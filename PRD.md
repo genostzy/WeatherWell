@@ -2,7 +2,7 @@
 
 *Single source of truth for this project. Phase 1 task breakdown: [docs/superpowers/plans/2026-09-01-hi-fi-WeatherWell.md](docs/superpowers/plans/2026-09-01-hi-fi-WeatherWell.md). Concept pitch: [IDEA.md](IDEA.md).*
 
-## WeatherWell — Citizen App
+## WeatherWell
 
 *(Challenge: Climate Resilience and Hydrometeorological Disaster Management)*
 
@@ -41,7 +41,7 @@ Not previously defined — stated explicitly here since the system has no automa
 
 Until the Authority Dashboard sub-project exists, this system is **dev-curated, not officially operated** — the dev team stands in for the DRRMO role. This should be stated plainly wherever the system is presented, so it's clear this is a prototype standing in for a role barangay officials would eventually own.
 
-### Scope — Citizen App
+### Scope
 
 Software-only prototype. No physical hardware. Web-based, installable Progressive Web App (PWA), not a native app.
 
