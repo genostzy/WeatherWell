@@ -8,7 +8,7 @@
 
 **Tech Stack:** Next.js 16 (App Router), React 19, TypeScript strict, Tailwind CSS v4, shadcn/ui, lucide-react, Vitest + React Testing Library, axe-core.
 
-**Spec:** [PRD.md](../../../PRD.md) (also mirrored at [docs/superpowers/specs/2026-09-01-citizen-app-phase1-design.md](../specs/2026-09-01-citizen-app-phase1-design.md))
+**Spec:** [PRD.md](../../../PRD.md) — single source of truth.
 
 ## Global Constraints
 

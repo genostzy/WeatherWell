@@ -1,6 +1,6 @@
 # PRD
 
-*(Full technical spec also maintained at [docs/superpowers/specs/2026-09-01-citizen-app-phase1-design.md](docs/superpowers/specs/2026-09-01-citizen-app-phase1-design.md))*
+*Single source of truth for this project. Phase 1 task breakdown: [docs/superpowers/plans/2026-09-01-hi-fi-WeatherWell.md](docs/superpowers/plans/2026-09-01-hi-fi-WeatherWell.md). Concept pitch: [IDEA.md](IDEA.md).*
 
 ## WeatherWell — Citizen App
 
@@ -43,7 +43,9 @@ Until the Authority Dashboard sub-project exists, this system is **dev-curated, 
 
 ### Scope — Citizen App
 
-Software-only prototype. No physical hardware. Web-based, installable Progressive Web App (PWA), not a native app. **Pilot scope:** launches supporting a single pilot barangay for this challenge (architecture supports unlimited zones without rework).
+Software-only prototype. No physical hardware. Web-based, installable Progressive Web App (PWA), not a native app.
+
+**Pilot scope:** one real barangay is the deployment target for this challenge. The app itself is multi-zone from Phase 1 — the hi-fi build carries three mock barangays so zone selection, zone listing, and the "no active alert" state are all exercisable, and the architecture supports unlimited zones without rework. One barangay is the *pilot*, not the *capacity*.
 
 **In scope:**
 1. Citizen-facing offline-capable alert app
@@ -74,7 +76,30 @@ Software-only prototype. No physical hardware. Web-based, installable Progressiv
 - **Large targets, minimal text** — buttons and tap targets sized for one-handed, injured, or shaking-hand use; instructions in short plain-language fragments, not paragraphs.
 - Designs should be checked under dim light and at arm's length, not just in a bright design tool — this is a documented gap in most emergency-app design processes.
 
-**Depth-reference visual (replaces plain text labels):** an adult reference silhouette and a child reference silhouette side by side, with a rising water-fill line marking the reported depth, colored through the same Yellow→Orange→Red→Evacuate scale. Two figures, not one, because the same water depth that's manageable for an adult can already be dangerous for a child — this is informational, not dramatized (no distress imagery). Pets get a separate small evacuation-checklist reminder elsewhere, not folded into this visual.
+**Depth-reference visual (replaces plain text labels):** an adult reference silhouette and a child reference silhouette standing on a **shared ground line under a single shared waterline**, colored through the same Yellow→Orange→Red→Evacuate scale. The child is drawn **physically shorter** (110cm vs 170cm), and the water is drawn at one absolute height across both figures — so a depth that reaches an adult's chest visibly closes over a child's head. That asymmetry is the entire reason two figures exist; drawing them the same height would destroy the message. Informational, not dramatized — no distress imagery. Pets get a separate small evacuation-checklist reminder elsewhere, not folded into this visual.
+
+### Severity & Depth Reference (decided values)
+
+These are implemented values, not proposals — the UI, the auto-trigger rule, and the accessibility tests all read from them.
+
+| Severity | Label shown | Hex | Text on top | Contrast |
+|---|---|---|---|---|
+| `yellow` | Advisory | `#eab308` | black | 10.9:1 |
+| `orange` | Watch | `#f97316` | black | 7.5:1 |
+| `red` | Warning | `#dc2626` | white | 4.8:1 |
+| `evacuate` | Evacuate Now | `#7f1d1d` | white | 10.0:1 |
+
+All four clear WCAG AA (≥4.5:1); `red` is the tightest. Contrast is asserted numerically in the test suite, so changing a hex without rechecking fails the build.
+
+| Depth level | Label | Approx. depth | Maps to severity |
+|---|---|---|---|
+| `dry` | Dry | 0 cm | yellow |
+| `ankle` | Ankle-deep | 15 cm | yellow |
+| `knee` | Knee-deep | 45 cm | orange |
+| `waist` | Waist-deep | 90 cm | red |
+| `neck` | Neck-deep | 150 cm | evacuate |
+
+Reference figure heights: adult 170 cm, child 110 cm. At `neck` (150 cm) the child is fully submerged while the adult is not — the case the two-figure visual exists to communicate.
 
 ### Core Features
 
@@ -195,14 +220,71 @@ During an extended outage there's no way to recharge — battery is a survival r
 - Manual QA: airplane-mode device test, sunlight/dim-light legibility check
 - Field pilot with the single pilot barangay before considering a wider rollout (Final Phase)
 
+### Success Metrics
+
+How to tell whether this actually works, rather than merely ships. Targets are initial hypotheses to validate in the pilot, not guarantees.
+
+**Primary — does the alert reach people when it matters?**
+
+| Metric | Definition | Target |
+|---|---|---|
+| Alert reach | Enrolled residents in a zone who received an alert by any channel (push, SMS, or opened the app and saw cached state) ÷ enrolled residents in that zone | ≥ 90% |
+| Outage reach | Same, measured only for alerts issued while the resident's device had no data connection | ≥ 70% (this is the number the whole product exists to move) |
+| Time to delivery | Alert created → first channel confirms delivery | < 60s median, push path |
+| Offline usefulness | Sessions opened with no connectivity that still showed a zone's evacuation instructions | 100% (any failure is a defect, not a metric) |
+
+**Secondary — is the crowdsourced sensor trustworthy?**
+
+| Metric | Definition | Target |
+|---|---|---|
+| Report validity | Reports passing geofence + rate-limit checks ÷ total submitted | ≥ 85% |
+| False-alarm rate | Auto-triggered alerts later downgraded or cancelled ÷ all auto-triggered alerts | ≤ 10% |
+| Corroboration depth | Median independent reports behind each auto-triggered alert | ≥ 3 (the threshold floor) |
+| Contribution rate | Enrolled residents submitting ≥ 1 report during a flood event | ≥ 15% |
+
+**Adoption — pilot barangay**
+
+| Metric | Definition | Target |
+|---|---|---|
+| Enrollment | Households enrolled (app or SMS opt-in) ÷ households in the pilot barangay | ≥ 30% |
+| Retention through an event | Enrolled users still enrolled 30 days after a flood event | ≥ 80% |
+
+Phase 1 (`hi-fi`) cannot move any of these — it has no backend and no users. Its own exit bar is the qualitative one already stated: a complete first-run click-through and a passing accessibility audit.
+
+### Assumptions & Dependencies
+
+Stated explicitly because the design leans on them, and one of them is load-bearing.
+
+1. **SMS survives when mobile data does not.** *(Load-bearing — validate before relying on it.)* The entire fallback ordering assumes that during PH typhoon outages, data backhaul degrades before voice/SMS. This is the common reported pattern and is why PAGASA and NDRRMC lean on SMS, but it is not universally true — a downed tower kills both. If it fails to hold, the fallback chain collapses to "cached data only" and the case for phone-to-phone mesh relay (currently roadmap) becomes the primary answer instead of a nice-to-have.
+2. **Residents have a smartphone with a modern browser.** Those who don't are served only by the SMS path, which is why SMS opt-in enrollment exists as a non-app entry point.
+3. **Web Push is not guaranteed.** Delivery depends on device, browser, and OS battery policy — iOS in particular only supports Web Push for installed PWAs. SMS fallback is therefore mandatory, not optional.
+4. **Barangay boundary data is accurate enough for geofencing.** PSA/PSGC boundaries are indicative, not survey-grade; geofence tolerance must be generous or valid reports near a boundary will be wrongly rejected.
+5. **A DRRMO will eventually own the content.** Until the Authority Dashboard exists the dev team stands in — this is a prototype posture, not an operating model.
+
+### Cost Model
+
+Only SMS carries meaningful per-use cost; Vercel and Supabase free tiers cover a single-barangay pilot.
+
+At PhilSMS ₱0.35/SMS, one alert broadcast to every enrolled resident costs `₱0.35 × enrolled`:
+
+| Enrolled residents | Cost per broadcast | 10 broadcasts (one storm season) |
+|---|---|---|
+| 100 | ₱35 | ₱350 |
+| 500 | ₱175 | ₱1,750 |
+| 2,000 | ₱700 | ₱7,000 |
+
+Two consequences the design already reflects: SMS is a **fallback**, not the default channel (push is free, so every push that lands is an SMS not sent), and OTP verification is one-time per number rather than per-session. A production deployment at municipal scale would need either an LGU-funded SMS budget or a telco public-service arrangement — worth pursuing alongside the official PAGASA data relationship.
+
 ### Implementation Phases
 
 Mapped onto the repo's branch workflow — each phase has a concrete build plan, not just a feature list.
 
-**Phase 1 (`hi-fi`)** — UI only, no backend.
-- Build: alert screen, evacuation screen, water-level report form (with the depth-reference visual), zone map, consent notice — all on mock data.
-- Plan: build components in shadcn/ui high-contrast theme → wire mock data fixtures → deploy Vercel preview → accessibility pass (contrast/WCAG/icon legibility, dim-light check).
-- Exit criteria: full mock click-through, preview link ready for submission review.
+**Phase 1 (`hi-fi`)** — UI only, no backend. Detailed task breakdown: [docs/superpowers/plans/2026-09-01-hi-fi-WeatherWell.md](docs/superpowers/plans/2026-09-01-hi-fi-WeatherWell.md).
+- Build: alert screen, evacuation screen (with pictogram cues), water-level report form (with the depth-reference visual), zone map, consent notice, **zone onboarding** (Core Feature #6, GPS detect + manual picker), **first-run onboarding gate** so a visitor actually reaches consent before anything else, **language toggle** (Filipino/English), and the **one-tap emergency hotline** — all on mock data.
+- Plan: build components in shadcn/ui high-contrast theme → wire mock data fixtures → deploy Vercel preview → accessibility pass (automated axe audit + numeric WCAG contrast check + dim-light check).
+- Exit criteria: full mock click-through starting from a fresh first-run, preview link ready for submission review.
+
+The hotline, language toggle, and onboarding ship this early because they are cheap in UI-only form and because a demo that never shows the consent flow fails the PRD's own privacy requirement.
 
 **Phase 2 (`v0`)** — Real data, real offline.
 - Build: Supabase schema (`zones`/`alerts`/`water_level_reports`/`push_subscriptions`) + RLS, Server Actions, service worker caching, installable PWA manifest.
@@ -215,8 +297,8 @@ Mapped onto the repo's branch workflow — each phase has a concrete build plan,
 - Exit criteria: a simulated crowd-report scenario correctly auto-triggers an alert and delivers via push, falling back to SMS in a test environment.
 
 **Final Phase (`mvp`)** — Trust and inclusion polish that needs real usage to tune well.
-- Build: reputation scoring, outlier downweighting, SMS OTP identity, audio/TTS alerts, SMS opt-in enrollment, one-tap emergency hotline, full accessibility audit.
-- Plan: reputation model → OTP flow → TTS → SMS opt-in handler → hotline integration → full WCAG audit → field pilot in the chosen barangay → end-to-end QA → prep for `main` merge.
+- Build: reputation scoring, outlier downweighting, SMS OTP identity, audio/TTS alerts, SMS opt-in enrollment, full accessibility audit. (The emergency hotline itself shipped in Phase 1; what lands here is wiring it to real per-zone DRRMO numbers.)
+- Plan: reputation model → OTP flow → TTS → SMS opt-in handler → real hotline numbers → full WCAG audit → field pilot in the chosen barangay → end-to-end QA → prep for `main` merge.
 - Exit criteria: full feature set working together, audit passed, pilot feedback incorporated, submission-ready.
 
 ### Future Roadmap (beyond this project)
@@ -232,3 +314,5 @@ Mapped onto the repo's branch workflow — each phase has a concrete build plan,
 - SMS cost scales with alert volume and subscriber count
 - Web Push delivery isn't guaranteed (device/browser dependent) — SMS fallback is required, not optional, to cover this
 - RA 10173 compliance is stated by design here but not legally reviewed — recommend actual legal review before any real deployment beyond the pilot
+- The "SMS outlives data" assumption is unvalidated (see Assumptions #1). It is the single point the fallback design rests on; if it does not hold in a real outage, mesh relay stops being roadmap and becomes required
+- Success-metric targets are hypotheses, not benchmarks — there is no baseline from a comparable PH deployment to calibrate against yet
