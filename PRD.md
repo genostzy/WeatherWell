@@ -263,7 +263,16 @@ Stated explicitly because the design leans on them, and one of them is load-bear
 
 ### Cost Model
 
-Only SMS carries meaningful per-use cost; Vercel and Supabase free tiers cover a single-barangay pilot.
+Only SMS carries meaningful per-use cost. Everything else runs on free tiers for a single-barangay pilot: Vercel (Hobby), Supabase (free tier — a new project on this org is confirmed ₱0/month), GitHub, Web Push/VAPID, and every data source in the table above (bagyo-api is keyless, NASA GPM and the PSA/GeoRisk boundary data are open).
+
+**Free-tier operating constraints** — these cost a working demo rather than money, so they are planning items, not footnotes:
+
+- **Supabase free projects pause after roughly a week of inactivity.** A reviewer opening the link weeks after submission would find a sleeping database and a broken-looking app. Either wake the project before any judging window, or submit the Phase 1 (`hi-fi`) build, which has no backend to sleep.
+- **The Supabase free tier caps active projects per organization.** Confirm headroom before Phase 2 rather than discovering it mid-migration.
+- **Vercel Hobby is non-commercial only.** Fine for this challenge; an LGU-operated deployment would need a paid plan.
+- **PhilSMS sender-ID registration takes ~2–4 weeks.** A schedule dependency for Phase 3, independent of cost — start it early.
+
+**Keeping Phase 3 free:** the SMS provider can be stubbed to log instead of send, clearly labeled as such. The fallback ordering (push → SMS → cache) is still fully demonstrable that way; buy credit only for a final real-delivery proof.
 
 At PhilSMS ₱0.35/SMS, one alert broadcast to every enrolled resident costs `₱0.35 × enrolled`:
 
