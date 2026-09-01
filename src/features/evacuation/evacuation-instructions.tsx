@@ -10,7 +10,7 @@ export function EvacuationInstructions({ zone }: { zone: Zone }) {
   const { lang } = useLanguage();
 
   return (
-    <Card className="w-full max-w-md border-2">
+    <Card className="w-full max-w-md">
       <CardContent className="space-y-6 pt-6">
         <div className="flex items-start gap-4">
           <Building2

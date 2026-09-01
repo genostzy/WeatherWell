@@ -16,7 +16,7 @@ export function AlertCard({
   const { lang } = useLanguage();
 
   return (
-    <Card className="w-full max-w-md border-2">
+    <Card className="w-full max-w-md">
       <CardHeader className="flex flex-row items-center justify-between gap-3">
         <CardTitle>{zone.name}</CardTitle>
         {alert && <SeverityBadge severity={alert.severity} />}
