@@ -2463,7 +2463,7 @@ git commit -m "feat: add zone map and automated accessibility audit"
 git push origin hi-fi
 ```
 
-Confirm the `hi-fi` deployment reaches `READY`, then check on a real phone-sized viewport:
+Confirm the `hi-fi` deployment reaches `READY`, then do the manual checks 1-9 below — **superseded by Task 11's own manual checklist**, since Task 11 changes several of these screens again. Treat this as a mid-point sanity check, not the final one.
 
 1. Open the preview root `/` with fresh storage — it must redirect to `/onboarding`.
 2. Accept the consent notice, pick a **non-first** barangay, confirm — it must land back on `/`.
@@ -2474,3 +2474,372 @@ Confirm the `hi-fi` deployment reaches `READY`, then check on a real phone-sized
 7. Confirm the red hotline button is present and tappable on every screen.
 8. Confirm the app renders dark **without** the OS being set to dark mode.
 9. Dim the screen to roughly 20% brightness and confirm the severity badges and depth visual are still readable — the PRD's dim-light check.
+
+---
+
+### Task 11: Skeleton loaders, optimistic submission, tooltips, and a polish pass
+
+Added after user request mid-execution. Caching (TanStack Query, service-worker) is explicitly deferred to Phase 2, per the PRD's own phase split (Phase 1 has no real backend to cache against) — not built here. This task also closes two Minor findings from Task 6's review: the onboarding-gate flash-of-content, and adds real loading/optimistic feedback where Phase 1's synchronous mock data previously skipped it entirely.
+
+**Files:**
+- Modify: `src/features/onboarding/onboarding-gate.tsx`, `src/features/onboarding/onboarding-gate.test.tsx`
+- Create: `src/components/ui/skeleton.tsx`, `src/components/ui/tooltip.tsx` (via `shadcn add`)
+- Modify: `src/features/water-level-report/report-form.tsx`, `src/features/water-level-report/report-form.test.tsx`
+- Modify: `src/app/report/page.tsx`
+- Modify: `src/features/water-level-report/depth-reference-visual.tsx` (tooltip on the depth label)
+- Modify: `src/components/emergency-hotline-button.tsx`, `src/components/emergency-hotline-button.test.tsx` (tooltip)
+- Modify: `src/features/i18n/language-toggle.tsx` (tooltip)
+
+**Interfaces:**
+- Consumes: `hasOnboarded` (Task 5), `DepthLevel`/`DEPTH_CM`/`DEPTH_LABEL` (Task 2), `ReportForm`/`DepthReferenceVisual` (Tasks 7-8), shadcn `Tooltip`/`TooltipContent`/`TooltipTrigger`/`TooltipProvider`, `Skeleton`.
+- Produces: `OnboardingGate` now renders a skeleton instead of `null` while the onboarded check is pending; `ReportForm`'s submit flow becomes optimistic (see Step 5).
+
+- [ ] **Step 1: Add shadcn Skeleton and Tooltip components**
+
+```bash
+npx shadcn@latest add skeleton tooltip -y
+```
+
+- [ ] **Step 2: Write the failing test for OnboardingGate's skeleton state**
+
+Modify `src/features/onboarding/onboarding-gate.test.tsx` — add one test to the existing file (keep the two tests already there):
+
+```typescript
+it("renders a loading skeleton, not the page underneath, before the check resolves", () => {
+  const { container } = render(<OnboardingGate />);
+  expect(container.querySelector('[data-testid="onboarding-gate-skeleton"]')).toBeInTheDocument();
+});
+```
+
+- [ ] **Step 3: Run to verify it fails**
+
+Run: `npm test -- onboarding-gate`
+Expected: FAIL — no `data-testid="onboarding-gate-skeleton"` element exists yet (the component currently returns `null`).
+
+- [ ] **Step 4: Rewrite OnboardingGate to render a skeleton instead of nothing**
+
+Replace `src/features/onboarding/onboarding-gate.tsx`:
+
+```typescript
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Skeleton } from "@/components/ui/skeleton";
+import { hasOnboarded } from "./onboarding-storage";
+
+/**
+ * Renders a full-screen skeleton while checking onboarding status, then
+ * either redirects (first-time visitor) or renders nothing further
+ * (already-onboarded — the real page content takes over). This replaces
+ * an earlier version that returned null outright, which let a first-time
+ * visitor's browser paint the real home screen for one frame before the
+ * redirect fired.
+ */
+export function OnboardingGate() {
+  const router = useRouter();
+  const [checked, setChecked] = useState(false);
+  const [redirecting, setRedirecting] = useState(false);
+
+  useEffect(() => {
+    if (!hasOnboarded()) {
+      setRedirecting(true);
+      router.replace("/onboarding");
+      return;
+    }
+    setChecked(true);
+  }, [router]);
+
+  if (checked) return null;
+
+  return (
+    <div
+      data-testid="onboarding-gate-skeleton"
+      aria-busy="true"
+      aria-label={redirecting ? "Redirecting to setup" : "Loading"}
+      className="fixed inset-0 z-40 flex flex-col items-center gap-6 bg-background p-6 pt-16"
+    >
+      <Skeleton className="h-40 w-full max-w-md rounded-md" />
+      <div className="flex w-full max-w-md flex-col gap-3">
+        <Skeleton className="h-12 w-full rounded-md" />
+        <Skeleton className="h-12 w-full rounded-md" />
+        <Skeleton className="h-12 w-full rounded-md" />
+      </div>
+    </div>
+  );
+}
+```
+
+This also fixes Task 6's deferred flash-of-content finding: the skeleton now covers the real page (`fixed inset-0 z-40`) for the one render before either the redirect fires or `checked` flips true, so a first-time visitor never sees real alert content before landing on `/onboarding`.
+
+- [ ] **Step 5: Run to verify it passes**
+
+Run: `npm test -- onboarding-gate`
+Expected: PASS, 3 tests passed.
+
+- [ ] **Step 6: Write the failing test for ReportForm's optimistic submit**
+
+Modify `src/features/water-level-report/report-form.test.tsx` — add:
+
+```typescript
+it("shows the confirmation immediately on submit, before any async work would resolve", async () => {
+  const onSubmit = vi.fn();
+  render(<ReportForm zoneId="zone-1" onSubmit={onSubmit} />);
+
+  await userEvent.click(screen.getByLabelText("Knee-deep"));
+  await userEvent.click(screen.getByRole("button", { name: /submit report/i }));
+
+  // Optimistic: onSubmit fires synchronously on click, not after a delay.
+  expect(onSubmit).toHaveBeenCalledWith("knee");
+});
+
+it("disables the submit button immediately after submitting, before any reconciliation", async () => {
+  render(<ReportForm zoneId="zone-1" onSubmit={() => {}} />);
+  await userEvent.click(screen.getByRole("button", { name: /submit report/i }));
+  expect(screen.getByRole("button", { name: /submit report/i })).toBeDisabled();
+});
+```
+
+- [ ] **Step 7: Run to verify it fails**
+
+Run: `npm test -- report-form`
+Expected: FAIL — the current form doesn't disable itself after submit (nothing prevents a double-submit yet).
+
+- [ ] **Step 8: Add optimistic-submit state to ReportForm**
+
+Modify `src/features/water-level-report/report-form.tsx` — add a `submitted` flag that disables the button the instant the user submits, matching the optimistic-UI pattern (assume success, disable re-entry, let the caller reconcile):
+
+```typescript
+"use client";
+
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { DepthReferenceVisual } from "./depth-reference-visual";
+import { DEPTH_LEVELS, DEPTH_LABEL, type DepthLevel } from "@/lib/depth";
+
+export function ReportForm({
+  zoneId,
+  onSubmit,
+}: {
+  zoneId: string;
+  onSubmit: (depthLevel: DepthLevel) => void;
+}) {
+  const [depthLevel, setDepthLevel] = useState<DepthLevel>("dry");
+  const [submitting, setSubmitting] = useState(false);
+
+  return (
+    <form
+      className="flex w-full max-w-md flex-col gap-6"
+      onSubmit={(event) => {
+        event.preventDefault();
+        // Optimistic: flip the button state and call onSubmit synchronously,
+        // on the assumption the write succeeds — Phase 3 reconciles this
+        // against the real Server Action result instead of a blocking wait.
+        setSubmitting(true);
+        onSubmit(depthLevel);
+      }}
+    >
+      <input type="hidden" name="zoneId" value={zoneId} />
+
+      <DepthReferenceVisual depthLevel={depthLevel} />
+
+      <RadioGroup
+        value={depthLevel}
+        onValueChange={(value) => setDepthLevel(value as DepthLevel)}
+        aria-label="How deep is the water?"
+      >
+        {DEPTH_LEVELS.map((level) => (
+          <div key={level} className="flex items-center space-x-3 py-2">
+            <RadioGroupItem value={level} id={`depth-${level}`} disabled={submitting} />
+            <Label htmlFor={`depth-${level}`} className="text-base">
+              {DEPTH_LABEL[level]}
+            </Label>
+          </div>
+        ))}
+      </RadioGroup>
+
+      <Button type="submit" size="lg" disabled={submitting}>
+        Submit report
+      </Button>
+    </form>
+  );
+}
+```
+
+- [ ] **Step 9: Run to verify it passes**
+
+Run: `npm test -- report-form`
+Expected: PASS, 5 tests passed (3 from Task 8 + 2 new).
+
+- [ ] **Step 10: Add a tooltip to each depth option showing its approximate real-world depth**
+
+Modify `src/features/water-level-report/depth-reference-visual.tsx` — wrap the `<figcaption>` label in a tooltip showing the `DEPTH_CM` value, so "Waist-deep" reads as a concrete number, not just a word:
+
+```typescript
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+```
+
+Replace the existing `<figcaption>` line:
+
+```typescript
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <figcaption className="cursor-help text-base font-medium underline decoration-dotted">
+            {DEPTH_LABEL[depthLevel]}
+          </figcaption>
+        </TooltipTrigger>
+        <TooltipContent>Approximately {DEPTH_CM[depthLevel]} cm</TooltipContent>
+      </Tooltip>
+```
+
+`DEPTH_CM` is already imported in this file from Task 7 — no new import needed for it.
+
+- [ ] **Step 11: Verify the depth-reference-visual suite still passes**
+
+Run: `npm test -- depth-reference-visual`
+Expected: PASS, 7 tests passed (unchanged — the tooltip doesn't alter any existing assertion, `figcaption` text is still queryable the same way since `TooltipTrigger asChild` renders its child as the actual DOM node).
+
+- [ ] **Step 12: Add tooltips to the hotline button and language toggle**
+
+Modify `src/components/emergency-hotline-button.tsx`:
+
+```typescript
+import { Phone } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+
+export function EmergencyHotlineButton({ hotlineNumber }: { hotlineNumber: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <a
+          href={`tel:${hotlineNumber}`}
+          aria-label="Call emergency hotline"
+          className="fixed bottom-4 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full border-2 border-white bg-severity-red text-white shadow-lg"
+        >
+          <Phone className="h-6 w-6" aria-hidden="true" />
+        </a>
+      </TooltipTrigger>
+      <TooltipContent side="left">Call emergency hotline</TooltipContent>
+    </Tooltip>
+  );
+}
+```
+
+Modify `src/components/emergency-hotline-button.test.tsx` — the existing two tests still target the `link` role directly, which `TooltipTrigger asChild` preserves (it clones its child rather than wrapping it in an extra element), so no test changes are required. Run `npm test -- emergency-hotline-button` to confirm — Expected: PASS, 2 tests passed, unchanged.
+
+Modify `src/features/i18n/language-toggle.tsx` similarly — wrap each language `Button` in a `Tooltip` with content `"Switch to " + LANGUAGE_LABEL[code]`:
+
+```typescript
+"use client";
+
+import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { LANGUAGES, LANGUAGE_LABEL } from "@/lib/i18n";
+import { useLanguage } from "./language-provider";
+
+export function LanguageToggle() {
+  const { lang, setLang } = useLanguage();
+
+  return (
+    <div className="flex gap-2" role="group" aria-label="Language">
+      {LANGUAGES.map((code) => (
+        <Tooltip key={code}>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              size="sm"
+              variant={code === lang ? "default" : "outline"}
+              aria-pressed={code === lang}
+              onClick={() => setLang(code)}
+            >
+              {LANGUAGE_LABEL[code]}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Switch to {LANGUAGE_LABEL[code]}</TooltipContent>
+        </Tooltip>
+      ))}
+    </div>
+  );
+}
+```
+
+- [ ] **Step 13: Wrap the app in TooltipProvider**
+
+shadcn's `Tooltip` requires a `TooltipProvider` ancestor. Modify `src/app/layout.tsx` — import `TooltipProvider` from `@/components/ui/tooltip` and wrap it around the existing `LanguageProvider` children (outermost of the two):
+
+```typescript
+import { TooltipProvider } from "@/components/ui/tooltip";
+```
+
+```typescript
+      <body className="min-h-full flex flex-col bg-background font-sans text-foreground">
+        <TooltipProvider>
+          <LanguageProvider>
+            <header className="flex justify-end p-3">
+              <LanguageToggle />
+            </header>
+            {children}
+            <EmergencyHotlineButton hotlineNumber={MOCK_ZONES[0].hotlineNumber} />
+          </LanguageProvider>
+        </TooltipProvider>
+      </body>
+```
+
+- [ ] **Step 14: Run the full suite**
+
+Run: `npm test`
+Expected: All tests pass (Tasks 1-10's tests plus this task's additions), no failures.
+
+- [ ] **Step 15: Polish pass — sweep against the ui-ux-pro-max checklist already validated for this project**
+
+Read through every component built in Tasks 4-10 (`src/features/**`, `src/components/**`) and check each against these four points, fixing anything that doesn't hold — these are the same standards already confirmed to apply to this project earlier in the session:
+
+1. Every interactive element has a visible `:focus-visible` state (shadcn's `Button`/`RadioGroupItem` provide this by default — verify nothing overrides it away with a custom `className` that drops `focus-visible:` utilities).
+2. Every icon-only or icon-plus-minimal-text control has an accessible name (`aria-label` or visible text) — spot-check `EmergencyHotlineButton` (has one), the depth `RadioGroupItem`s (each has an associated `Label`), and any new tooltip triggers (the tooltip content is supplementary, not a replacement for the trigger's own accessible name).
+3. Touch targets stay at or above the 24 CSS px web minimum with 8px+ spacing — verify the tooltip additions didn't shrink any existing tap target's rendered size.
+4. No layout shift from the tooltip or skeleton additions — the skeleton in `OnboardingGate` is `fixed inset-0`, so it overlays rather than pushing content; confirm the tooltip's `asChild` pattern didn't add wrapper `<div>`s that change spacing.
+
+Record what you checked and what (if anything) you fixed in your report — a bare "looks fine" is not evidence.
+
+- [ ] **Step 16: Run the full suite and production build again**
+
+```bash
+npm test
+npm run build
+```
+
+Expected: all tests pass, build succeeds with no type errors.
+
+- [ ] **Step 17: Commit**
+
+```bash
+git add src/features/onboarding/onboarding-gate.tsx src/features/onboarding/onboarding-gate.test.tsx src/components/ui/skeleton.tsx src/components/ui/tooltip.tsx src/features/water-level-report/report-form.tsx src/features/water-level-report/report-form.test.tsx src/features/water-level-report/depth-reference-visual.tsx src/components/emergency-hotline-button.tsx src/features/i18n/language-toggle.tsx src/app/layout.tsx
+git commit -m "feat: add skeleton loading, optimistic submit, tooltips, and a11y polish pass"
+```
+
+- [ ] **Step 18: Push and do the final manual verification**
+
+```bash
+git push origin hi-fi
+```
+
+Confirm the `hi-fi` deployment reaches `READY`, then repeat Task 10's checklist (items 1-9) plus these additions:
+
+10. Open `/` with fresh storage — confirm you see the skeleton screen, not a flash of real alert content, before landing on `/onboarding`.
+11. On `/report`, submit a report — confirm the button disables immediately (optimistic), not after a delay.
+12. Hover (desktop) or long-press (touch, if supported by the device) the depth label on `/report` — confirm the cm tooltip appears.
+13. Hover the hotline button and each language toggle button — confirm their tooltips appear.
