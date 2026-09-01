@@ -4,7 +4,10 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ConsentNotice } from "@/features/onboarding/consent-notice";
 import { ZonePicker } from "@/features/onboarding/zone-picker";
-import { markOnboarded } from "@/features/onboarding/onboarding-storage";
+import {
+  markOnboarded,
+  setSelectedZoneId,
+} from "@/features/onboarding/onboarding-storage";
 import { MOCK_ZONES } from "@/lib/mock-data";
 
 export default function OnboardingPage() {
@@ -18,7 +21,10 @@ export default function OnboardingPage() {
       ) : (
         <ZonePicker
           zones={MOCK_ZONES}
-          onSelect={() => {
+          onSelect={(zoneId) => {
+            // The picked zone is what every other screen resolves against —
+            // store it before marking onboarding complete.
+            setSelectedZoneId(zoneId);
             markOnboarded();
             router.replace("/");
           }}

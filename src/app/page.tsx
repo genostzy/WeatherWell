@@ -1,16 +1,22 @@
+"use client";
+
 import Link from "next/link";
 import { AlertCard } from "@/features/alerts/alert-card";
 import { OnboardingGate } from "@/features/onboarding/onboarding-gate";
+import { useSelectedZone } from "@/features/zones/use-selected-zone";
 import { Button } from "@/components/ui/button";
-import { MOCK_ZONES, getActiveAlertForZone } from "@/lib/mock-data";
+import { getActiveAlertForZone } from "@/lib/mock-data";
 
 export default function Home() {
-  const zone = MOCK_ZONES[0];
+  const zone = useSelectedZone();
   const alert = getActiveAlertForZone(zone.id);
 
   return (
     <main className="flex flex-1 flex-col items-center gap-8 p-6">
       <OnboardingGate />
+      {/* The other screens all open with an <h1>; without this one the app's
+          primary screen gives a screen reader no document structure at all. */}
+      <h1 className="text-lg font-semibold">WeatherWell alerts — {zone.name}</h1>
       <AlertCard alert={alert} zone={zone} />
 
       {/* Progressive disclosure: evacuation is the one primary action;

@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { DepthReferenceVisual } from "./depth-reference-visual";
+import { useLanguage } from "@/features/i18n/language-provider";
+import { t } from "@/lib/i18n";
 import { DEPTH_LEVELS, DEPTH_LABEL, type DepthLevel } from "@/lib/depth";
 
 export function ReportForm({
@@ -16,6 +18,7 @@ export function ReportForm({
 }) {
   const [depthLevel, setDepthLevel] = useState<DepthLevel>("dry");
   const [submitting, setSubmitting] = useState(false);
+  const { lang } = useLanguage();
 
   return (
     <form
@@ -41,8 +44,8 @@ export function ReportForm({
         {DEPTH_LEVELS.map((level) => (
           <div key={level} className="flex items-center space-x-3 py-2">
             <RadioGroupItem value={level} id={`depth-${level}`} disabled={submitting} />
-            <Label htmlFor={`depth-${level}`} className="text-base">
-              {DEPTH_LABEL[level]}
+            <Label htmlFor={`depth-${level}`} lang={lang} className="text-base">
+              {t(DEPTH_LABEL[level], lang)}
             </Label>
           </div>
         ))}

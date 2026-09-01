@@ -1,12 +1,20 @@
+import type { LocalizedText } from "./types";
+
 export type Severity = "yellow" | "orange" | "red" | "evacuate";
 
 export const SEVERITY_ORDER: Severity[] = ["yellow", "orange", "red", "evacuate"];
 
-export const SEVERITY_LABEL: Record<Severity, string> = {
-  yellow: "Advisory",
-  orange: "Watch",
-  red: "Warning",
-  evacuate: "Evacuate Now",
+/**
+ * Alert copy, so localized per the project's global constraint — no bare
+ * strings on anything the public reads during a flood. Filipino follows the
+ * escalation PAGASA bulletins use: paalala (notice) → pagbabantay (watch) →
+ * babala (warning) → lumikas na (evacuate now).
+ */
+export const SEVERITY_LABEL: Record<Severity, LocalizedText> = {
+  yellow: { en: "Advisory", fil: "Paalala" },
+  orange: { en: "Watch", fil: "Pagbabantay" },
+  red: { en: "Warning", fil: "Babala" },
+  evacuate: { en: "Evacuate Now", fil: "Lumikas Na" },
 };
 
 export const SEVERITY_BADGE_CLASS: Record<Severity, string> = {

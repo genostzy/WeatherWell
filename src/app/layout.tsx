@@ -3,8 +3,7 @@ import "./globals.css";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { LanguageProvider } from "@/features/i18n/language-provider";
 import { LanguageToggle } from "@/features/i18n/language-toggle";
-import { EmergencyHotlineButton } from "@/components/emergency-hotline-button";
-import { MOCK_ZONES } from "@/lib/mock-data";
+import { SelectedZoneHotlineButton } from "@/components/selected-zone-hotline-button";
 
 export const metadata: Metadata = {
   title: "WeatherWell",
@@ -21,7 +20,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               <LanguageToggle />
             </header>
             {children}
-            <EmergencyHotlineButton hotlineNumber={MOCK_ZONES[0].hotlineNumber} />
+            <SelectedZoneHotlineButton />
           </LanguageProvider>
         </TooltipProvider>
       </body>

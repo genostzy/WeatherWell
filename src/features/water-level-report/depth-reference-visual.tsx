@@ -9,6 +9,8 @@ import {
   type DepthLevel,
 } from "@/lib/depth";
 import { SEVERITY_HEX } from "@/lib/severity";
+import { useLanguage } from "@/features/i18n/language-provider";
+import { t } from "@/lib/i18n";
 import {
   Tooltip,
   TooltipContent,
@@ -101,6 +103,7 @@ export function DepthReferenceVisual({ depthLevel }: { depthLevel: DepthLevel })
   // useId() emits punctuation that is not safe inside a url(#...) fragment
   // reference, so strip everything except word characters and dashes.
   const baseId = useId().replace(/[^a-zA-Z0-9-]/g, "");
+  const { lang } = useLanguage();
   const depthCm = DEPTH_CM[depthLevel];
   const color = SEVERITY_HEX[DEPTH_SEVERITY[depthLevel]];
   const waterY = GROUND_Y - depthCm;
@@ -167,8 +170,11 @@ export function DepthReferenceVisual({ depthLevel }: { depthLevel: DepthLevel })
       </svg>
       <Tooltip>
         <TooltipTrigger asChild>
-          <figcaption className="cursor-help text-base font-medium underline decoration-dotted">
-            {DEPTH_LABEL[depthLevel]}
+          <figcaption
+            lang={lang}
+            className="cursor-help text-base font-medium underline decoration-dotted"
+          >
+            {t(DEPTH_LABEL[depthLevel], lang)}
           </figcaption>
         </TooltipTrigger>
         <TooltipContent>Approximately {DEPTH_CM[depthLevel]} cm</TooltipContent>

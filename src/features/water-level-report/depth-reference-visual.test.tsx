@@ -7,6 +7,8 @@ import {
   ADULT_HEIGHT_CM,
   CHILD_HEIGHT_CM,
 } from "./depth-reference-visual";
+import { LanguageProvider } from "@/features/i18n/language-provider";
+import { DEPTH_LABEL } from "@/lib/depth";
 
 // The depth label is now wrapped in a shadcn Tooltip (Radix), which throws
 // if rendered without an ancestor TooltipProvider. The real app supplies
@@ -69,5 +71,17 @@ describe("DepthReferenceVisual", () => {
   it("shows the depth label", () => {
     render(<DepthReferenceVisual depthLevel="waist" />);
     expect(screen.getByText("Waist-deep")).toBeInTheDocument();
+  });
+
+  it("shows the depth label in Filipino when that language is active", () => {
+    rtlRender(
+      <TooltipProvider>
+        <LanguageProvider initialLang="fil">
+          <DepthReferenceVisual depthLevel="waist" />
+        </LanguageProvider>
+      </TooltipProvider>
+    );
+    expect(screen.getByText(DEPTH_LABEL.waist.fil)).toBeInTheDocument();
+    expect(screen.queryByText(DEPTH_LABEL.waist.en)).not.toBeInTheDocument();
   });
 });

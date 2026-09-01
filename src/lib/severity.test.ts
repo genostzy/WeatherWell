@@ -12,11 +12,18 @@ describe("severity", () => {
     expect(SEVERITY_ORDER).toEqual(["yellow", "orange", "red", "evacuate"]);
   });
 
-  it("labels every severity", () => {
-    expect(SEVERITY_LABEL.yellow).toBe("Advisory");
-    expect(SEVERITY_LABEL.orange).toBe("Watch");
-    expect(SEVERITY_LABEL.red).toBe("Warning");
-    expect(SEVERITY_LABEL.evacuate).toBe("Evacuate Now");
+  it("labels every severity in English", () => {
+    expect(SEVERITY_LABEL.yellow.en).toBe("Advisory");
+    expect(SEVERITY_LABEL.orange.en).toBe("Watch");
+    expect(SEVERITY_LABEL.red.en).toBe("Warning");
+    expect(SEVERITY_LABEL.evacuate.en).toBe("Evacuate Now");
+  });
+
+  it("labels every severity in Filipino too — alert copy is never a bare string", () => {
+    expect(SEVERITY_LABEL.yellow.fil).toBe("Paalala");
+    expect(SEVERITY_LABEL.orange.fil).toBe("Pagbabantay");
+    expect(SEVERITY_LABEL.red.fil).toBe("Babala");
+    expect(SEVERITY_LABEL.evacuate.fil).toBe("Lumikas Na");
   });
 
   it("maps every severity to a badge class containing its color token", () => {

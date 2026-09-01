@@ -1,15 +1,21 @@
 import type { Severity } from "./severity";
+import type { LocalizedText } from "./types";
 
 export type DepthLevel = "dry" | "ankle" | "knee" | "waist" | "neck";
 
 export const DEPTH_LEVELS: DepthLevel[] = ["dry", "ankle", "knee", "waist", "neck"];
 
-export const DEPTH_LABEL: Record<DepthLevel, string> = {
-  dry: "Dry",
-  ankle: "Ankle-deep",
-  knee: "Knee-deep",
-  waist: "Waist-deep",
-  neck: "Neck-deep",
+/**
+ * The whole vocabulary of the water-level report, so localized per the
+ * project's global constraint. Filipino uses the everyday "hanggang <body
+ * part>" phrasing people actually say when describing flood depth.
+ */
+export const DEPTH_LABEL: Record<DepthLevel, LocalizedText> = {
+  dry: { en: "Dry", fil: "Walang baha" },
+  ankle: { en: "Ankle-deep", fil: "Hanggang bukong-bukong" },
+  knee: { en: "Knee-deep", fil: "Hanggang tuhod" },
+  waist: { en: "Waist-deep", fil: "Hanggang baywang" },
+  neck: { en: "Neck-deep", fil: "Hanggang leeg" },
 };
 
 /** Approximate water depth in centimetres for each reported level. */

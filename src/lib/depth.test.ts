@@ -12,12 +12,20 @@ describe("depth", () => {
     expect(DEPTH_LEVELS).toEqual(["dry", "ankle", "knee", "waist", "neck"]);
   });
 
-  it("labels every depth level", () => {
-    expect(DEPTH_LABEL.dry).toBe("Dry");
-    expect(DEPTH_LABEL.ankle).toBe("Ankle-deep");
-    expect(DEPTH_LABEL.knee).toBe("Knee-deep");
-    expect(DEPTH_LABEL.waist).toBe("Waist-deep");
-    expect(DEPTH_LABEL.neck).toBe("Neck-deep");
+  it("labels every depth level in English", () => {
+    expect(DEPTH_LABEL.dry.en).toBe("Dry");
+    expect(DEPTH_LABEL.ankle.en).toBe("Ankle-deep");
+    expect(DEPTH_LABEL.knee.en).toBe("Knee-deep");
+    expect(DEPTH_LABEL.waist.en).toBe("Waist-deep");
+    expect(DEPTH_LABEL.neck.en).toBe("Neck-deep");
+  });
+
+  it("labels every depth level in Filipino too — report copy is never a bare string", () => {
+    expect(DEPTH_LABEL.dry.fil).toBe("Walang baha");
+    expect(DEPTH_LABEL.ankle.fil).toBe("Hanggang bukong-bukong");
+    expect(DEPTH_LABEL.knee.fil).toBe("Hanggang tuhod");
+    expect(DEPTH_LABEL.waist.fil).toBe("Hanggang baywang");
+    expect(DEPTH_LABEL.neck.fil).toBe("Hanggang leeg");
   });
 
   it("maps each depth level to a cm estimate matching the PRD scale", () => {
