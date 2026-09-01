@@ -108,7 +108,7 @@ Reference figure heights: adult 170 cm, child 110 cm. At `neck` (150 cm) the chi
 
 **4. Crowdsourced water-level reporting** — Residents report water depth using the depth-reference visual (dry/ankle/knee/waist/neck), geotagged and timestamped. Enough reports crossing a threshold in one zone within a time window auto-generates a zone alert. Reports made offline queue via the Background Sync API and send automatically once connectivity returns, instead of failing outright.
 
-**5. Predictive flood timing & depth** — The prediction engine combines rainfall data (NASA GPM IMERG), terrain slope (SRTM DEM), and tidal data (NOAA) to estimate: (a) when flooding will reach a zone (timing), (b) how deep it will likely get (depth). Displayed as a simple timeline: "🟡 Advisory in 6h → 🟠 Watch in 3h → 🔴 Warning now → ⬛ Evacuate in 1h." Confidence level shown ("Estimated" until validated by local data).
+**5. Predictive flood timing & depth** — The prediction engine combines rainfall data, terrain slope, and tidal data to estimate: (a) when flooding will reach a zone (timing), (b) how deep it will likely get (depth). Displayed as a simple timeline. Confidence level shown ("Estimated" until validated by local data).
 
 **6. Cascade early warning** — If the prediction engine detects flooding heading toward downstream zones, it issues early warnings to those zones before their own crowd reports arrive. An upstream river gauge reading or heavy rainfall in Zone A triggers a "heads-up" alert in downstream Zone B — "Flooding detected upstream. Possible impact in 2–4 hours."
 
@@ -164,7 +164,7 @@ During an extended outage there's no way to recharge — battery is a survival r
 - Dark-mode-default UI (see Design Language above) — OLED screens cut power draw significantly.
 - Minimal background activity: no polling loops; service worker wakes only on push events or user action.
 - Background Sync queues writes instead of retrying on a timer.
-- **Battery-Aware Mode (Phase 2):** detect `navigator.getBattery()` (where available). Below 20% battery: reduce push frequency, simplify UI, pause non-essential updates. This extends survival during multi-day outages.
+- **Battery-Aware Mode (Phase 2):** detect battery status (where available). Below 20% battery: reduce push frequency, simplify UI, pause non-essential updates. This extends survival during multi-day outages.
 
 ### Push Delivery Strategy
 
@@ -187,18 +187,16 @@ The app serves smartphone users directly. Residents without smartphones are serv
 
 This is not a technical system — it's an operational one. It requires coordination with the barangay during the pilot, not code.
 
-### Data Sources (locked)
+### Data Sources (to be selected during implementation)
 
-| Purpose | Source | Notes |
+| Purpose | Source type | Notes |
 |---|---|---|
-| Weather/typhoon bulletins | [PANaHON](https://panahon.gov.ph/) (DOST-PAGASA official) | Authoritative reference; no confirmed public dev API |
-| Weather/typhoon bulletins (dev integration) | [bagyo-api](https://github.com/edwardguevarra/bagyo-api) | Free, keyless REST/JSON. Third-party, unofficial |
-| Bulletin parsing/archive | [PAGASA Parser](https://pagasa.chlod.net/) / [bulletin-archive](https://github.com/pagasa-parser/bulletin-archive) | Historical + parsed bulletins |
-| Rainfall backup | [NASA GPM IMERG](https://gpm.nasa.gov/data) | Satellite rainfall, 30-min resolution |
-| Flood/dam water levels | PAGASA FFWSDO / [ProjectLIGTAS](https://projectligtas.com/flood_monitoring) | No confirmed open third-party API — access gap; crowdsourced reports cover this for now |
-| Barangay boundaries / zone maps | [GeoRisk ArcGIS REST (PSA/Barangay)](https://portal.georisk.gov.ph/arcgis/rest/services/PSA/Barangay/MapServer), [philippines-json-maps](https://github.com/faeldon/philippines-json-maps), [philippines-psgc-shapefiles](https://github.com/altcoder/philippines-psgc-shapefiles) | Static — bundled directly into the app |
-| SMS delivery (optional, Phase 3+) | [PhilSMS](https://www.philsms.com/) (₱0.35/SMS) | REST API, no minimum top-up; only needed if real SMS delivery is required beyond the demo |
-| SMS delivery backup (optional, Phase 3+) | [Semaphore](https://semaphore.co/) (₱0.50/SMS) | Alternative provider |
+| Weather/typhoon bulletins | Philippine weather agency data + third-party API | Authoritative reference from PAGASA; dev integration via free keyless API |
+| Bulletin parsing/archive | Open-source parsers + GitHub archives | Historical + parsed bulletins |
+| Rainfall data | Satellite rainfall data (free, public) | 30-min resolution |
+| Flood/dam water levels | Crowdsourced reports cover this gap | No reliable public API for real-time water levels |
+| Barangay boundaries / zone maps | Open government data + open-source maps | Static — bundled directly into the app |
+| SMS delivery (optional, Phase 3+) | SMS provider (₱0.35–0.50/SMS) | Only needed if real SMS delivery is required beyond the demo |
 
 ### Architecture
 
@@ -222,24 +220,24 @@ This is not a technical system — it's an operational one. It requires coordina
 - `evacuation_centers`: id, zone_id, name, capacity (jsonb per-language), current_status (space_available/limited/full), updated_at, updated_by
 - `users` (Phase 2, optional): id, email, created_at, zone_id (nullable — set during onboarding)
 
-**Auto-trigger rule (illustrative, tunable):** ≥3 reports from different devices, same zone, within 30 minutes, average depth ≥ `waist` → auto-creates a Red-severity alert.
+**Auto-trigger rule (illustrative, tunable):** multiple reports from different devices, same zone, within a short time window, average depth above a threshold → auto-creates an alert. Exact values are configurable per zone.
 
 **Conservative starting thresholds (tunable per zone):**
 
-| Zone type | 6h rainfall | 12h rainfall | 24h rainfall | Crowd reports |
-|---|---|---|---|---|
-| Low-lying, near river | 30mm → Advisory | 50mm → Watch | 80mm → Warning | ≥3 reports → Red |
-| Moderate elevation | 50mm → Advisory | 80mm → Watch | 120mm → Warning | ≥3 reports → Red |
-| High elevation | 80mm → Advisory | 120mm → Watch | 180mm → Warning | ≥5 reports → Red |
+| Zone type | Rainfall thresholds | Crowd reports |
+|---|---|---|
+| Low-lying, near river | Lower thresholds → earlier alerts | Fewer reports needed |
+| Moderate elevation | Medium thresholds | Medium reports needed |
+| High elevation | Higher thresholds → later alerts | More reports needed |
 
 Start conservative (warn earlier, accept more false positives). "Better to warn and be wrong than miss a real event."
 
 **Confidence tagging:** every prediction is tagged with a confidence level:
-- **Estimated** — initial thresholds, no real event validation yet. Shown to users but clearly marked.
-- **Validated** — after ≥3 real events where the prediction matched actual crowd reports. More authoritative.
-- **Calibrated** — after ≥10 real events, auto-tuned by the calibration loop. Highest confidence.
+- **Estimated** — initial thresholds, no real event validation yet. Clearly marked in UI.
+- **Validated** — after several real events where the prediction matched actual crowd reports. More authoritative.
+- **Calibrated** — after many real events, auto-tuned by the calibration loop. Highest confidence.
 
-Confidence level is displayed in the UI: "⚠️ Estimated — based on initial thresholds" vs "✓ Validated by local data."
+Confidence level is displayed in the UI so users know how much to trust the prediction.
 
 **Calibration loop (Phase 3+):** after each real flood event, the system compares:
 1. What the threshold engine predicted (alert severity, timing)
@@ -325,7 +323,7 @@ All infrastructure runs on free tiers. Zero recurring costs for the prototype.
 - **Supabase** (free tier) — ₱0/month, 2 project limit
 - **GitHub** — free
 - **Web Push / VAPID** — free, no external service needed
-- **All data sources** — free (bagyo-api is keyless, NASA GPM and PSA/GeoRisk boundary data are open)
+- **All data sources** — free (open government data, open-source APIs, satellite data)
 
 **Free-tier operating constraints** — these cost a working demo rather than money, so they are planning items, not footnotes:
 
@@ -344,8 +342,8 @@ Mapped onto the repo's branch workflow — each phase has a concrete build plan,
 **Phase 1 (`hi-fi`)** — UI only, no backend. Everything is mock. Detailed task breakdown: [docs/superpowers/plans/2026-09-01-hi-fi-WeatherWell.md](docs/superpowers/plans/2026-09-01-hi-fi-WeatherWell.md).
 
 **What's mock in Phase 1:**
-- Alert data: hardcoded Typhoon Ondoy 2009 scenario (real rainfall amounts, real timeline)
-- Zone data: 3 mock zones with real barangay names, real evacuation center names
+- Alert data: hardcoded realistic typhoon scenario (real rainfall amounts, real timeline)
+- Zone data: 3 mock zones with realistic barangay names, evacuation center names
 - Push notifications: simulated (UI shows "Push sent ✓", no real push)
 - SMS: simulated (UI shows "SMS sent ✓", no real SMS)
 - Prediction engine: hardcoded timeline ("🟡 Advisory in 6h → 🟠 Watch in 3h → 🔴 Warning now → ⬛ Evacuate in 1h"), no real calculation
@@ -384,12 +382,12 @@ The hotline, language toggle, and onboarding ship this early because they are ch
 
 **Phase 2 (`v0`)** — Real data, real offline.
 - Build: Supabase schema (`zones`/`alerts`/`water_level_reports`/`push_subscriptions`/`users`) + RLS, Server Actions, service worker caching, installable PWA manifest. Add `confidence` field to alerts schema. Add `audit_log` table. Supabase Auth for optional resident accounts (email + password). Admin PIN gate for `/admin` page. Post-onboarding login prompt.
-- Plan: write migrations → wire Server Actions → implement service worker + Background Sync → seed pilot barangay data with realistic mock (Typhoon Ondoy scenario) → airplane-mode QA → set up Sentry free tier for error monitoring → set up UptimeRobot for uptime monitoring → add data retention auto-deletion cron → implement Supabase Auth → add login page → add admin PIN gate → add post-onboarding prompt → implement data migration (merge guest data into account on login).
+- Plan: write migrations → wire Server Actions → implement service worker + Background Sync → seed pilot barangay data with realistic mock (historical typhoon scenario) → airplane-mode QA → set up error monitoring (Sentry free tier or equivalent) → set up uptime monitoring (UptimeRobot or equivalent) → add data retention auto-deletion cron → implement Supabase Auth → add login page → add admin PIN gate → add post-onboarding prompt → implement data migration (merge guest data into account on login).
 - Exit criteria: app works fully offline on real seeded data after first online visit. Error monitoring active. Uptime monitoring active. Optional login works (guest mode remains default). Admin page protected by PIN.
 
 **Phase 3 (`v1`)** — Core mechanism goes live.
 - Build: threshold engine with conservative starting thresholds, Web Push subscription + delivery with retry, the 3 cheap anti-abuse layers (geofence, rate limit, multi-report threshold). Optional: real SMS provider integration (PhilSMS or equivalent) if needed beyond the demo. Configurable geofence tolerance per zone. Audit trail logging.
-- Plan: implement + unit-test threshold logic with conservative thresholds → implement Push with retry → geofence/rate-limit checks on report submission → integration test of push→cache fallback path → add configurable geofence tolerance (default 100m buffer) → log all alert actions to audit_log.
+- Plan: implement + unit-test threshold logic with conservative thresholds → implement Push with retry → geofence/rate-limit checks on report submission → integration test of push→cache fallback path → add configurable geofence tolerance → log all alert actions to audit_log.
 - Exit criteria: a simulated crowd-report scenario correctly auto-triggers an alert and delivers via push, with retry working correctly. Confidence tagging visible in UI. Audit trail functional.
 
 **Final Phase (`mvp`)** — Trust and inclusion polish that needs real usage to tune well.
@@ -407,25 +405,25 @@ The hotline, language toggle, and onboarding ship this early because they are ch
 
 | Data type | Retention | Reason |
 |---|---|---|
-| Location (from reports) | 24 hours | Only needed for geofence validation |
-| Crowd reports | 1 year | Needed for calibration loop |
-| Predictions / alerts | 2 years | Needed for model improvement |
+| Location (from reports) | Short-term (24h or less) | Only needed for geofence validation |
+| Crowd reports | Medium-term (1 year) | Needed for calibration loop |
+| Predictions / alerts | Long-term (2 years) | Needed for model improvement |
 | Device fingerprints | Until user clears storage | Rate limiting |
 | Alerts (issued) | Indefinite | Historical record, audit trail |
 
-Automated deletion via Supabase cron job. Users can request early deletion via the data export/deletion API.
+Exact retention periods are configurable. Automated deletion via cron job or scheduled function.
 
 ### RA 10173 Article 16 Compliance (Data Export & Deletion)
 
-- `GET /api/data-export` — returns all data associated with the user's device ID (reports, zone assignment, device fingerprint)
-- `DELETE /api/data-deletion` — deletes all data associated with the device ID
+- Data export endpoint: returns all data associated with the user's device ID (reports, zone assignment, device fingerprint)
+- Data deletion endpoint: deletes all data associated with the device ID
 - Both endpoints available from Phase 2. No phone numbers are stored, so phone-related deletion is not needed.
 
 ### Geofence Accuracy
 
 PSA/PSGC boundaries are indicative, not survey-grade. Mitigations:
 
-- **Configurable tolerance** — each zone has a geofence buffer (default 100m). Reports within the buffer are accepted.
+- **Configurable tolerance** — each zone has a geofence buffer (configurable, default generous). Reports within the buffer are accepted.
 - **Distance-weighted scoring** — reports near zone boundaries are accepted but weighted slightly lower than reports from the zone center.
 - **Manual zone selection** — residents can manually override their detected zone if GPS places them outside their actual zone.
 
@@ -433,13 +431,13 @@ PSA/PSGC boundaries are indicative, not survey-grade. Mitigations:
 
 The prediction engine uses:
 
-- **Rainfall** — NASA GPM IMERG (satellite, 30-min resolution)
-- **Slope/terrain** — NASA SRTM DEM (30m resolution, one-time processing to extract slope per zone)
-- **Wind speed** — bagyo-api (real-time typhoon wind data)
-- **Tidal data** — NOAA Tides & Currents API (for coastal zones)
-- **Building density** — PSA census data (housing units / zone area)
+- **Rainfall** — satellite rainfall data (free, public, 30-min resolution)
+- **Slope/terrain** — digital elevation model (one-time processing to extract slope per zone)
+- **Wind speed** — typhoon wind data from weather API
+- **Tidal data** — tide predictions for coastal zones
+- **Building density** — census data (housing units / zone area)
 
-Phase 1 uses mock slope and wind data for the 3 mock zones. Phase 2 bundles real slope from SRTM and real wind from bagyo-api.
+Phase 1 uses mock slope and wind data for the 3 mock zones. Phase 2 bundles real data from the sources selected during implementation.
 
 ### Evacuation Center Capacity
 
@@ -472,8 +470,8 @@ No separate training materials needed. The Community Drill scenario (Feature 10,
 
 Skip for prototype. If usage data is desired in Phase 2+:
 
-- [Plausible](https://plausible.io/) — no cookies, GDPR-compliant
-- [Umami](https://umami.is/) — self-hosted, no cookies
+- Use a privacy-respecting analytics tool (no cookies, GDPR-compliant)
+- Self-hosted options available for full control
 
 The calibration loop (predictions vs actuals) is more important than usage analytics.
 
@@ -495,8 +493,8 @@ After each alert expires, a 1-question survey: "Was this alert useful? (Yes / No
 
 ### Open Risks
 
-- PAGASA FFWSDO / official dam water-level API access unresolved
-- bagyo-api is an unofficial third-party scraper — fine for a prototype, pursue an official relationship for production
+- Weather data API access may be unreliable or change without notice
+- Third-party weather APIs are unofficial — fine for a prototype, pursue official relationships for production
 - Web Push delivery isn't guaranteed (device/browser dependent) — push retry and Share Alert button compensate, but this remains the primary delivery risk
 - RA 10173 compliance is stated by design here but not legally reviewed — recommend actual legal review before any real deployment beyond the pilot
 - Non-smartphone users have no direct app access — served only by community relay and printed cards, which require operational coordination
