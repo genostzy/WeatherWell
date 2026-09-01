@@ -9,6 +9,11 @@ import {
   type DepthLevel,
 } from "@/lib/depth";
 import { SEVERITY_HEX } from "@/lib/severity";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 export const ADULT_HEIGHT_CM = 170;
 export const CHILD_HEIGHT_CM = 110;
@@ -160,7 +165,14 @@ export function DepthReferenceVisual({ depthLevel }: { depthLevel: DepthLevel })
           strokeWidth={2}
         />
       </svg>
-      <figcaption className="text-base font-medium">{DEPTH_LABEL[depthLevel]}</figcaption>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <figcaption className="cursor-help text-base font-medium underline decoration-dotted">
+            {DEPTH_LABEL[depthLevel]}
+          </figcaption>
+        </TooltipTrigger>
+        <TooltipContent>Approximately {DEPTH_CM[depthLevel]} cm</TooltipContent>
+      </Tooltip>
     </figure>
   );
 }

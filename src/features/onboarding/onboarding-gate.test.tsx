@@ -24,4 +24,9 @@ describe("OnboardingGate", () => {
     render(<OnboardingGate />);
     expect(replace).not.toHaveBeenCalled();
   });
+
+  it("renders a loading skeleton, not the page underneath, before the check resolves", () => {
+    const { container } = render(<OnboardingGate />);
+    expect(container.querySelector('[data-testid="onboarding-gate-skeleton"]')).toBeInTheDocument();
+  });
 });

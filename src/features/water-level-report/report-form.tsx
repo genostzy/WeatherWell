@@ -15,12 +15,17 @@ export function ReportForm({
   onSubmit: (depthLevel: DepthLevel) => void;
 }) {
   const [depthLevel, setDepthLevel] = useState<DepthLevel>("dry");
+  const [submitting, setSubmitting] = useState(false);
 
   return (
     <form
       className="flex w-full max-w-md flex-col gap-6"
       onSubmit={(event) => {
         event.preventDefault();
+        // Optimistic: flip the button state and call onSubmit synchronously,
+        // on the assumption the write succeeds — Phase 3 reconciles this
+        // against the real Server Action result instead of a blocking wait.
+        setSubmitting(true);
         onSubmit(depthLevel);
       }}
     >
@@ -35,7 +40,7 @@ export function ReportForm({
       >
         {DEPTH_LEVELS.map((level) => (
           <div key={level} className="flex items-center space-x-3 py-2">
-            <RadioGroupItem value={level} id={`depth-${level}`} />
+            <RadioGroupItem value={level} id={`depth-${level}`} disabled={submitting} />
             <Label htmlFor={`depth-${level}`} className="text-base">
               {DEPTH_LABEL[level]}
             </Label>
@@ -43,7 +48,7 @@ export function ReportForm({
         ))}
       </RadioGroup>
 
-      <Button type="submit" size="lg">
+      <Button type="submit" size="lg" disabled={submitting}>
         Submit report
       </Button>
     </form>

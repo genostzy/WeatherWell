@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import type { ReactElement } from "react";
 import { render } from "@testing-library/react";
 import axe from "axe-core";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { AlertCard } from "@/features/alerts/alert-card";
 import { EvacuationInstructions } from "@/features/evacuation/evacuation-instructions";
 import { ReportForm } from "@/features/water-level-report/report-form";
@@ -12,7 +13,11 @@ import { EmergencyHotlineButton } from "@/components/emergency-hotline-button";
 import { MOCK_ZONES, MOCK_ALERTS } from "@/lib/mock-data";
 
 async function violationsFor(ui: ReactElement): Promise<string[]> {
-  const { container } = render(ui);
+  // ReportForm and EmergencyHotlineButton now render a shadcn Tooltip
+  // (Radix), which requires an ancestor TooltipProvider — the real app
+  // supplies this via layout.tsx. TooltipProvider renders no DOM of its
+  // own, so wrapping every case here is harmless for the other components.
+  const { container } = render(<TooltipProvider>{ui}</TooltipProvider>);
   const results = await axe.run(container, {
     rules: {
       // jsdom has no layout/paint, so axe cannot compute contrast here.

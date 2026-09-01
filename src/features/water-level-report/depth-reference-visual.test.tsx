@@ -1,10 +1,20 @@
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render as rtlRender, screen, type RenderResult } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import {
   DepthReferenceVisual,
   ADULT_HEIGHT_CM,
   CHILD_HEIGHT_CM,
 } from "./depth-reference-visual";
+
+// The depth label is now wrapped in a shadcn Tooltip (Radix), which throws
+// if rendered without an ancestor TooltipProvider. The real app supplies
+// this via layout.tsx; these unit tests render the component in isolation,
+// so we supply the same provider here.
+function render(ui: ReactElement): RenderResult {
+  return rtlRender(<TooltipProvider>{ui}</TooltipProvider>);
+}
 
 function fillHeight(container: HTMLElement, who: "adult" | "child"): number {
   const rect = container.querySelector(`[data-testid="${who}-fill"]`);
@@ -43,7 +53,11 @@ describe("DepthReferenceVisual", () => {
   it("raises the water as the depth level increases", () => {
     const { container, rerender } = render(<DepthReferenceVisual depthLevel="ankle" />);
     const shallow = fillHeight(container, "adult");
-    rerender(<DepthReferenceVisual depthLevel="waist" />);
+    rerender(
+      <TooltipProvider>
+        <DepthReferenceVisual depthLevel="waist" />
+      </TooltipProvider>
+    );
     expect(fillHeight(container, "adult")).toBeGreaterThan(shallow);
   });
 

@@ -1,6 +1,17 @@
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render as rtlRender, screen, type RenderResult } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { EmergencyHotlineButton } from "./emergency-hotline-button";
+
+// EmergencyHotlineButton now wraps its link in a shadcn Tooltip (Radix),
+// which throws without an ancestor TooltipProvider. The real app supplies
+// this via layout.tsx; supply the same here. TooltipTrigger asChild clones
+// its child rather than wrapping it, so the `link` role queries below are
+// unaffected.
+function render(ui: ReactElement): RenderResult {
+  return rtlRender(<TooltipProvider>{ui}</TooltipProvider>);
+}
 
 describe("EmergencyHotlineButton", () => {
   it("renders a tel: link with the given hotline number", () => {
