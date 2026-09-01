@@ -2,7 +2,9 @@
 
 *(Full technical spec also maintained at [docs/superpowers/specs/2026-09-01-citizen-app-phase1-design.md](docs/superpowers/specs/2026-09-01-citizen-app-phase1-design.md))*
 
-## Climate Resilience and Hydrometeorological Disaster Management — Phase 1: Citizen App
+## WeatherWell — Phase 1: Citizen App
+
+*(Challenge: Climate Resilience and Hydrometeorological Disaster Management)*
 
 ### Background
 

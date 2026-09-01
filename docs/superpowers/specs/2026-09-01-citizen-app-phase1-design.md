@@ -1,4 +1,6 @@
-# Climate Resilience and Hydrometeorological Disaster Management — PRD (Phase 1: Citizen App)
+# WeatherWell — PRD (Phase 1: Citizen App)
+
+*(Challenge: Climate Resilience and Hydrometeorological Disaster Management)*
 
 ## Background
 

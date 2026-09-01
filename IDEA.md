@@ -1,7 +1,9 @@
 # IDEA
 
 ## Project Title
-Climate Resilience and Hydrometeorological Disaster Management
+WeatherWell
+
+*(Challenge: Climate Resilience and Hydrometeorological Disaster Management)*
 
 ## Problem
 
