@@ -27,16 +27,13 @@ This product's differentiation: predictive early warning with cascade alerts and
 
 ### Governance & Stakeholders
 
-Not previously defined — stated explicitly here since the system has no automated "owner" for its content.
+Two roles in the system. No officers, no role-based access control.
 
 | Stakeholder | Role |
 |---|---|
-| **Residents** | End users; also crowdsourced data contributors via water-level reports |
-| **Barangay/City DRRMO officers** | Authoritative owners of evacuation-zone content; become manual alert issuers/moderators once the Authority Dashboard sub-project ships |
-| **Dev team (this project)** | System administrator through the phases below: hosts infrastructure (Vercel/Supabase), curates initial zone/evacuation data from public sources |
+| **Admin (developer)** | System operator — issues alerts, edits content, manages infrastructure, views audit trail. Access protected by a simple 4-digit PIN. |
+| **Residents** | End users — view alerts, report water levels, view evacuation instructions, share alerts. No account required (guest mode default). |
 | **PAGASA / national agencies** | Indirect stakeholder — data source only, not a system user |
-
-Until the Authority Dashboard sub-project exists, this system is **dev-curated, not officially operated** — the dev team stands in for the DRRMO role. This should be stated plainly wherever the system is presented, so it's clear this is a prototype standing in for a role barangay officials would eventually own.
 
 ### Scope
 
@@ -51,19 +48,19 @@ Software-only prototype. No physical hardware. Web-based, installable Progressiv
 4. Multi-channel alert delivery: push notification with retry → mock SMS fallback (demo) → offline cache; plus user-initiated "Share Alert" to Messenger/WhatsApp/Viber/SMS
 5. Predictive flood timing & depth (confidence-tagged, conservative starting thresholds)
 6. Cascade early warning (upstream → downstream zone alerts)
-7. Admin simulation & drill mode (pre-built scenarios, dedicated `/admin` page)
-8. Data model designed so the Authority Dashboard and a future real sensor-hardware feed can plug into the same tables later, without rework
+7. Admin simulation & drill mode (pre-built scenarios, dedicated `/admin` page, PIN-protected)
+8. Data model designed so a future real sensor-hardware feed can plug into the same tables later, without rework
 9. Community relay system and printed emergency cards for non-smartphone residents
+10. Optional account with guest-first access (Phase 2: email+password via Supabase Auth, guest mode default)
 
 **Out of scope (explicit roadmap, not built this phase):**
 - Physical water-level sensor hardware
-- Authority Dashboard (separate sub-project, later)
 - Dynamic routing engine for evacuation paths (zones use static pre-authored routes, not live routing)
 
 ### Target Users
 
 - Residents of flood- and typhoon-prone barangays
-- Local Disaster Risk Reduction and Management Offices (DRRMOs) — as future consumers via the Authority Dashboard sub-project
+- The developer/admin who operates the system
 
 ### Design Language & Crisis UX
 
@@ -121,7 +118,9 @@ Reference figure heights: adult 170 cm, child 110 cm. At `neck` (150 cm) the chi
 
 **9. One-tap emergency hotline** — A persistent, always-visible call button to the barangay/DRRMO emergency hotline, independent of app connectivity state.
 
-**10. Admin simulation & drill mode** — A dedicated `/admin` page with pre-built scenarios (Approaching Typhoon, Flash Flood, Coastal Surge, Monsoon Rain, Clear Skies, Community Drill). DRRMO officers select a zone and scenario, then watch the full alert flow unfold in real-time — from prediction → alert issuance → push notification → mock SMS → cached data display. Includes explanation text at each step. Serves as both a training tool and a demo for stakeholders.
+**10. Admin simulation & drill mode** — A dedicated `/admin` page with pre-built scenarios (Approaching Typhoon, Flash Flood, Coastal Surge, Monsoon Rain, Clear Skies, Community Drill). The admin selects a zone and scenario, then watches the full alert flow unfold in real-time — from prediction → alert issuance → push notification → mock SMS → cached data display. Includes explanation text at each step. Serves as both a training tool and a demo for stakeholders. Protected by a simple 4-digit PIN.
+
+**11. Optional account with guest-first access** — The app works fully without an account: device fingerprint, geofence, and local storage handle identity. An optional email+password account (Supabase Auth) adds cross-device sync, persistent reputation, and data export across devices. Guest mode is the default — the login prompt appears after onboarding and is dismissible.
 
 ### Data Trust & Anti-Abuse
 
@@ -155,6 +154,7 @@ The app collects location (geofencing, zone detection) — this is personal data
 
 - A plain-language consent notice is shown before the first location request: what's collected, why, and how it's used — no pre-ticked boxes, no bundling with unrelated permissions.
 - Location is used only for geofence validation and zone auto-detection, never stored beyond what's needed for report validation.
+- If the user chooses to create an account (Phase 2), email is collected for authentication only — never shared, never used for marketing. Account creation is optional; guest mode collects nothing beyond location (which is discarded after 24h).
 - Consent and data-handling notice ships from Phase 1 (hi-fi) as part of the UI, not deferred to a later phase.
 
 ### Power & Battery Considerations
@@ -204,12 +204,13 @@ This is not a technical system — it's an operational one. It requires coordina
 
 - **Frontend/App shell:** Next.js (App Router), TypeScript strict, RSC-first, feature-based structure
 - **UI:** shadcn/ui + Tailwind, High-Contrast Utility-First theme, dark-mode-default
-- **Backend/data:** Supabase — tables for `zones`, `alerts`, `water_level_reports`, `push_subscriptions`, `audit_log`, `evacuation_centers`; Row Level Security; Server Actions for all writes
+- **Backend/data:** Supabase — tables for `zones`, `alerts`, `water_level_reports`, `push_subscriptions`, `audit_log`, `evacuation_centers`, `users` (optional); Row Level Security; Server Actions for all writes
 - **Offline layer:** Service worker cache (cache-first for `zones`/evacuation data, long TTL; network-first with cache fallback for `alerts`); Background Sync for offline report submission
 - **Push:** Web Push API (VAPID keys), service worker handles push events and displays notifications even when the app isn't open; retries once after 60s if first attempt fails
 - **SMS (mock in Phase 1):** UI displays "SMS sent ✓" to demonstrate the fallback path; real SMS provider (PhilSMS or equivalent) plugged in during Phase 3+ if needed
 - **Prediction engine:** server-side (Supabase Edge Functions or Next.js API routes). Combines GPM rainfall + SRTM slope + NOAA tides → timing + depth estimate per zone. Conservative thresholds, confidence tagging, calibration loop.
 - **Cascade warning:** upstream zone alert → downstream zone "heads-up" alert before crowd reports arrive
+- **Auth (Phase 2):** Supabase Auth for optional resident accounts (email + password). Guest mode is default (device fingerprint). Admin page protected by 4-digit PIN (env variable).
 - **Depth reference:** severity/depth level enum shared between the report form, the map, and alert styling — one source of truth, not duplicated logic
 
 **Schema (illustrative):**
@@ -219,6 +220,7 @@ This is not a technical system — it's an operational one. It requires coordina
 - `push_subscriptions`: id, zone_id, device_id, endpoint, keys (jsonb)
 - `audit_log`: id, actor (device_id/officer), action (alert_issued/alert_edited/alert_cancelled/report_submitted), target_id, timestamp, details (jsonb)
 - `evacuation_centers`: id, zone_id, name, capacity (jsonb per-language), current_status (space_available/limited/full), updated_at, updated_by
+- `users` (Phase 2, optional): id, email, created_at, zone_id (nullable — set during onboarding)
 
 **Auto-trigger rule (illustrative, tunable):** ≥3 reports from different devices, same zone, within 30 minutes, average depth ≥ `waist` → auto-creates a Red-severity alert.
 
@@ -381,9 +383,9 @@ Mapped onto the repo's branch workflow — each phase has a concrete build plan,
 The hotline, language toggle, and onboarding ship this early because they are cheap in UI-only form and because a demo that never shows the consent flow fails the PRD's own privacy requirement.
 
 **Phase 2 (`v0`)** — Real data, real offline.
-- Build: Supabase schema (`zones`/`alerts`/`water_level_reports`/`push_subscriptions`) + RLS, Server Actions, service worker caching, installable PWA manifest. Add `confidence` field to alerts schema. Add `audit_log` table.
-- Plan: write migrations → wire Server Actions → implement service worker + Background Sync → seed pilot barangay data with realistic mock (Typhoon Ondoy scenario) → airplane-mode QA → set up Sentry free tier for error monitoring → set up UptimeRobot for uptime monitoring → add data retention auto-deletion cron.
-- Exit criteria: app works fully offline on real seeded data after first online visit. Error monitoring active. Uptime monitoring active.
+- Build: Supabase schema (`zones`/`alerts`/`water_level_reports`/`push_subscriptions`/`users`) + RLS, Server Actions, service worker caching, installable PWA manifest. Add `confidence` field to alerts schema. Add `audit_log` table. Supabase Auth for optional resident accounts (email + password). Admin PIN gate for `/admin` page. Post-onboarding login prompt.
+- Plan: write migrations → wire Server Actions → implement service worker + Background Sync → seed pilot barangay data with realistic mock (Typhoon Ondoy scenario) → airplane-mode QA → set up Sentry free tier for error monitoring → set up UptimeRobot for uptime monitoring → add data retention auto-deletion cron → implement Supabase Auth → add login page → add admin PIN gate → add post-onboarding prompt → implement data migration (merge guest data into account on login).
+- Exit criteria: app works fully offline on real seeded data after first online visit. Error monitoring active. Uptime monitoring active. Optional login works (guest mode remains default). Admin page protected by PIN.
 
 **Phase 3 (`v1`)** — Core mechanism goes live.
 - Build: threshold engine with conservative starting thresholds, Web Push subscription + delivery with retry, the 3 cheap anti-abuse layers (geofence, rate limit, multi-report threshold). Optional: real SMS provider integration (PhilSMS or equivalent) if needed beyond the demo. Configurable geofence tolerance per zone. Audit trail logging.
@@ -398,7 +400,8 @@ The hotline, language toggle, and onboarding ship this early because they are ch
 ### Future Roadmap (beyond this project)
 
 - Real water-level sensor hardware integration (schema already supports it)
-- Authority Dashboard sub-project
+- Multi-language expansion (Cebuano, Ilocano, Hiligaynon)
+- Role-based access (if DRRMO officers eventually operate the system)
 
 ### Data Retention Policy
 
@@ -461,9 +464,9 @@ This is a hyperlocal app, not a website. Distribution is physical, not digital:
 - **Word of mouth** — the Community Drill scenario is a viral moment — residents share the experience with neighbors.
 - **Barangay bulletin boards** — post flyers with QR code and simple instructions.
 
-### DRRMO Training (Built Into the App)
+### Training (Built Into the App)
 
-No separate training materials needed. The Community Drill scenario (Feature 10, Admin simulation & drill mode) walks officers through the system step-by-step with explanation text. The admin panel IS the training — it teaches itself through use.
+No separate training materials needed. The Community Drill scenario (Feature 10, Admin simulation & drill mode) walks the admin through the system step-by-step with explanation text. The admin panel IS the training — it teaches itself through use.
 
 ### Analytics (Optional, Privacy-Respecting)
 
