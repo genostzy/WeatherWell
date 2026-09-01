@@ -71,6 +71,16 @@ Crowdsourced water-level reports are the biggest fake-data risk surface (spam, p
 7. **Human override** — auto-triggered alerts are a fast first response, not final word. Once the Authority Dashboard sub-project exists, a DRRMO officer can confirm, downgrade, or cancel any auto-triggered alert.
 8. **Audit trail** — every report is retained with timestamp, location, and device id, enabling later review and threshold/weight tuning.
 
+### Accessibility & Inclusion
+
+Target users are a broad, often vulnerable population under disaster stress — accessibility isn't cosmetic here, it determines whether an alert actually reaches and is understood by the person who needs it.
+
+1. **Language** — Filipino (Tagalog) and English as the Phase 1 baseline; zone data model stores instruction text per-language so regional languages (Cebuano, Ilocano, etc.) can be added without rework.
+2. **WCAG AA baseline** — sufficient color contrast (critical for outdoor/low-light phone use), full keyboard navigation, screen-reader labels on all interactive elements, minimum touch target size for stressed or wet-handed use.
+3. **Low-literacy design** — evacuation instructions paired with icon/pictogram cues, not text-only, so meaning survives for residents who read poorly or not at all.
+4. **Audio alerts** — critical alerts can optionally be read aloud (device text-to-speech), supporting visually impaired and low-literacy users; text-based delivery (SMS, on-screen) stays primary too, so deaf/hard-of-hearing users aren't left dependent on audio.
+5. **Enrollment without ever opening the app** — SMS fallback needs a phone number on file; non-smartphone or first-time users enroll via a simple SMS opt-in keyword (e.g., text "JOIN [ZONE]" to a shortcode) or barangay-level bulk enrollment by the DRRMO, not solely through the PWA.
+
 ### Data Sources (locked)
 
 | Purpose | Source | Notes |
