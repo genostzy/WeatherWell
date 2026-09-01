@@ -64,6 +64,19 @@ Residents report water depth against a simple, non-technical visual reference (e
 ### 5. Zone & hazard maps
 Barangay zone boundaries and evacuation points are shown on a map, built from static, bundled boundary data (not a live geospatial API), consistent with the offline-first design.
 
+## Data Trust & Anti-Abuse
+
+Crowdsourced water-level reports are the biggest fake-data risk surface (spam, panic-triggering false reports, downplayed reports, spoofed location). Layered defense, no single point of failure:
+
+1. **Geofence check** — report must carry device GPS falling inside the claimed zone's boundary (checked against bundled zone polygon data). Outside-zone or missing-location reports are rejected or heavily downweighted.
+2. **Rate limiting** — one report per device per short window (e.g. 10 minutes), preventing flood-spam from a single source.
+3. **Multi-report threshold** — an alert requires several independent, agreeing reports in the same zone within a tight time window; no single report can trigger an alert alone.
+4. **Outlier downweighting** — a report that disagrees sharply with nearby reports is discounted rather than trusted outright; clusters of agreement carry more weight than any lone report.
+5. **Lightweight identity** — reporter phone number verified once via SMS OTP (not full account signup), raising the cost of abuse above free-and-anonymous.
+6. **Reputation scoring** — devices whose past reports matched verified outcomes (official bulletins, other confirming reports) count more over time; devices with a poor track record count less. Self-correcting without manual moderation for most cases.
+7. **Human override** — auto-triggered alerts are a fast first response, not final word. Once the Authority Dashboard sub-project exists, a DRRMO officer can confirm, downgrade, or cancel any auto-triggered alert.
+8. **Audit trail** — every report is retained with timestamp, location, and device id, enabling later review and threshold/weight tuning.
+
 ## Data Sources (locked)
 
 | Purpose | Source | Notes |
@@ -101,7 +114,7 @@ Barangay zone boundaries and evacuation points are shown on a map, built from st
 ## Error Handling
 
 - Stale cached data is visually flagged (timestamp + "may be outdated" indicator), never presented as live without qualification
-- Crowdsourced reports include basic abuse mitigation: geofence validation (report must originate near the claimed zone) and per-device rate limiting
+- Crowdsourced reports go through the full Data Trust & Anti-Abuse pipeline above before affecting any alert
 - SMS delivery failures are logged server-side and retried against the backup provider (Semaphore)
 
 ## Testing Approach
