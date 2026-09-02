@@ -45,9 +45,10 @@ Software-only prototype. No physical hardware. PWA, not native app.
 8. Cascade early warning (upstream → downstream)
 9. Hazard-tile map backdrop — static baseline Flood/Landslide/Storm Surge risk per zone, shown as the map's tile layer instead of drawn zone boundaries (mocked in Phase 1, real open government hazard data in Phase 2+)
 10. Admin simulation & drill mode (6 pre-built scenarios; PIN-protected from Phase 2, unauthenticated mock in Phase 1)
-11. Share Alert button (user-initiated forwarding to Messenger/WhatsApp/Viber/SMS)
-12. Community relay system + printed emergency cards for non-smartphone residents
-13. Optional account with guest-first access (Phase 2)
+11. Admin analytics dashboard — report/alert/cascade trend views for the admin role, built on the audit trail (Phase 3+)
+12. Share Alert button (user-initiated forwarding to Messenger/WhatsApp/Viber/SMS)
+13. Community relay system + printed emergency cards for non-smartphone residents
+14. Optional account with guest-first access (Phase 2)
 
 **Out of scope:**
 - Physical water-level sensor hardware
@@ -128,9 +129,11 @@ Four plain-language labels for at-a-glance map reading, in keeping with the low-
 
 12. **Admin simulation & drill mode** — Dedicated `/admin` page with 6 pre-built scenarios. Admin selects zone and scenario, watches full alert flow unfold in real-time with explanation text. PIN-protected from Phase 2; Phase 1 ships it as an unauthenticated mock demo surface.
 
-13. **Share Alert button** — One-tap forward of alert text to any messaging app (Messenger, WhatsApp, Viber, SMS). User-initiated, viral, free.
+13. **Admin analytics dashboard** — Aggregates report, alert, and cascade history into trend views (reports over time, alert frequency per zone, false-alarm rate) for the admin role, built on top of the audit trail. Ships once there's real data worth aggregating and the audit trail exists to read from (Phase 3+) — Phase 1/2 have no volume to show trends on yet.
 
-14. **Optional account** — App works fully without an account (device fingerprint, geofence, local storage). Optional email+password (Phase 2) adds cross-device sync. Guest mode is default, login prompt is dismissible.
+14. **Share Alert button** — One-tap forward of alert text to any messaging app (Messenger, WhatsApp, Viber, SMS). User-initiated, viral, free.
+
+15. **Optional account** — App works fully without an account (device fingerprint, geofence, local storage). Optional email+password (Phase 2) adds cross-device sync. Guest mode is default, login prompt is dismissible.
 
 ### Anti-Abuse
 
@@ -216,6 +219,7 @@ This is an operational system, not a technical one — requires coordination wit
 - **SMS (Phase 1 mock):** UI displays "SMS sent ✓"; real provider plugged in Phase 3+
 - **Prediction engine:** server-side. Combines rainfall + slope + tides → timing + depth per zone. Conservative thresholds, confidence tagging, calibration loop
 - **Cascade warning:** upstream zone alert → downstream "heads-up" before crowd reports arrive
+- **Admin analytics dashboard:** reads existing `water_level_reports`, `alerts`, and `audit_log` tables into trend views (reports over time, alert frequency per zone, false-alarm rate) — no new infrastructure, just aggregation queries. Ships Phase 3+, once the audit trail exists and there's real data worth trending
 - **Hazard-tile map backdrop:** static per-zone Flood/Landslide/Storm Surge risk (Low/Medium/High), rendered as the map's persistent tile-style backdrop (no drawn zone boundaries) — a client-side area-shading overlay from stored classification data, not a separate raster tile-serving pipeline. Phase 1 mocks this styling for the 3 demo zones; Phase 2+ seeds it from real open Philippine government hazard datasets (DENR-MGB geohazard maps, PAGASA) — free, public, downloaded once and stored in Supabase, not fetched live from any hazard-mapping agency's own service. Live per-zone alert status renders separately as a colored marker, never a fill
 - **Auth (Phase 2):** Supabase Auth for optional accounts (email + password). Guest mode default. Admin PIN gate.
 - **Data sources:** Philippine weather agency data, satellite rainfall, open government boundaries, open-source maps, open government hazard-susceptibility datasets — all free/public
@@ -289,7 +293,7 @@ Phase 1 (`hi-fi`) cannot move these — it has no backend and no users. Its exit
 - Exit criteria: app works fully offline on real seeded data. Error/uptime monitoring active. Optional login works.
 
 **Phase 3 (`v1`)** — Core mechanism live.
-- Build: threshold engine, Web Push with retry, 3 anti-abuse layers (geofence, rate limit, multi-report) — covering both water-level reports and pin votes — audit trail
+- Build: threshold engine, Web Push with retry, 3 anti-abuse layers (geofence, rate limit, multi-report) — covering both water-level reports and pin votes — audit trail, basic admin analytics dashboard (report/alert/cascade trend views) built on the new audit trail
 - Exit criteria: crowd-report scenario correctly auto-triggers alert and delivers via push with retry
 
 **Final Phase (`mvp`)** — Trust and polish.
@@ -300,7 +304,14 @@ Phase 1 (`hi-fi`) cannot move these — it has no backend and no users. Its exit
 
 - Real water-level sensor hardware integration (schema supports it)
 - Multi-language expansion (Cebuano, Ilocano, Hiligaynon)
-- Role-based access (if DRRMO officers eventually operate the system)
+- Role-based access for LGU/responder tooling (if DRRMO officers eventually operate the system) — a deliberate reversal of the current no-RBAC governance model (see Governance), not a small add: real authentication, permissions, and audit requirements come with it
+- Multi-hazard expansion (landslide, storm surge, drought, heatwave) — considered and deliberately deferred: each hazard needs its own data model and crowd-report vocabulary (there's no landslide/heatwave equivalent of the ankle/knee/waist/neck depth scale), so this isn't an extension of the flood-specific engine, it's a set of parallel products
+- Climate adaptation planning tools (infrastructure/agriculture/water-management strategy) — considered and deliberately out of scope: a different audience (government planners) and timescale (months/years) than this app's live-event focus
+
+### Open Risks
+
+- Web Push delivery isn't guaranteed (device/browser dependent) — retry and Share Alert compensate
+- RA 10173 compliance stated by design but not legally reviewed — recommend legal review before real deployment
 
 ### Open Risks
 
