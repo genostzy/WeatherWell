@@ -1,4 +1,12 @@
-import type { Zone, AlertRecord, PredictionStep, CascadeAlert } from "./types";
+import type {
+  Zone,
+  AlertRecord,
+  PredictionStep,
+  CascadeAlert,
+  PointOfInterest,
+  HazardType,
+  HazardRiskLevel,
+} from "./types";
 
 export const MOCK_ZONES: Zone[] = [
   {
@@ -10,6 +18,15 @@ export const MOCK_ZONES: Zone[] = [
       en: "Head to Rizal St., then straight ahead to the school gym on your right.",
       fil: "Dumaan sa Rizal St., pagkatapos ay diretso sa gym ng paaralan sa iyong kanan.",
     },
+    lat: 14.656,
+    lng: 121.1015,
+    evacuationCenterLat: 14.657,
+    evacuationCenterLng: 121.1005,
+    evacuationRoutePath: [
+      [14.656, 121.1015],
+      [14.6565, 121.101],
+      [14.657, 121.1005],
+    ],
     hotlineNumber: "09171234567",
     centerStatus: "space_available",
     downstreamZoneId: "zone-2",
@@ -23,6 +40,15 @@ export const MOCK_ZONES: Zone[] = [
       en: "Take Mabini St. north to the covered court beside the health center.",
       fil: "Dumaan sa Mabini St. pahilaga papunta sa covered court katabi ng health center.",
     },
+    lat: 14.648,
+    lng: 121.105,
+    evacuationCenterLat: 14.647,
+    evacuationCenterLng: 121.106,
+    evacuationRoutePath: [
+      [14.648, 121.105],
+      [14.6475, 121.1055],
+      [14.647, 121.106],
+    ],
     hotlineNumber: "09171234568",
     centerStatus: "limited",
     downstreamZoneId: "zone-3",
@@ -36,6 +62,15 @@ export const MOCK_ZONES: Zone[] = [
       en: "Follow Bonifacio Ave. east, then turn left at the chapel to reach the high school.",
       fil: "Sundan ang Bonifacio Ave. pasilangan, kumaliwa sa kapilya papunta sa high school.",
     },
+    lat: 14.658,
+    lng: 121.112,
+    evacuationCenterLat: 14.659,
+    evacuationCenterLng: 121.113,
+    evacuationRoutePath: [
+      [14.658, 121.112],
+      [14.6585, 121.1125],
+      [14.659, 121.113],
+    ],
     hotlineNumber: "09171234569",
     centerStatus: "space_available",
   },
@@ -169,6 +204,68 @@ export const MOCK_SCENARIOS = [
     },
   },
 ];
+
+export const MOCK_POIS: PointOfInterest[] = [
+  {
+    id: "poi-1",
+    zoneId: "zone-1",
+    category: "health_center",
+    name: "San Isidro Health Center",
+    lat: 14.6555,
+    lng: 121.102,
+  },
+  {
+    id: "poi-2",
+    zoneId: "zone-1",
+    category: "market",
+    name: "San Isidro Public Market",
+    lat: 14.6565,
+    lng: 121.101,
+  },
+  {
+    id: "poi-3",
+    zoneId: "zone-2",
+    category: "pharmacy",
+    name: "Malinis Botika",
+    lat: 14.6485,
+    lng: 121.1045,
+  },
+  {
+    id: "poi-4",
+    zoneId: "zone-2",
+    category: "water_station",
+    name: "Malinis Water Refilling Station",
+    lat: 14.6475,
+    lng: 121.1055,
+  },
+  {
+    id: "poi-5",
+    zoneId: "zone-3",
+    category: "barangay_office",
+    name: "Bagong Silang Barangay Hall",
+    lat: 14.6575,
+    lng: 121.1115,
+  },
+];
+
+export const MOCK_HAZARD_SUSCEPTIBILITY: Record<
+  string,
+  Record<HazardType, HazardRiskLevel>
+> = {
+  "zone-1": { flood: "high", landslide: "low", storm_surge: "low" },
+  "zone-2": { flood: "high", landslide: "low", storm_surge: "medium" },
+  "zone-3": { flood: "medium", landslide: "medium", storm_surge: "low" },
+};
+
+export function getPOIsForZone(zoneId: string): PointOfInterest[] {
+  return MOCK_POIS.filter((poi) => poi.zoneId === zoneId);
+}
+
+export function getHazardSusceptibilityForZone(
+  zoneId: string
+): Record<HazardType, HazardRiskLevel> {
+  return MOCK_HAZARD_SUSCEPTIBILITY[zoneId];
+}
 
 export function getActiveAlertForZone(zoneId: string): AlertRecord | undefined {
   return MOCK_ALERTS.find((alert) => alert.zoneId === zoneId && alert.isActive);

@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { MOCK_ZONES, MOCK_ALERTS, getActiveAlertForZone } from "./mock-data";
+import {
+  MOCK_ZONES,
+  MOCK_ALERTS,
+  MOCK_POIS,
+  MOCK_HAZARD_SUSCEPTIBILITY,
+  getActiveAlertForZone,
+  getPOIsForZone,
+  getHazardSusceptibilityForZone,
+} from "./mock-data";
 import { t } from "./i18n";
 
 describe("mock-data", () => {
@@ -53,5 +61,45 @@ describe("t", () => {
 
   it("falls back to English when a translation is empty", () => {
     expect(t({ en: "Hello", fil: "" }, "fil")).toBe("Hello");
+  });
+});
+
+describe("map mock data", () => {
+  it("gives every zone real coordinates for the homepage map", () => {
+    for (const zone of MOCK_ZONES) {
+      expect(typeof zone.lat).toBe("number");
+      expect(typeof zone.lng).toBe("number");
+      expect(typeof zone.evacuationCenterLat).toBe("number");
+      expect(typeof zone.evacuationCenterLng).toBe("number");
+      expect(zone.evacuationRoutePath.length).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  it("covers all five essential-service categories across the mock POIs", () => {
+    const categories = new Set(MOCK_POIS.map((poi) => poi.category));
+    expect(categories).toEqual(
+      new Set(["health_center", "pharmacy", "market", "water_station", "barangay_office"])
+    );
+  });
+
+  it("returns only the POIs belonging to the requested zone", () => {
+    const zone1Pois = getPOIsForZone("zone-1");
+    expect(zone1Pois.length).toBeGreaterThan(0);
+    expect(zone1Pois.every((poi) => poi.zoneId === "zone-1")).toBe(true);
+  });
+
+  it("gives every zone a risk level for all three hazard types", () => {
+    for (const zone of MOCK_ZONES) {
+      const risk = getHazardSusceptibilityForZone(zone.id);
+      expect(risk.flood).toBeDefined();
+      expect(risk.landslide).toBeDefined();
+      expect(risk.storm_surge).toBeDefined();
+    }
+  });
+
+  it("has an entry in MOCK_HAZARD_SUSCEPTIBILITY for every zone", () => {
+    for (const zone of MOCK_ZONES) {
+      expect(MOCK_HAZARD_SUSCEPTIBILITY[zone.id]).toBeDefined();
+    }
   });
 });
