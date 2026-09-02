@@ -4,7 +4,9 @@ import { Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
-import type { AlertRecord, Zone } from "@/lib/types";
+import type { AlertRecord, LocalizedText, Zone } from "@/lib/types";
+
+const SHARE_ALERT: LocalizedText = { en: "Share Alert", fil: "Ibahagi" };
 
 export function ShareAlertButton({
   alert,
@@ -14,6 +16,7 @@ export function ShareAlertButton({
   zone: Zone;
 }) {
   const { lang } = useLanguage();
+  const shareLabel = t(SHARE_ALERT, lang);
 
   const shareText = `⚠️ ${alert.severity.toUpperCase()} — ${zone.name}\n${t(alert.message, lang)}\n📍 ${zone.evacuationCenterName}`;
 
@@ -29,7 +32,7 @@ export function ShareAlertButton({
       }
     } else {
       const smsUrl = `sms:?body=${encodeURIComponent(shareText)}`;
-      window.open(smsUrl, "_blank");
+      window.location.href = smsUrl;
     }
   };
 
@@ -39,10 +42,10 @@ export function ShareAlertButton({
       size="sm"
       onClick={handleShare}
       className="gap-2"
-      aria-label="Share this alert"
+      aria-label={shareLabel}
     >
       <Share2 className="h-4 w-4" />
-      {lang === "fil" ? "Ibahagi" : "Share Alert"}
+      {shareLabel}
     </Button>
   );
 }

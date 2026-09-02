@@ -4,6 +4,7 @@ import { Badge } from "./badge";
 import { Button } from "./button";
 import { Card } from "./card";
 import { RadioGroup, RadioGroupItem } from "./radio-group";
+import { Select, SelectTrigger, SelectValue } from "./select";
 
 /**
  * The PRD asks for high-contrast, large targets and thick borders. These are
@@ -43,5 +44,16 @@ describe("shared control sizing", () => {
     expect(badge.className).toMatch(/h-7/);
     expect(badge.className).toMatch(/text-sm/);
     expect(badge.className).not.toMatch(/text-xs/);
+  });
+
+  it("gives the select trigger at least a 44px height", () => {
+    render(
+      <Select value="a">
+        <SelectTrigger aria-label="Zone">
+          <SelectValue />
+        </SelectTrigger>
+      </Select>
+    );
+    expect(screen.getByRole("combobox").className).toMatch(/h-11/);
   });
 });

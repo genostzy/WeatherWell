@@ -35,8 +35,8 @@ export function AlertCard({
               {t(alert.message, lang)}
             </p>
             {alert.predictedTiming && (
-              <p className="text-sm text-muted-foreground">
-                ⏱ {alert.predictedTiming}
+              <p lang={lang} className="text-sm text-muted-foreground">
+                ⏱ {t(alert.predictedTiming, lang)}
               </p>
             )}
             <div className="flex items-center justify-between">

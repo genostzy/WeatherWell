@@ -33,7 +33,7 @@ export interface AlertRecord {
   message: LocalizedText;
   source: AlertSource;
   confidence: ConfidenceLevel;
-  predictedTiming?: string;
+  predictedTiming?: LocalizedText;
   issuedAt: string;
   isActive: boolean;
 }
@@ -41,7 +41,7 @@ export interface AlertRecord {
 export interface PredictionStep {
   severity: Severity;
   label: LocalizedText;
-  timing: string;
+  timing: LocalizedText;
 }
 
 export interface CascadeAlert {

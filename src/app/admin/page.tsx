@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,17 +21,18 @@ import {
   WifiOff,
   Play,
   RotateCcw,
+  AlertTriangle,
 } from "lucide-react";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
-import { SEVERITY_HEX } from "@/lib/severity";
+import { PredictionTimeline } from "@/features/alerts/prediction-timeline";
 import {
   MOCK_ZONES,
   MOCK_SCENARIOS,
   getPredictionsForZone,
   MOCK_CASCADES,
 } from "@/lib/mock-data";
-import type { Zone, PredictionStep } from "@/lib/types";
+import type { LocalizedText, Zone } from "@/lib/types";
 
 type SimulationStep =
   | "idle"
@@ -43,6 +44,8 @@ type SimulationStep =
   | "cached"
   | "cascade"
   | "complete";
+
+type IndicatorStep = Exclude<SimulationStep, "idle" | "complete">;
 
 const STEP_EXPLANATION = {
   en: {
@@ -66,6 +69,94 @@ const STEP_EXPLANATION = {
     complete: "Simulation tapos na. Lahat ng delivery channels na-demonstrate.",
   },
 };
+
+const STEP_LABEL: Record<IndicatorStep, LocalizedText> = {
+  predicting: { en: "Prediction", fil: "Prediksyon" },
+  "alert-issued": { en: "Alert Issued", fil: "Alert Na-issue" },
+  "push-sent": { en: "Push Notification", fil: "Push Notification" },
+  "push-failed": { en: "Push Failed", fil: "Push Nabigo" },
+  "sms-sent": { en: "SMS (mock)", fil: "SMS (mock)" },
+  cached: { en: "Cached Offline", fil: "Naka-cache" },
+  cascade: { en: "Cascade Warning", fil: "Cascade Warning" },
+};
+
+const SUBTITLE: LocalizedText = {
+  en: "Test the alert flow for training and demo",
+  fil: "Subukan ang alert flow para sa pagsasanay",
+};
+const ZONE_LABEL: LocalizedText = { en: "Zone", fil: "Zone" };
+const SCENARIO_LABEL: LocalizedText = { en: "Scenario", fil: "Senaryo" };
+const ALERT_FLOW: LocalizedText = { en: "Alert Flow", fil: "Daloy ng Alert" };
+const RETRY_IN_60S: LocalizedText = { en: "Retry in 60s", fil: "Ulitin sa loob ng 60s" };
+const RUN_AGAIN: LocalizedText = { en: "Run Again", fil: "Muli" };
+const START_SIMULATION: LocalizedText = { en: "Start Simulation", fil: "Simulan" };
+const RESET: LocalizedText = { en: "Reset", fil: "I-reset" };
+
+function isStepDone(
+  step: SimulationStep,
+  currentStep: SimulationStep,
+  stepHistory: SimulationStep[]
+): boolean {
+  return (
+    stepHistory.indexOf(step) < stepHistory.indexOf(currentStep) ||
+    (currentStep === "complete" && stepHistory.includes(step))
+  );
+}
+
+function StepIndicator({
+  label,
+  icon: Icon,
+  isActive,
+  isDone,
+  retryBadge,
+}: {
+  label: string;
+  icon: React.ElementType;
+  isActive: boolean;
+  isDone: boolean;
+  retryBadge?: string;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <div
+        className={`flex h-8 w-8 items-center justify-center rounded-full border-2 ${
+          isActive
+            ? "border-severity-orange bg-severity-orange/20"
+            : isDone
+            ? "border-green-500 bg-green-500/20"
+            : "border-muted-foreground/30"
+        }`}
+      >
+        <Icon
+          className={`h-4 w-4 ${
+            isActive
+              ? "text-severity-orange"
+              : isDone
+              ? "text-green-500"
+              : "text-muted-foreground"
+          }`}
+        />
+      </div>
+      <span
+        className={`text-sm ${
+          isActive
+            ? "font-medium text-severity-orange"
+            : isDone
+            ? "text-green-500"
+            : "text-muted-foreground"
+        }`}
+      >
+        {label}
+      </span>
+      {isDone && <CheckCircle2 className="h-4 w-4 text-green-500" />}
+      {isActive && retryBadge && (
+        <Badge variant="outline" className="text-xs text-yellow-500">
+          {retryBadge}
+        </Badge>
+      )}
+    </div>
+  );
+}
 
 export default function AdminPage() {
   const { lang } = useLanguage();
@@ -124,81 +215,20 @@ export default function AdminPage() {
     setStepHistory([]);
   };
 
-  const StepIndicator = ({
-    step,
-    label,
-    icon: Icon,
-  }: {
-    step: SimulationStep;
-    label: string;
-    icon: React.ElementType;
-  }) => {
-    const isActive = currentStep === step;
-    const isDone = stepHistory.indexOf(step) < stepHistory.indexOf(currentStep) ||
-      (currentStep === "complete" && stepHistory.includes(step));
-
-    return (
-      <div className="flex items-center gap-2">
-        <div
-          className={`flex h-8 w-8 items-center justify-center rounded-full border-2 ${
-            isActive
-              ? "border-severity-orange bg-severity-orange/20"
-              : isDone
-              ? "border-green-500 bg-green-500/20"
-              : "border-muted-foreground/30"
-          }`}
-        >
-          <Icon
-            className={`h-4 w-4 ${
-              isActive
-                ? "text-severity-orange"
-                : isDone
-                ? "text-green-500"
-                : "text-muted-foreground"
-            }`}
-          />
-        </div>
-        <span
-          className={`text-sm ${
-            isActive
-              ? "font-medium text-severity-orange"
-              : isDone
-              ? "text-green-500"
-              : "text-muted-foreground"
-          }`}
-        >
-          {label}
-        </span>
-        {isDone && <CheckCircle2 className="h-4 w-4 text-green-500" />}
-        {isActive && step === "push-failed" && (
-          <Badge variant="outline" className="text-xs text-yellow-500">
-            Retry in 60s
-          </Badge>
-        )}
-      </div>
-    );
-  };
-
   return (
     <main className="flex min-h-screen flex-col items-center gap-6 p-6">
       <div className="w-full max-w-2xl space-y-6">
         <div>
-          <h1 className="text-2xl font-bold">
-            {lang === "fil" ? "Admin Simulation" : "Admin Simulation"}
-          </h1>
-          <p className="text-muted-foreground">
-            {lang === "fil"
-              ? "Subukan ang alert flow para sa pagsasanay"
-              : "Test the alert flow for training and demo"}
-          </p>
+          <h1 className="text-2xl font-bold">Admin Simulation</h1>
+          <p className="text-muted-foreground">{t(SUBTITLE, lang)}</p>
         </div>
 
         <Separator />
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
-            <label className="text-sm font-medium">
-              {lang === "fil" ? "Zone" : "Zone"}
+            <label htmlFor="admin-zone-select" className="text-sm font-medium">
+              {t(ZONE_LABEL, lang)}
             </label>
             <Select
               value={selectedZone.id}
@@ -207,7 +237,7 @@ export default function AdminPage() {
                 resetSimulation();
               }}
             >
-              <SelectTrigger>
+              <SelectTrigger id="admin-zone-select">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -221,8 +251,8 @@ export default function AdminPage() {
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">
-              {lang === "fil" ? "Senaryo" : "Scenario"}
+            <label htmlFor="admin-scenario-select" className="text-sm font-medium">
+              {t(SCENARIO_LABEL, lang)}
             </label>
             <Select
               value={selectedScenario}
@@ -231,7 +261,7 @@ export default function AdminPage() {
                 resetSimulation();
               }}
             >
-              <SelectTrigger>
+              <SelectTrigger id="admin-scenario-select">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -263,83 +293,58 @@ export default function AdminPage() {
         </Card>
 
         {predictions.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <span>🌊</span>
-                <span>{lang === "fil" ? "Prediksyon" : "Prediction Timeline"}</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-1">
-                {predictions.map((step, i) => (
-                  <div key={i} className="flex items-center">
-                    <div className="flex flex-col items-center gap-1">
-                      <div
-                        className="h-4 w-4 rounded-full border-2"
-                        style={{
-                          backgroundColor: SEVERITY_HEX[step.severity],
-                          borderColor: SEVERITY_HEX[step.severity],
-                        }}
-                      />
-                      <span className="text-xs font-medium">{step.timing}</span>
-                      <span className="text-[10px] text-muted-foreground">
-                        {t(step.label, lang)}
-                      </span>
-                    </div>
-                    {i < predictions.length - 1 && (
-                      <div className="mx-1 h-0.5 w-8 bg-muted-foreground/30" />
-                    )}
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+          <PredictionTimeline steps={predictions} zoneName={selectedZone.name} />
         )}
 
         <Separator />
 
         <div className="space-y-4">
-          <h2 className="text-lg font-semibold">
-            {lang === "fil" ? "Daloy ng Alert" : "Alert Flow"}
-          </h2>
+          <h2 className="text-lg font-semibold">{t(ALERT_FLOW, lang)}</h2>
 
           <div className="space-y-3">
             <StepIndicator
-              step="predicting"
-              label={lang === "fil" ? "Prediksyon" : "Prediction"}
+              label={t(STEP_LABEL.predicting, lang)}
               icon={Wifi}
+              isActive={currentStep === "predicting"}
+              isDone={isStepDone("predicting", currentStep, stepHistory)}
             />
             <StepIndicator
-              step="alert-issued"
-              label={lang === "fil" ? "Alert Na-issue" : "Alert Issued"}
+              label={t(STEP_LABEL["alert-issued"], lang)}
               icon={Bell}
+              isActive={currentStep === "alert-issued"}
+              isDone={isStepDone("alert-issued", currentStep, stepHistory)}
             />
             <StepIndicator
-              step="push-sent"
-              label={lang === "fil" ? "Push Notification" : "Push Notification"}
+              label={t(STEP_LABEL["push-sent"], lang)}
               icon={Smartphone}
+              isActive={currentStep === "push-sent"}
+              isDone={isStepDone("push-sent", currentStep, stepHistory)}
             />
             <StepIndicator
-              step="push-failed"
-              label={lang === "fil" ? "Push Nabigo" : "Push Failed"}
+              label={t(STEP_LABEL["push-failed"], lang)}
               icon={WifiOff}
+              isActive={currentStep === "push-failed"}
+              isDone={isStepDone("push-failed", currentStep, stepHistory)}
+              retryBadge={t(RETRY_IN_60S, lang)}
             />
             <StepIndicator
-              step="sms-sent"
-              label="SMS (mock)"
+              label={t(STEP_LABEL["sms-sent"], lang)}
               icon={MessageSquare}
+              isActive={currentStep === "sms-sent"}
+              isDone={isStepDone("sms-sent", currentStep, stepHistory)}
             />
             <StepIndicator
-              step="cached"
-              label={lang === "fil" ? "Naka-cache" : "Cached Offline"}
+              label={t(STEP_LABEL.cached, lang)}
               icon={CheckCircle2}
+              isActive={currentStep === "cached"}
+              isDone={isStepDone("cached", currentStep, stepHistory)}
             />
             {cascade && (
               <StepIndicator
-                step="cascade"
-                label={lang === "fil" ? "Cascade Warning" : "Cascade Warning"}
+                label={t(STEP_LABEL.cascade, lang)}
                 icon={AlertTriangle}
+                isActive={currentStep === "cascade"}
+                isDone={isStepDone("cascade", currentStep, stepHistory)}
               />
             )}
           </div>
@@ -362,43 +367,16 @@ export default function AdminPage() {
             className="gap-2"
           >
             <Play className="h-4 w-4" />
-            {currentStep === "complete"
-              ? lang === "fil"
-                ? "Muli"
-                : "Run Again"
-              : lang === "fil"
-              ? "Simulan"
-              : "Start Simulation"}
+            {currentStep === "complete" ? t(RUN_AGAIN, lang) : t(START_SIMULATION, lang)}
           </Button>
           {currentStep !== "idle" && (
             <Button variant="outline" onClick={resetSimulation} className="gap-2">
               <RotateCcw className="h-4 w-4" />
-              {lang === "fil" ? "I-reset" : "Reset"}
+              {t(RESET, lang)}
             </Button>
           )}
         </div>
       </div>
     </main>
-  );
-}
-
-function AlertTriangle(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      {...props}
-    >
-      <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
-      <path d="M12 9v4" />
-      <path d="M12 17h.01" />
-    </svg>
   );
 }

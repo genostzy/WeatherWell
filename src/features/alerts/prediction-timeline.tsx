@@ -5,7 +5,14 @@ import { Badge } from "@/components/ui/badge";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { SEVERITY_HEX } from "@/lib/severity";
-import type { PredictionStep } from "@/lib/types";
+import type { LocalizedText, PredictionStep } from "@/lib/types";
+
+const PREDICTION_FOR: LocalizedText = { en: "Prediction for", fil: "Prediksyon para sa" };
+const ESTIMATED: LocalizedText = { en: "Estimated", fil: "Tantiya" };
+const WILL_BE_VALIDATED: LocalizedText = {
+  en: "Will be validated by local data",
+  fil: "Aabutin ng oras bago ma-validate",
+};
 
 export function PredictionTimeline({
   steps,
@@ -23,7 +30,7 @@ export function PredictionTimeline({
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <span>🌊</span>
-          <span>{lang === "fil" ? "Prediksyon para sa" : "Prediction for"} {zoneName}</span>
+          <span>{t(PREDICTION_FOR, lang)} {zoneName}</span>
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -38,7 +45,7 @@ export function PredictionTimeline({
                     borderColor: SEVERITY_HEX[step.severity],
                   }}
                 />
-                <span className="text-xs font-medium">{step.timing}</span>
+                <span className="text-xs font-medium">{t(step.timing, lang)}</span>
                 <span className="text-[10px] text-muted-foreground">
                   {t(step.label, lang)}
                 </span>
@@ -51,7 +58,7 @@ export function PredictionTimeline({
         </div>
         <div className="mt-4">
           <Badge variant="outline" className="text-xs">
-            {lang === "fil" ? "Tantiya" : "Estimated"} — {lang === "fil" ? "Aabutin ng oras bago ma-validate" : "Will be validated by local data"}
+            {t(ESTIMATED, lang)} — {t(WILL_BE_VALIDATED, lang)}
           </Badge>
         </div>
       </CardContent>

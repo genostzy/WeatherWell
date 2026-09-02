@@ -52,7 +52,7 @@ export const MOCK_ALERTS: AlertRecord[] = [
     },
     source: "auto_crowdsourced",
     confidence: "estimated",
-    predictedTiming: "Watch in 3h",
+    predictedTiming: { en: "Watch in 3h", fil: "Pagbabantay sa 3h" },
     issuedAt: "2026-09-01T08:00:00.000Z",
     isActive: true,
   },
@@ -66,27 +66,35 @@ export const MOCK_ALERTS: AlertRecord[] = [
     },
     source: "auto_crowdsourced",
     confidence: "estimated",
-    predictedTiming: "Warning now",
+    predictedTiming: { en: "Warning now", fil: "Babala ngayon" },
     issuedAt: "2026-09-01T08:30:00.000Z",
     isActive: true,
   },
 ];
 
+const TIMING = {
+  in6h: { en: "6h", fil: "6 oras" },
+  in3h: { en: "3h", fil: "3 oras" },
+  now: { en: "now", fil: "ngayon" },
+  in1h: { en: "1h", fil: "1 oras" },
+  in12h: { en: "12h", fil: "12 oras" },
+};
+
 export const MOCK_PREDICTIONS: Record<string, PredictionStep[]> = {
   "zone-1": [
-    { severity: "yellow", label: { en: "Advisory", fil: "Abiso" }, timing: "6h" },
-    { severity: "orange", label: { en: "Watch", fil: "Bantay" }, timing: "3h" },
-    { severity: "red", label: { en: "Warning", fil: "Babala" }, timing: "now" },
-    { severity: "evacuate", label: { en: "Evacuate", fil: "Lumikas" }, timing: "1h" },
+    { severity: "yellow", label: { en: "Advisory", fil: "Abiso" }, timing: TIMING.in6h },
+    { severity: "orange", label: { en: "Watch", fil: "Bantay" }, timing: TIMING.in3h },
+    { severity: "red", label: { en: "Warning", fil: "Babala" }, timing: TIMING.now },
+    { severity: "evacuate", label: { en: "Evacuate", fil: "Lumikas" }, timing: TIMING.in1h },
   ],
   "zone-2": [
-    { severity: "orange", label: { en: "Watch", fil: "Bantay" }, timing: "3h" },
-    { severity: "red", label: { en: "Warning", fil: "Babala" }, timing: "now" },
-    { severity: "evacuate", label: { en: "Evacuate", fil: "Lumikas" }, timing: "1h" },
+    { severity: "orange", label: { en: "Watch", fil: "Bantay" }, timing: TIMING.in3h },
+    { severity: "red", label: { en: "Warning", fil: "Babala" }, timing: TIMING.now },
+    { severity: "evacuate", label: { en: "Evacuate", fil: "Lumikas" }, timing: TIMING.in1h },
   ],
   "zone-3": [
-    { severity: "yellow", label: { en: "Advisory", fil: "Abiso" }, timing: "12h" },
-    { severity: "orange", label: { en: "Watch", fil: "Bantay" }, timing: "6h" },
+    { severity: "yellow", label: { en: "Advisory", fil: "Abiso" }, timing: TIMING.in12h },
+    { severity: "orange", label: { en: "Watch", fil: "Bantay" }, timing: TIMING.in6h },
   ],
 };
 
@@ -114,7 +122,7 @@ export const MOCK_CASCADES: CascadeAlert[] = [
 export const MOCK_SCENARIOS = [
   {
     id: "typhoon",
-    name: { en: "Approaching Typhoon", fil: " paparating na Bagyo" },
+    name: { en: "Approaching Typhoon", fil: "Paparating na Bagyo" },
     description: {
       en: "Typhoon approaching with 80mm rainfall expected in 6 hours.",
       fil: "Paparating na bagyo na may 80mm ulan sa loob ng 6 na oras.",
@@ -140,7 +148,7 @@ export const MOCK_SCENARIOS = [
     id: "monsoon",
     name: { en: "Monsoon Rain", fil: "Ulan ng Habagat" },
     description: {
-      en: "Prolonged monsoon rain持续 24 hours with 120mm total rainfall.",
+      en: "Prolonged monsoon rain lasting 24 hours with 120mm total rainfall.",
       fil: "Matagalang ulan ng habagat na 24 oras na may 120mm kabuuang ulan.",
     },
   },
@@ -157,7 +165,7 @@ export const MOCK_SCENARIOS = [
     name: { en: "Community Drill", fil: "Komunidad na Ehersisyo" },
     description: {
       en: "Simulated emergency drill for training purposes.",
-      fil: "Sinulad na emergency drill para sa pagsasanay.",
+      fil: "Ginayang emergency drill para sa pagsasanay.",
     },
   },
 ];
