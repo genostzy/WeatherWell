@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import OnboardingPage from "@/app/onboarding/page";
@@ -30,20 +30,39 @@ describe("onboarding → home zone threading", () => {
     unmount();
   }
 
-  it("orders the picked zone first on the home page, not zone-1's", async () => {
-    // Deliberately not the first zone: proves the choice is read, not defaulted.
-    const picked = MOCK_ZONES[1];
-    Object.defineProperty(navigator, "onLine", { value: false, configurable: true });
+  // These two force the offline fallback (which renders plain zone-name text,
+  // unlike the Leaflet map) so zone ordering is actually observable in jsdom.
+  // The online/offline stub is scoped here via beforeEach/afterEach — not an
+  // inline statement at the end of the test body — so a failing assertion
+  // above it still leaves navigator.onLine restored for every other test.
+  describe("when offline", () => {
+    beforeEach(() => {
+      Object.defineProperty(navigator, "onLine", { value: false, configurable: true });
+    });
 
-    await completeOnboardingWith(picked.name);
-    expect(replace).toHaveBeenCalledWith("/");
+    afterEach(() => {
+      Object.defineProperty(navigator, "onLine", { value: true, configurable: true });
+    });
 
-    render(<Home />);
+    it("orders the picked zone first on the home page, not zone-1's", async () => {
+      // Deliberately not the first zone: proves the choice is read, not defaulted.
+      const picked = MOCK_ZONES[1];
 
-    const zoneNames = screen.getAllByText(new RegExp(MOCK_ZONES.map((z) => z.name).join("|")));
-    expect(zoneNames[0]).toHaveTextContent(picked.name);
+      await completeOnboardingWith(picked.name);
+      expect(replace).toHaveBeenCalledWith("/");
 
-    Object.defineProperty(navigator, "onLine", { value: true, configurable: true });
+      render(<Home />);
+
+      const zoneNames = screen.getAllByText(new RegExp(MOCK_ZONES.map((z) => z.name).join("|")));
+      expect(zoneNames[0]).toHaveTextContent(picked.name);
+    });
+
+    it("falls back to the first zone when nothing has been picked yet", () => {
+      render(<Home />);
+
+      const zoneNames = screen.getAllByText(new RegExp(MOCK_ZONES.map((z) => z.name).join("|")));
+      expect(zoneNames[0]).toHaveTextContent(MOCK_ZONES[0].name);
+    });
   });
 
   it("does not send an onboarded visitor back to onboarding", async () => {
@@ -52,17 +71,6 @@ describe("onboarding → home zone threading", () => {
 
     render(<Home />);
     expect(replace).not.toHaveBeenCalled();
-  });
-
-  it("falls back to the first zone when nothing has been picked yet", () => {
-    Object.defineProperty(navigator, "onLine", { value: false, configurable: true });
-
-    render(<Home />);
-
-    const zoneNames = screen.getAllByText(new RegExp(MOCK_ZONES.map((z) => z.name).join("|")));
-    expect(zoneNames[0]).toHaveTextContent(MOCK_ZONES[0].name);
-
-    Object.defineProperty(navigator, "onLine", { value: true, configurable: true });
   });
 
   it("gives the home page a level-1 heading so it has document structure", async () => {

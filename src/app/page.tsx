@@ -7,27 +7,31 @@ import { OnboardingGate } from "@/features/onboarding/onboarding-gate";
 import { ZoneAlertListFallback } from "@/features/homepage-map/zone-alert-list-fallback";
 import { useIsOnline } from "@/features/homepage-map/use-tiles-cached";
 import { useSelectedZone } from "@/features/zones/use-selected-zone";
+import { useLanguage } from "@/features/i18n/language-provider";
+import { t } from "@/lib/i18n";
 import { MOCK_ZONES } from "@/lib/mock-data";
 import { orderZonesWithSelectedFirst } from "@/lib/order-zones";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import type { LocalizedText } from "@/lib/types";
 
 const HomepageMap = dynamic(
   () => import("@/features/homepage-map/homepage-map").then((m) => m.HomepageMap),
   { ssr: false, loading: () => <Skeleton className="h-[400px] w-full max-w-2xl rounded-md" /> }
 );
 
-const NAV_LINKS = [
-  { href: "/evacuation", label: "Evacuation", icon: Building2 },
-  { href: "/report", label: "Report", icon: Droplet },
-  { href: "/map", label: "Zone map", icon: Map },
-  { href: "/admin", label: "Admin", icon: Settings },
-] as const;
+const NAV_LINKS: { href: string; label: LocalizedText; icon: typeof Building2 }[] = [
+  { href: "/evacuation", label: { en: "Evacuation", fil: "Evacuation" }, icon: Building2 },
+  { href: "/report", label: { en: "Report", fil: "Ulat" }, icon: Droplet },
+  { href: "/map", label: { en: "Map", fil: "Mapa" }, icon: Map },
+  { href: "/admin", label: { en: "Admin", fil: "Admin" }, icon: Settings },
+];
 
 export default function Home() {
   const isOnline = useIsOnline();
   const selectedZone = useSelectedZone();
   const orderedZones = orderZonesWithSelectedFirst(MOCK_ZONES, selectedZone.id);
+  const { lang } = useLanguage();
 
   return (
     <main className="flex flex-1 flex-col items-center gap-6 p-6">
@@ -44,7 +48,7 @@ export default function Home() {
           <Button key={href} asChild variant="ghost" size="sm">
             <Link href={href}>
               <Icon aria-hidden="true" />
-              {label}
+              {t(label, lang)}
             </Link>
           </Button>
         ))}
