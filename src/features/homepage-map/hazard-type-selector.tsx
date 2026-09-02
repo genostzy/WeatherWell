@@ -14,6 +14,11 @@ const HAZARD_TYPE_LABEL: Record<HazardType, LocalizedText> = {
 
 const HAZARD_TYPE_ORDER: HazardType[] = ["flood", "landslide", "storm_surge"];
 
+const HAZARD_TYPE_SELECTOR_LABEL: LocalizedText = {
+  en: "Hazard type shown on map",
+  fil: "Uri ng hazard na ipinapakita sa mapa",
+};
+
 export function HazardTypeSelector({
   value,
   onChange,
@@ -28,6 +33,7 @@ export function HazardTypeSelector({
       value={value}
       onValueChange={(v) => onChange(v as HazardType)}
       className="flex gap-4"
+      aria-label={t(HAZARD_TYPE_SELECTOR_LABEL, lang)}
     >
       {HAZARD_TYPE_ORDER.map((type) => (
         <div key={type} className="flex items-center gap-2">

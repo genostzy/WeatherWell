@@ -4,17 +4,23 @@ import {
   createPoiMarkerIcon,
   createEvacuationMarkerIcon,
 } from "./marker-icons";
+import { SAFE_HEX } from "@/lib/zone-status";
+import { SEVERITY_HEX } from "@/lib/severity";
 
 describe("createStatusMarkerIcon", () => {
   it("gives each status a distinct shape class, not color alone", () => {
     const shapes = ["safe", "cautionary", "dangerous", "hazardous"].map(
-      (status) => createStatusMarkerIcon(status as never, "label").options.className
+      (status) => createStatusMarkerIcon(status as never, SAFE_HEX, "label").options.className
     );
     expect(new Set(shapes).size).toBe(4);
   });
 
   it("bakes an accessible label into the marker HTML", () => {
-    const icon = createStatusMarkerIcon("hazardous", "Barangay San Isidro — Hazardous");
+    const icon = createStatusMarkerIcon(
+      "hazardous",
+      SEVERITY_HEX.evacuate,
+      "Barangay San Isidro — Hazardous"
+    );
     expect(icon.options.html).toContain("Barangay San Isidro — Hazardous");
     expect(icon.options.html).toContain('role="img"');
   });
@@ -56,7 +62,7 @@ describe("label HTML-escaping", () => {
   const maliciousLabel = `"><script>alert(1)</script>&`;
 
   it("escapes an unsafe label in createStatusMarkerIcon instead of injecting raw markup", () => {
-    const icon = createStatusMarkerIcon("hazardous", maliciousLabel);
+    const icon = createStatusMarkerIcon("hazardous", SEVERITY_HEX.evacuate, maliciousLabel);
     expect(icon.options.html).not.toContain("<script>");
     expect(icon.options.html).toContain("&lt;script&gt;");
     expect(icon.options.html).toContain("&quot;");

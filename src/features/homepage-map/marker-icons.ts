@@ -1,16 +1,7 @@
 import L from "leaflet";
-import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
-import {
-  Building2,
-  Droplet,
-  Landmark,
-  Pill,
-  ShoppingBasket,
-  Stethoscope,
-} from "lucide-react";
 import type { ZoneStatus } from "@/lib/zone-status";
 import type { POICategory } from "@/lib/types";
+import { STATUS_SHAPE_STYLE } from "./status-shape";
 
 /**
  * Leaflet's default marker images 404 under bundlers (a well-known gotcha),
@@ -34,23 +25,14 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
-const STATUS_SHAPE_STYLE: Record<ZoneStatus, string> = {
-  safe: "border-radius: 50%;", // circle
-  cautionary: "clip-path: polygon(50% 0%, 0% 100%, 100% 100%);", // triangle
-  dangerous: "transform: rotate(45deg);", // diamond
-  hazardous:
-    "clip-path: polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%);", // octagon
-};
-
-const STATUS_COLOR_HEX: Record<ZoneStatus, string> = {
-  safe: "#22c55e",
-  cautionary: "#f97316",
-  dangerous: "#dc2626",
-  hazardous: "#7f1d1d",
-};
-
-export function createStatusMarkerIcon(status: ZoneStatus, label: string): L.DivIcon {
-  const color = STATUS_COLOR_HEX[status];
+/**
+ * The color itself comes from the caller via `getZoneStatusColor` (see
+ * @/lib/zone-status) — the single source of truth for severity colors used
+ * everywhere else in the app (e.g. SeverityBadge). This module only owns the
+ * *shape* that differentiates statuses for colorblind users, via
+ * STATUS_SHAPE_STYLE (shared with marker-legend.tsx).
+ */
+export function createStatusMarkerIcon(status: ZoneStatus, color: string, label: string): L.DivIcon {
   const shape = STATUS_SHAPE_STYLE[status];
   return L.divIcon({
     className: `zone-status-marker zone-status-marker--${status}`,
@@ -64,31 +46,26 @@ export function createStatusMarkerIcon(status: ZoneStatus, label: string): L.Div
  * Icon glyphs come from lucide-react — this project's single icon set (see
  * zone-map.tsx, evacuation-instructions.tsx) — never raw HTML entities or
  * emoji. `L.divIcon`'s `html` option takes a plain HTML string rather than
- * JSX, so each icon component is pre-rendered once to static SVG markup via
- * `renderToStaticMarkup` and that string is embedded inside the colored
- * marker wrapper below.
+ * JSX, so rather than pulling react-dom/server's `renderToStaticMarkup` into
+ * this client bundle to render these icons at runtime, each icon's static
+ * SVG markup (six icons, none of which ever change) was captured once
+ * ahead of time and is inlined below as a plain string constant.
  */
 const POI_ICON_SVG: Record<POICategory, string> = {
-  health_center: renderToStaticMarkup(
-    createElement(Stethoscope, { size: 14, color: "white", "aria-hidden": true })
-  ),
-  pharmacy: renderToStaticMarkup(
-    createElement(Pill, { size: 14, color: "white", "aria-hidden": true })
-  ),
-  market: renderToStaticMarkup(
-    createElement(ShoppingBasket, { size: 14, color: "white", "aria-hidden": true })
-  ),
-  water_station: renderToStaticMarkup(
-    createElement(Droplet, { size: 14, color: "white", "aria-hidden": true })
-  ),
-  barangay_office: renderToStaticMarkup(
-    createElement(Landmark, { size: 14, color: "white", "aria-hidden": true })
-  ),
+  health_center:
+    '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-stethoscope" aria-hidden="true"><path d="M11 2v2"></path><path d="M5 2v2"></path><path d="M5 3H4a2 2 0 0 0-2 2v4a6 6 0 0 0 12 0V5a2 2 0 0 0-2-2h-1"></path><path d="M8 15a6 6 0 0 0 12 0v-3"></path><circle cx="20" cy="10" r="2"></circle></svg>',
+  pharmacy:
+    '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pill" aria-hidden="true"><path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"></path><path d="m8.5 8.5 7 7"></path></svg>',
+  market:
+    '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-shopping-basket" aria-hidden="true"><path d="m15 11-1 9"></path><path d="m19 11-4-7"></path><path d="M2 11h20"></path><path d="m3.5 11 1.6 7.4a2 2 0 0 0 2 1.6h9.8a2 2 0 0 0 2-1.6l1.7-7.4"></path><path d="M4.5 15.5h15"></path><path d="m5 11 4-7"></path><path d="m9 11 1 9"></path></svg>',
+  water_station:
+    '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-droplet" aria-hidden="true"><path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"></path></svg>',
+  barangay_office:
+    '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-landmark" aria-hidden="true"><path d="M10 18v-7"></path><path d="M11.119 2.205a2 2 0 0 1 1.762 0l7.84 3.846A.5.5 0 0 1 20.5 7h-17a.5.5 0 0 1-.22-.949z"></path><path d="M14 18v-7"></path><path d="M18 18v-7"></path><path d="M3 22h18"></path><path d="M6 18v-7"></path></svg>',
 };
 
-const EVACUATION_ICON_SVG = renderToStaticMarkup(
-  createElement(Building2, { size: 14, color: "white", "aria-hidden": true })
-);
+const EVACUATION_ICON_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-building2 lucide-building-2" aria-hidden="true"><path d="M10 12h4"></path><path d="M10 8h4"></path><path d="M14 21v-3a2 2 0 0 0-4 0v3"></path><path d="M6 10H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2"></path><path d="M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16"></path></svg>';
 
 export function createPoiMarkerIcon(category: POICategory, label: string): L.DivIcon {
   return L.divIcon({

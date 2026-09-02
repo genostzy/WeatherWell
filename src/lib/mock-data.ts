@@ -105,6 +105,20 @@ export const MOCK_ALERTS: AlertRecord[] = [
     issuedAt: "2026-09-01T08:30:00.000Z",
     isActive: true,
   },
+  {
+    id: "alert-3",
+    zoneId: "zone-3",
+    severity: "evacuate",
+    message: {
+      en: "Neck-deep flooding reported in Barangay Bagong Silang. Evacuate immediately.",
+      fil: "May baha na hanggang leeg sa Barangay Bagong Silang. Lumikas kaagad.",
+    },
+    source: "auto_crowdsourced",
+    confidence: "estimated",
+    predictedTiming: { en: "Evacuate now", fil: "Lumikas ngayon" },
+    issuedAt: "2026-09-01T09:00:00.000Z",
+    isActive: true,
+  },
 ];
 
 const TIMING = {

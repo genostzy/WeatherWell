@@ -21,6 +21,10 @@ const CONSENT_COPY = {
     en: "WeatherWell asks for your location to match you to your barangay zone and to confirm water-level reports come from where you say they do. It is not stored beyond validating a report.",
     fil: "Hinihingi ng WeatherWell ang iyong lokasyon upang itugma ka sa iyong barangay zone at upang matiyak na ang mga ulat ng lalim ng tubig ay talagang mula sa lugar na sinasabi mo. Hindi ito iniimbak matapos masuri ang isang ulat.",
   },
+  liveLocation: {
+    en: "Separately, while the homepage map is open, WeatherWell also tracks your device's position continuously (at a low frequency) to show your direction and distance to your evacuation center. This is never stored — it exists only while the map is on screen.",
+    fil: "Bukod dito, habang bukas ang mapa sa homepage, sinusubaybayan din ng WeatherWell ang posisyon ng iyong device nang tuloy-tuloy (sa mababang dalas) upang ipakita ang direksyon at layo mo papunta sa iyong evacuation center. Hindi ito iniimbak — umiiral lamang ito habang nakabukas ang mapa.",
+  },
   phone: {
     en: "WeatherWell also asks for your phone number so it can send SMS alerts if your internet connection drops. It is stored securely and never shared.",
     fil: "Hinihingi rin ng WeatherWell ang iyong numero ng telepono upang makapagpadala ng SMS alert kung mawalan ka ng koneksyon sa internet. Ligtas itong iniimbak at hindi kailanman ibinabahagi.",
@@ -49,6 +53,7 @@ export function ConsentNotice({ onAccept }: { onAccept: () => void }) {
       </CardHeader>
       <CardContent lang={lang} className="space-y-4 text-sm">
         <p>{t(CONSENT_COPY.location, lang)}</p>
+        <p>{t(CONSENT_COPY.liveLocation, lang)}</p>
         <p>{t(CONSENT_COPY.phone, lang)}</p>
         <p>{t(CONSENT_COPY.decline, lang)}</p>
         <p className="text-muted-foreground">{t(CONSENT_COPY.legalBasis, lang)}</p>

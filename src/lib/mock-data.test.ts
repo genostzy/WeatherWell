@@ -41,9 +41,8 @@ describe("mock-data", () => {
     expect(alert?.isActive).toBe(true);
   });
 
-  it("returns undefined for a real zone with no active alert", () => {
-    expect(MOCK_ZONES.some((z) => z.id === "zone-3")).toBe(true);
-    expect(getActiveAlertForZone("zone-3")).toBeUndefined();
+  it("returns undefined for a zone id that has no active alert", () => {
+    expect(getActiveAlertForZone("zone-does-not-exist")).toBeUndefined();
   });
 
   it("every mock alert references a real mock zone", () => {

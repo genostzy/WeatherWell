@@ -16,6 +16,7 @@ import { ZonePicker } from "@/features/onboarding/zone-picker";
 import { EmergencyHotlineButton } from "@/components/emergency-hotline-button";
 import { ZoneAlertListFallback } from "@/features/homepage-map/zone-alert-list-fallback";
 import { MarkerLegend } from "@/features/homepage-map/marker-legend";
+import { HazardTypeSelector } from "@/features/homepage-map/hazard-type-selector";
 import AdminPage from "@/app/admin/page";
 import {
   MOCK_ZONES,
@@ -122,5 +123,11 @@ describe("accessibility (WCAG 2.1 AA, automated subset)", () => {
 
   it("marker legend has no violations", async () => {
     expect(await violationsFor(<MarkerLegend />)).toEqual([]);
+  });
+
+  it("hazard type selector has no violations", async () => {
+    expect(
+      await violationsFor(<HazardTypeSelector value="flood" onChange={() => {}} />)
+    ).toEqual([]);
   });
 });

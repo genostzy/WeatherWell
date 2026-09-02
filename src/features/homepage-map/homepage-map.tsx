@@ -6,16 +6,15 @@ import "leaflet/dist/leaflet.css";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { getActiveAlertForZone, getPOIsForZone, getHazardSusceptibilityForZone } from "@/lib/mock-data";
-import { getZoneStatus, ZONE_STATUS_LABEL } from "@/lib/zone-status";
+import { getZoneStatus, getZoneStatusColor, ZONE_STATUS_LABEL } from "@/lib/zone-status";
 import { hazardRiskColor } from "./hazard-color";
 import { createStatusMarkerIcon, createPoiMarkerIcon, createEvacuationMarkerIcon } from "./marker-icons";
 import { MarkerLegend } from "./marker-legend";
 import { HazardTypeSelector } from "./hazard-type-selector";
 import { getBearingAndDistance } from "./bearing-distance";
 import { useLivePosition } from "./use-live-position";
+import { routeCrossesHazard } from "./route-hazard";
 import type { HazardType, LocalizedText, Zone } from "@/lib/types";
-
-const HAZARD_ZONE_STATUSES = new Set(["dangerous", "hazardous"]);
 
 const SAFEST_ROUTE_TO: LocalizedText = { en: "Safest route to", fil: "Pinakaligtas na ruta papunta sa" };
 const PASSES_THROUGH_HAZARD: LocalizedText = {
@@ -23,6 +22,14 @@ const PASSES_THROUGH_HAZARD: LocalizedText = {
   fil: "Ito ang pinakamagandang ruta na available, pero dumadaan ito sa mapanganib na lugar.",
 };
 const DIRECTION_TO_SAFETY: LocalizedText = { en: "away", fil: "ang layo" };
+const MAP_ARIA_LABEL: LocalizedText = {
+  en: "Interactive flood zone map",
+  fil: "Interactibong mapa ng flood zone",
+};
+const VIEW_EVACUATION_DETAILS: LocalizedText = {
+  en: "View evacuation details",
+  fil: "Tingnan ang detalye ng evacuation",
+};
 
 /** Compass codes returned by `getBearingAndDistance` — Filipino uses distinct words, not abbreviations of the English letters. */
 const COMPASS_LABEL: Record<string, LocalizedText> = {
@@ -39,7 +46,7 @@ const COMPASS_LABEL: Record<string, LocalizedText> = {
 export function HomepageMap({ zones }: { zones: Zone[] }) {
   const { lang } = useLanguage();
   const [hazardType, setHazardType] = useState<HazardType>("flood");
-  const [routeZoneId, setRouteZoneId] = useState<string | null>(null);
+  const [routeZoneId, setRouteZoneId] = useState<string | null>(zones[0]?.id ?? null);
   const livePosition = useLivePosition();
 
   const center: [number, number] = [zones[0].lat, zones[0].lng];
@@ -51,22 +58,16 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
           lng: routeZone.evacuationCenterLng,
         })
       : null;
-  const routeCrossesHazard = routeZone
-    ? zones.some(
-        (z) =>
-          HAZARD_ZONE_STATUSES.has(getZoneStatus(getActiveAlertForZone(z.id))) &&
-          z.id !== routeZone.id &&
-          routeZone.evacuationRoutePath.some(
-            ([lat, lng]) => Math.abs(lat - z.lat) < 0.003 && Math.abs(lng - z.lng) < 0.003
-          )
-      )
-    : false;
+  const routeHazard = routeZone ? routeCrossesHazard(routeZone, zones) : false;
 
   return (
     <div className="flex w-full max-w-2xl flex-col gap-4">
       <HazardTypeSelector value={hazardType} onChange={setHazardType} />
 
-      <div className="h-[400px] w-full overflow-hidden rounded-md border-2 border-border">
+      <div
+        className="h-[400px] w-full overflow-hidden rounded-md border-2 border-border"
+        aria-label={t(MAP_ARIA_LABEL, lang)}
+      >
         <MapContainer center={center} zoom={14} scrollWheelZoom={false} style={{ height: "100%", width: "100%" }}>
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -94,15 +95,23 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
           {zones.map((zone) => {
             const alert = getActiveAlertForZone(zone.id);
             const status = getZoneStatus(alert);
+            const color = getZoneStatusColor(alert);
             const label = `${zone.name} — ${t(ZONE_STATUS_LABEL[status], lang)}`;
             return (
               <Marker
                 key={`status-${zone.id}`}
                 position={[zone.lat, zone.lng]}
-                icon={createStatusMarkerIcon(status, label)}
+                icon={createStatusMarkerIcon(status, color, label)}
                 eventHandlers={{ click: () => setRouteZoneId(zone.id) }}
               >
-                <Popup>{label}</Popup>
+                <Popup>
+                  <div className="space-y-1">
+                    <p className="font-medium">{label}</p>
+                    <a href="/evacuation" className="text-sm underline">
+                      {t(VIEW_EVACUATION_DETAILS, lang)}
+                    </a>
+                  </div>
+                </Popup>
               </Marker>
             );
           })}
@@ -133,9 +142,9 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
             <Polyline
               positions={routeZone.evacuationRoutePath}
               pathOptions={{
-                color: routeCrossesHazard ? "#7f1d1d" : "#0f766e",
+                color: routeHazard ? "#7f1d1d" : "#0f766e",
                 weight: 4,
-                dashArray: routeCrossesHazard ? "6 6" : undefined,
+                dashArray: routeHazard ? "6 6" : undefined,
               }}
             />
           )}
@@ -151,8 +160,8 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
               {t(COMPASS_LABEL[directionToSafety.compassLabel], lang)} {t(DIRECTION_TO_SAFETY, lang)}.
             </span>
           )}{" "}
-          {routeCrossesHazard && (
-            <span className="font-medium text-severity-evacuate">
+          {routeHazard && (
+            <span className="rounded bg-severity-evacuate px-2 py-0.5 font-medium text-white">
               {t(PASSES_THROUGH_HAZARD, lang)}
             </span>
           )}
