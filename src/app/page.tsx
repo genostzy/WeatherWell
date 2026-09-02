@@ -6,7 +6,9 @@ import { Building2, Droplet, Map, Settings } from "lucide-react";
 import { OnboardingGate } from "@/features/onboarding/onboarding-gate";
 import { ZoneAlertListFallback } from "@/features/homepage-map/zone-alert-list-fallback";
 import { useIsOnline } from "@/features/homepage-map/use-tiles-cached";
+import { useSelectedZone } from "@/features/zones/use-selected-zone";
 import { MOCK_ZONES } from "@/lib/mock-data";
+import { orderZonesWithSelectedFirst } from "@/lib/order-zones";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 
@@ -24,12 +26,18 @@ const NAV_LINKS = [
 
 export default function Home() {
   const isOnline = useIsOnline();
+  const selectedZone = useSelectedZone();
+  const orderedZones = orderZonesWithSelectedFirst(MOCK_ZONES, selectedZone.id);
 
   return (
     <main className="flex flex-1 flex-col items-center gap-6 p-6">
       <OnboardingGate />
       <h1 className="text-lg font-semibold">WeatherWell</h1>
-      {isOnline ? <HomepageMap zones={MOCK_ZONES} /> : <ZoneAlertListFallback zones={MOCK_ZONES} />}
+      {isOnline ? (
+        <HomepageMap zones={orderedZones} />
+      ) : (
+        <ZoneAlertListFallback zones={orderedZones} />
+      )}
 
       <div className="flex w-full max-w-2xl flex-wrap justify-center gap-2">
         {NAV_LINKS.map(({ href, label, icon: Icon }) => (
