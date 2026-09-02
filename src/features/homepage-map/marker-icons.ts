@@ -18,6 +18,22 @@ import type { POICategory } from "@/lib/types";
  * here is a small inline-styled divIcon instead — CSS shape, not an image.
  */
 
+/**
+ * `L.divIcon`'s `html` is assigned via `innerHTML` by Leaflet, so any raw
+ * `label` interpolated into it is live markup, not text. Today's call sites
+ * only pass hardcoded literals, but this is shared infrastructure future
+ * tasks will feed real zone/POI names and eventually user-submitted pin
+ * captions through, so every label is escaped before interpolation.
+ */
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 const STATUS_SHAPE_STYLE: Record<ZoneStatus, string> = {
   safe: "border-radius: 50%;", // circle
   cautionary: "clip-path: polygon(50% 0%, 0% 100%, 100% 100%);", // triangle
@@ -38,7 +54,7 @@ export function createStatusMarkerIcon(status: ZoneStatus, label: string): L.Div
   const shape = STATUS_SHAPE_STYLE[status];
   return L.divIcon({
     className: `zone-status-marker zone-status-marker--${status}`,
-    html: `<div role="img" aria-label="${label}" style="width:22px;height:22px;background:${color};border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.4);${shape}"></div>`,
+    html: `<div role="img" aria-label="${escapeHtml(label)}" style="width:22px;height:22px;background:${color};border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.4);${shape}"></div>`,
     iconSize: [26, 26],
     iconAnchor: [13, 13],
   });
@@ -77,7 +93,7 @@ const EVACUATION_ICON_SVG = renderToStaticMarkup(
 export function createPoiMarkerIcon(category: POICategory, label: string): L.DivIcon {
   return L.divIcon({
     className: `poi-marker poi-marker--${category}`,
-    html: `<div role="img" aria-label="${label}" style="width:24px;height:24px;background:#1f2937;border:2px solid white;border-radius:6px;display:flex;align-items:center;justify-content:center;color:white;font-size:12px;">${POI_ICON_SVG[category]}</div>`,
+    html: `<div role="img" aria-label="${escapeHtml(label)}" style="width:24px;height:24px;background:#1f2937;border:2px solid white;border-radius:6px;display:flex;align-items:center;justify-content:center;color:white;font-size:12px;">${POI_ICON_SVG[category]}</div>`,
     iconSize: [28, 28],
     iconAnchor: [14, 14],
   });
@@ -86,7 +102,7 @@ export function createPoiMarkerIcon(category: POICategory, label: string): L.Div
 export function createEvacuationMarkerIcon(label: string): L.DivIcon {
   return L.divIcon({
     className: "evacuation-marker",
-    html: `<div role="img" aria-label="${label}" style="width:26px;height:26px;background:#0f766e;border:2px solid white;border-radius:6px;display:flex;align-items:center;justify-content:center;color:white;font-size:13px;">${EVACUATION_ICON_SVG}</div>`,
+    html: `<div role="img" aria-label="${escapeHtml(label)}" style="width:26px;height:26px;background:#0f766e;border:2px solid white;border-radius:6px;display:flex;align-items:center;justify-content:center;color:white;font-size:13px;">${EVACUATION_ICON_SVG}</div>`,
     iconSize: [30, 30],
     iconAnchor: [15, 15],
   });

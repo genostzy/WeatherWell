@@ -51,3 +51,31 @@ describe("createEvacuationMarkerIcon", () => {
     expect(icon.options.html).toContain("<svg");
   });
 });
+
+describe("label HTML-escaping", () => {
+  const maliciousLabel = `"><script>alert(1)</script>&`;
+
+  it("escapes an unsafe label in createStatusMarkerIcon instead of injecting raw markup", () => {
+    const icon = createStatusMarkerIcon("hazardous", maliciousLabel);
+    expect(icon.options.html).not.toContain("<script>");
+    expect(icon.options.html).toContain("&lt;script&gt;");
+    expect(icon.options.html).toContain("&quot;");
+    expect(icon.options.html).toContain("&amp;");
+  });
+
+  it("escapes an unsafe label in createPoiMarkerIcon instead of injecting raw markup", () => {
+    const icon = createPoiMarkerIcon("pharmacy", maliciousLabel);
+    expect(icon.options.html).not.toContain("<script>");
+    expect(icon.options.html).toContain("&lt;script&gt;");
+    expect(icon.options.html).toContain("&quot;");
+    expect(icon.options.html).toContain("&amp;");
+  });
+
+  it("escapes an unsafe label in createEvacuationMarkerIcon instead of injecting raw markup", () => {
+    const icon = createEvacuationMarkerIcon(maliciousLabel);
+    expect(icon.options.html).not.toContain("<script>");
+    expect(icon.options.html).toContain("&lt;script&gt;");
+    expect(icon.options.html).toContain("&quot;");
+    expect(icon.options.html).toContain("&amp;");
+  });
+});
