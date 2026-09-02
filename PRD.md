@@ -1,7 +1,5 @@
 # PRD
 
-*Single source of truth for this project. Concept pitch: [IDEA.md](IDEA.md).*
-
 ## WeatherWell
 
 ### Background
@@ -87,11 +85,11 @@ Software-only prototype. No physical hardware. PWA, not native app.
 
 | Depth | Approx. depth | Maps to |
 |---|---|---|
-| `dry` | 0 cm | yellow |
+| `dry` | 0 cm | Green |
 | `ankle` | 15 cm | yellow |
 | `knee` | 45 cm | orange |
 | `waist` | 90 cm | red |
-| `neck` | 150 cm | evacuate |
+| `neck` | 150 cm | red Danger warning sign |
 
 **Homepage Map — Zone Status Legend:**
 
