@@ -1,7 +1,5 @@
 # PRD
 
-*Single source of truth for this project. Concept pitch: [IDEA.md](IDEA.md).*
-
 ## WeatherWell
 
 *(Challenge: Climate Resilience and Hydrometeorological Disaster Management)*
