@@ -1,55 +1,45 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
-import { AlertCard } from "@/features/alerts/alert-card";
-import { PredictionTimeline } from "@/features/alerts/prediction-timeline";
-import { CascadeWarning } from "@/features/alerts/cascade-warning";
+import { Building2, Droplet, Map, Settings } from "lucide-react";
 import { OnboardingGate } from "@/features/onboarding/onboarding-gate";
-import { useSelectedZone } from "@/features/zones/use-selected-zone";
+import { ZoneAlertListFallback } from "@/features/homepage-map/zone-alert-list-fallback";
+import { useIsOnline } from "@/features/homepage-map/use-tiles-cached";
+import { MOCK_ZONES } from "@/lib/mock-data";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import {
-  getActiveAlertForZone,
-  getPredictionsForZone,
-  getCascadeForZone,
-  MOCK_ZONES,
-} from "@/lib/mock-data";
+
+const HomepageMap = dynamic(
+  () => import("@/features/homepage-map/homepage-map").then((m) => m.HomepageMap),
+  { ssr: false, loading: () => <Skeleton className="h-[400px] w-full max-w-2xl rounded-md" /> }
+);
+
+const NAV_LINKS = [
+  { href: "/evacuation", label: "Evacuation", icon: Building2 },
+  { href: "/report", label: "Report", icon: Droplet },
+  { href: "/map", label: "Zone map", icon: Map },
+  { href: "/admin", label: "Admin", icon: Settings },
+] as const;
 
 export default function Home() {
-  const zone = useSelectedZone();
-  const alert = getActiveAlertForZone(zone.id);
-  const predictions = getPredictionsForZone(zone.id);
-  const cascade = getCascadeForZone(zone.id);
-  const fromZone = cascade
-    ? MOCK_ZONES.find((z) => z.id === cascade.fromZoneId)
-    : undefined;
+  const isOnline = useIsOnline();
 
   return (
-    <main className="flex flex-1 flex-col items-center gap-8 p-6">
+    <main className="flex flex-1 flex-col items-center gap-6 p-6">
       <OnboardingGate />
-      <h1 className="text-lg font-semibold">WeatherWell alerts — {zone.name}</h1>
-      <AlertCard alert={alert} zone={zone} />
+      <h1 className="text-lg font-semibold">WeatherWell</h1>
+      {isOnline ? <HomepageMap zones={MOCK_ZONES} /> : <ZoneAlertListFallback zones={MOCK_ZONES} />}
 
-      {predictions.length > 0 && (
-        <PredictionTimeline steps={predictions} zoneName={zone.name} />
-      )}
-
-      {cascade && fromZone && (
-        <CascadeWarning cascade={cascade} fromZone={fromZone} toZone={zone} />
-      )}
-
-      <div className="flex w-full max-w-md flex-col gap-3">
-        <Button asChild size="lg">
-          <Link href="/evacuation">View evacuation instructions</Link>
-        </Button>
-        <Button asChild size="lg" variant="outline">
-          <Link href="/report">Report water level</Link>
-        </Button>
-        <Button asChild size="lg" variant="ghost">
-          <Link href="/map">View zone map</Link>
-        </Button>
-        <Button asChild size="lg" variant="ghost">
-          <Link href="/admin">Admin simulation</Link>
-        </Button>
+      <div className="flex w-full max-w-2xl flex-wrap justify-center gap-2">
+        {NAV_LINKS.map(({ href, label, icon: Icon }) => (
+          <Button key={href} asChild variant="ghost" size="sm">
+            <Link href={href}>
+              <Icon aria-hidden="true" />
+              {label}
+            </Link>
+          </Button>
+        ))}
       </div>
     </main>
   );

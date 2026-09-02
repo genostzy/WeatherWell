@@ -14,6 +14,8 @@ import { ZoneMap } from "@/features/zones/zone-map";
 import { ConsentNotice } from "@/features/onboarding/consent-notice";
 import { ZonePicker } from "@/features/onboarding/zone-picker";
 import { EmergencyHotlineButton } from "@/components/emergency-hotline-button";
+import { ZoneAlertListFallback } from "@/features/homepage-map/zone-alert-list-fallback";
+import { MarkerLegend } from "@/features/homepage-map/marker-legend";
 import AdminPage from "@/app/admin/page";
 import {
   MOCK_ZONES,
@@ -112,5 +114,13 @@ describe("accessibility (WCAG 2.1 AA, automated subset)", () => {
 
   it("admin simulation page has no violations", async () => {
     expect(await violationsFor(<AdminPage />)).toEqual([]);
+  });
+
+  it("zone alert list fallback has no violations", async () => {
+    expect(await violationsFor(<ZoneAlertListFallback zones={MOCK_ZONES} />)).toEqual([]);
+  });
+
+  it("marker legend has no violations", async () => {
+    expect(await violationsFor(<MarkerLegend />)).toEqual([]);
   });
 });
