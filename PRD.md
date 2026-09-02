@@ -85,11 +85,13 @@ Software-only prototype. No physical hardware. PWA, not native app.
 
 | Depth | Approx. depth | Maps to |
 |---|---|---|
-| `dry` | 0 cm | Green |
-| `ankle` | 15 cm | yellow |
-| `knee` | 45 cm | orange |
-| `waist` | 90 cm | red |
-| `neck` | 150 cm | red Danger warning sign |
+| `dry` | 0 cm | yellow |
+| `ankle` | 15 cm | orange |
+| `knee` | 45 cm | red |
+| `waist` | 90 cm | evacuate |
+| `neck` | 150 cm | evacuate |
+
+Shifted one severity tier earlier than a naive linear mapping would suggest: `waist` and `neck` both land on `evacuate`, not just `neck`. The depth-reference visual above exists precisely because the same nominal depth is far more dangerous for a child than an adult (a child is 110cm tall — "waist" on the adult scale is already near a child's shoulders) — waiting until the most extreme adult-scale reading to call for evacuation would already be too late for the more vulnerable person standing in the same water.
 
 **Homepage Map — Zone Status Legend:**
 
