@@ -24,6 +24,18 @@ const PASSES_THROUGH_HAZARD: LocalizedText = {
 };
 const DIRECTION_TO_SAFETY: LocalizedText = { en: "away", fil: "ang layo" };
 
+/** Compass codes returned by `getBearingAndDistance` — Filipino uses distinct words, not abbreviations of the English letters. */
+const COMPASS_LABEL: Record<string, LocalizedText> = {
+  N: { en: "N", fil: "Hilaga" },
+  NE: { en: "NE", fil: "Hilagang-Silangan" },
+  E: { en: "E", fil: "Silangan" },
+  SE: { en: "SE", fil: "Timog-Silangan" },
+  S: { en: "S", fil: "Timog" },
+  SW: { en: "SW", fil: "Timog-Kanluran" },
+  W: { en: "W", fil: "Kanluran" },
+  NW: { en: "NW", fil: "Hilagang-Kanluran" },
+};
+
 export function HomepageMap({ zones }: { zones: Zone[] }) {
   const { lang } = useLanguage();
   const [hazardType, setHazardType] = useState<HazardType>("flood");
@@ -135,8 +147,8 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
           {t(SAFEST_ROUTE_TO, lang)} {routeZone.evacuationCenterName}.{" "}
           {directionToSafety && (
             <span className="font-medium">
-              {Math.round(directionToSafety.distanceMeters)}m {directionToSafety.compassLabel}{" "}
-              {t(DIRECTION_TO_SAFETY, lang)}.
+              {Math.round(directionToSafety.distanceMeters)}m{" "}
+              {t(COMPASS_LABEL[directionToSafety.compassLabel], lang)} {t(DIRECTION_TO_SAFETY, lang)}.
             </span>
           )}{" "}
           {routeCrossesHazard && (

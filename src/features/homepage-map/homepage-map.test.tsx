@@ -1,7 +1,8 @@
-import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { HomepageMap } from "./homepage-map";
 import { MOCK_ZONES } from "@/lib/mock-data";
+import { LanguageProvider } from "@/features/i18n/language-provider";
 
 /**
  * jsdom has no real layout engine, and Leaflet computes marker/tile
@@ -16,5 +17,32 @@ describe("HomepageMap", () => {
     render(<HomepageMap zones={MOCK_ZONES} />);
     expect(screen.getByText(/map legend/i)).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: /flood/i })).toBeInTheDocument();
+  });
+
+  it("renders the direction-to-safety compass label localized, not as a bare code", () => {
+    // zone-1's evacuation center sits due north (same lng) of this stubbed live
+    // position, so getBearingAndDistance deterministically returns "N".
+    vi.stubGlobal("navigator", {
+      geolocation: {
+        watchPosition: vi.fn((success) => {
+          success({ coords: { latitude: 14.647, longitude: 121.1005 } });
+          return 1;
+        }),
+        clearWatch: vi.fn(),
+      },
+    });
+
+    render(
+      <LanguageProvider initialLang="fil">
+        <HomepageMap zones={MOCK_ZONES} />
+      </LanguageProvider>
+    );
+
+    // Clicking the zone-1 status marker selects it as the active evacuation route.
+    fireEvent.click(screen.getByRole("img", { name: /Barangay San Isidro/i }));
+
+    // Filipino must show the localized word, not the bare English "N" code.
+    expect(screen.getByText(/Hilaga/)).toBeInTheDocument();
+    expect(screen.queryByText(/\bN\b/)).not.toBeInTheDocument();
   });
 });
