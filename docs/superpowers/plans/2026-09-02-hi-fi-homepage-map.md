@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace the alert-card homepage (`src/app/page.tsx`) with the interactive map described in PRD.md Core Feature #9 — live geolocation, a mocked hazard-tile backdrop, zone-status/evacuation/POI markers, a persistent marker legend, a pre-authored safest-route to each zone's evacuation center, and an offline fallback list view.
+**Goal:** Replace the alert-card homepage (`src/app/page.tsx`) with the interactive map described in PRD.md Core Feature #11 — live geolocation, a mocked hazard-tile backdrop, zone-status/evacuation/POI markers, a persistent marker legend, a pre-authored safest-route to each zone's evacuation center with a live bearing/distance direction-to-safety indicator, and an offline fallback list view. (This plan predates the PRD's Personal Status Headline and Current Conditions panel additions — see Self-Review for what's covered and what's deferred.)
 
 **Architecture:** Leaflet + react-leaflet render the map client-side only (dynamically imported with `ssr: false`, since Leaflet touches `window`). All map data is pure mock data added to the existing `mock-data.ts`/`types.ts` files. Pure logic (zone status, hazard colors, marker icon factories) lives in plain `.ts` modules with no Leaflet dependency, so it's unit-testable without touching the map at all — only the final `HomepageMap` component composes Leaflet itself, and that component gets a narrow smoke test rather than deep interaction tests, because jsdom has no real layout engine and Leaflet computes pixel geometry from real `getBoundingClientRect()`/`ResizeObserver` values.
 
@@ -981,6 +981,191 @@ git commit -m "feat: add offline detection hook and no-map fallback list view"
 
 ---
 
+### Task 7a: Live bearing/distance ("direction to safety") indicator
+
+PRD Core Feature #11 was extended after this plan was first written to add a live direction-to-safety indicator — compass bearing + distance from the resident's current position to their zone's evacuation center, computed client-side, no routing engine. This task adds that as a small, self-contained, fully unit-testable slice before Task 7 wires it into the map. It does **not** render a moving live-position marker on the map itself, and does not touch the onboarding consent notice's wording — both of those still belong to the deferred "live geolocation" follow-up flagged in this plan's Self-Review, because a rendered blue dot and consent-copy changes are a bigger, separate UX surface than a text readout.
+
+**Files:**
+- Create: `src/features/homepage-map/bearing-distance.ts`
+- Test: `src/features/homepage-map/bearing-distance.test.ts`
+- Create: `src/features/homepage-map/use-live-position.ts`
+- Test: `src/features/homepage-map/use-live-position.test.ts`
+
+**Interfaces:**
+- Produces: `getBearingAndDistance(from: {lat:number,lng:number}, to: {lat:number,lng:number}): { bearingDeg: number; distanceMeters: number; compassLabel: string }`; `useLivePosition(): {lat:number,lng:number} | null`.
+
+- [ ] **Step 1: Write the failing bearing/distance test**
+
+Create `src/features/homepage-map/bearing-distance.test.ts`:
+```typescript
+import { describe, it, expect } from "vitest";
+import { getBearingAndDistance } from "./bearing-distance";
+
+describe("getBearingAndDistance", () => {
+  it("computes distance in meters using the haversine formula", () => {
+    // ~111m per 0.001 degree of latitude at this latitude
+    const result = getBearingAndDistance({ lat: 14.656, lng: 121.1015 }, { lat: 14.657, lng: 121.1005 });
+    expect(result.distanceMeters).toBeGreaterThan(100);
+    expect(result.distanceMeters).toBeLessThan(200);
+  });
+
+  it("labels due north as N", () => {
+    const result = getBearingAndDistance({ lat: 14.0, lng: 121.0 }, { lat: 14.01, lng: 121.0 });
+    expect(result.compassLabel).toBe("N");
+  });
+
+  it("labels due east as E", () => {
+    const result = getBearingAndDistance({ lat: 14.0, lng: 121.0 }, { lat: 14.0, lng: 121.01 });
+    expect(result.compassLabel).toBe("E");
+  });
+
+  it("returns zero distance for the same point", () => {
+    const point = { lat: 14.656, lng: 121.1015 };
+    expect(getBearingAndDistance(point, point).distanceMeters).toBeCloseTo(0, 0);
+  });
+});
+```
+
+- [ ] **Step 2: Verify it fails, then implement**
+
+Run: `npm test -- --run bearing-distance.test.ts` → FAIL (module missing).
+
+Create `src/features/homepage-map/bearing-distance.ts`:
+```typescript
+const EARTH_RADIUS_METERS = 6371000;
+
+function toRadians(deg: number): number {
+  return (deg * Math.PI) / 180;
+}
+
+const COMPASS_LABELS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+
+function compassLabelFor(bearingDeg: number): string {
+  const index = Math.round(bearingDeg / 45) % 8;
+  return COMPASS_LABELS[index];
+}
+
+/**
+ * Straight-line bearing and distance only — not a walkable route. This
+ * can't know what's physically between the two points (a building, a
+ * flooded street), which is why the UI must label it as a direction, not
+ * a path, per PRD Core Feature #11.
+ */
+export function getBearingAndDistance(
+  from: { lat: number; lng: number },
+  to: { lat: number; lng: number }
+): { bearingDeg: number; distanceMeters: number; compassLabel: string } {
+  const lat1 = toRadians(from.lat);
+  const lat2 = toRadians(to.lat);
+  const deltaLat = toRadians(to.lat - from.lat);
+  const deltaLng = toRadians(to.lng - from.lng);
+
+  const a =
+    Math.sin(deltaLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLng / 2) ** 2;
+  const distanceMeters = EARTH_RADIUS_METERS * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  const y = Math.sin(deltaLng) * Math.cos(lat2);
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(deltaLng);
+  const bearingDeg = (Math.atan2(y, x) * 180) / Math.PI;
+  const normalizedBearing = (bearingDeg + 360) % 360;
+
+  return {
+    bearingDeg: normalizedBearing,
+    distanceMeters,
+    compassLabel: compassLabelFor(normalizedBearing),
+  };
+}
+```
+
+- [ ] **Step 3: Run it to verify it passes**
+
+Run: `npm test -- --run bearing-distance.test.ts`
+Expected: PASS (4 tests)
+
+- [ ] **Step 4: Write the failing live-position hook test**
+
+Create `src/features/homepage-map/use-live-position.test.ts`:
+```typescript
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { renderHook, waitFor } from "@testing-library/react";
+import { useLivePosition } from "./use-live-position";
+
+describe("useLivePosition", () => {
+  beforeEach(() => {
+    vi.stubGlobal("navigator", {
+      geolocation: {
+        watchPosition: vi.fn((success) => {
+          success({ coords: { latitude: 14.656, longitude: 121.1015 } });
+          return 1;
+        }),
+        clearWatch: vi.fn(),
+      },
+    });
+  });
+
+  it("returns the watched position once geolocation reports one", async () => {
+    const { result } = renderHook(() => useLivePosition());
+    await waitFor(() => expect(result.current).toEqual({ lat: 14.656, lng: 121.1015 }));
+  });
+
+  it("returns null when geolocation is unavailable", () => {
+    vi.stubGlobal("navigator", {});
+    const { result } = renderHook(() => useLivePosition());
+    expect(result.current).toBeNull();
+  });
+});
+```
+
+- [ ] **Step 5: Verify it fails, then implement**
+
+Run: `npm test -- --run use-live-position.test.ts` → FAIL (module missing).
+
+Create `src/features/homepage-map/use-live-position.ts`:
+```typescript
+"use client";
+
+import { useEffect, useState } from "react";
+
+/**
+ * Low-frequency/low-accuracy watch per PRD Non-Functional Requirements
+ * (limits battery drain). Returns null on denial, unavailability, or
+ * before the first fix arrives — every call site must handle null by
+ * falling back to the existing static pre-authored route text, never a
+ * loading spinner blocking the rest of the page.
+ */
+export function useLivePosition(): { lat: number; lng: number } | null {
+  const [position, setPosition] = useState<{ lat: number; lng: number } | null>(null);
+
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) return;
+
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => setPosition({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => setPosition(null),
+      { enableHighAccuracy: false, maximumAge: 30000 }
+    );
+
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, []);
+
+  return position;
+}
+```
+
+- [ ] **Step 6: Run the test to verify it passes**
+
+Run: `npm test -- --run use-live-position.test.ts`
+Expected: PASS (2 tests)
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add src/features/homepage-map/bearing-distance.ts src/features/homepage-map/bearing-distance.test.ts src/features/homepage-map/use-live-position.ts src/features/homepage-map/use-live-position.test.ts
+git commit -m "feat: add live bearing/distance direction-to-safety calculation"
+```
+
+---
+
 ### Task 7: The HomepageMap Leaflet component
 
 **Files:**
@@ -988,7 +1173,7 @@ git commit -m "feat: add offline detection hook and no-map fallback list view"
 - Test: `src/features/homepage-map/homepage-map.test.tsx`
 
 **Interfaces:**
-- Consumes: everything from Tasks 1–6 (`MOCK_ZONES`, `getPOIsForZone`, `getHazardSusceptibilityForZone`, `getActiveAlertForZone`, `getZoneStatus`, `hazardRiskColor`, `createStatusMarkerIcon`/`createPoiMarkerIcon`/`createEvacuationMarkerIcon`, `MarkerLegend`, `HazardTypeSelector`).
+- Consumes: everything from Tasks 1–6 (`MOCK_ZONES`, `getPOIsForZone`, `getHazardSusceptibilityForZone`, `getActiveAlertForZone`, `getZoneStatus`, `hazardRiskColor`, `createStatusMarkerIcon`/`createPoiMarkerIcon`/`createEvacuationMarkerIcon`, `MarkerLegend`, `HazardTypeSelector`) and Task 7a (`getBearingAndDistance`, `useLivePosition`).
 - Produces: `<HomepageMap zones={Zone[]} />` — the only export; this is the component `src/app/page.tsx` will dynamically import in Task 8.
 
 - [ ] **Step 1: Write the smoke test**
@@ -1039,6 +1224,8 @@ import { hazardRiskColor } from "./hazard-color";
 import { createStatusMarkerIcon, createPoiMarkerIcon, createEvacuationMarkerIcon } from "./marker-icons";
 import { MarkerLegend } from "./marker-legend";
 import { HazardTypeSelector } from "./hazard-type-selector";
+import { getBearingAndDistance } from "./bearing-distance";
+import { useLivePosition } from "./use-live-position";
 import type { HazardType, LocalizedText, Zone } from "@/lib/types";
 
 const HAZARD_ZONE_STATUSES = new Set(["dangerous", "hazardous"]);
@@ -1048,14 +1235,23 @@ const PASSES_THROUGH_HAZARD: LocalizedText = {
   en: "This is the best available path, but it passes through a hazardous area.",
   fil: "Ito ang pinakamagandang ruta na available, pero dumadaan ito sa mapanganib na lugar.",
 };
+const DIRECTION_TO_SAFETY: LocalizedText = { en: "away", fil: "ang layo" };
 
 export function HomepageMap({ zones }: { zones: Zone[] }) {
   const { lang } = useLanguage();
   const [hazardType, setHazardType] = useState<HazardType>("flood");
   const [routeZoneId, setRouteZoneId] = useState<string | null>(null);
+  const livePosition = useLivePosition();
 
   const center: [number, number] = [zones[0].lat, zones[0].lng];
   const routeZone = zones.find((z) => z.id === routeZoneId) ?? null;
+  const directionToSafety =
+    routeZone && livePosition
+      ? getBearingAndDistance(livePosition, {
+          lat: routeZone.evacuationCenterLat,
+          lng: routeZone.evacuationCenterLng,
+        })
+      : null;
   const routeCrossesHazard = routeZone
     ? zones.some(
         (z) =>
@@ -1150,6 +1346,12 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
       {routeZone && (
         <p lang={lang} className="text-sm">
           {t(SAFEST_ROUTE_TO, lang)} {routeZone.evacuationCenterName}.{" "}
+          {directionToSafety && (
+            <span className="font-medium">
+              {Math.round(directionToSafety.distanceMeters)}m {directionToSafety.compassLabel}{" "}
+              {t(DIRECTION_TO_SAFETY, lang)}.
+            </span>
+          )}{" "}
           {routeCrossesHazard && (
             <span className="font-medium text-severity-evacuate">
               {t(PASSES_THROUGH_HAZARD, lang)}
@@ -1261,8 +1463,15 @@ git commit -m "feat: replace the alert-card homepage with the interactive map"
 
 ## Self-Review
 
-**Spec coverage:** Live geolocation (deferred — see note below), hazard-tile backdrop (Task 7, mocked per Task 1 data), zone-status markers with shape+color (Task 3/7), evacuation + POI markers (Task 1/3/7), persistent marker legend (Task 4/7), safest-route-to-evacuation-center with hazard flagging (Task 7), offline fallback list view (Task 6/8), no drawn zone boundaries (never implemented — correct, by omission). One gap found and intentionally deferred: PRD's live `watchPosition` geolocation dot and its consent-notice wording are **not** in this plan — they depend on the existing consent-notice component and raise their own permission-UX questions (denied/blocked permission, manual pin-drop) substantial enough to deserve their own reviewed task rather than being folded into an already-large Task 7. Flag this to the user as a follow-up, not a silent gap.
+**Spec coverage:** hazard-tile backdrop (Task 7, mocked per Task 1 data), zone-status markers with shape+color (Task 3/7), evacuation + POI markers (Task 1/3/7), persistent marker legend (Task 4/7), safest-route-to-evacuation-center with hazard flagging (Task 7), live bearing/distance direction-to-safety indicator (Task 7a/7), offline fallback list view (Task 6/8), no drawn zone boundaries (never implemented — correct, by omission).
+
+Three gaps found and intentionally deferred, not silently dropped:
+1. **A rendered live-position marker on the map itself** (a moving blue dot showing where the resident is) — Task 7a's `useLivePosition` hook feeds the bearing/distance *text* readout, but nothing in this plan draws the position as a map marker. That's a bigger visual/UX surface (icon design, what happens while position is null, whether it recenters the map) deserving its own task.
+2. **The onboarding consent notice's wording** for continuous (`watchPosition`) location use, distinct from the existing one-time fetch — PRD Privacy & Data calls for this explicitly; this plan doesn't touch `consent-notice.tsx`.
+3. **Personal Status Headline and Current Conditions panel** (PRD Core Features #9–#10, added after this plan was first written) are entirely separate, standalone components that sit above the map, not modifications to it — out of scope for this plan by the same "separate subsystem" logic that kept Community Flood Pins out. They need their own plan.
+
+Flag all three to the user as follow-ups after this plan ships, not silent gaps.
 
 **Placeholder scan:** The marker-icon glyphs in Task 3 are flagged inline as needing a real-icon swap rather than left as an unflagged placeholder — that's a deliberate, disclosed shortcut, not a plan failure.
 
-**Type consistency:** `HazardType`/`HazardRiskLevel`/`POICategory`/`PointOfInterest` are defined once in Task 1 and imported (never redefined) in Tasks 3, 5, 7. `ZoneStatus`/`getZoneStatus`/`getZoneStatusColor`/`ZONE_STATUS_LABEL` defined once in Task 2, imported in Tasks 3, 4, 7. `hazardRiskColor` defined once in Task 3, imported in Task 7. Confirmed no signature drift across tasks.
+**Type consistency:** `HazardType`/`HazardRiskLevel`/`POICategory`/`PointOfInterest` are defined once in Task 1 and imported (never redefined) in Tasks 3, 5, 7. `ZoneStatus`/`getZoneStatus`/`getZoneStatusColor`/`ZONE_STATUS_LABEL` defined once in Task 2, imported in Tasks 3, 4, 7. `hazardRiskColor` defined once in Task 3, imported in Task 7. `getBearingAndDistance`/`useLivePosition` defined once in Task 7a, imported in Task 7. Confirmed no signature drift across tasks.
