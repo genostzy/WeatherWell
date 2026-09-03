@@ -28,6 +28,7 @@ function syntheticZone(evacuationRoutePath: [number, number][]): Zone {
     evacuationRoutePath,
     hotlineNumber: "0",
     centerStatus: "space_available",
+    evacuationCenterCapacity: 100,
   };
 }
 

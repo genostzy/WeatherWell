@@ -11,6 +11,8 @@ export type AlertOverrideValue = Severity | "none";
 export interface ZoneOverride {
   alertSeverity?: AlertOverrideValue;
   centerStatus?: CenterStatus;
+  /** Live headcount at the zone's evacuation center (PRD Gap B). When set, this — not centerStatus — drives the displayed status; see deriveCenterStatusFromOccupancy. */
+  currentOccupancy?: number;
 }
 
 type OverridesMap = Record<string, ZoneOverride>;
@@ -49,6 +51,15 @@ export function setZoneCenterStatusOverride(zoneId: string, centerStatus: Center
   });
 }
 
+/** Admin-entered headcount at a zone's evacuation center — undefined clears it, falling back to the manual centerStatus enum (PRD Gap B). */
+export function setZoneOccupancyOverride(zoneId: string, currentOccupancy: number | undefined): void {
+  store.update((all) => {
+    const next = { ...all[zoneId], currentOccupancy };
+    if (currentOccupancy === undefined) delete next.currentOccupancy;
+    return { ...all, [zoneId]: next };
+  });
+}
+
 const GENERIC_OVERRIDE_MESSAGE: LocalizedText = {
   en: "Alert severity set by zone management.",
   fil: "Severity ng alert na itinakda ng namamahala sa zone.",
@@ -80,10 +91,33 @@ export function resolveEffectiveAlert(
   };
 }
 
-/** The capacity status the rest of the app should display: the override if set, otherwise the zone's own mock default. */
+/** Full-capacity threshold before "limited"/"full" band boundaries, per PRD Gap B. Kept low ("limited" well before literally full) since a shelter approaching capacity needs advance notice, not a last-minute one. */
+const LIMITED_AT_RATIO = 0.7;
+const FULL_AT_RATIO = 0.95;
+
+/** Derives a plain-language status from a real headcount instead of requiring a separate manual choice — PRD Gap B (evacuation center capacity management). */
+export function deriveCenterStatusFromOccupancy(capacity: number, occupancy: number): CenterStatus {
+  if (capacity <= 0) return "full";
+  const ratio = occupancy / capacity;
+  if (ratio >= FULL_AT_RATIO) return "full";
+  if (ratio >= LIMITED_AT_RATIO) return "limited";
+  return "space_available";
+}
+
+/**
+ * The capacity status the rest of the app should display. If a live
+ * headcount is being tracked (capacity + occupancy both known), that
+ * derives the status directly — otherwise falls back to the manual
+ * centerStatus override, then the zone's own mock default.
+ */
 export function resolveEffectiveCenterStatus(
   zoneDefault: CenterStatus,
-  override: CenterStatus | undefined
+  override: CenterStatus | undefined,
+  capacity?: number,
+  occupancy?: number
 ): CenterStatus {
+  if (capacity !== undefined && occupancy !== undefined) {
+    return deriveCenterStatusFromOccupancy(capacity, occupancy);
+  }
   return override ?? zoneDefault;
 }

@@ -22,6 +22,7 @@ export const MOCK_ZONES: Zone[] = [
     ],
     hotlineNumber: "09171234567",
     centerStatus: "space_available",
+    evacuationCenterCapacity: 300,
     downstreamZoneId: "zone-2",
   },
   {
@@ -45,6 +46,7 @@ export const MOCK_ZONES: Zone[] = [
     ],
     hotlineNumber: "09171234568",
     centerStatus: "limited",
+    evacuationCenterCapacity: 150,
     downstreamZoneId: "zone-3",
   },
   {
@@ -68,6 +70,7 @@ export const MOCK_ZONES: Zone[] = [
     ],
     hotlineNumber: "09171234569",
     centerStatus: "space_available",
+    evacuationCenterCapacity: 250,
     downstreamZoneId: "zone-4",
   },
   {
@@ -91,5 +94,6 @@ export const MOCK_ZONES: Zone[] = [
     ],
     hotlineNumber: "09171234570",
     centerStatus: "space_available",
+    evacuationCenterCapacity: 200,
   },
 ];

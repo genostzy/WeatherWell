@@ -67,7 +67,12 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
 
   const alertOverride = overrides[zone.id]?.alertSeverity;
   const effectiveAlert = resolveEffectiveAlert(zone.id, alertOverride);
-  const centerStatus = resolveEffectiveCenterStatus(zone.centerStatus, overrides[zone.id]?.centerStatus);
+  const centerStatus = resolveEffectiveCenterStatus(
+    zone.centerStatus,
+    overrides[zone.id]?.centerStatus,
+    zone.evacuationCenterCapacity,
+    overrides[zone.id]?.currentOccupancy
+  );
   const susceptibility = getHazardSusceptibilityForZone(zone.id);
   const rainfall = getRainfallForZone(zone.id);
   const rainfallHistory = getRainfallHistoryForZone(zone.id);

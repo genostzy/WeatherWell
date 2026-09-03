@@ -136,7 +136,9 @@ export function ZoneMap({ zones }: { zones: Zone[] }) {
           const susceptibility = getHazardSusceptibilityForZone(zone.id);
           const centerStatus = resolveEffectiveCenterStatus(
             zone.centerStatus,
-            overrides[zone.id]?.centerStatus
+            overrides[zone.id]?.centerStatus,
+            zone.evacuationCenterCapacity,
+            overrides[zone.id]?.currentOccupancy
           );
           const rainfall = getRainfallForZone(zone.id);
           const zonePins = pins.filter((pin) => pin.zoneId === zone.id).length;

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import {
+  Activity,
   AlertTriangle,
   Building2,
   CloudRain,
@@ -34,6 +35,7 @@ import {
 import { useZoneOverrides, resolveEffectiveAlert, resolveEffectiveCenterStatus } from "@/lib/zone-overrides";
 import { useCommunityPins } from "@/lib/community-pins";
 import { getZoneStatus } from "@/lib/zone-status";
+import { buildZoneInputForZone, computeZoneState } from "@/lib/risk-engine/score";
 import type { LocalizedText } from "@/lib/types";
 
 const SUBTITLE: LocalizedText = {
@@ -62,6 +64,11 @@ const UNVERIFIED: LocalizedText = { en: "unverified, resident-reported", fil: "h
 const ACTIVE_CYCLONE: LocalizedText = { en: "Tropical cyclone", fil: "Bagyo" };
 const NONE_TRACKED: LocalizedText = { en: "None tracked", fil: "Wala" };
 const AWAY: LocalizedText = { en: "away", fil: "ang layo" };
+const HIGHEST_RISK_SCORE: LocalizedText = { en: "Highest risk score", fil: "Pinakamataas na risk score" };
+const RISK_SCORE_HINT: LocalizedText = {
+  en: "computed, advisory only — not the actual alert",
+  fil: "kinakalkula, payo lamang — hindi ang aktwal na alerto",
+};
 
 export default function AdminPage() {
   const { lang } = useLanguage();
@@ -74,9 +81,19 @@ export default function AdminPage() {
   const reportsToday = MOCK_ZONES.reduce((sum, zone) => sum + getReportsTodayForZone(zone.id), 0);
   const heaviestRain = Math.max(...MOCK_ZONES.map((zone) => getRainfallForZone(zone.id)));
   const constrainedCenters = MOCK_ZONES.filter((zone) => {
-    const status = resolveEffectiveCenterStatus(zone.centerStatus, overrides[zone.id]?.centerStatus);
+    const status = resolveEffectiveCenterStatus(
+      zone.centerStatus,
+      overrides[zone.id]?.centerStatus,
+      zone.evacuationCenterCapacity,
+      overrides[zone.id]?.currentOccupancy
+    );
     return status !== "space_available";
   }).length;
+  const zoneStates = MOCK_ZONES.map((zone) => computeZoneState(buildZoneInputForZone(zone, MOCK_ZONES)));
+  const highestRiskState = zoneStates.reduce((highest, state) =>
+    state.riskScore > highest.riskScore ? state : highest
+  );
+  const highestRiskZone = MOCK_ZONES.find((zone) => zone.id === highestRiskState.zoneId)!;
 
   return (
     <main className="flex min-h-screen flex-col items-center gap-6 p-4 sm:p-6 lg:p-8">
@@ -129,6 +146,13 @@ export default function AdminPage() {
               hint={MOCK_TYPHOON ? `${MOCK_TYPHOON.distanceKm}km ${MOCK_TYPHOON.bearing} ${t(AWAY, lang)}` : undefined}
               icon={Wind}
               accentClass={MOCK_TYPHOON ? "text-severity-orange" : "text-foreground"}
+            />
+            <StatCard
+              label={t(HIGHEST_RISK_SCORE, lang)}
+              value={highestRiskState.riskScore}
+              hint={`${highestRiskZone.name} — ${t(RISK_SCORE_HINT, lang)}`}
+              icon={Activity}
+              accentClass={highestRiskState.riskScore >= 50 ? "text-severity-orange" : "text-foreground"}
             />
           </div>
         </section>

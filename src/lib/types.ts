@@ -29,6 +29,8 @@ export interface Zone {
   evacuationRoutePath: [number, number][];
   hotlineNumber: string;
   centerStatus: CenterStatus;
+  /** Total headcount the evacuation center can hold. Paired with ZoneOverride.currentOccupancy to derive a real "X of Y spots" reading instead of just the manual centerStatus enum (PRD Gap B / Climate Resilience plan). */
+  evacuationCenterCapacity: number;
   downstreamZoneId?: string;
 }
 

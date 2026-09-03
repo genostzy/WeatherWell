@@ -13,11 +13,18 @@ const GO_HERE: LocalizedText = { en: "Go here", fil: "Pumunta rito" };
 const CAPACITY: LocalizedText = { en: "Capacity", fil: "Kapasidad" };
 const HOW_TO_GET_THERE: LocalizedText = { en: "How to get there", fil: "Paano makarating" };
 const CALL: LocalizedText = { en: "Call", fil: "Tawagan" };
+const SPOTS_LEFT: LocalizedText = { en: "spots left", fil: "espasyong natitira" };
 
 export function EvacuationInstructions({ zone }: { zone: Zone }) {
   const { lang } = useLanguage();
   const overrides = useZoneOverrides();
-  const centerStatus = resolveEffectiveCenterStatus(zone.centerStatus, overrides[zone.id]?.centerStatus);
+  const occupancy = overrides[zone.id]?.currentOccupancy;
+  const centerStatus = resolveEffectiveCenterStatus(
+    zone.centerStatus,
+    overrides[zone.id]?.centerStatus,
+    zone.evacuationCenterCapacity,
+    occupancy
+  );
 
   return (
     <Card className="w-full max-w-md">
@@ -45,6 +52,11 @@ export function EvacuationInstructions({ zone }: { zone: Zone }) {
             <Badge className={CENTER_STATUS_CLASS[centerStatus]}>
               {t(CENTER_STATUS_LABEL[centerStatus], lang)}
             </Badge>
+            {occupancy !== undefined && (
+              <p className="mt-1 text-sm text-muted-foreground">
+                {Math.max(0, zone.evacuationCenterCapacity - occupancy)} {t(SPOTS_LEFT, lang)}
+              </p>
+            )}
           </div>
         </div>
 
