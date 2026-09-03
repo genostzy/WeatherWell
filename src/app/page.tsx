@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { Building2, Droplet, Map, Settings } from "lucide-react";
 import { OnboardingGate } from "@/features/onboarding/onboarding-gate";
+import { PersonalStatusHeadline } from "@/features/homepage-map/personal-status-headline";
 import { ZoneAlertListFallback } from "@/features/homepage-map/zone-alert-list-fallback";
 import { useIsOnline } from "@/features/homepage-map/use-tiles-cached";
 import { useSelectedZone } from "@/features/zones/use-selected-zone";
@@ -17,7 +18,7 @@ import type { LocalizedText } from "@/lib/types";
 
 const HomepageMap = dynamic(
   () => import("@/features/homepage-map/homepage-map").then((m) => m.HomepageMap),
-  { ssr: false, loading: () => <Skeleton className="h-[400px] w-full max-w-2xl rounded-md" /> }
+  { ssr: false, loading: () => <Skeleton className="h-[340px] w-full max-w-2xl rounded-md sm:h-[400px]" /> }
 );
 
 const NAV_LINKS: { href: string; label: LocalizedText; icon: typeof Building2 }[] = [
@@ -34,9 +35,9 @@ export default function Home() {
   const { lang } = useLanguage();
 
   return (
-    <main className="flex flex-1 flex-col items-center gap-6 p-4 sm:p-6 lg:p-8">
+    <main className="flex flex-1 flex-col items-center gap-4 p-4 sm:gap-6 sm:p-6 lg:p-8">
       <OnboardingGate />
-      <h1 className="text-lg font-semibold md:text-xl">WeatherWell</h1>
+      <PersonalStatusHeadline zone={selectedZone} />
       {isOnline ? (
         <HomepageMap zones={orderedZones} />
       ) : (

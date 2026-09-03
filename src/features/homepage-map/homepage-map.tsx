@@ -61,13 +61,13 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
   const routeHazard = routeZone ? routeCrossesHazard(routeZone, zones) : false;
 
   return (
-    <div className="grid w-full max-w-2xl gap-4 lg:max-w-5xl lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start lg:gap-6">
+    <div className="grid w-full max-w-2xl gap-3 sm:gap-4 lg:max-w-5xl lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start lg:gap-6">
       <div className="lg:col-start-2 lg:row-start-1">
         <HazardTypeSelector value={hazardType} onChange={setHazardType} />
       </div>
 
       <div
-        className="h-[400px] w-full overflow-hidden rounded-md border-2 border-border lg:col-start-1 lg:row-span-3 lg:h-[600px]"
+        className="h-[340px] w-full overflow-hidden rounded-md border-2 border-border sm:h-[400px] lg:col-start-1 lg:row-span-3 lg:h-[600px]"
         aria-label={t(MAP_ARIA_LABEL, lang)}
       >
         <MapContainer center={center} zoom={14} scrollWheelZoom={false} style={{ height: "100%", width: "100%" }}>

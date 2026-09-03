@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { ReactElement } from "react";
-import { render } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import axe from "axe-core";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AlertCard } from "@/features/alerts/alert-card";
@@ -17,6 +18,7 @@ import { EmergencyHotlineButton } from "@/components/emergency-hotline-button";
 import { ZoneAlertListFallback } from "@/features/homepage-map/zone-alert-list-fallback";
 import { MarkerLegend } from "@/features/homepage-map/marker-legend";
 import { HazardTypeSelector } from "@/features/homepage-map/hazard-type-selector";
+import { PersonalStatusHeadline } from "@/features/homepage-map/personal-status-headline";
 import AdminPage from "@/app/admin/page";
 import {
   MOCK_ZONES,
@@ -129,5 +131,25 @@ describe("accessibility (WCAG 2.1 AA, automated subset)", () => {
     expect(
       await violationsFor(<HazardTypeSelector value="flood" onChange={() => {}} />)
     ).toEqual([]);
+  });
+
+  it("personal status headline has no violations", async () => {
+    expect(
+      await violationsFor(<PersonalStatusHeadline zone={MOCK_ZONES[0]} />)
+    ).toEqual([]);
+  });
+
+  it("expanded marker legend has no violations", async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <TooltipProvider>
+        <MarkerLegend />
+      </TooltipProvider>
+    );
+    await user.click(screen.getByRole("button", { name: /see more/i }));
+    const results = await axe.run(container, {
+      rules: { "color-contrast": { enabled: false }, region: { enabled: false } },
+    });
+    expect(results.violations.map((v) => `${v.id}: ${v.help}`)).toEqual([]);
   });
 });

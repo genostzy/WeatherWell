@@ -1,8 +1,10 @@
 "use client";
 
-import type { ComponentType } from "react";
+import { useState, type ComponentType } from "react";
 import {
   Building2,
+  ChevronDown,
+  ChevronUp,
   Droplet,
   Landmark,
   Pill,
@@ -42,6 +44,8 @@ const MARKER_LEGEND_ITEMS: { key: string; label: LocalizedText; icon: ComponentT
 ];
 
 const LEGEND_TITLE: LocalizedText = { en: "Map legend", fil: "Legend ng Mapa" };
+const SEE_MORE: LocalizedText = { en: "See more", fil: "Tingnan pa" };
+const SEE_LESS: LocalizedText = { en: "See less", fil: "Bawasan" };
 
 /**
  * STATUS_SHAPE_STYLE (shared with marker-icons.ts, which interpolates it
@@ -63,6 +67,8 @@ function cssTextToStyleObject(cssText: string): Record<string, string> {
 
 export function MarkerLegend() {
   const { lang } = useLanguage();
+  const [expanded, setExpanded] = useState(false);
+  const ChevronIcon = expanded ? ChevronUp : ChevronDown;
 
   return (
     <Card className="w-full max-w-md">
@@ -80,19 +86,33 @@ export function MarkerLegend() {
             </div>
           ))}
         </div>
-        <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
-          {MARKER_LEGEND_ITEMS.map((item) => (
-            <div key={item.key} className="flex items-center gap-2">
-              <span
-                className="flex h-4 w-4 shrink-0 items-center justify-center rounded-sm bg-foreground/60 text-background"
-                aria-hidden="true"
-              >
-                <item.icon size={12} />
-              </span>
-              <span>{t(item.label, lang)}</span>
-            </div>
-          ))}
-        </div>
+
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+          aria-controls="marker-legend-poi-icons"
+          className="flex items-center gap-1 text-sm text-muted-foreground underline-offset-2 hover:underline"
+        >
+          {t(expanded ? SEE_LESS : SEE_MORE, lang)}
+          <ChevronIcon aria-hidden="true" className="h-4 w-4" />
+        </button>
+
+        {expanded && (
+          <div id="marker-legend-poi-icons" className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
+            {MARKER_LEGEND_ITEMS.map((item) => (
+              <div key={item.key} className="flex items-center gap-2">
+                <span
+                  className="flex h-4 w-4 shrink-0 items-center justify-center rounded-sm bg-foreground/60 text-background"
+                  aria-hidden="true"
+                >
+                  <item.icon size={12} />
+                </span>
+                <span>{t(item.label, lang)}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

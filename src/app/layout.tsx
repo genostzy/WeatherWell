@@ -23,7 +23,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <TooltipProvider>
           <LanguageProvider>
             <ServiceWorkerRegistration />
-            <header className="flex justify-end p-3">
+            <header className="flex items-center justify-between p-3">
+              <span className="font-semibold">WeatherWell</span>
               <LanguageToggle />
             </header>
             {children}
