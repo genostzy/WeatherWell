@@ -45,6 +45,23 @@ type SimulationStep =
 
 type IndicatorStep = Exclude<SimulationStep, "idle" | "complete">;
 
+/**
+ * Absolute milliseconds from the start of runSimulation to each step —
+ * a single source of truth instead of hand-added cumulative delays at each
+ * scheduleStep call. "complete" is always 11000ms in, cascade or not: the
+ * cascade check happens at 9500ms regardless of whether a cascade fires,
+ * and "complete" follows 1500ms after that check either way.
+ */
+const STEP_TIMING_MS: Record<Exclude<SimulationStep, "idle" | "predicting">, number> = {
+  "alert-issued": 1500,
+  "push-sent": 3000,
+  "push-failed": 5000,
+  "sms-sent": 6500,
+  cached: 8000,
+  cascade: 9500,
+  complete: 11000,
+};
+
 const STEP_EXPLANATION = {
   en: {
     predicting: "The prediction engine analyzes rainfall, terrain, and tidal data to estimate flood risk.",
@@ -196,18 +213,18 @@ export default function AdminSimulationPage() {
     setCurrentStep("predicting");
     setStepHistory(["predicting"]);
 
-    scheduleStep("alert-issued", 1500);
-    scheduleStep("push-sent", 3000);
-    scheduleStep("push-failed", 5000);
-    scheduleStep("sms-sent", 6500);
-    scheduleStep("cached", 8000);
-    if (cascade) {
-      scheduleStep("cascade", 9500);
+    const steps: Exclude<SimulationStep, "idle" | "predicting">[] = [
+      "alert-issued",
+      "push-sent",
+      "push-failed",
+      "sms-sent",
+      "cached",
+    ];
+    if (cascade) steps.push("cascade");
+    steps.push("complete");
+    for (const step of steps) {
+      scheduleStep(step, STEP_TIMING_MS[step]);
     }
-    // Always 1500ms after the cascade-check point, whether or not a cascade
-    // actually fired — matches the original nested-setTimeout chain, where
-    // "complete" was scheduled unconditionally outside the cascade branch.
-    scheduleStep("complete", 11000);
   };
 
   const resetSimulation = () => {

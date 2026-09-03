@@ -67,7 +67,7 @@ export function addWaterLevelReport(zoneId: string, depthLevel: DepthLevel): voi
     isOutlier: false,
     deviceId: getDeviceId(),
   };
-  store.write([...store.getSnapshot(), report]);
+  store.update((reports) => [...reports, report]);
 }
 
 export function minutesSinceReport(reportedAt: string): number {

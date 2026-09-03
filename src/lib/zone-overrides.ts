@@ -34,19 +34,19 @@ export function useZoneOverrides(): OverridesMap {
 }
 
 export function setZoneAlertOverride(zoneId: string, alertSeverity: AlertOverrideValue | undefined): void {
-  const all = { ...store.getSnapshot() };
-  const next = { ...all[zoneId], alertSeverity };
-  if (alertSeverity === undefined) delete next.alertSeverity;
-  all[zoneId] = next;
-  store.write(all);
+  store.update((all) => {
+    const next = { ...all[zoneId], alertSeverity };
+    if (alertSeverity === undefined) delete next.alertSeverity;
+    return { ...all, [zoneId]: next };
+  });
 }
 
 export function setZoneCenterStatusOverride(zoneId: string, centerStatus: CenterStatus | undefined): void {
-  const all = { ...store.getSnapshot() };
-  const next = { ...all[zoneId], centerStatus };
-  if (centerStatus === undefined) delete next.centerStatus;
-  all[zoneId] = next;
-  store.write(all);
+  store.update((all) => {
+    const next = { ...all[zoneId], centerStatus };
+    if (centerStatus === undefined) delete next.centerStatus;
+    return { ...all, [zoneId]: next };
+  });
 }
 
 const GENERIC_OVERRIDE_MESSAGE: LocalizedText = {

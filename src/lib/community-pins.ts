@@ -76,6 +76,14 @@ const pinsStore = createLocalStorageStore<CommunityPin[]>(
   SEED_COMMUNITY_PINS
 );
 
+type VotesMap = Record<string, 1 | -1>;
+
+const votesStore = createLocalStorageStore<VotesMap>(
+  VOTES_KEY,
+  "weatherwell:community-pin-votes-changed",
+  {}
+);
+
 /** Active pins only — what the public map and KPI counts show. Re-renders whenever any pin is added, voted on, removed, or restored. */
 export function useCommunityPins(): CommunityPin[] {
   const all = pinsStore.useStore();
@@ -108,7 +116,7 @@ export function addCommunityPin(input: {
     createdAt: new Date().toISOString(),
     deviceId: getDeviceId(),
   };
-  pinsStore.write([...pinsStore.getSnapshot(), pin]);
+  pinsStore.update((pins) => [...pins, pin]);
 }
 
 /**
@@ -125,17 +133,18 @@ export function updateCommunityPin(
   pinId: string,
   patch: { statusTag?: PinStatusTag; caption?: string; photoDataUrl?: string }
 ): void {
-  const next = pinsStore.getSnapshot().map((pin) => {
-    if (pin.id !== pinId) return pin;
-    return {
-      ...pin,
-      statusTag: patch.statusTag ?? pin.statusTag,
-      caption: patch.caption ?? pin.caption,
-      // An explicit empty string clears the photo; undefined leaves it alone.
-      photoDataUrl: patch.photoDataUrl === "" ? undefined : patch.photoDataUrl ?? pin.photoDataUrl,
-    };
-  });
-  pinsStore.write(next);
+  pinsStore.update((pins) =>
+    pins.map((pin) => {
+      if (pin.id !== pinId) return pin;
+      return {
+        ...pin,
+        statusTag: patch.statusTag ?? pin.statusTag,
+        caption: patch.caption ?? pin.caption,
+        // An explicit empty string clears the photo; undefined leaves it alone.
+        photoDataUrl: patch.photoDataUrl === "" ? undefined : patch.photoDataUrl ?? pin.photoDataUrl,
+      };
+    })
+  );
 }
 
 /**
@@ -145,56 +154,38 @@ export function updateCommunityPin(
  * to restore.
  */
 export function deleteOwnPin(pinId: string): void {
-  pinsStore.write(pinsStore.getSnapshot().filter((pin) => pin.id !== pinId));
+  pinsStore.update((pins) => pins.filter((pin) => pin.id !== pinId));
 }
 
 /** Admin's own manual removal — PRD Anti-Abuse layer 7/10's human override. Soft-delete so it can be undone via restoreCommunityPin. */
 export function removePinByAdmin(pinId: string): void {
-  const next = pinsStore.getSnapshot().map((pin) =>
-    pin.id === pinId ? { ...pin, removed: true, removedReason: "admin" as const } : pin
+  pinsStore.update((pins) =>
+    pins.map((pin) => (pin.id === pinId ? { ...pin, removed: true, removedReason: "admin" as const } : pin))
   );
-  pinsStore.write(next);
 }
 
 /** Clears a removal (net-score or admin) — the other half of "admin can remove or restore any pin". */
 export function restoreCommunityPin(pinId: string): void {
-  const next = pinsStore.getSnapshot().map((pin) =>
-    pin.id === pinId ? { ...pin, removed: false, removedReason: undefined } : pin
+  pinsStore.update((pins) =>
+    pins.map((pin) => (pin.id === pinId ? { ...pin, removed: false, removedReason: undefined } : pin))
   );
-  pinsStore.write(next);
 }
 
-function readRaw(key: string): string | null {
-  if (typeof window === "undefined") return null;
-  try {
-    return window.localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function readVotes(): Record<string, 1 | -1> {
-  const raw = readRaw(VOTES_KEY);
-  if (!raw) return {};
-  try {
-    return JSON.parse(raw) as Record<string, 1 | -1>;
-  } catch {
-    return {};
-  }
-}
-
-function writeVotes(votes: Record<string, 1 | -1>): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(VOTES_KEY, JSON.stringify(votes));
-  } catch {
-    // Private-mode or blocked storage: this device just won't be remembered.
-  }
-}
-
-/** One vote per device per pin — PRD Anti-Abuse layer 10 (mock/UI-only in Phase 1; real geofence + rate-limit enforcement lands Phase 3). */
+/**
+ * One vote per device per pin — PRD Anti-Abuse layer 10 (mock/UI-only in
+ * Phase 1; real geofence + rate-limit enforcement lands Phase 3). Plain
+ * function, not a hook: today's only call site (map-canvas.tsx) reads this
+ * inline inside a component already subscribed to useCommunityPins(), which
+ * re-renders on every vote anyway. Use useHasVotedOnPin below for any future
+ * consumer that isn't already re-rendering off one of these stores.
+ */
 export function hasVotedOnPin(pinId: string): boolean {
-  return pinId in readVotes();
+  return pinId in votesStore.getSnapshot();
+}
+
+/** Reactive equivalent of hasVotedOnPin — re-renders its own component when this pin's vote state changes, independent of the pins store. */
+export function useHasVotedOnPin(pinId: string): boolean {
+  return pinId in votesStore.useStore();
 }
 
 /**
@@ -210,24 +201,22 @@ export function hasVotedOnPin(pinId: string): boolean {
  * infrastructure for a resident-side removal notice to reuse yet.
  */
 export function voteOnPin(pinId: string, direction: 1 | -1): void {
-  const votes = readVotes();
-  if (pinId in votes) return;
+  if (pinId in votesStore.getSnapshot()) return;
 
-  const next = pinsStore.getSnapshot().map((pin) => {
-    if (pin.id !== pinId) return pin;
-    const upvotes = pin.upvotes + (direction === 1 ? 1 : 0);
-    const downvotes = pin.downvotes + (direction === -1 ? 1 : 0);
-    const netRemoved = downvotes - upvotes >= NET_SCORE_REMOVAL_THRESHOLD;
-    return {
-      ...pin,
-      upvotes,
-      downvotes,
-      removed: netRemoved || pin.removed,
-      removedReason: netRemoved ? "net_score" : pin.removedReason,
-    };
-  });
-
-  votes[pinId] = direction;
-  writeVotes(votes);
-  pinsStore.write(next);
+  pinsStore.update((pins) =>
+    pins.map((pin) => {
+      if (pin.id !== pinId) return pin;
+      const upvotes = pin.upvotes + (direction === 1 ? 1 : 0);
+      const downvotes = pin.downvotes + (direction === -1 ? 1 : 0);
+      const netRemoved = downvotes - upvotes >= NET_SCORE_REMOVAL_THRESHOLD;
+      return {
+        ...pin,
+        upvotes,
+        downvotes,
+        removed: netRemoved || pin.removed,
+        removedReason: netRemoved ? "net_score" : pin.removedReason,
+      };
+    })
+  );
+  votesStore.update((votes) => ({ ...votes, [pinId]: direction }));
 }

@@ -72,9 +72,16 @@ export function createLocalStorageStore<T>(key: string, eventName: string, defau
     };
   }
 
+  // Every mutation is "read current, transform, write back" — owning that
+  // shape here means callers can't accidentally transform a stale read, and
+  // any future correctness fix (e.g. validation before write) lands in one place.
+  function update(updater: (current: T) => T): void {
+    write(updater(getSnapshot()));
+  }
+
   function useStore(): T {
     return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   }
 
-  return { useStore, getSnapshot, write, subscribe };
+  return { useStore, getSnapshot, write, update, subscribe };
 }
