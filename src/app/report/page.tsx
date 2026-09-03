@@ -24,6 +24,7 @@ import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { DEPTH_LABEL, DEPTH_CM, DEPTH_SEVERITY, type DepthLevel } from "@/lib/depth";
 import { getRainfallForZone, isHeavyRainfall } from "@/lib/mock-data";
+import { addWaterLevelReport } from "@/lib/water-level-reports";
 import { useZoneOverrides, resolveEffectiveAlert, resolveEffectiveCenterStatus } from "@/lib/zone-overrides";
 import { getZoneStatus, getZoneStatusColor, ZONE_STATUS_LABEL } from "@/lib/zone-status";
 import { CENTER_STATUS_LABEL, CENTER_STATUS_CLASS } from "@/lib/center-status";
@@ -61,6 +62,13 @@ export default function ReportPage() {
   const zone = useSelectedZone();
   const { lang } = useLanguage();
   const overrides = useZoneOverrides();
+
+  function handleSubmit(depthLevel: DepthLevel) {
+    // Persisted so it actually shows up in "What neighbours are reporting"
+    // and moves the threshold bar below, on this device — not just a thank-you screen.
+    addWaterLevelReport(zone.id, depthLevel);
+    setSubmitted(depthLevel);
+  }
 
   const alert = resolveEffectiveAlert(zone.id, overrides[zone.id]?.alertSeverity);
   const status = getZoneStatus(alert);
@@ -188,7 +196,7 @@ export default function ReportPage() {
               </Card>
             ) : (
               <>
-                <ReportForm zoneId={zone.id} onSubmit={setSubmitted} />
+                <ReportForm zoneId={zone.id} onSubmit={handleSubmit} />
 
                 <Card className="border-severity-yellow/40">
                   <CardContent className="flex gap-3">

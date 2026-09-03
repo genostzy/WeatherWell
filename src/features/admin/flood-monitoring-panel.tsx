@@ -8,12 +8,8 @@ import { Droplet, Users, Settings2 } from "lucide-react";
 import { SeverityBadge } from "@/features/alerts/severity-badge";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
-import {
-  getHazardSusceptibilityForZone,
-  getReportsTodayForZone,
-  getRecentReportsForZone,
-  REPORT_THRESHOLD,
-} from "@/lib/mock-data";
+import { getHazardSusceptibilityForZone, getReportsTodayForZone, REPORT_THRESHOLD } from "@/lib/mock-data";
+import { useWaterLevelReports, getRecentReportsForZoneLive, minutesSinceReport } from "@/lib/water-level-reports";
 import { getZoneStatus, getZoneStatusColor, ZONE_STATUS_LABEL } from "@/lib/zone-status";
 import { useZoneOverrides, resolveEffectiveAlert } from "@/lib/zone-overrides";
 import { DEPTH_LABEL } from "@/lib/depth";
@@ -42,6 +38,7 @@ const SUSCEPTIBILITY_LABEL: Record<HazardRiskLevel, LocalizedText> = {
 export function FloodMonitoringPanel({ zones }: { zones: Zone[] }) {
   const { lang } = useLanguage();
   const overrides = useZoneOverrides();
+  const allReports = useWaterLevelReports();
 
   return (
     <Card>
@@ -59,7 +56,7 @@ export function FloodMonitoringPanel({ zones }: { zones: Zone[] }) {
           const statusColor = getZoneStatusColor(alert);
           const susceptibility = getHazardSusceptibilityForZone(zone.id).flood;
           const reportsToday = getReportsTodayForZone(zone.id);
-          const recent = getRecentReportsForZone(zone.id);
+          const recent = getRecentReportsForZoneLive(allReports, zone.id);
           const agreeing = recent.filter((report) => !report.isOutlier).length;
 
           return (
@@ -112,7 +109,7 @@ export function FloodMonitoringPanel({ zones }: { zones: Zone[] }) {
                 {recent.length > 0 ? (
                   <>
                     {t(LATEST_REPORT, lang)}: {t(DEPTH_LABEL[recent[0].depthLevel], lang)} ·{" "}
-                    {recent[0].minutesAgo} {t(MINUTES_AGO, lang)}
+                    {minutesSinceReport(recent[0].reportedAt)} {t(MINUTES_AGO, lang)}
                   </>
                 ) : (
                   t(NO_REPORTS, lang)

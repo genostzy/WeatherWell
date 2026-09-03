@@ -5,7 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Users, TriangleAlert } from "lucide-react";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
-import { getRecentReportsForZone, REPORT_THRESHOLD } from "@/lib/mock-data";
+import { REPORT_THRESHOLD } from "@/lib/mock-data";
+import { useWaterLevelReports, getRecentReportsForZoneLive, minutesSinceReport } from "@/lib/water-level-reports";
 import { DEPTH_LABEL, DEPTH_CM, DEPTH_SEVERITY } from "@/lib/depth";
 import { SEVERITY_HEX } from "@/lib/severity";
 import type { LocalizedText, Zone } from "@/lib/types";
@@ -29,7 +30,8 @@ const THRESHOLD_NOTE: LocalizedText = {
 
 export function RecentReportsPanel({ zone }: { zone: Zone }) {
   const { lang } = useLanguage();
-  const reports = getRecentReportsForZone(zone.id);
+  const allReports = useWaterLevelReports();
+  const reports = getRecentReportsForZoneLive(allReports, zone.id);
   const agreeing = reports.filter((report) => !report.isOutlier).length;
 
   return (
@@ -89,7 +91,7 @@ export function RecentReportsPanel({ zone }: { zone: Zone }) {
                       </Badge>
                     )}
                     <span className="text-xs text-muted-foreground tabular-nums">
-                      {report.minutesAgo} {t(MINUTES_AGO, lang)}
+                      {minutesSinceReport(report.reportedAt)} {t(MINUTES_AGO, lang)}
                     </span>
                   </span>
                 </li>

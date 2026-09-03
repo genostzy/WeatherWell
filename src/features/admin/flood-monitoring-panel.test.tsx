@@ -1,9 +1,13 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { FloodMonitoringPanel } from "./flood-monitoring-panel";
-import { MOCK_ZONES, getRecentReportsForZone, REPORT_THRESHOLD } from "@/lib/mock-data";
+import { MOCK_ZONES, MOCK_WATER_LEVEL_REPORTS, REPORT_THRESHOLD } from "@/lib/mock-data";
 
 describe("FloodMonitoringPanel", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
   it("shows every zone with a manage link back to its dashboard", () => {
     render(<FloodMonitoringPanel zones={MOCK_ZONES} />);
     for (const zone of MOCK_ZONES) {
@@ -18,16 +22,21 @@ describe("FloodMonitoringPanel", () => {
     render(<FloodMonitoringPanel zones={MOCK_ZONES} />);
     const zoneWithEnough = MOCK_ZONES.find(
       (zone) =>
-        getRecentReportsForZone(zone.id).filter((r) => !r.isOutlier).length >= REPORT_THRESHOLD
+        MOCK_WATER_LEVEL_REPORTS.filter((r) => r.zoneId === zone.id && !r.isOutlier).length >=
+        REPORT_THRESHOLD
     );
     expect(zoneWithEnough).toBeDefined();
     expect(screen.getAllByText(/report threshold met/i).length).toBeGreaterThan(0);
   });
 
-  it("shows the latest report's depth and age for a zone with reports", () => {
+  it("shows the latest report's depth for a zone with reports", () => {
     render(<FloodMonitoringPanel zones={MOCK_ZONES} />);
-    const zoneWithReports = MOCK_ZONES.find((z) => getRecentReportsForZone(z.id).length > 0)!;
-    const latest = getRecentReportsForZone(zoneWithReports.id)[0];
-    expect(screen.getByText(new RegExp(`${latest.minutesAgo} min ago`))).toBeInTheDocument();
+    const zoneWithReports = MOCK_ZONES.find(
+      (z) => MOCK_WATER_LEVEL_REPORTS.filter((r) => r.zoneId === z.id).length > 0
+    )!;
+    const latest = [...MOCK_WATER_LEVEL_REPORTS]
+      .filter((r) => r.zoneId === zoneWithReports.id)
+      .sort((a, b) => a.minutesAgo - b.minutesAgo)[0];
+    expect(screen.getAllByText(new RegExp(latest.depthLevel, "i")).length).toBeGreaterThan(0);
   });
 });
