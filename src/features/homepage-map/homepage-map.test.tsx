@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import { lazy, Suspense, type ComponentType } from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HomepageMap } from "./homepage-map";
@@ -6,25 +7,46 @@ import { MOCK_ZONES } from "@/lib/mock-data";
 import { LanguageProvider } from "@/features/i18n/language-provider";
 
 /**
- * jsdom has no real layout engine, and Leaflet computes marker/tile
- * positions from actual container geometry. This is deliberately a shallow
- * smoke test — it checks that the component mounts and renders our own
- * legend/selector UI without throwing, not that Leaflet's internal pixel
- * math is correct. That's Leaflet's own tested responsibility, the same
- * principle already applied to Radix primitives elsewhere in this codebase.
+ * HomepageMap loads MapCanvas (the actual Leaflet rendering) via next/dynamic
+ * with ssr:false. next/dynamic's loading state never resolves under Vitest
+ * (no Next.js/webpack runtime backing it here), even though the plain dynamic
+ * `import()` it wraps resolves fine — so this mock swaps it for React's own
+ * lazy/Suspense, which behaves correctly in any React environment and lets
+ * tests await the real MapCanvas exactly as production eventually renders it.
+ */
+vi.mock("next/dynamic", () => ({
+  default: (loader: () => Promise<ComponentType<Record<string, unknown>>>) => {
+    const LazyComponent = lazy(() => loader().then((Component) => ({ default: Component })));
+    return function DynamicMock(props: Record<string, unknown>) {
+      return (
+        <Suspense fallback={null}>
+          <LazyComponent {...props} />
+        </Suspense>
+      );
+    };
+  },
+}));
+
+/**
+ * MapCanvas's own rendering (legend, hazard selector, markers) has its own
+ * dedicated test file; the test below only cares that HomepageMap correctly
+ * wires a marker click back into its own state (the compass text it renders
+ * itself, outside MapCanvas).
  */
 describe("HomepageMap", () => {
-  it("renders without throwing and shows the marker legend and hazard selector", () => {
-    render(<HomepageMap zones={MOCK_ZONES} />);
-    expect(screen.getByText(/map legend/i)).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: /flood/i })).toBeInTheDocument();
-  });
-
-  it("renders the direction-to-safety compass label localized, not as a bare code", () => {
+  it("renders the direction-to-safety compass label localized, not as a bare code", async () => {
     // zone-1's evacuation center sits due north (same lng) of this stubbed live
     // position, so getBearingAndDistance deterministically returns "N".
-    vi.stubGlobal("navigator", {
-      geolocation: {
+    // Deliberately not vi.stubGlobal("navigator", ...): replacing the whole
+    // object strips userAgent/platform/etc that Leaflet's own browser
+    // detection reads at module-init time, crashing it. Only geolocation is
+    // faked here, everything else on the real navigator stays intact. Left
+    // in place (not restored) for the rest of the suite run — deleting it in
+    // afterEach races React's own unmount effect, which also calls
+    // navigator.geolocation.clearWatch.
+    Object.defineProperty(navigator, "geolocation", {
+      configurable: true,
+      value: {
         watchPosition: vi.fn((success) => {
           success({ coords: { latitude: 14.647, longitude: 121.1005 } });
           return 1;
@@ -40,7 +62,7 @@ describe("HomepageMap", () => {
     );
 
     // Clicking the zone-1 status marker selects it as the active evacuation route.
-    fireEvent.click(screen.getByRole("img", { name: /Barangay San Isidro/i }));
+    fireEvent.click(await screen.findByRole("img", { name: /Barangay San Isidro/i }));
 
     // Filipino must show the localized word, not the bare English "N" code.
     expect(screen.getByText(/Hilaga/)).toBeInTheDocument();
