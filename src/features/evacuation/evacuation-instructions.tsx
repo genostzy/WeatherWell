@@ -7,7 +7,12 @@ import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { CENTER_STATUS_CLASS, CENTER_STATUS_LABEL } from "@/lib/center-status";
 import { useZoneOverrides, resolveEffectiveCenterStatus } from "@/lib/zone-overrides";
-import type { Zone } from "@/lib/types";
+import type { LocalizedText, Zone } from "@/lib/types";
+
+const GO_HERE: LocalizedText = { en: "Go here", fil: "Pumunta rito" };
+const CAPACITY: LocalizedText = { en: "Capacity", fil: "Kapasidad" };
+const HOW_TO_GET_THERE: LocalizedText = { en: "How to get there", fil: "Paano makarating" };
+const CALL: LocalizedText = { en: "Call", fil: "Tawagan" };
 
 export function EvacuationInstructions({ zone }: { zone: Zone }) {
   const { lang } = useLanguage();
@@ -24,7 +29,7 @@ export function EvacuationInstructions({ zone }: { zone: Zone }) {
             className="h-8 w-8 shrink-0"
           />
           <div className="flex-1">
-            <p className="text-sm text-muted-foreground">Go here</p>
+            <p className="text-sm text-muted-foreground">{t(GO_HERE, lang)}</p>
             <p className="text-lg font-semibold">{zone.evacuationCenterName}</p>
           </div>
         </div>
@@ -36,7 +41,7 @@ export function EvacuationInstructions({ zone }: { zone: Zone }) {
             className="h-8 w-8 shrink-0"
           />
           <div>
-            <p className="text-sm text-muted-foreground">Capacity</p>
+            <p className="text-sm text-muted-foreground">{t(CAPACITY, lang)}</p>
             <Badge className={CENTER_STATUS_CLASS[centerStatus]}>
               {t(CENTER_STATUS_LABEL[centerStatus], lang)}
             </Badge>
@@ -50,7 +55,7 @@ export function EvacuationInstructions({ zone }: { zone: Zone }) {
             className="h-8 w-8 shrink-0"
           />
           <div>
-            <p className="text-sm text-muted-foreground">How to get there</p>
+            <p className="text-sm text-muted-foreground">{t(HOW_TO_GET_THERE, lang)}</p>
             <p lang={lang} className="text-base">
               {t(zone.evacuationRouteText, lang)}
             </p>
@@ -66,7 +71,7 @@ export function EvacuationInstructions({ zone }: { zone: Zone }) {
             aria-hidden="true"
             className="h-8 w-8 shrink-0"
           />
-          <span className="text-base font-medium">Call {zone.hotlineNumber}</span>
+          <span className="text-base font-medium">{t(CALL, lang)} {zone.hotlineNumber}</span>
         </a>
       </CardContent>
     </Card>

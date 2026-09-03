@@ -1,12 +1,10 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
 import { getDeviceId } from "./device-id";
+import { createLocalStorageStore } from "./local-storage-store";
 import type { PinStatusTag } from "./community-pin";
 
-const PINS_KEY = "weatherwell.communityPins";
 const VOTES_KEY = "weatherwell.communityPinVotes";
-const PINS_EVENT = "weatherwell:community-pins-changed";
 
 /** Net-score removal threshold — PRD Anti-Abuse layer 10: downvotes exceeding upvotes by this much removes the pin. */
 const NET_SCORE_REMOVAL_THRESHOLD = 5;
@@ -72,73 +70,21 @@ const SEED_COMMUNITY_PINS: CommunityPin[] = [
   },
 ];
 
-function readRaw(key: string): string | null {
-  if (typeof window === "undefined") return null;
-  try {
-    return window.localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-// getSnapshot must return a referentially stable value when nothing changed
-// (a React/useSyncExternalStore requirement) — same cache-by-raw-JSON
-// approach as zone-overrides.ts.
-let cachedRaw: string | null | undefined = undefined;
-let cachedParsed: CommunityPin[] = SEED_COMMUNITY_PINS;
-
-function getSnapshot(): CommunityPin[] {
-  const raw = readRaw(PINS_KEY);
-  if (raw !== cachedRaw) {
-    cachedRaw = raw;
-    if (raw === null) {
-      cachedParsed = SEED_COMMUNITY_PINS;
-    } else {
-      try {
-        cachedParsed = JSON.parse(raw) as CommunityPin[];
-      } catch {
-        cachedParsed = SEED_COMMUNITY_PINS;
-      }
-    }
-  }
-  return cachedParsed;
-}
-
-function getServerSnapshot(): CommunityPin[] {
-  return SEED_COMMUNITY_PINS;
-}
-
-function writePins(pins: CommunityPin[]): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(PINS_KEY, JSON.stringify(pins));
-    // storage events only fire in OTHER tabs — dispatch our own so same-tab
-    // consumers (e.g. the map right after a vote) re-render too.
-    window.dispatchEvent(new Event(PINS_EVENT));
-  } catch {
-    // Private-mode or blocked storage: the edit just doesn't persist/broadcast.
-  }
-}
-
-function subscribe(callback: () => void): () => void {
-  if (typeof window === "undefined") return () => {};
-  window.addEventListener(PINS_EVENT, callback);
-  window.addEventListener("storage", callback);
-  return () => {
-    window.removeEventListener(PINS_EVENT, callback);
-    window.removeEventListener("storage", callback);
-  };
-}
+const pinsStore = createLocalStorageStore<CommunityPin[]>(
+  "weatherwell.communityPins",
+  "weatherwell:community-pins-changed",
+  SEED_COMMUNITY_PINS
+);
 
 /** Active pins only — what the public map and KPI counts show. Re-renders whenever any pin is added, voted on, removed, or restored. */
 export function useCommunityPins(): CommunityPin[] {
-  const all = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const all = pinsStore.useStore();
   return all.filter((pin) => !pin.removed);
 }
 
 /** Every pin including removed ones — for admin moderation, where a removed pin must still be visible to restore. */
 export function useAllCommunityPins(): CommunityPin[] {
-  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  return pinsStore.useStore();
 }
 
 export function addCommunityPin(input: {
@@ -162,7 +108,7 @@ export function addCommunityPin(input: {
     createdAt: new Date().toISOString(),
     deviceId: getDeviceId(),
   };
-  writePins([...getSnapshot(), pin]);
+  pinsStore.write([...pinsStore.getSnapshot(), pin]);
 }
 
 /**
@@ -179,7 +125,7 @@ export function updateCommunityPin(
   pinId: string,
   patch: { statusTag?: PinStatusTag; caption?: string; photoDataUrl?: string }
 ): void {
-  const next = getSnapshot().map((pin) => {
+  const next = pinsStore.getSnapshot().map((pin) => {
     if (pin.id !== pinId) return pin;
     return {
       ...pin,
@@ -189,7 +135,7 @@ export function updateCommunityPin(
       photoDataUrl: patch.photoDataUrl === "" ? undefined : patch.photoDataUrl ?? pin.photoDataUrl,
     };
   });
-  writePins(next);
+  pinsStore.write(next);
 }
 
 /**
@@ -199,23 +145,32 @@ export function updateCommunityPin(
  * to restore.
  */
 export function deleteOwnPin(pinId: string): void {
-  writePins(getSnapshot().filter((pin) => pin.id !== pinId));
+  pinsStore.write(pinsStore.getSnapshot().filter((pin) => pin.id !== pinId));
 }
 
 /** Admin's own manual removal — PRD Anti-Abuse layer 7/10's human override. Soft-delete so it can be undone via restoreCommunityPin. */
 export function removePinByAdmin(pinId: string): void {
-  const next = getSnapshot().map((pin) =>
+  const next = pinsStore.getSnapshot().map((pin) =>
     pin.id === pinId ? { ...pin, removed: true, removedReason: "admin" as const } : pin
   );
-  writePins(next);
+  pinsStore.write(next);
 }
 
 /** Clears a removal (net-score or admin) — the other half of "admin can remove or restore any pin". */
 export function restoreCommunityPin(pinId: string): void {
-  const next = getSnapshot().map((pin) =>
+  const next = pinsStore.getSnapshot().map((pin) =>
     pin.id === pinId ? { ...pin, removed: false, removedReason: undefined } : pin
   );
-  writePins(next);
+  pinsStore.write(next);
+}
+
+function readRaw(key: string): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
 }
 
 function readVotes(): Record<string, 1 | -1> {
@@ -258,7 +213,7 @@ export function voteOnPin(pinId: string, direction: 1 | -1): void {
   const votes = readVotes();
   if (pinId in votes) return;
 
-  const next = getSnapshot().map((pin) => {
+  const next = pinsStore.getSnapshot().map((pin) => {
     if (pin.id !== pinId) return pin;
     const upvotes = pin.upvotes + (direction === 1 ? 1 : 0);
     const downvotes = pin.downvotes + (direction === -1 ? 1 : 0);
@@ -274,5 +229,5 @@ export function voteOnPin(pinId: string, direction: 1 | -1): void {
 
   votes[pinId] = direction;
   writeVotes(votes);
-  writePins(next);
+  pinsStore.write(next);
 }

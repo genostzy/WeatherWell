@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import {
   addWaterLevelReport,
   getRecentReportsForZoneLive,
@@ -47,8 +47,12 @@ describe("water-level-reports", () => {
 
   it("orders reports newest first", () => {
     localStorage.setItem("weatherwell.waterLevelReports", "[]");
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-01T10:00:00.000Z"));
     addWaterLevelReport("zone-3", "ankle");
+    vi.setSystemTime(new Date("2026-09-01T10:00:01.000Z"));
     addWaterLevelReport("zone-3", "knee");
+    vi.useRealTimers();
 
     const reports = getRecentReportsForZoneLive(JSON.parse(readStoredRaw()), "zone-3");
     expect(reports[0].depthLevel).toBe("knee");

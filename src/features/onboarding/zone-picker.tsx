@@ -16,7 +16,7 @@ export function ZonePicker({
   onSelect: (zoneId: string) => void;
 }) {
   // Starts empty so the user must make a real choice.
-  const [selected, setSelected] = useState<string | undefined>(undefined);
+  const [selected, setSelected] = useState<string>("");
   const [detection, setDetection] = useState<DetectionState>("idle");
 
   function handleUseMyLocation() {

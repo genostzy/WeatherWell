@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -164,53 +164,51 @@ export default function AdminSimulationPage() {
   const [selectedScenario, setSelectedScenario] = useState(MOCK_SCENARIOS[0].id);
   const [currentStep, setCurrentStep] = useState<SimulationStep>("idle");
   const [stepHistory, setStepHistory] = useState<SimulationStep[]>([]);
+  const timeoutRefs = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   const predictions = getPredictionsForZone(selectedZone.id);
   const cascade = MOCK_CASCADES.find((c) => c.fromZoneId === selectedZone.id);
 
+  // Clean up all pending timeouts on unmount.
+  useEffect(() => {
+    return () => {
+      timeoutRefs.current.forEach(clearTimeout);
+      timeoutRefs.current = [];
+    };
+  }, []);
+
+  function clearPendingTimeouts() {
+    timeoutRefs.current.forEach(clearTimeout);
+    timeoutRefs.current = [];
+  }
+
+  function scheduleStep(step: SimulationStep, delay: number) {
+    const id = setTimeout(() => {
+      setCurrentStep(step);
+      setStepHistory((prev) => [...prev, step]);
+      timeoutRefs.current = timeoutRefs.current.filter((t) => t !== id);
+    }, delay);
+    timeoutRefs.current.push(id);
+  }
+
   const runSimulation = () => {
+    clearPendingTimeouts();
     setCurrentStep("predicting");
     setStepHistory(["predicting"]);
 
-    setTimeout(() => {
-      setCurrentStep("alert-issued");
-      setStepHistory((prev) => [...prev, "alert-issued"]);
-
-      setTimeout(() => {
-        setCurrentStep("push-sent");
-        setStepHistory((prev) => [...prev, "push-sent"]);
-
-        setTimeout(() => {
-          setCurrentStep("push-failed");
-          setStepHistory((prev) => [...prev, "push-failed"]);
-
-          setTimeout(() => {
-            setCurrentStep("sms-sent");
-            setStepHistory((prev) => [...prev, "sms-sent"]);
-
-            setTimeout(() => {
-              setCurrentStep("cached");
-              setStepHistory((prev) => [...prev, "cached"]);
-
-              setTimeout(() => {
-                if (cascade) {
-                  setCurrentStep("cascade");
-                  setStepHistory((prev) => [...prev, "cascade"]);
-                }
-
-                setTimeout(() => {
-                  setCurrentStep("complete");
-                  setStepHistory((prev) => [...prev, "complete"]);
-                }, 1500);
-              }, 1500);
-            }, 1500);
-          }, 1500);
-        }, 2000);
-      }, 1500);
-    }, 1500);
+    scheduleStep("alert-issued", 1500);
+    scheduleStep("push-sent", 3000);
+    scheduleStep("push-failed", 5000);
+    scheduleStep("sms-sent", 6500);
+    scheduleStep("cached", 8000);
+    if (cascade) {
+      scheduleStep("cascade", 9500);
+    }
+    scheduleStep("complete", cascade ? 11000 : 9500);
   };
 
   const resetSimulation = () => {
+    clearPendingTimeouts();
     setCurrentStep("idle");
     setStepHistory([]);
   };
