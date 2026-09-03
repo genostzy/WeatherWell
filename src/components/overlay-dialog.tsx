@@ -32,6 +32,16 @@ export function OverlayDialog({
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
+  // Consumers pass a fresh onClose identity every render (inline arrows, or
+  // handlers rebuilt by usePinFlow). Reading it through a ref keeps the setup
+  // effect on [] — otherwise any unrelated parent re-render (a live-position
+  // tick, a store write) would tear the effect down and re-focus the first
+  // element, yanking focus away from a resident mid-way through the form.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
   useEffect(() => {
     // Remember what had focus before the dialog opened, so we can restore it on close.
     previousFocusRef.current = document.activeElement as HTMLElement;
@@ -45,7 +55,7 @@ export function OverlayDialog({
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        onClose();
+        onCloseRef.current();
         return;
       }
       // Trap Tab inside the dialog.
@@ -78,7 +88,7 @@ export function OverlayDialog({
       // Restore focus to the element that had it before the dialog opened.
       previousFocusRef.current?.focus();
     };
-  }, [onClose]);
+  }, []);
 
   return (
     <div

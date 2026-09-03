@@ -1,5 +1,4 @@
 import type { AlertRecord, CascadeAlert, PredictionStep } from "../types";
-import { MOCK_ZONES } from "./zones";
 
 export const MOCK_ALERTS: AlertRecord[] = [
   {
