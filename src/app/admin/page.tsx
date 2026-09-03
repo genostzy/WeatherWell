@@ -216,8 +216,8 @@ export default function AdminPage() {
   };
 
   return (
-    <main className="flex min-h-screen flex-col items-center gap-6 p-6">
-      <div className="w-full max-w-2xl space-y-6">
+    <main className="flex min-h-screen flex-col items-center gap-6 p-4 sm:p-6 lg:p-8">
+      <div className="w-full max-w-2xl space-y-6 lg:max-w-4xl">
         <div>
           <h1 className="text-2xl font-bold">Admin Simulation</h1>
           <p className="text-muted-foreground">{t(SUBTITLE, lang)}</p>
@@ -301,7 +301,7 @@ export default function AdminPage() {
         <div className="space-y-4">
           <h2 className="text-lg font-semibold">{t(ALERT_FLOW, lang)}</h2>
 
-          <div className="space-y-3">
+          <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:gap-x-6 lg:gap-y-3">
             <StepIndicator
               label={t(STEP_LABEL.predicting, lang)}
               icon={Wifi}

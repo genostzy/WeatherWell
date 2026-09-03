@@ -19,7 +19,7 @@ export function ZoneMap({ zones }: { zones: Zone[] }) {
   const { lang } = useLanguage();
 
   return (
-    <div className="grid w-full max-w-md gap-3">
+    <div className="grid w-full max-w-md gap-3 md:max-w-2xl md:grid-cols-2 lg:max-w-4xl lg:grid-cols-3">
       {zones.map((zone) => {
         const alert = getActiveAlertForZone(zone.id);
         return (
@@ -61,7 +61,9 @@ export function ZoneMap({ zones }: { zones: Zone[] }) {
           </Card>
         );
       })}
-      <p className="text-xs text-muted-foreground">{t(PLACEHOLDER_BOUNDARY, lang)}</p>
+      <p className="text-xs text-muted-foreground md:col-span-2 lg:col-span-3">
+        {t(PLACEHOLDER_BOUNDARY, lang)}
+      </p>
     </div>
   );
 }

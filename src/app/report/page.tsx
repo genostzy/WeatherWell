@@ -14,9 +14,9 @@ export default function ReportPage() {
   const { lang } = useLanguage();
 
   return (
-    <main className="flex flex-1 flex-col items-center gap-6 p-6">
+    <main className="flex flex-1 flex-col items-center gap-6 p-4 sm:p-6 lg:p-8">
       <BackLink />
-      <h1 className="text-lg font-semibold">Report water level — {zone.name}</h1>
+      <h1 className="text-lg font-semibold md:text-xl">Report water level — {zone.name}</h1>
       {submitted ? (
         <p role="status" className="text-base">
           Thanks — your &ldquo;{t(DEPTH_LABEL[submitted], lang)}&rdquo; report was

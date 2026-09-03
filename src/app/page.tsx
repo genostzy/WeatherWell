@@ -34,16 +34,16 @@ export default function Home() {
   const { lang } = useLanguage();
 
   return (
-    <main className="flex flex-1 flex-col items-center gap-6 p-6">
+    <main className="flex flex-1 flex-col items-center gap-6 p-4 sm:p-6 lg:p-8">
       <OnboardingGate />
-      <h1 className="text-lg font-semibold">WeatherWell</h1>
+      <h1 className="text-lg font-semibold md:text-xl">WeatherWell</h1>
       {isOnline ? (
         <HomepageMap zones={orderedZones} />
       ) : (
         <ZoneAlertListFallback zones={orderedZones} />
       )}
 
-      <div className="flex w-full max-w-2xl flex-wrap justify-center gap-2">
+      <div className="flex w-full max-w-2xl flex-wrap justify-center gap-2 lg:max-w-5xl">
         {NAV_LINKS.map(({ href, label, icon: Icon }) => (
           <Button key={href} asChild variant="ghost" size="sm">
             <Link href={href}>

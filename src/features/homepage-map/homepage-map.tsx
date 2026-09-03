@@ -61,11 +61,13 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
   const routeHazard = routeZone ? routeCrossesHazard(routeZone, zones) : false;
 
   return (
-    <div className="flex w-full max-w-2xl flex-col gap-4">
-      <HazardTypeSelector value={hazardType} onChange={setHazardType} />
+    <div className="grid w-full max-w-2xl gap-4 lg:max-w-5xl lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start lg:gap-6">
+      <div className="lg:col-start-2 lg:row-start-1">
+        <HazardTypeSelector value={hazardType} onChange={setHazardType} />
+      </div>
 
       <div
-        className="h-[400px] w-full overflow-hidden rounded-md border-2 border-border"
+        className="h-[400px] w-full overflow-hidden rounded-md border-2 border-border lg:col-start-1 lg:row-span-3 lg:h-[600px]"
         aria-label={t(MAP_ARIA_LABEL, lang)}
       >
         <MapContainer center={center} zoom={14} scrollWheelZoom={false} style={{ height: "100%", width: "100%" }}>
@@ -152,7 +154,7 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
       </div>
 
       {routeZone && (
-        <p lang={lang} className="text-sm">
+        <p lang={lang} className="text-sm lg:col-start-2 lg:row-start-2">
           {t(SAFEST_ROUTE_TO, lang)} {routeZone.evacuationCenterName}.{" "}
           {directionToSafety && (
             <span className="font-medium">
@@ -168,7 +170,9 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
         </p>
       )}
 
-      <MarkerLegend />
+      <div className="lg:col-start-2 lg:row-start-3">
+        <MarkerLegend />
+      </div>
     </div>
   );
 }

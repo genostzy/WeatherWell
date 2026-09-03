@@ -18,7 +18,7 @@ export function ZoneAlertListFallback({ zones }: { zones: Zone[] }) {
   const { lang } = useLanguage();
 
   return (
-    <div className="w-full max-w-md space-y-3">
+    <div className="w-full max-w-md space-y-3 md:max-w-lg lg:max-w-xl">
       <p lang={lang} className="text-sm text-muted-foreground">
         {t(NO_CONNECTION_NOTE, lang)}
       </p>
