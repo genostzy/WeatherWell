@@ -11,6 +11,7 @@ import { PIN_STATUS_ORDER, PIN_STATUS_LABEL, type PinStatusTag } from "@/lib/com
 import type { LocalizedText } from "@/lib/types";
 
 const FORM_TITLE: LocalizedText = { en: "Report flood conditions here", fil: "Iulat ang kondisyon ng baha dito" };
+const EDIT_TITLE: LocalizedText = { en: "Edit your flood pin", fil: "I-edit ang iyong flood pin" };
 const STATUS_LABEL: LocalizedText = { en: "What's happening?", fil: "Ano ang nangyayari?" };
 const CAPTION_LABEL: LocalizedText = { en: "Short description", fil: "Maikling paglalarawan" };
 const CAPTION_PLACEHOLDER: LocalizedText = {
@@ -22,38 +23,48 @@ const PHOTO_NOTE: LocalizedText = {
   en: "Stays on this device only — never uploaded.",
   fil: "Dito lang sa device na ito mananatili — hindi ini-upload.",
 };
+const REMOVE_PHOTO: LocalizedText = { en: "Remove photo", fil: "Alisin ang larawan" };
 const UNVERIFIED_NOTE: LocalizedText = {
   en: "Unverified community report, separate from official alerts.",
   fil: "Hindi pa na-verify na ulat ng komunidad, hiwalay sa opisyal na alerto.",
 };
 const CANCEL: LocalizedText = { en: "Cancel", fil: "Kanselahin" };
 const DROP_PIN: LocalizedText = { en: "Drop pin", fil: "Ilagay ang pin" };
+const SAVE_CHANGES: LocalizedText = { en: "Save changes", fil: "I-save ang pagbabago" };
+
+export interface CommunityPinFormValues {
+  statusTag: PinStatusTag;
+  caption: string;
+  /** "" explicitly clears an existing photo; undefined leaves it unchanged. */
+  photoDataUrl?: string;
+}
 
 /**
- * The confirmation step after a resident taps a spot on the map (see
- * MapCanvas's placing-mode + HomepageMap). Photo attachment is client-side
- * only — read into a data URL and never sent anywhere — per PRD Core
- * Feature #5, so the phone number/consent-notice tradeoffs of real upload
- * don't apply in Phase 1.
+ * Used both for the confirmation step after a resident taps a spot on the map
+ * and for editing a pin they already dropped (see HomepageMap, which renders
+ * this inside an OverlayDialog so it never sits below the fold). Photo
+ * attachment is client-side only — read into a data URL and never sent
+ * anywhere — per PRD Core Feature #5.
  */
 export function CommunityPinForm({
   onSubmit,
   onCancel,
+  initialValues,
+  mode = "create",
 }: {
-  onSubmit: (input: { statusTag: PinStatusTag; caption: string; photoDataUrl?: string }) => void;
+  onSubmit: (values: CommunityPinFormValues) => void;
   onCancel: () => void;
+  initialValues?: { statusTag: PinStatusTag; caption: string; photoDataUrl?: string };
+  mode?: "create" | "edit";
 }) {
   const { lang } = useLanguage();
-  const [statusTag, setStatusTag] = useState<PinStatusTag>("flooded");
-  const [caption, setCaption] = useState("");
-  const [photoDataUrl, setPhotoDataUrl] = useState<string | undefined>(undefined);
+  const [statusTag, setStatusTag] = useState<PinStatusTag>(initialValues?.statusTag ?? "flooded");
+  const [caption, setCaption] = useState(initialValues?.caption ?? "");
+  const [photoDataUrl, setPhotoDataUrl] = useState<string | undefined>(initialValues?.photoDataUrl);
 
   function handlePhotoChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
-    if (!file) {
-      setPhotoDataUrl(undefined);
-      return;
-    }
+    if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
       setPhotoDataUrl(typeof reader.result === "string" ? reader.result : undefined);
@@ -62,10 +73,10 @@ export function CommunityPinForm({
   }
 
   return (
-    <Card className="w-full max-w-2xl lg:max-w-5xl">
+    <Card className="w-full">
       <CardHeader>
-        <CardTitle lang={lang} className="text-base">
-          {t(FORM_TITLE, lang)}
+        <CardTitle lang={lang} className="pr-10 text-base">
+          {t(mode === "edit" ? EDIT_TITLE : FORM_TITLE, lang)}
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -73,7 +84,12 @@ export function CommunityPinForm({
           className="flex flex-col gap-4"
           onSubmit={(event) => {
             event.preventDefault();
-            onSubmit({ statusTag, caption: caption.trim(), photoDataUrl });
+            onSubmit({
+              statusTag,
+              caption: caption.trim(),
+              // Distinguish "cleared" from "unchanged" for the edit path.
+              photoDataUrl: photoDataUrl ?? (initialValues?.photoDataUrl ? "" : undefined),
+            });
           }}
         >
           <div className="space-y-2">
@@ -125,8 +141,22 @@ export function CommunityPinForm({
               {t(PHOTO_NOTE, lang)}
             </p>
             {photoDataUrl && (
-              // eslint-disable-next-line @next/next/no-img-element -- a local data: URL, not a remote image next/image would optimize
-              <img src={photoDataUrl} alt="" className="h-24 w-auto rounded-md border-2 border-border object-cover" />
+              <div className="flex items-center gap-2">
+                {/* eslint-disable-next-line @next/next/no-img-element -- a local data: URL, not a remote image next/image would optimize */}
+                <img
+                  src={photoDataUrl}
+                  alt=""
+                  className="h-24 w-auto rounded-md border-2 border-border object-cover"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPhotoDataUrl(undefined)}
+                >
+                  {t(REMOVE_PHOTO, lang)}
+                </Button>
+              </div>
             )}
           </div>
 
@@ -136,7 +166,7 @@ export function CommunityPinForm({
 
           <div className="flex gap-2">
             <Button type="submit" size="sm">
-              {t(DROP_PIN, lang)}
+              {t(mode === "edit" ? SAVE_CHANGES : DROP_PIN, lang)}
             </Button>
             <Button type="button" variant="outline" size="sm" onClick={onCancel}>
               {t(CANCEL, lang)}

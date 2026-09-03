@@ -88,7 +88,9 @@ describe("ReportForm", () => {
     );
 
     await userEvent.click(screen.getByLabelText(DEPTH_LABEL.waist.fil));
-    await userEvent.click(screen.getByRole("button", { name: /submit report/i }));
+    // The submit button is localized too, so this deliberately clicks the
+    // Filipino label — the value submitted must still be the same depth key.
+    await userEvent.click(screen.getByRole("button", { name: /ipadala ang ulat/i }));
 
     expect(onSubmit).toHaveBeenCalledWith("waist");
   });

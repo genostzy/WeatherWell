@@ -7,7 +7,7 @@ import { t } from "@/lib/i18n";
 import { getPOIsForZone, getHazardSusceptibilityForZone } from "@/lib/mock-data";
 import { getZoneStatus, getZoneStatusColor, ZONE_STATUS_LABEL } from "@/lib/zone-status";
 import { useZoneOverrides, resolveEffectiveAlert } from "@/lib/zone-overrides";
-import { useCommunityPins, voteOnPin, hasVotedOnPin } from "@/lib/community-pins";
+import { useCommunityPins, voteOnPin, hasVotedOnPin, isOwnPin, type CommunityPin } from "@/lib/community-pins";
 import { PIN_STATUS_LABEL } from "@/lib/community-pin";
 import { hazardRiskColor } from "./hazard-color";
 import {
@@ -35,6 +35,10 @@ const UNVERIFIED_REPORT: LocalizedText = {
 const UPVOTE: LocalizedText = { en: "Upvote", fil: "I-upvote" };
 const DOWNVOTE: LocalizedText = { en: "Downvote", fil: "I-downvote" };
 const ALREADY_VOTED: LocalizedText = { en: "You already voted on this pin", fil: "Nakaboto ka na sa pin na ito" };
+const EDIT_PIN: LocalizedText = { en: "Edit", fil: "I-edit" };
+const DELETE_PIN: LocalizedText = { en: "Delete", fil: "Burahin" };
+const YOUR_PIN: LocalizedText = { en: "Your pin", fil: "Iyong pin" };
+const VIEW_PHOTO: LocalizedText = { en: "View full photo", fil: "Tingnan ang buong larawan" };
 const TAP_MAP_TO_PLACE: LocalizedText = {
   en: "Tap the map to drop your pin",
   fil: "Pindutin ang mapa para ilagay ang pin",
@@ -66,6 +70,9 @@ export function MapCanvas({
   onSelectZone,
   isPlacingPin = false,
   onMapClickForPin,
+  onEditPin,
+  onDeletePin,
+  onViewPhoto,
 }: {
   zones: Zone[];
   hazardType: HazardType;
@@ -75,6 +82,9 @@ export function MapCanvas({
   onSelectZone: (zoneId: string) => void;
   isPlacingPin?: boolean;
   onMapClickForPin?: (lat: number, lng: number) => void;
+  onEditPin?: (pin: CommunityPin) => void;
+  onDeletePin?: (pin: CommunityPin) => void;
+  onViewPhoto?: (pin: CommunityPin) => void;
 }) {
   const { lang } = useLanguage();
   const overrides = useZoneOverrides();
@@ -171,6 +181,7 @@ export function MapCanvas({
         {communityPins.map((pin) => {
           const label = `${t(PIN_STATUS_LABEL[pin.statusTag], lang)} — ${t(UNVERIFIED_REPORT, lang)}`;
           const alreadyVoted = hasVotedOnPin(pin.id);
+          const own = isOwnPin(pin);
           return (
             <Marker
               key={pin.id}
@@ -179,16 +190,30 @@ export function MapCanvas({
             >
               <Popup>
                 <div className="space-y-1.5 text-sm">
-                  <p className="font-medium">{t(PIN_STATUS_LABEL[pin.statusTag], lang)}</p>
+                  <p className="font-medium">
+                    {t(PIN_STATUS_LABEL[pin.statusTag], lang)}
+                    {own && (
+                      <span className="ml-2 rounded border border-border px-1 text-xs font-normal text-muted-foreground">
+                        {t(YOUR_PIN, lang)}
+                      </span>
+                    )}
+                  </p>
                   <p className="text-xs text-muted-foreground">{t(UNVERIFIED_REPORT, lang)}</p>
                   {pin.caption && <p>{pin.caption}</p>}
                   {pin.photoDataUrl && (
-                    // eslint-disable-next-line @next/next/no-img-element -- local/data URL, not a remote image next/image would optimize
-                    <img
-                      src={pin.photoDataUrl}
-                      alt=""
-                      className="h-20 w-auto rounded-md border-2 border-border object-cover"
-                    />
+                    <button
+                      type="button"
+                      onClick={() => onViewPhoto?.(pin)}
+                      aria-label={t(VIEW_PHOTO, lang)}
+                      className="block cursor-zoom-in"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element -- local/data URL, not a remote image next/image would optimize */}
+                      <img
+                        src={pin.photoDataUrl}
+                        alt=""
+                        className="h-20 w-auto rounded-md border-2 border-border object-cover"
+                      />
+                    </button>
                   )}
                   <div className="flex items-center gap-2 pt-1">
                     <button
@@ -211,6 +236,24 @@ export function MapCanvas({
                     </button>
                   </div>
                   {alreadyVoted && <p className="text-xs text-muted-foreground">{t(ALREADY_VOTED, lang)}</p>}
+                  {own && (
+                    <div className="flex items-center gap-2 border-t pt-1.5">
+                      <button
+                        type="button"
+                        onClick={() => onEditPin?.(pin)}
+                        className="rounded border-2 border-border px-2 py-0.5 text-xs font-medium"
+                      >
+                        {t(EDIT_PIN, lang)}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onDeletePin?.(pin)}
+                        className="rounded border-2 border-severity-red px-2 py-0.5 text-xs font-medium text-severity-red"
+                      >
+                        {t(DELETE_PIN, lang)}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </Popup>
             </Marker>

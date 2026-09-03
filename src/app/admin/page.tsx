@@ -1,399 +1,182 @@
 "use client";
 
-import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Bell,
-  MessageSquare,
-  CheckCircle2,
-  Smartphone,
-  Wifi,
-  WifiOff,
-  Play,
-  RotateCcw,
   AlertTriangle,
+  Building2,
+  CloudRain,
+  MapPin,
+  Play,
+  Users,
+  Wind,
 } from "lucide-react";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
-import { PredictionTimeline } from "@/features/alerts/prediction-timeline";
+import { StatCard } from "@/features/admin/stat-card";
 import { FloodMonitoringPanel } from "@/features/admin/flood-monitoring-panel";
 import { RainfallMonitoringPanel } from "@/features/admin/rainfall-monitoring-panel";
 import { TyphoonTrackingPanel } from "@/features/admin/typhoon-tracking-panel";
 import { LandslideRiskPanel } from "@/features/admin/landslide-risk-panel";
 import { EvacuationManagementPanel } from "@/features/admin/evacuation-management-panel";
+import { ReportTrendPanel } from "@/features/admin/report-trend-panel";
+import { AlertAnalyticsPanel } from "@/features/admin/alert-analytics-panel";
+import { CommunityPinModerationPanel } from "@/features/admin/community-pin-moderation-panel";
 import {
   MOCK_ZONES,
-  MOCK_SCENARIOS,
-  getPredictionsForZone,
-  MOCK_CASCADES,
+  MOCK_TYPHOON,
+  getRainfallForZone,
+  getReportsTodayForZone,
+  isHeavyRainfall,
 } from "@/lib/mock-data";
-import type { LocalizedText, Zone } from "@/lib/types";
-
-type SimulationStep =
-  | "idle"
-  | "predicting"
-  | "alert-issued"
-  | "push-sent"
-  | "push-failed"
-  | "sms-sent"
-  | "cached"
-  | "cascade"
-  | "complete";
-
-type IndicatorStep = Exclude<SimulationStep, "idle" | "complete">;
-
-const STEP_EXPLANATION = {
-  en: {
-    predicting: "The prediction engine analyzes rainfall, terrain, and tidal data to estimate flood risk.",
-    "alert-issued": "Alert auto-triggered based on crowd reports and prediction thresholds.",
-    "push-sent": "Push notification delivered to all subscribed devices in the zone.",
-    "push-failed": "Push delivery failed — retrying once after 60 seconds.",
-    "sms-sent": "SMS fallback sent to residents whose push failed (mock in Phase 1).",
-    cached: "Alert cached locally on each device for offline access.",
-    cascade: "Upstream flooding detected — early warning sent to downstream zones.",
-    complete: "Simulation complete. All delivery channels demonstrated.",
-  },
-  fil: {
-    predicting: "Ang prediction engine ay nagsusuri ng ulan, lupa, at tidal data para tantyahin ang panganib ng baha.",
-    "alert-issued": "Auto-triggered alert batay sa crowd reports at prediction thresholds.",
-    "push-sent": "Push notification na-deliver sa lahat ng subscribed devices sa zone.",
-    "push-failed": "Push delivery nabigo — ni-retry pagkatapos ng 60 segundo.",
-    "sms-sent": "SMS fallback na-send sa mga resident na nabigo ang push (mock sa Phase 1).",
-    cached: "Alert naka-cache sa bawat device para sa offline access.",
-    cascade: "May baha sa itaas — early warning na-send sa downstream zones.",
-    complete: "Simulation tapos na. Lahat ng delivery channels na-demonstrate.",
-  },
-};
-
-const STEP_LABEL: Record<IndicatorStep, LocalizedText> = {
-  predicting: { en: "Prediction", fil: "Prediksyon" },
-  "alert-issued": { en: "Alert Issued", fil: "Alert Na-issue" },
-  "push-sent": { en: "Push Notification", fil: "Push Notification" },
-  "push-failed": { en: "Push Failed", fil: "Push Nabigo" },
-  "sms-sent": { en: "SMS (mock)", fil: "SMS (mock)" },
-  cached: { en: "Cached Offline", fil: "Naka-cache" },
-  cascade: { en: "Cascade Warning", fil: "Cascade Warning" },
-};
+import { useZoneOverrides, resolveEffectiveAlert, resolveEffectiveCenterStatus } from "@/lib/zone-overrides";
+import { useCommunityPins } from "@/lib/community-pins";
+import { getZoneStatus } from "@/lib/zone-status";
+import type { LocalizedText } from "@/lib/types";
 
 const SUBTITLE: LocalizedText = {
-  en: "Monitor every zone, then test the alert flow for training and demo",
-  fil: "Subaybayan ang bawat zone, pagkatapos ay subukan ang alert flow para sa pagsasanay",
+  en: "Live picture of every zone — hazards, crowd reports, and evacuation capacity",
+  fil: "Live na larawan ng bawat zone — panganib, ulat, at kapasidad ng evacuation",
 };
-const MONITORING_DASHBOARD: LocalizedText = { en: "Monitoring Dashboard", fil: "Monitoring Dashboard" };
-const ALERT_FLOW_SIMULATION: LocalizedText = { en: "Alert Flow Simulation", fil: "Simulation ng Alert Flow" };
-const ZONE_LABEL: LocalizedText = { en: "Zone", fil: "Zone" };
-const SCENARIO_LABEL: LocalizedText = { en: "Scenario", fil: "Senaryo" };
-const ALERT_FLOW: LocalizedText = { en: "Alert Flow", fil: "Daloy ng Alert" };
-const RETRY_IN_60S: LocalizedText = { en: "Retry in 60s", fil: "Ulitin sa loob ng 60s" };
-const RUN_AGAIN: LocalizedText = { en: "Run Again", fil: "Muli" };
-const START_SIMULATION: LocalizedText = { en: "Start Simulation", fil: "Simulan" };
-const RESET: LocalizedText = { en: "Reset", fil: "I-reset" };
+const AT_A_GLANCE: LocalizedText = { en: "At a glance", fil: "Sa isang sulyap" };
+const HAZARDS: LocalizedText = { en: "Hazard monitoring", fil: "Pagsubaybay sa panganib" };
+const ANALYTICS: LocalizedText = { en: "Trends & analytics", fil: "Mga trend at analytics" };
+const OPERATIONS: LocalizedText = { en: "Operations", fil: "Operasyon" };
+const RUN_SIMULATION: LocalizedText = { en: "Run alert flow simulation", fil: "Patakbuhin ang alert flow simulation" };
+const SIMULATION_HINT: LocalizedText = {
+  en: "Practice issuing an alert and watch every delivery channel fire, without notifying anyone.",
+  fil: "Magsanay mag-issue ng alerto at panoorin ang bawat delivery channel, walang aabisuhan.",
+};
 
-function isStepDone(
-  step: SimulationStep,
-  currentStep: SimulationStep,
-  stepHistory: SimulationStep[]
-): boolean {
-  return (
-    stepHistory.indexOf(step) < stepHistory.indexOf(currentStep) ||
-    (currentStep === "complete" && stepHistory.includes(step))
-  );
-}
-
-function StepIndicator({
-  label,
-  icon: Icon,
-  isActive,
-  isDone,
-  retryBadge,
-}: {
-  label: string;
-  icon: React.ElementType;
-  isActive: boolean;
-  isDone: boolean;
-  retryBadge?: string;
-}) {
-  return (
-    <div className="flex items-center gap-2">
-      <div
-        className={`flex h-8 w-8 items-center justify-center rounded-full border-2 ${
-          isActive
-            ? "border-severity-orange bg-severity-orange/20"
-            : isDone
-            ? "border-green-500 bg-green-500/20"
-            : "border-muted-foreground/30"
-        }`}
-      >
-        <Icon
-          className={`h-4 w-4 ${
-            isActive
-              ? "text-severity-orange"
-              : isDone
-              ? "text-green-500"
-              : "text-muted-foreground"
-          }`}
-        />
-      </div>
-      <span
-        className={`text-sm ${
-          isActive
-            ? "font-medium text-severity-orange"
-            : isDone
-            ? "text-green-500"
-            : "text-muted-foreground"
-        }`}
-      >
-        {label}
-      </span>
-      {isDone && <CheckCircle2 className="h-4 w-4 text-green-500" />}
-      {isActive && retryBadge && (
-        <Badge variant="outline" className="text-xs text-yellow-500">
-          {retryBadge}
-        </Badge>
-      )}
-    </div>
-  );
-}
+const ZONES_UNDER_ALERT: LocalizedText = { en: "Zones under alert", fil: "Zone na may alerto" };
+const OF_TOTAL: LocalizedText = { en: "of", fil: "sa" };
+const REPORTS_TODAY: LocalizedText = { en: "Reports today", fil: "Ulat ngayon" };
+const ACROSS_ALL_ZONES: LocalizedText = { en: "across all zones", fil: "sa lahat ng zone" };
+const HEAVIEST_RAIN: LocalizedText = { en: "Heaviest rainfall", fil: "Pinakamalakas na ulan" };
+const CENTERS_FULL: LocalizedText = { en: "Centers at capacity", fil: "Punong center" };
+const CENTERS_NOTE: LocalizedText = { en: "full or limited", fil: "puno o limitado" };
+const COMMUNITY_PINS: LocalizedText = { en: "Community pins", fil: "Community pins" };
+const UNVERIFIED: LocalizedText = { en: "unverified, resident-reported", fil: "hindi pa na-verify, galing sa residente" };
+const ACTIVE_CYCLONE: LocalizedText = { en: "Tropical cyclone", fil: "Bagyo" };
+const NONE_TRACKED: LocalizedText = { en: "None tracked", fil: "Wala" };
+const AWAY: LocalizedText = { en: "away", fil: "ang layo" };
 
 export default function AdminPage() {
   const { lang } = useLanguage();
-  const [selectedZone, setSelectedZone] = useState<Zone>(MOCK_ZONES[0]);
-  const [selectedScenario, setSelectedScenario] = useState(MOCK_SCENARIOS[0].id);
-  const [currentStep, setCurrentStep] = useState<SimulationStep>("idle");
-  const [stepHistory, setStepHistory] = useState<SimulationStep[]>([]);
+  const overrides = useZoneOverrides();
+  const pins = useCommunityPins();
 
-  const predictions = getPredictionsForZone(selectedZone.id);
-  const cascade = MOCK_CASCADES.find((c) => c.fromZoneId === selectedZone.id);
-
-  const runSimulation = () => {
-    setCurrentStep("predicting");
-    setStepHistory(["predicting"]);
-
-    setTimeout(() => {
-      setCurrentStep("alert-issued");
-      setStepHistory((prev) => [...prev, "alert-issued"]);
-
-      setTimeout(() => {
-        setCurrentStep("push-sent");
-        setStepHistory((prev) => [...prev, "push-sent"]);
-
-        setTimeout(() => {
-          setCurrentStep("push-failed");
-          setStepHistory((prev) => [...prev, "push-failed"]);
-
-          setTimeout(() => {
-            setCurrentStep("sms-sent");
-            setStepHistory((prev) => [...prev, "sms-sent"]);
-
-            setTimeout(() => {
-              setCurrentStep("cached");
-              setStepHistory((prev) => [...prev, "cached"]);
-
-              setTimeout(() => {
-                if (cascade) {
-                  setCurrentStep("cascade");
-                  setStepHistory((prev) => [...prev, "cascade"]);
-                }
-
-                setTimeout(() => {
-                  setCurrentStep("complete");
-                  setStepHistory((prev) => [...prev, "complete"]);
-                }, 1500);
-              }, 1500);
-            }, 1500);
-          }, 1500);
-        }, 2000);
-      }, 1500);
-    }, 1500);
-  };
-
-  const resetSimulation = () => {
-    setCurrentStep("idle");
-    setStepHistory([]);
-  };
+  const zonesUnderAlert = MOCK_ZONES.filter(
+    (zone) => getZoneStatus(resolveEffectiveAlert(zone.id, overrides[zone.id]?.alertSeverity)) !== "safe"
+  ).length;
+  const reportsToday = MOCK_ZONES.reduce((sum, zone) => sum + getReportsTodayForZone(zone.id), 0);
+  const heaviestRain = Math.max(...MOCK_ZONES.map((zone) => getRainfallForZone(zone.id)));
+  const constrainedCenters = MOCK_ZONES.filter((zone) => {
+    const status = resolveEffectiveCenterStatus(zone.centerStatus, overrides[zone.id]?.centerStatus);
+    return status !== "space_available";
+  }).length;
 
   return (
     <main className="flex min-h-screen flex-col items-center gap-6 p-4 sm:p-6 lg:p-8">
-      <div className="w-full max-w-2xl space-y-6 lg:max-w-4xl">
+      <div className="w-full max-w-2xl space-y-6 lg:max-w-5xl">
         <div>
           <h1 className="text-2xl font-bold">Admin Dashboard</h1>
           <p className="text-muted-foreground">{t(SUBTITLE, lang)}</p>
         </div>
 
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold">{t(MONITORING_DASHBOARD, lang)}</h2>
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold">{t(AT_A_GLANCE, lang)}</h2>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+            <StatCard
+              label={t(ZONES_UNDER_ALERT, lang)}
+              value={zonesUnderAlert}
+              hint={`${t(OF_TOTAL, lang)} ${MOCK_ZONES.length}`}
+              icon={AlertTriangle}
+              accentClass={zonesUnderAlert > 0 ? "text-severity-orange" : "text-green-500"}
+            />
+            <StatCard
+              label={t(REPORTS_TODAY, lang)}
+              value={reportsToday}
+              hint={t(ACROSS_ALL_ZONES, lang)}
+              icon={Users}
+            />
+            <StatCard
+              label={t(HEAVIEST_RAIN, lang)}
+              value={heaviestRain}
+              unit="mm/hr"
+              hint={isHeavyRainfall(heaviestRain) ? t({ en: "Heavy", fil: "Malakas" }, lang) : undefined}
+              icon={CloudRain}
+              accentClass={isHeavyRainfall(heaviestRain) ? "text-severity-orange" : "text-foreground"}
+            />
+            <StatCard
+              label={t(CENTERS_FULL, lang)}
+              value={constrainedCenters}
+              hint={t(CENTERS_NOTE, lang)}
+              icon={Building2}
+              accentClass={constrainedCenters > 0 ? "text-severity-yellow" : "text-green-500"}
+            />
+            <StatCard
+              label={t(COMMUNITY_PINS, lang)}
+              value={pins.length}
+              hint={t(UNVERIFIED, lang)}
+              icon={MapPin}
+            />
+            <StatCard
+              label={t(ACTIVE_CYCLONE, lang)}
+              value={MOCK_TYPHOON ? MOCK_TYPHOON.name : t(NONE_TRACKED, lang)}
+              hint={MOCK_TYPHOON ? `${MOCK_TYPHOON.distanceKm}km ${MOCK_TYPHOON.bearing} ${t(AWAY, lang)}` : undefined}
+              icon={Wind}
+              accentClass={MOCK_TYPHOON ? "text-severity-orange" : "text-foreground"}
+            />
+          </div>
+        </section>
+
+        <Separator />
+
+        <section className="space-y-4">
+          <h2 className="text-lg font-semibold">{t(HAZARDS, lang)}</h2>
           <FloodMonitoringPanel zones={MOCK_ZONES} />
           <RainfallMonitoringPanel zones={MOCK_ZONES} />
-          <TyphoonTrackingPanel />
-          <LandslideRiskPanel zones={MOCK_ZONES} />
+          <div className="grid gap-4 lg:grid-cols-2">
+            <TyphoonTrackingPanel />
+            <LandslideRiskPanel zones={MOCK_ZONES} />
+          </div>
+        </section>
+
+        <Separator />
+
+        <section className="space-y-4">
+          <h2 className="text-lg font-semibold">{t(ANALYTICS, lang)}</h2>
+          <ReportTrendPanel zones={MOCK_ZONES} />
+          <AlertAnalyticsPanel zones={MOCK_ZONES} />
+        </section>
+
+        <Separator />
+
+        <section className="space-y-4">
+          <h2 className="text-lg font-semibold">{t(OPERATIONS, lang)}</h2>
           <EvacuationManagementPanel zones={MOCK_ZONES} />
-        </div>
+          <CommunityPinModerationPanel zones={MOCK_ZONES} />
 
-        <Separator />
-
-        <h2 className="text-lg font-semibold">{t(ALERT_FLOW_SIMULATION, lang)}</h2>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <label htmlFor="admin-zone-select" className="text-sm font-medium">
-              {t(ZONE_LABEL, lang)}
-            </label>
-            <Select
-              value={selectedZone.id}
-              onValueChange={(v) => {
-                setSelectedZone(MOCK_ZONES.find((z) => z.id === v) || MOCK_ZONES[0]);
-                resetSimulation();
-              }}
-            >
-              <SelectTrigger id="admin-zone-select">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {MOCK_ZONES.map((zone) => (
-                  <SelectItem key={zone.id} value={zone.id}>
-                    {zone.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <label htmlFor="admin-scenario-select" className="text-sm font-medium">
-              {t(SCENARIO_LABEL, lang)}
-            </label>
-            <Select
-              value={selectedScenario}
-              onValueChange={(v) => {
-                setSelectedScenario(v);
-                resetSimulation();
-              }}
-            >
-              <SelectTrigger id="admin-scenario-select">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {MOCK_SCENARIOS.map((scenario) => (
-                  <SelectItem key={scenario.id} value={scenario.id}>
-                    {t(scenario.name, lang)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <span>📋</span>
-              <span>{t(MOCK_SCENARIOS.find((s) => s.id === selectedScenario)!.name, lang)}</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p lang={lang} className="text-muted-foreground">
-              {t(
-                MOCK_SCENARIOS.find((s) => s.id === selectedScenario)!.description,
-                lang
-              )}
-            </p>
-          </CardContent>
-        </Card>
-
-        {predictions.length > 0 && (
-          <PredictionTimeline steps={predictions} zoneName={selectedZone.name} />
-        )}
-
-        <Separator />
-
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold">{t(ALERT_FLOW, lang)}</h2>
-
-          <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:gap-x-6 lg:gap-y-3">
-            <StepIndicator
-              label={t(STEP_LABEL.predicting, lang)}
-              icon={Wifi}
-              isActive={currentStep === "predicting"}
-              isDone={isStepDone("predicting", currentStep, stepHistory)}
-            />
-            <StepIndicator
-              label={t(STEP_LABEL["alert-issued"], lang)}
-              icon={Bell}
-              isActive={currentStep === "alert-issued"}
-              isDone={isStepDone("alert-issued", currentStep, stepHistory)}
-            />
-            <StepIndicator
-              label={t(STEP_LABEL["push-sent"], lang)}
-              icon={Smartphone}
-              isActive={currentStep === "push-sent"}
-              isDone={isStepDone("push-sent", currentStep, stepHistory)}
-            />
-            <StepIndicator
-              label={t(STEP_LABEL["push-failed"], lang)}
-              icon={WifiOff}
-              isActive={currentStep === "push-failed"}
-              isDone={isStepDone("push-failed", currentStep, stepHistory)}
-              retryBadge={t(RETRY_IN_60S, lang)}
-            />
-            <StepIndicator
-              label={t(STEP_LABEL["sms-sent"], lang)}
-              icon={MessageSquare}
-              isActive={currentStep === "sms-sent"}
-              isDone={isStepDone("sms-sent", currentStep, stepHistory)}
-            />
-            <StepIndicator
-              label={t(STEP_LABEL.cached, lang)}
-              icon={CheckCircle2}
-              isActive={currentStep === "cached"}
-              isDone={isStepDone("cached", currentStep, stepHistory)}
-            />
-            {cascade && (
-              <StepIndicator
-                label={t(STEP_LABEL.cascade, lang)}
-                icon={AlertTriangle}
-                isActive={currentStep === "cascade"}
-                isDone={isStepDone("cascade", currentStep, stepHistory)}
-              />
-            )}
-          </div>
-
-          {currentStep !== "idle" && (
-            <Card className="border-severity-orange/30">
-              <CardContent className="pt-6">
-                <p lang={lang} className="text-sm">
-                  {STEP_EXPLANATION[lang][currentStep]}
+          <Card>
+            <CardContent className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-medium">{t(RUN_SIMULATION, lang)}</p>
+                <p lang={lang} className="text-sm text-muted-foreground">
+                  {t(SIMULATION_HINT, lang)}
                 </p>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-
-        <div className="flex gap-3">
-          <Button
-            onClick={runSimulation}
-            disabled={currentStep !== "idle" && currentStep !== "complete"}
-            className="gap-2"
-          >
-            <Play className="h-4 w-4" />
-            {currentStep === "complete" ? t(RUN_AGAIN, lang) : t(START_SIMULATION, lang)}
-          </Button>
-          {currentStep !== "idle" && (
-            <Button variant="outline" onClick={resetSimulation} className="gap-2">
-              <RotateCcw className="h-4 w-4" />
-              {t(RESET, lang)}
-            </Button>
-          )}
-        </div>
+              </div>
+              <Button asChild>
+                <Link href="/admin/simulation">
+                  <Play aria-hidden="true" className="h-4 w-4" />
+                  {t({ en: "Open simulation", fil: "Buksan ang simulation" }, lang)}
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </section>
       </div>
     </main>
   );

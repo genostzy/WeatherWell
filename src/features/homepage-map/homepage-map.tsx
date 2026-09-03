@@ -10,12 +10,18 @@ import { getZoneStatus } from "@/lib/zone-status";
 import { useZoneOverrides, resolveEffectiveAlert } from "@/lib/zone-overrides";
 import { PersonalStatusHeadline } from "./personal-status-headline";
 import { CurrentConditionsPanel } from "./current-conditions-panel";
-import { CommunityPinForm } from "./community-pin-form";
+import { CommunityPinForm, type CommunityPinFormValues } from "./community-pin-form";
+import { PhotoLightbox } from "./photo-lightbox";
+import { OverlayDialog } from "@/components/overlay-dialog";
 import { getBearingAndDistance } from "./bearing-distance";
 import { useLivePosition } from "./use-live-position";
 import { routeCrossesHazard } from "./route-hazard";
-import { addCommunityPin } from "@/lib/community-pins";
-import type { PinStatusTag } from "@/lib/community-pin";
+import {
+  addCommunityPin,
+  updateCommunityPin,
+  deleteCommunityPin,
+  type CommunityPin,
+} from "@/lib/community-pins";
 import type { HazardType, LocalizedText, Zone } from "@/lib/types";
 
 const MapCanvas = dynamic(() => import("./map-canvas").then((m) => m.MapCanvas), {
@@ -43,6 +49,8 @@ const NO_SAFE_ROUTE_FOUND: LocalizedText = {
 };
 const ADD_FLOOD_PIN: LocalizedText = { en: "Add flood pin", fil: "Magdagdag ng flood pin" };
 const CANCEL_ADD_PIN: LocalizedText = { en: "Cancel adding pin", fil: "Kanselahin ang pagdagdag ng pin" };
+const PIN_DIALOG_LABEL: LocalizedText = { en: "Flood pin details", fil: "Detalye ng flood pin" };
+const CLOSE_DIALOG: LocalizedText = { en: "Close", fil: "Isara" };
 
 /** Compass codes returned by `getBearingAndDistance` — Filipino uses distinct words, not abbreviations of the English letters. */
 const COMPASS_LABEL: Record<string, LocalizedText> = {
@@ -63,6 +71,8 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
   const [notice, setNotice] = useState<LocalizedText | null>(null);
   const [isPlacingPin, setIsPlacingPin] = useState(false);
   const [pendingPinLocation, setPendingPinLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [editingPin, setEditingPin] = useState<CommunityPin | null>(null);
+  const [photoPin, setPhotoPin] = useState<CommunityPin | null>(null);
   const livePosition = useLivePosition();
   const overrides = useZoneOverrides();
 
@@ -110,9 +120,22 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
 
   function handlePinFormCancel() {
     setPendingPinLocation(null);
+    setEditingPin(null);
   }
 
-  function handlePinFormSubmit(input: { statusTag: PinStatusTag; caption: string; photoDataUrl?: string }) {
+  function handleEditPinSubmit(values: CommunityPinFormValues) {
+    if (!editingPin) return;
+    updateCommunityPin(editingPin.id, values);
+    setEditingPin(null);
+  }
+
+  function handleDeletePin(pin: CommunityPin) {
+    deleteCommunityPin(pin.id);
+    if (editingPin?.id === pin.id) setEditingPin(null);
+    if (photoPin?.id === pin.id) setPhotoPin(null);
+  }
+
+  function handlePinFormSubmit(input: CommunityPinFormValues) {
     if (!pendingPinLocation) return;
     // Nearest zone by straight-line distance — the same math already used
     // for the direction-to-safety indicator, just picking the closest zone
@@ -154,6 +177,9 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
           onSelectZone={handleSelectZone}
           isPlacingPin={isPlacingPin}
           onMapClickForPin={handleMapClickForPin}
+          onEditPin={setEditingPin}
+          onDeletePin={handleDeletePin}
+          onViewPhoto={setPhotoPin}
         />
       </div>
 
@@ -192,10 +218,44 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
         </p>
       )}
 
+      {/* Both of these open over the map rather than below it — a form or photo
+          rendered inline would land off-screen behind a full-height map. */}
       {pendingPinLocation && (
-        <div className="lg:col-start-2 lg:row-start-5">
+        <OverlayDialog
+          onClose={handlePinFormCancel}
+          label={t(PIN_DIALOG_LABEL, lang)}
+          closeLabel={t(CLOSE_DIALOG, lang)}
+        >
           <CommunityPinForm onSubmit={handlePinFormSubmit} onCancel={handlePinFormCancel} />
-        </div>
+        </OverlayDialog>
+      )}
+
+      {editingPin && (
+        <OverlayDialog
+          onClose={handlePinFormCancel}
+          label={t(PIN_DIALOG_LABEL, lang)}
+          closeLabel={t(CLOSE_DIALOG, lang)}
+        >
+          <CommunityPinForm
+            mode="edit"
+            initialValues={{
+              statusTag: editingPin.statusTag,
+              caption: editingPin.caption,
+              photoDataUrl: editingPin.photoDataUrl,
+            }}
+            onSubmit={handleEditPinSubmit}
+            onCancel={handlePinFormCancel}
+          />
+        </OverlayDialog>
+      )}
+
+      {photoPin?.photoDataUrl && (
+        <PhotoLightbox
+          photoDataUrl={photoPin.photoDataUrl}
+          statusTag={photoPin.statusTag}
+          caption={photoPin.caption}
+          onClose={() => setPhotoPin(null)}
+        />
       )}
     </div>
   );

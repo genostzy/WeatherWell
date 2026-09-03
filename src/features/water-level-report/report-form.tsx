@@ -8,6 +8,10 @@ import { DepthReferenceVisual } from "./depth-reference-visual";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { DEPTH_LEVELS, DEPTH_LABEL, type DepthLevel } from "@/lib/depth";
+import type { LocalizedText } from "@/lib/types";
+
+const SUBMIT_REPORT: LocalizedText = { en: "Submit report", fil: "Ipadala ang ulat" };
+const HOW_DEEP: LocalizedText = { en: "How deep is the water?", fil: "Gaano kalalim ang tubig?" };
 
 export function ReportForm({
   zoneId,
@@ -39,7 +43,7 @@ export function ReportForm({
       <RadioGroup
         value={depthLevel}
         onValueChange={(value) => setDepthLevel(value as DepthLevel)}
-        aria-label="How deep is the water?"
+        aria-label={t(HOW_DEEP, lang)}
       >
         {DEPTH_LEVELS.map((level) => (
           <div key={level} className="flex items-center space-x-3 py-2">
@@ -52,7 +56,7 @@ export function ReportForm({
       </RadioGroup>
 
       <Button type="submit" size="lg" disabled={submitting}>
-        Submit report
+        {t(SUBMIT_REPORT, lang)}
       </Button>
     </form>
   );

@@ -148,6 +148,37 @@ export function addCommunityPin(input: {
   writePins([...getSnapshot(), pin]);
 }
 
+/**
+ * Whether this device created the pin — the only handle Phase 1 has on
+ * authorship (no accounts, PRD Anti-Abuse layer 5). Edit and delete are
+ * offered only for a resident's own pins; an admin override to remove
+ * anyone's pin lives on the admin dashboard instead, per PRD Core Feature #5.
+ */
+export function isOwnPin(pin: CommunityPin): boolean {
+  return pin.deviceId === getDeviceId();
+}
+
+export function updateCommunityPin(
+  pinId: string,
+  patch: { statusTag?: PinStatusTag; caption?: string; photoDataUrl?: string }
+): void {
+  const next = getSnapshot().map((pin) => {
+    if (pin.id !== pinId) return pin;
+    return {
+      ...pin,
+      statusTag: patch.statusTag ?? pin.statusTag,
+      caption: patch.caption ?? pin.caption,
+      // An explicit empty string clears the photo; undefined leaves it alone.
+      photoDataUrl: patch.photoDataUrl === "" ? undefined : patch.photoDataUrl ?? pin.photoDataUrl,
+    };
+  });
+  writePins(next);
+}
+
+export function deleteCommunityPin(pinId: string): void {
+  writePins(getSnapshot().filter((pin) => pin.id !== pinId));
+}
+
 function readVotes(): Record<string, 1 | -1> {
   const raw = readRaw(VOTES_KEY);
   if (!raw) return {};
