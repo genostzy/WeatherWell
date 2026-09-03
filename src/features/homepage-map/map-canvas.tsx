@@ -1,13 +1,21 @@
 "use client";
 
-import { MapContainer, TileLayer, Marker, Circle, Polyline, Popup } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Circle, Polyline, Popup, useMapEvents } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
-import { getActiveAlertForZone, getPOIsForZone, getHazardSusceptibilityForZone } from "@/lib/mock-data";
+import { getPOIsForZone, getHazardSusceptibilityForZone } from "@/lib/mock-data";
 import { getZoneStatus, getZoneStatusColor, ZONE_STATUS_LABEL } from "@/lib/zone-status";
+import { useZoneOverrides, resolveEffectiveAlert } from "@/lib/zone-overrides";
+import { useCommunityPins, voteOnPin, hasVotedOnPin } from "@/lib/community-pins";
+import { PIN_STATUS_LABEL } from "@/lib/community-pin";
 import { hazardRiskColor } from "./hazard-color";
-import { createStatusMarkerIcon, createPoiMarkerIcon, createEvacuationMarkerIcon } from "./marker-icons";
+import {
+  createStatusMarkerIcon,
+  createPoiMarkerIcon,
+  createEvacuationMarkerIcon,
+  createCommunityPinMarkerIcon,
+} from "./marker-icons";
 import { MarkerLegend } from "./marker-legend";
 import { HazardTypeSelector } from "./hazard-type-selector";
 import type { HazardType, LocalizedText, Zone } from "@/lib/types";
@@ -20,6 +28,27 @@ const VIEW_EVACUATION_DETAILS: LocalizedText = {
   en: "View evacuation details",
   fil: "Tingnan ang detalye ng evacuation",
 };
+const UNVERIFIED_REPORT: LocalizedText = {
+  en: "Unverified community report",
+  fil: "Hindi pa na-verify na ulat ng komunidad",
+};
+const UPVOTE: LocalizedText = { en: "Upvote", fil: "I-upvote" };
+const DOWNVOTE: LocalizedText = { en: "Downvote", fil: "I-downvote" };
+const ALREADY_VOTED: LocalizedText = { en: "You already voted on this pin", fil: "Nakaboto ka na sa pin na ito" };
+const TAP_MAP_TO_PLACE: LocalizedText = {
+  en: "Tap the map to drop your pin",
+  fil: "Pindutin ang mapa para ilagay ang pin",
+};
+
+/** Only mounted while `isPlacingPin` — reports the resident's tap back up without adding a permanent click handler to the whole map. */
+function PinPlacer({ onPlace }: { onPlace: (lat: number, lng: number) => void }) {
+  useMapEvents({
+    click(event) {
+      onPlace(event.latlng.lat, event.latlng.lng);
+    },
+  });
+  return null;
+}
 
 /**
  * The only piece of the homepage map that actually needs Leaflet (browser-only,
@@ -35,6 +64,8 @@ export function MapCanvas({
   routeZone,
   routeHazard,
   onSelectZone,
+  isPlacingPin = false,
+  onMapClickForPin,
 }: {
   zones: Zone[];
   hazardType: HazardType;
@@ -42,16 +73,21 @@ export function MapCanvas({
   routeZone: Zone | null;
   routeHazard: boolean;
   onSelectZone: (zoneId: string) => void;
+  isPlacingPin?: boolean;
+  onMapClickForPin?: (lat: number, lng: number) => void;
 }) {
   const { lang } = useLanguage();
+  const overrides = useZoneOverrides();
+  const communityPins = useCommunityPins();
   const center: [number, number] = [zones[0].lat, zones[0].lng];
 
   return (
     <div
-      className="relative h-[340px] w-full overflow-hidden rounded-md border-2 border-border sm:h-[400px] lg:h-[600px]"
+      className={`relative h-[340px] w-full overflow-hidden rounded-md border-2 border-border sm:h-[400px] lg:h-[600px] ${isPlacingPin ? "cursor-crosshair" : ""}`}
       aria-label={t(MAP_ARIA_LABEL, lang)}
     >
       <MapContainer center={center} zoom={14} scrollWheelZoom={false} style={{ height: "100%", width: "100%" }}>
+        {isPlacingPin && onMapClickForPin && <PinPlacer onPlace={onMapClickForPin} />}
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -76,7 +112,7 @@ export function MapCanvas({
         })}
 
         {zones.map((zone) => {
-          const alert = getActiveAlertForZone(zone.id);
+          const alert = resolveEffectiveAlert(zone.id, overrides[zone.id]?.alertSeverity);
           const status = getZoneStatus(alert);
           const color = getZoneStatusColor(alert);
           const label = `${zone.name} — ${t(ZONE_STATUS_LABEL[status], lang)}`;
@@ -131,6 +167,55 @@ export function MapCanvas({
             }}
           />
         )}
+
+        {communityPins.map((pin) => {
+          const label = `${t(PIN_STATUS_LABEL[pin.statusTag], lang)} — ${t(UNVERIFIED_REPORT, lang)}`;
+          const alreadyVoted = hasVotedOnPin(pin.id);
+          return (
+            <Marker
+              key={pin.id}
+              position={[pin.lat, pin.lng]}
+              icon={createCommunityPinMarkerIcon(pin.statusTag, label)}
+            >
+              <Popup>
+                <div className="space-y-1.5 text-sm">
+                  <p className="font-medium">{t(PIN_STATUS_LABEL[pin.statusTag], lang)}</p>
+                  <p className="text-xs text-muted-foreground">{t(UNVERIFIED_REPORT, lang)}</p>
+                  {pin.caption && <p>{pin.caption}</p>}
+                  {pin.photoDataUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element -- local/data URL, not a remote image next/image would optimize
+                    <img
+                      src={pin.photoDataUrl}
+                      alt=""
+                      className="h-20 w-auto rounded-md border-2 border-border object-cover"
+                    />
+                  )}
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      disabled={alreadyVoted}
+                      onClick={() => voteOnPin(pin.id, 1)}
+                      aria-label={t(UPVOTE, lang)}
+                      className="rounded border-2 border-border px-2 py-0.5 text-xs font-medium disabled:opacity-50"
+                    >
+                      ▲ {pin.upvotes}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={alreadyVoted}
+                      onClick={() => voteOnPin(pin.id, -1)}
+                      aria-label={t(DOWNVOTE, lang)}
+                      className="rounded border-2 border-border px-2 py-0.5 text-xs font-medium disabled:opacity-50"
+                    >
+                      ▼ {pin.downvotes}
+                    </button>
+                  </div>
+                  {alreadyVoted && <p className="text-xs text-muted-foreground">{t(ALREADY_VOTED, lang)}</p>}
+                </div>
+              </Popup>
+            </Marker>
+          );
+        })}
       </MapContainer>
 
       <div className="pointer-events-none absolute inset-0 z-[1000] p-2">
@@ -140,6 +225,11 @@ export function MapCanvas({
         <div className="pointer-events-auto absolute bottom-2 left-2">
           <HazardTypeSelector value={hazardType} onChange={onHazardTypeChange} />
         </div>
+        {isPlacingPin && (
+          <div className="pointer-events-none absolute top-2 left-1/2 -translate-x-1/2 rounded-md border-2 border-border bg-background/95 px-3 py-1 text-xs font-medium shadow-md">
+            {t(TAP_MAP_TO_PLACE, lang)}
+          </div>
+        )}
       </div>
     </div>
   );

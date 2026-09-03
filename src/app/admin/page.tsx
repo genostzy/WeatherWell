@@ -26,6 +26,11 @@ import {
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { PredictionTimeline } from "@/features/alerts/prediction-timeline";
+import { FloodMonitoringPanel } from "@/features/admin/flood-monitoring-panel";
+import { RainfallMonitoringPanel } from "@/features/admin/rainfall-monitoring-panel";
+import { TyphoonTrackingPanel } from "@/features/admin/typhoon-tracking-panel";
+import { LandslideRiskPanel } from "@/features/admin/landslide-risk-panel";
+import { EvacuationManagementPanel } from "@/features/admin/evacuation-management-panel";
 import {
   MOCK_ZONES,
   MOCK_SCENARIOS,
@@ -81,9 +86,11 @@ const STEP_LABEL: Record<IndicatorStep, LocalizedText> = {
 };
 
 const SUBTITLE: LocalizedText = {
-  en: "Test the alert flow for training and demo",
-  fil: "Subukan ang alert flow para sa pagsasanay",
+  en: "Monitor every zone, then test the alert flow for training and demo",
+  fil: "Subaybayan ang bawat zone, pagkatapos ay subukan ang alert flow para sa pagsasanay",
 };
+const MONITORING_DASHBOARD: LocalizedText = { en: "Monitoring Dashboard", fil: "Monitoring Dashboard" };
+const ALERT_FLOW_SIMULATION: LocalizedText = { en: "Alert Flow Simulation", fil: "Simulation ng Alert Flow" };
 const ZONE_LABEL: LocalizedText = { en: "Zone", fil: "Zone" };
 const SCENARIO_LABEL: LocalizedText = { en: "Scenario", fil: "Senaryo" };
 const ALERT_FLOW: LocalizedText = { en: "Alert Flow", fil: "Daloy ng Alert" };
@@ -219,11 +226,22 @@ export default function AdminPage() {
     <main className="flex min-h-screen flex-col items-center gap-6 p-4 sm:p-6 lg:p-8">
       <div className="w-full max-w-2xl space-y-6 lg:max-w-4xl">
         <div>
-          <h1 className="text-2xl font-bold">Admin Simulation</h1>
+          <h1 className="text-2xl font-bold">Admin Dashboard</h1>
           <p className="text-muted-foreground">{t(SUBTITLE, lang)}</p>
         </div>
 
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold">{t(MONITORING_DASHBOARD, lang)}</h2>
+          <FloodMonitoringPanel zones={MOCK_ZONES} />
+          <RainfallMonitoringPanel zones={MOCK_ZONES} />
+          <TyphoonTrackingPanel />
+          <LandslideRiskPanel zones={MOCK_ZONES} />
+          <EvacuationManagementPanel zones={MOCK_ZONES} />
+        </div>
+
         <Separator />
+
+        <h2 className="text-lg font-semibold">{t(ALERT_FLOW_SIMULATION, lang)}</h2>
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">

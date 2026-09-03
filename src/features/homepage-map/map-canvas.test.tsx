@@ -31,7 +31,7 @@ describe("MapCanvas", () => {
     const onSelectZone = vi.fn();
     render(<MapCanvas {...baseProps} onSelectZone={onSelectZone} />);
 
-    fireEvent.click(screen.getByRole("img", { name: /Barangay San Isidro/i }));
+    fireEvent.click(screen.getByRole("img", { name: /Barangay Nilombot, Mapandan/i }));
 
     expect(onSelectZone).toHaveBeenCalledWith(MOCK_ZONES[0].id);
   });

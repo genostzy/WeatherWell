@@ -6,7 +6,7 @@ import { SeverityBadge } from "@/features/alerts/severity-badge";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { SEVERITY_HEX } from "@/lib/severity";
-import { getActiveAlertForZone } from "@/lib/mock-data";
+import { useZoneOverrides, resolveEffectiveAlert } from "@/lib/zone-overrides";
 import type { LocalizedText, Zone } from "@/lib/types";
 
 const CLEAR_NO_ALERT: LocalizedText = { en: "Clear — no active alert", fil: "Ligtas" };
@@ -17,11 +17,12 @@ const PLACEHOLDER_BOUNDARY: LocalizedText = {
 
 export function ZoneMap({ zones }: { zones: Zone[] }) {
   const { lang } = useLanguage();
+  const overrides = useZoneOverrides();
 
   return (
     <div className="grid w-full max-w-md gap-3 md:max-w-2xl md:grid-cols-2 lg:max-w-4xl lg:grid-cols-3">
       {zones.map((zone) => {
-        const alert = getActiveAlertForZone(zone.id);
+        const alert = resolveEffectiveAlert(zone.id, overrides[zone.id]?.alertSeverity);
         return (
           <Card
             key={zone.id}

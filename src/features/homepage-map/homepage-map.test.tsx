@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { HomepageMap } from "./homepage-map";
 import { MOCK_ZONES } from "@/lib/mock-data";
 import { LanguageProvider } from "@/features/i18n/language-provider";
+import type { Zone } from "@/lib/types";
 
 /**
  * HomepageMap loads MapCanvas (the actual Leaflet rendering) via next/dynamic
@@ -28,6 +29,17 @@ vi.mock("next/dynamic", () => ({
 }));
 
 /**
+ * The shipped mock zones are real, properly-spaced barangays several km
+ * apart (see mock-data.ts), so none of their own short local routes actually
+ * cross another zone's hazard — routeCrossesHazard is mocked here so the
+ * "finds a hazard-free route" test can exercise that branch deterministically
+ * instead of depending on incidental real-world distance.
+ */
+vi.mock("./route-hazard", () => ({
+  routeCrossesHazard: (zone: Zone) => zone.id === "zone-1",
+}));
+
+/**
  * MapCanvas's own rendering (legend, hazard selector, markers) has its own
  * dedicated test file; the test below only cares that HomepageMap correctly
  * wires a marker click back into its own state (the compass text it renders
@@ -48,7 +60,7 @@ describe("HomepageMap", () => {
       configurable: true,
       value: {
         watchPosition: vi.fn((success) => {
-          success({ coords: { latitude: 14.647, longitude: 121.1005 } });
+          success({ coords: { latitude: 16.0, longitude: 120.436 } });
           return 1;
         }),
         clearWatch: vi.fn(),
@@ -62,7 +74,7 @@ describe("HomepageMap", () => {
     );
 
     // Clicking the zone-1 status marker selects it as the active evacuation route.
-    fireEvent.click(await screen.findByRole("img", { name: /Barangay San Isidro/i }));
+    fireEvent.click(await screen.findByRole("img", { name: /Barangay Nilombot, Mapandan/i }));
 
     // Filipino must show the localized word, not the bare English "N" code.
     expect(screen.getByText(/Hilaga/)).toBeInTheDocument();
@@ -73,7 +85,7 @@ describe("HomepageMap", () => {
     const user = userEvent.setup();
     render(<HomepageMap zones={MOCK_ZONES} />);
 
-    // zone-1 (the default route) is tuned to cross a hazard on its own route.
+    // zone-1 (the default route) is mocked above to cross a hazard.
     expect(screen.getByText(/passes through a hazardous area/i)).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /find safe evacuation center/i }));
@@ -85,7 +97,7 @@ describe("HomepageMap", () => {
     const user = userEvent.setup();
     render(<HomepageMap zones={MOCK_ZONES} />);
 
-    // All three mock zones carry an active alert, so none qualify as Safe.
+    // All four mock zones carry an active alert, so none qualify as Safe.
     await user.click(screen.getByRole("button", { name: /^find safe area$/i }));
 
     expect(screen.getByText(/no zone is currently safe/i)).toBeInTheDocument();

@@ -5,21 +5,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
+import { CENTER_STATUS_CLASS, CENTER_STATUS_LABEL } from "@/lib/center-status";
+import { useZoneOverrides, resolveEffectiveCenterStatus } from "@/lib/zone-overrides";
 import type { Zone } from "@/lib/types";
-
-const CENTER_STATUS_LABEL = {
-  en: { space_available: "Space available", limited: "Limited space", full: "Full" },
-  fil: { space_available: "May espasyo", limited: "Kakaunting espasyo", full: "Puno na" },
-};
-
-const CENTER_STATUS_CLASS = {
-  space_available: "bg-green-500/20 text-green-400",
-  limited: "bg-yellow-500/20 text-yellow-400",
-  full: "bg-red-500/20 text-red-400",
-};
 
 export function EvacuationInstructions({ zone }: { zone: Zone }) {
   const { lang } = useLanguage();
+  const overrides = useZoneOverrides();
+  const centerStatus = resolveEffectiveCenterStatus(zone.centerStatus, overrides[zone.id]?.centerStatus);
 
   return (
     <Card className="w-full max-w-md">
@@ -44,8 +37,8 @@ export function EvacuationInstructions({ zone }: { zone: Zone }) {
           />
           <div>
             <p className="text-sm text-muted-foreground">Capacity</p>
-            <Badge className={CENTER_STATUS_CLASS[zone.centerStatus]}>
-              {CENTER_STATUS_LABEL[lang][zone.centerStatus]}
+            <Badge className={CENTER_STATUS_CLASS[centerStatus]}>
+              {t(CENTER_STATUS_LABEL[centerStatus], lang)}
             </Badge>
           </div>
         </div>

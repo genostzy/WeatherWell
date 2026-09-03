@@ -7,6 +7,11 @@ import {
   getActiveAlertForZone,
   getPOIsForZone,
   getHazardSusceptibilityForZone,
+  getHeatIndexCategory,
+  hasElevatedLandslideRisk,
+  getFriendlyWeatherRead,
+  getRainfallForZone,
+  isHeavyRainfall,
 } from "./mock-data";
 import { t } from "./i18n";
 
@@ -99,6 +104,36 @@ describe("map mock data", () => {
   it("has an entry in MOCK_HAZARD_SUSCEPTIBILITY for every zone", () => {
     for (const zone of MOCK_ZONES) {
       expect(MOCK_HAZARD_SUSCEPTIBILITY[zone.id]).toBeDefined();
+    }
+  });
+});
+
+describe("Current Conditions panel data", () => {
+  it("classifies heat index into PAGASA's published bands", () => {
+    expect(getHeatIndexCategory(30)).toBe("caution");
+    expect(getHeatIndexCategory(33)).toBe("extreme_caution");
+    expect(getHeatIndexCategory(42)).toBe("danger");
+    expect(getHeatIndexCategory(52)).toBe("extreme_danger");
+  });
+
+  it("flags elevated landslide risk only when susceptible AND rain is heavy", () => {
+    expect(hasElevatedLandslideRisk("high", 20)).toBe(true);
+    expect(hasElevatedLandslideRisk("low", 20)).toBe(false);
+    expect(hasElevatedLandslideRisk("high", 5)).toBe(false);
+  });
+
+  it("matches isHeavyRainfall's own threshold for every zone's mock rainfall", () => {
+    for (const zone of MOCK_ZONES) {
+      const mmPerHour = getRainfallForZone(zone.id);
+      expect(isHeavyRainfall(mmPerHour)).toBe(mmPerHour >= 15);
+    }
+  });
+
+  it("gives every zone a bilingual friendly weather read", () => {
+    for (const zone of MOCK_ZONES) {
+      const read = getFriendlyWeatherRead(zone.id);
+      expect(t(read, "en")).toBeTruthy();
+      expect(t(read, "fil")).toBeTruthy();
     }
   });
 });

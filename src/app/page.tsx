@@ -18,7 +18,7 @@ import type { LocalizedText } from "@/lib/types";
 const NAV_LINKS: { href: string; label: LocalizedText; icon: typeof Building2 }[] = [
   { href: "/evacuation", label: { en: "Evacuation", fil: "Evacuation" }, icon: Building2 },
   { href: "/report", label: { en: "Report", fil: "Ulat" }, icon: Droplet },
-  { href: "/map", label: { en: "Map", fil: "Mapa" }, icon: Map },
+  { href: "/map", label: { en: "Zones", fil: "Zones" }, icon: Map },
   { href: "/admin", label: { en: "Admin", fil: "Admin" }, icon: Settings },
 ];
 

@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { SeverityBadge } from "@/features/alerts/severity-badge";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
-import { getActiveAlertForZone } from "@/lib/mock-data";
+import { useZoneOverrides, resolveEffectiveAlert } from "@/lib/zone-overrides";
 import type { LocalizedText, Zone } from "@/lib/types";
 
 const NO_CONNECTION_NOTE: LocalizedText = {
@@ -16,6 +16,7 @@ const CLEAR_NO_ALERT: LocalizedText = { en: "Clear — no active alert", fil: "L
 
 export function ZoneAlertListFallback({ zones }: { zones: Zone[] }) {
   const { lang } = useLanguage();
+  const overrides = useZoneOverrides();
 
   return (
     <div className="w-full max-w-md space-y-3 md:max-w-lg lg:max-w-xl">
@@ -23,7 +24,7 @@ export function ZoneAlertListFallback({ zones }: { zones: Zone[] }) {
         {t(NO_CONNECTION_NOTE, lang)}
       </p>
       {zones.map((zone) => {
-        const alert = getActiveAlertForZone(zone.id);
+        const alert = resolveEffectiveAlert(zone.id, overrides[zone.id]?.alertSeverity);
         return (
           <Card key={zone.id}>
             <CardContent className="flex items-center justify-between gap-3 p-4">

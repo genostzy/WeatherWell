@@ -6,12 +6,16 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
-import { getActiveAlertForZone } from "@/lib/mock-data";
 import { getZoneStatus } from "@/lib/zone-status";
+import { useZoneOverrides, resolveEffectiveAlert } from "@/lib/zone-overrides";
 import { PersonalStatusHeadline } from "./personal-status-headline";
+import { CurrentConditionsPanel } from "./current-conditions-panel";
+import { CommunityPinForm } from "./community-pin-form";
 import { getBearingAndDistance } from "./bearing-distance";
 import { useLivePosition } from "./use-live-position";
 import { routeCrossesHazard } from "./route-hazard";
+import { addCommunityPin } from "@/lib/community-pins";
+import type { PinStatusTag } from "@/lib/community-pin";
 import type { HazardType, LocalizedText, Zone } from "@/lib/types";
 
 const MapCanvas = dynamic(() => import("./map-canvas").then((m) => m.MapCanvas), {
@@ -37,6 +41,8 @@ const NO_SAFE_ROUTE_FOUND: LocalizedText = {
   en: "Every route currently passes through a hazardous area.",
   fil: "Lahat ng ruta ay dumadaan sa mapanganib na lugar sa ngayon.",
 };
+const ADD_FLOOD_PIN: LocalizedText = { en: "Add flood pin", fil: "Magdagdag ng flood pin" };
+const CANCEL_ADD_PIN: LocalizedText = { en: "Cancel adding pin", fil: "Kanselahin ang pagdagdag ng pin" };
 
 /** Compass codes returned by `getBearingAndDistance` — Filipino uses distinct words, not abbreviations of the English letters. */
 const COMPASS_LABEL: Record<string, LocalizedText> = {
@@ -55,7 +61,10 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
   const [hazardType, setHazardType] = useState<HazardType>("flood");
   const [routeZoneId, setRouteZoneId] = useState<string | null>(zones[0]?.id ?? null);
   const [notice, setNotice] = useState<LocalizedText | null>(null);
+  const [isPlacingPin, setIsPlacingPin] = useState(false);
+  const [pendingPinLocation, setPendingPinLocation] = useState<{ lat: number; lng: number } | null>(null);
   const livePosition = useLivePosition();
+  const overrides = useZoneOverrides();
 
   const routeZone = zones.find((z) => z.id === routeZoneId) ?? null;
   const directionToSafety =
@@ -73,7 +82,9 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
   }
 
   function handleFindSafeArea() {
-    const safeZone = zones.find((z) => getZoneStatus(getActiveAlertForZone(z.id)) === "safe");
+    const safeZone = zones.find(
+      (z) => getZoneStatus(resolveEffectiveAlert(z.id, overrides[z.id]?.alertSeverity)) === "safe"
+    );
     if (safeZone) {
       setRouteZoneId(safeZone.id);
       setNotice(null);
@@ -92,13 +103,48 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
     }
   }
 
+  function handleMapClickForPin(lat: number, lng: number) {
+    setPendingPinLocation({ lat, lng });
+    setIsPlacingPin(false);
+  }
+
+  function handlePinFormCancel() {
+    setPendingPinLocation(null);
+  }
+
+  function handlePinFormSubmit(input: { statusTag: PinStatusTag; caption: string; photoDataUrl?: string }) {
+    if (!pendingPinLocation) return;
+    // Nearest zone by straight-line distance — the same math already used
+    // for the direction-to-safety indicator, just picking the closest zone
+    // center instead of a fixed evacuation center.
+    const nearestZone = zones.reduce((closest, zone) => {
+      const distance = getBearingAndDistance(pendingPinLocation, zone).distanceMeters;
+      const closestDistance = getBearingAndDistance(pendingPinLocation, closest).distanceMeters;
+      return distance < closestDistance ? zone : closest;
+    }, zones[0]);
+
+    addCommunityPin({
+      zoneId: nearestZone.id,
+      statusTag: input.statusTag,
+      caption: input.caption,
+      photoDataUrl: input.photoDataUrl,
+      lat: pendingPinLocation.lat,
+      lng: pendingPinLocation.lng,
+    });
+    setPendingPinLocation(null);
+  }
+
   return (
     <div className="grid w-full max-w-2xl gap-3 sm:gap-4 lg:max-w-5xl lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start lg:gap-6">
       <div className="lg:col-start-2 lg:row-start-1">
         <PersonalStatusHeadline zone={zones[0]} />
       </div>
 
-      <div className="lg:col-start-1 lg:row-span-3">
+      <div className="lg:col-start-2 lg:row-start-2">
+        <CurrentConditionsPanel zone={zones[0]} />
+      </div>
+
+      <div className="lg:col-start-1 lg:row-span-4">
         <MapCanvas
           zones={zones}
           hazardType={hazardType}
@@ -106,20 +152,30 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
           routeZone={routeZone}
           routeHazard={routeHazard}
           onSelectZone={handleSelectZone}
+          isPlacingPin={isPlacingPin}
+          onMapClickForPin={handleMapClickForPin}
         />
       </div>
 
-      <div className="flex flex-wrap gap-2 lg:col-start-2 lg:row-start-2">
+      <div className="flex flex-wrap gap-2 lg:col-start-2 lg:row-start-3">
         <Button type="button" variant="outline" size="sm" onClick={handleFindSafeArea}>
           {t(FIND_SAFE_AREA, lang)}
         </Button>
         <Button type="button" variant="outline" size="sm" onClick={handleFindSafeEvacuationCenter}>
           {t(FIND_SAFE_EVACUATION_CENTER, lang)}
         </Button>
+        <Button
+          type="button"
+          variant={isPlacingPin ? "default" : "outline"}
+          size="sm"
+          onClick={() => setIsPlacingPin((v) => !v)}
+        >
+          {t(isPlacingPin ? CANCEL_ADD_PIN : ADD_FLOOD_PIN, lang)}
+        </Button>
       </div>
 
       {(routeZone || notice) && (
-        <p lang={lang} className="text-sm lg:col-start-2 lg:row-start-3">
+        <p lang={lang} className="text-sm lg:col-start-2 lg:row-start-4">
           {routeZone && directionToSafety && (
             <span className="font-medium">
               {Math.round(directionToSafety.distanceMeters)}m{" "}
@@ -134,6 +190,12 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
           )}
           {notice && <span className="text-muted-foreground">{t(notice, lang)}</span>}
         </p>
+      )}
+
+      {pendingPinLocation && (
+        <div className="lg:col-start-2 lg:row-start-5">
+          <CommunityPinForm onSubmit={handlePinFormSubmit} onCancel={handlePinFormCancel} />
+        </div>
       )}
     </div>
   );

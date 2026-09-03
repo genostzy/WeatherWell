@@ -1,6 +1,8 @@
 import L from "leaflet";
 import type { ZoneStatus } from "@/lib/zone-status";
 import type { POICategory } from "@/lib/types";
+import type { PinStatusTag } from "@/lib/community-pin";
+import { PIN_STATUS_COLOR } from "@/lib/community-pin";
 import { STATUS_SHAPE_STYLE } from "./status-shape";
 
 /**
@@ -82,5 +84,23 @@ export function createEvacuationMarkerIcon(label: string): L.DivIcon {
     html: `<div role="img" aria-label="${escapeHtml(label)}" style="width:26px;height:26px;background:#0f766e;border:2px solid white;border-radius:6px;display:flex;align-items:center;justify-content:center;color:white;font-size:13px;">${EVACUATION_ICON_SVG}</div>`,
     iconSize: [30, 30],
     iconAnchor: [15, 15],
+  });
+}
+
+const PIN_ICON_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin" aria-hidden="true"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"></path><circle cx="12" cy="10" r="3"></circle></svg>';
+
+/**
+ * A dashed border (vs. the official markers' solid border) plus a distinct
+ * pin-shaped glyph — community pins are a clearly-labeled, unverified
+ * citizen layer (PRD Core Feature #5), never visually confusable with an
+ * official zone-status/evacuation/POI marker.
+ */
+export function createCommunityPinMarkerIcon(statusTag: PinStatusTag, label: string): L.DivIcon {
+  return L.divIcon({
+    className: `community-pin-marker community-pin-marker--${statusTag}`,
+    html: `<div role="img" aria-label="${escapeHtml(label)}" style="width:24px;height:24px;background:${PIN_STATUS_COLOR[statusTag]};border:2px dashed white;border-radius:50% 50% 50% 0;transform:rotate(45deg);display:flex;align-items:center;justify-content:center;"><span style="transform:rotate(-45deg);display:flex;">${PIN_ICON_SVG}</span></div>`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 26],
   });
 }
