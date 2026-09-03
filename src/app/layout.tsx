@@ -14,6 +14,15 @@ export const metadata: Metadata = {
   title: "WeatherWell",
   description: "Offline-capable flood alerts and evacuation guidance.",
   manifest: "/manifest.json",
+  // iOS Safari ignores the Web App Manifest's icons for "Add to Home
+  // Screen" — it needs an explicit apple-touch-icon link, which this
+  // generates. The browser-tab favicon itself comes from src/app/favicon.ico
+  // (Next.js's file convention) — that file now holds the same WeatherWell
+  // icon, replacing the framework's default placeholder; declaring `icon`
+  // here too would just add a second, competing <link rel="icon">.
+  icons: {
+    apple: "/icon-192.png",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

@@ -12,3 +12,24 @@ class ResizeObserverMock implements ResizeObserver {
 }
 
 global.ResizeObserver = ResizeObserverMock;
+
+/**
+ * jsdom also has no Pointer Capture implementation, which Radix's Select
+ * (and other Radix primitives) call directly on the event target during
+ * open/close and option-selection handling. Without these, any test that
+ * actually opens a Select and picks an option throws
+ * "target.hasPointerCapture is not a function" — this had gone unnoticed
+ * because no prior test drove a Select through a real interaction.
+ */
+if (!Element.prototype.hasPointerCapture) {
+  Element.prototype.hasPointerCapture = () => false;
+}
+if (!Element.prototype.setPointerCapture) {
+  Element.prototype.setPointerCapture = () => {};
+}
+if (!Element.prototype.releasePointerCapture) {
+  Element.prototype.releasePointerCapture = () => {};
+}
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = () => {};
+}

@@ -15,8 +15,14 @@ import {
 } from "@/components/ui/select";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
-import { MOCK_ZONES, getRainfallForZone, getHazardSusceptibilityForZone } from "@/lib/mock-data";
-import { SEVERITY_ORDER, SEVERITY_LABEL, type Severity } from "@/lib/severity";
+import {
+  MOCK_ZONES,
+  getRainfallForZone,
+  getRainfallHistoryForZone,
+  getHazardSusceptibilityForZone,
+  isHeavyRainfall,
+} from "@/lib/mock-data";
+import { SEVERITY_ORDER, SEVERITY_LABEL, SEVERITY_HEX, type Severity } from "@/lib/severity";
 import { CENTER_STATUS_LABEL, CENTER_STATUS_ORDER } from "@/lib/center-status";
 import {
   useZoneOverrides,
@@ -27,6 +33,9 @@ import {
   type AlertOverrideValue,
 } from "@/lib/zone-overrides";
 import { SeverityBadge } from "@/features/alerts/severity-badge";
+import { TrendChart } from "@/features/admin/charts/trend-chart";
+import { RecentReportsPanel } from "@/features/water-level-report/recent-reports-panel";
+import { CommunityPinModerationPanel } from "@/features/admin/community-pin-moderation-panel";
 import type { CenterStatus, LocalizedText } from "@/lib/types";
 
 const BACK_TO_DASHBOARD: LocalizedText = { en: "Back to admin dashboard", fil: "Balik sa admin dashboard" };
@@ -38,6 +47,7 @@ const CURRENT_STATUS: LocalizedText = { en: "Current status", fil: "Kasalukuyang
 const CLEAR: LocalizedText = { en: "Clear", fil: "Ligtas" };
 const CAPACITY: LocalizedText = { en: "Evacuation center capacity", fil: "Kapasidad ng evacuation center" };
 const RAINFALL: LocalizedText = { en: "Current rainfall", fil: "Kasalukuyang Ulan" };
+const RAINFALL_TREND: LocalizedText = { en: "Rainfall — last 12 hours", fil: "Ulan — huling 12 oras" };
 const FLOOD_SUSCEPTIBILITY: LocalizedText = { en: "Flood susceptibility", fil: "Panganib ng Baha" };
 const LANDSLIDE_SUSCEPTIBILITY: LocalizedText = { en: "Landslide susceptibility", fil: "Panganib ng Guho" };
 const NOTE: LocalizedText = {
@@ -60,6 +70,7 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
   const centerStatus = resolveEffectiveCenterStatus(zone.centerStatus, overrides[zone.id]?.centerStatus);
   const susceptibility = getHazardSusceptibilityForZone(zone.id);
   const rainfall = getRainfallForZone(zone.id);
+  const rainfallHistory = getRainfallHistoryForZone(zone.id);
 
   return (
     <main className="flex flex-1 flex-col items-center gap-6 p-4 sm:p-6 lg:p-8">
@@ -177,6 +188,25 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
             </div>
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">{t(RAINFALL_TREND, lang)}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <TrendChart
+              series={rainfallHistory}
+              color={isHeavyRainfall(rainfall) ? SEVERITY_HEX.orange : SEVERITY_HEX.yellow}
+              label={`${zone.name} rainfall, last 12 hours`}
+              unit="mm/hr"
+              height={72}
+            />
+          </CardContent>
+        </Card>
+
+        <RecentReportsPanel zone={zone} />
+
+        <CommunityPinModerationPanel zones={MOCK_ZONES} zoneId={zone.id} />
 
         <p className="text-xs text-muted-foreground">{t(NOTE, lang)}</p>
       </div>

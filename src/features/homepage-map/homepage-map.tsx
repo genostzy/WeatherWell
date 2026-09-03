@@ -13,13 +13,14 @@ import { CurrentConditionsPanel } from "./current-conditions-panel";
 import { CommunityPinForm, type CommunityPinFormValues } from "./community-pin-form";
 import { PhotoLightbox } from "./photo-lightbox";
 import { OverlayDialog } from "@/components/overlay-dialog";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { getBearingAndDistance } from "./bearing-distance";
 import { useLivePosition } from "./use-live-position";
 import { routeCrossesHazard } from "./route-hazard";
 import {
   addCommunityPin,
   updateCommunityPin,
-  deleteCommunityPin,
+  deleteOwnPin,
   type CommunityPin,
 } from "@/lib/community-pins";
 import type { HazardType, LocalizedText, Zone } from "@/lib/types";
@@ -51,6 +52,13 @@ const ADD_FLOOD_PIN: LocalizedText = { en: "Add flood pin", fil: "Magdagdag ng f
 const CANCEL_ADD_PIN: LocalizedText = { en: "Cancel adding pin", fil: "Kanselahin ang pagdagdag ng pin" };
 const PIN_DIALOG_LABEL: LocalizedText = { en: "Flood pin details", fil: "Detalye ng flood pin" };
 const CLOSE_DIALOG: LocalizedText = { en: "Close", fil: "Isara" };
+const DELETE_PIN_TITLE: LocalizedText = { en: "Delete this pin?", fil: "Burahin ang pin na ito?" };
+const DELETE_PIN_BODY: LocalizedText = {
+  en: "This can't be undone — unlike an admin removal, your own pin isn't kept for restoring.",
+  fil: "Hindi na maibabalik ito — kapag inalis ng admin, maibabalik pa; ang sarili mong pin, hindi na.",
+};
+const DELETE: LocalizedText = { en: "Delete", fil: "Burahin" };
+const CANCEL: LocalizedText = { en: "Cancel", fil: "Kanselahin" };
 
 /** Compass codes returned by `getBearingAndDistance` — Filipino uses distinct words, not abbreviations of the English letters. */
 const COMPASS_LABEL: Record<string, LocalizedText> = {
@@ -73,6 +81,7 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
   const [pendingPinLocation, setPendingPinLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [editingPin, setEditingPin] = useState<CommunityPin | null>(null);
   const [photoPin, setPhotoPin] = useState<CommunityPin | null>(null);
+  const [deletingPin, setDeletingPin] = useState<CommunityPin | null>(null);
   const livePosition = useLivePosition();
   const overrides = useZoneOverrides();
 
@@ -129,10 +138,12 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
     setEditingPin(null);
   }
 
-  function handleDeletePin(pin: CommunityPin) {
-    deleteCommunityPin(pin.id);
-    if (editingPin?.id === pin.id) setEditingPin(null);
-    if (photoPin?.id === pin.id) setPhotoPin(null);
+  function handleConfirmDeletePin() {
+    if (!deletingPin) return;
+    deleteOwnPin(deletingPin.id);
+    if (editingPin?.id === deletingPin.id) setEditingPin(null);
+    if (photoPin?.id === deletingPin.id) setPhotoPin(null);
+    setDeletingPin(null);
   }
 
   function handlePinFormSubmit(input: CommunityPinFormValues) {
@@ -178,7 +189,7 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
           isPlacingPin={isPlacingPin}
           onMapClickForPin={handleMapClickForPin}
           onEditPin={setEditingPin}
-          onDeletePin={handleDeletePin}
+          onDeletePin={setDeletingPin}
           onViewPhoto={setPhotoPin}
         />
       </div>
@@ -255,6 +266,18 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
           statusTag={photoPin.statusTag}
           caption={photoPin.caption}
           onClose={() => setPhotoPin(null)}
+        />
+      )}
+
+      {deletingPin && (
+        <ConfirmDialog
+          title={t(DELETE_PIN_TITLE, lang)}
+          body={t(DELETE_PIN_BODY, lang)}
+          confirmLabel={t(DELETE, lang)}
+          cancelLabel={t(CANCEL, lang)}
+          closeLabel={t(CLOSE_DIALOG, lang)}
+          onConfirm={handleConfirmDeletePin}
+          onCancel={() => setDeletingPin(null)}
         />
       )}
     </div>

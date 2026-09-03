@@ -11,6 +11,8 @@ const PINS_EVENT = "weatherwell:community-pins-changed";
 /** Net-score removal threshold — PRD Anti-Abuse layer 10: downvotes exceeding upvotes by this much removes the pin. */
 const NET_SCORE_REMOVAL_THRESHOLD = 5;
 
+export type PinRemovalReason = "net_score" | "admin";
+
 export interface CommunityPin {
   id: string;
   zoneId: string;
@@ -25,6 +27,15 @@ export interface CommunityPin {
   downvotes: number;
   createdAt: string;
   deviceId: string;
+  /**
+   * Soft-delete, not a filter-out: PRD says admin can "remove or restore any
+   * pin" — a net-score removal is a fast automated response, not final,
+   * exactly like the alert pipeline's own Human Override. A hard delete would
+   * make that promise false, so removed pins stay in storage, just hidden
+   * from the public map (see useCommunityPins).
+   */
+  removed?: boolean;
+  removedReason?: PinRemovalReason;
 }
 
 /**
@@ -119,8 +130,14 @@ function subscribe(callback: () => void): () => void {
   };
 }
 
-/** All live community pins — re-renders whenever any pin is added, voted on, or removed by net score. */
+/** Active pins only — what the public map and KPI counts show. Re-renders whenever any pin is added, voted on, removed, or restored. */
 export function useCommunityPins(): CommunityPin[] {
+  const all = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  return all.filter((pin) => !pin.removed);
+}
+
+/** Every pin including removed ones — for admin moderation, where a removed pin must still be visible to restore. */
+export function useAllCommunityPins(): CommunityPin[] {
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }
 
@@ -175,8 +192,30 @@ export function updateCommunityPin(
   writePins(next);
 }
 
-export function deleteCommunityPin(pinId: string): void {
+/**
+ * A resident permanently removing their own pin (gated by isOwnPin at the
+ * call site) — their own choice about their own content, not part of the
+ * anti-abuse safety net, so unlike admin/net-score removal there's nothing
+ * to restore.
+ */
+export function deleteOwnPin(pinId: string): void {
   writePins(getSnapshot().filter((pin) => pin.id !== pinId));
+}
+
+/** Admin's own manual removal — PRD Anti-Abuse layer 7/10's human override. Soft-delete so it can be undone via restoreCommunityPin. */
+export function removePinByAdmin(pinId: string): void {
+  const next = getSnapshot().map((pin) =>
+    pin.id === pinId ? { ...pin, removed: true, removedReason: "admin" as const } : pin
+  );
+  writePins(next);
+}
+
+/** Clears a removal (net-score or admin) — the other half of "admin can remove or restore any pin". */
+export function restoreCommunityPin(pinId: string): void {
+  const next = getSnapshot().map((pin) =>
+    pin.id === pinId ? { ...pin, removed: false, removedReason: undefined } : pin
+  );
+  writePins(next);
 }
 
 function readVotes(): Record<string, 1 | -1> {
@@ -207,7 +246,10 @@ export function hasVotedOnPin(pinId: string): boolean {
  * Casts a vote and applies net-score removal in one step (downvotes
  * exceeding upvotes by NET_SCORE_REMOVAL_THRESHOLD removes the pin) — a
  * well-corroborated pin isn't killed by a handful of bad-faith downvotes,
- * per PRD Anti-Abuse layer 10. No-ops if this device already voted on this pin.
+ * per PRD Anti-Abuse layer 10. Removal is a soft delete (see CommunityPin.removed)
+ * so admin can restore a pin a brigading attack took down wrongly — the same
+ * Human Override principle the alert pipeline already has. No-ops if this
+ * device already voted on this pin.
  * PRD also calls for notifying the pin's creator on removal by "reusing the
  * push-notification pipeline" — deferred, since Phase 1 has no real push
  * infrastructure for a resident-side removal notice to reuse yet.
@@ -216,17 +258,19 @@ export function voteOnPin(pinId: string, direction: 1 | -1): void {
   const votes = readVotes();
   if (pinId in votes) return;
 
-  const next = getSnapshot()
-    .map((pin) =>
-      pin.id === pinId
-        ? {
-            ...pin,
-            upvotes: pin.upvotes + (direction === 1 ? 1 : 0),
-            downvotes: pin.downvotes + (direction === -1 ? 1 : 0),
-          }
-        : pin
-    )
-    .filter((pin) => pin.downvotes - pin.upvotes < NET_SCORE_REMOVAL_THRESHOLD);
+  const next = getSnapshot().map((pin) => {
+    if (pin.id !== pinId) return pin;
+    const upvotes = pin.upvotes + (direction === 1 ? 1 : 0);
+    const downvotes = pin.downvotes + (direction === -1 ? 1 : 0);
+    const netRemoved = downvotes - upvotes >= NET_SCORE_REMOVAL_THRESHOLD;
+    return {
+      ...pin,
+      upvotes,
+      downvotes,
+      removed: netRemoved || pin.removed,
+      removedReason: netRemoved ? "net_score" : pin.removedReason,
+    };
+  });
 
   votes[pinId] = direction;
   writeVotes(votes);
