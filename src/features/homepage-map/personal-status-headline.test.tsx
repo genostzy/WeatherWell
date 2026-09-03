@@ -9,26 +9,24 @@ import type { Zone } from "@/lib/types";
 const SAFE_ZONE: Zone = { ...MOCK_ZONES[0], id: "zone-with-no-alert" };
 
 describe("PersonalStatusHeadline", () => {
-  it("shows 'You are safe' for a zone with no active alert", () => {
+  it("shows 'Safe' for a zone with no active alert", () => {
     render(<PersonalStatusHeadline zone={SAFE_ZONE} />);
-    expect(screen.getByRole("heading", { name: "You are safe" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Safe" })).toBeInTheDocument();
   });
 
-  it("shows a cautionary headline for an orange alert (zone-1)", () => {
+  it("shows 'Cautionary' for an orange alert (zone-1)", () => {
     render(<PersonalStatusHeadline zone={MOCK_ZONES[0]} />);
-    expect(
-      screen.getByRole("heading", { name: "Stay alert in your area" })
-    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Cautionary" })).toBeInTheDocument();
   });
 
-  it("shows a dangerous headline for a red alert (zone-2)", () => {
+  it("shows 'Dangerous' for a red alert (zone-2)", () => {
     render(<PersonalStatusHeadline zone={MOCK_ZONES[1]} />);
-    expect(screen.getByRole("heading", { name: "Danger in your area" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Dangerous" })).toBeInTheDocument();
   });
 
-  it("shows an evacuate headline for an evacuate alert (zone-3)", () => {
+  it("shows 'Hazardous' for an evacuate alert (zone-3)", () => {
     render(<PersonalStatusHeadline zone={MOCK_ZONES[2]} />);
-    expect(screen.getByRole("heading", { name: "Evacuate now" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Hazardous" })).toBeInTheDocument();
   });
 
   it("shows the zone name under the headline", () => {
@@ -42,6 +40,6 @@ describe("PersonalStatusHeadline", () => {
         <PersonalStatusHeadline zone={SAFE_ZONE} />
       </LanguageProvider>
     );
-    expect(screen.getByRole("heading", { name: "Ligtas ka" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Ligtas" })).toBeInTheDocument();
   });
 });

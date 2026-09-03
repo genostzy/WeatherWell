@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { HomepageMap } from "./homepage-map";
 import { MOCK_ZONES } from "@/lib/mock-data";
 import { LanguageProvider } from "@/features/i18n/language-provider";
@@ -44,5 +45,27 @@ describe("HomepageMap", () => {
     // Filipino must show the localized word, not the bare English "N" code.
     expect(screen.getByText(/Hilaga/)).toBeInTheDocument();
     expect(screen.queryByText(/\bN\b/)).not.toBeInTheDocument();
+  });
+
+  it("finds a hazard-free evacuation route when the default one crosses a hazard", async () => {
+    const user = userEvent.setup();
+    render(<HomepageMap zones={MOCK_ZONES} />);
+
+    // zone-1 (the default route) is tuned to cross a hazard on its own route.
+    expect(screen.getByText(/passes through a hazardous area/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /find safe evacuation center/i }));
+
+    expect(screen.queryByText(/passes through a hazardous area/i)).not.toBeInTheDocument();
+  });
+
+  it("reports when no zone is currently Safe", async () => {
+    const user = userEvent.setup();
+    render(<HomepageMap zones={MOCK_ZONES} />);
+
+    // All three mock zones carry an active alert, so none qualify as Safe.
+    await user.click(screen.getByRole("button", { name: /^find safe area$/i }));
+
+    expect(screen.getByText(/no zone is currently safe/i)).toBeInTheDocument();
   });
 });
