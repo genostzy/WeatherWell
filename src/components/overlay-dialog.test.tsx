@@ -55,6 +55,24 @@ describe("OverlayDialog", () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
+  it("focuses the first focusable element in the content, not the close button", () => {
+    render(
+      <OverlayDialog onClose={() => {}} label="Test" closeLabel="Dismiss">
+        <button type="button">First field</button>
+      </OverlayDialog>
+    );
+    expect(screen.getByRole("button", { name: "First field" })).toHaveFocus();
+  });
+
+  it("falls back to the close button when the content has nothing focusable", () => {
+    render(
+      <OverlayDialog onClose={() => {}} label="Test" closeLabel="Dismiss">
+        <p>No focusable content</p>
+      </OverlayDialog>
+    );
+    expect(screen.getByRole("button", { name: "Dismiss" })).toHaveFocus();
+  });
+
   it("closes from the close button", async () => {
     const onClose = vi.fn();
     const user = userEvent.setup();

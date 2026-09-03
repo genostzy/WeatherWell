@@ -30,6 +30,12 @@ export function OverlayDialog({
   className?: string;
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
+  // The close button is rendered before {children} in DOM order, so a plain
+  // "first focusable in the dialog" query lands on it instead of the actual
+  // content — a keyboard user's first Enter/Space dismisses the dialog
+  // instead of reaching the form. Query this content wrapper first so the
+  // dismiss control is reachable by Tab but never the initial landing spot.
+  const contentRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
   // Consumers pass a fresh onClose identity every render (inline arrows, or
@@ -46,12 +52,14 @@ export function OverlayDialog({
     // Remember what had focus before the dialog opened, so we can restore it on close.
     previousFocusRef.current = document.activeElement as HTMLElement;
 
-    // Focus the first focusable element inside the dialog.
+    // Focus the first focusable element in the actual content, falling back
+    // to the dialog's own controls (e.g. the close button) only if the
+    // content has nothing focusable at all.
     const dialog = dialogRef.current;
-    if (dialog) {
-      const firstFocusable = dialog.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
-      firstFocusable?.focus();
-    }
+    const firstFocusable =
+      contentRef.current?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR) ??
+      dialog?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
+    firstFocusable?.focus();
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
@@ -111,7 +119,9 @@ export function OverlayDialog({
         >
           <X aria-hidden="true" className="h-4 w-4" />
         </button>
-        {children}
+        <div ref={contentRef} className="contents">
+          {children}
+        </div>
       </div>
     </div>
   );

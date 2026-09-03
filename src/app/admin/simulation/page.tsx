@@ -204,7 +204,10 @@ export default function AdminSimulationPage() {
     if (cascade) {
       scheduleStep("cascade", 9500);
     }
-    scheduleStep("complete", cascade ? 11000 : 9500);
+    // Always 1500ms after the cascade-check point, whether or not a cascade
+    // actually fired — matches the original nested-setTimeout chain, where
+    // "complete" was scheduled unconditionally outside the cascade branch.
+    scheduleStep("complete", 11000);
   };
 
   const resetSimulation = () => {
