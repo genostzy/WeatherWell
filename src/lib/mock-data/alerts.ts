@@ -6,8 +6,8 @@ export const MOCK_ALERTS: AlertRecord[] = [
     zoneId: "zone-1",
     severity: "orange",
     message: {
-      en: "Water levels rising near Barangay Nilombot, Mapandan. Monitor conditions and prepare to evacuate.",
-      fil: "Tumataas ang tubig malapit sa Barangay Nilombot, Mapandan. Bantayan ang sitwasyon at maghanda nang lumikas.",
+      en: "Water levels rising near Barangay Nilombot, Mapandan. Monitor conditions and prepare to evacuate. (Orange Rainfall Warning level.)",
+      fil: "Tumataas ang tubig malapit sa Barangay Nilombot, Mapandan. Bantayan ang sitwasyon at maghanda nang lumikas. (Antas ng Orange Rainfall Warning.)",
     },
     source: "auto_crowdsourced",
     confidence: "estimated",
@@ -20,8 +20,8 @@ export const MOCK_ALERTS: AlertRecord[] = [
     zoneId: "zone-2",
     severity: "red",
     message: {
-      en: "Waist-deep flooding reported in Barangay Poblacion, Mangaldan. Move to the evacuation center now.",
-      fil: "May baha na hanggang baywang sa Barangay Poblacion, Mangaldan. Pumunta na sa evacuation center ngayon.",
+      en: "Waist-deep flooding reported in Barangay Poblacion, Mangaldan. Move to the evacuation center now. (Red Rainfall Warning level.)",
+      fil: "May baha na hanggang baywang sa Barangay Poblacion, Mangaldan. Pumunta na sa evacuation center ngayon. (Antas ng Red Rainfall Warning.)",
     },
     source: "auto_crowdsourced",
     confidence: "estimated",
@@ -48,8 +48,8 @@ export const MOCK_ALERTS: AlertRecord[] = [
     zoneId: "zone-4",
     severity: "yellow",
     message: {
-      en: "Light rainfall building near Barangay Poblacion, Santa Barbara. Stay alert for updates.",
-      fil: "Unti-unting lumalakas ang ulan malapit sa Barangay Poblacion, Santa Barbara. Manatiling alerto.",
+      en: "Light rainfall building near Barangay Poblacion, Santa Barbara. Stay alert for updates. (Yellow Rainfall Warning level.)",
+      fil: "Unti-unting lumalakas ang ulan malapit sa Barangay Poblacion, Santa Barbara. Manatiling alerto. (Antas ng Yellow Rainfall Warning.)",
     },
     source: "auto_crowdsourced",
     confidence: "estimated",

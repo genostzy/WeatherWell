@@ -3,10 +3,17 @@
 import { BackLink } from "@/components/back-link";
 import { EvacuationInstructions } from "@/features/evacuation/evacuation-instructions";
 import { EmergencyCard } from "@/features/evacuation/emergency-card";
+import { CheckInPanel } from "@/features/evacuation/check-in-panel";
 import { useSelectedZone } from "@/features/zones/use-selected-zone";
+import { useZoneOverrides, resolveEffectiveAlert } from "@/lib/zone-overrides";
+import { getZoneStatus } from "@/lib/zone-status";
 
 export default function EvacuationPage() {
   const zone = useSelectedZone();
+  const overrides = useZoneOverrides();
+  const alert = resolveEffectiveAlert(zone.id, overrides[zone.id]?.alertSeverity);
+  const status = getZoneStatus(alert);
+  const showCheckIn = status === "dangerous" || status === "hazardous";
 
   return (
     <main className="flex flex-1 flex-col items-center gap-6 p-4 sm:p-6 lg:p-8">
@@ -14,7 +21,10 @@ export default function EvacuationPage() {
       <h1 className="text-lg font-semibold md:text-xl">Evacuation — {zone.name}</h1>
       <div className="grid w-full max-w-md gap-6 lg:max-w-3xl lg:grid-cols-2 lg:items-start">
         <EvacuationInstructions zone={zone} />
-        <EmergencyCard zone={zone} />
+        <div className="space-y-6">
+          <EmergencyCard zone={zone} />
+          {showCheckIn && <CheckInPanel zoneId={zone.id} />}
+        </div>
       </div>
     </main>
   );

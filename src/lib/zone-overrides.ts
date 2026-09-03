@@ -2,7 +2,7 @@
 
 import { getActiveAlertForZone } from "./mock-data";
 import { createLocalStorageStore } from "./local-storage-store";
-import type { Severity } from "./severity";
+import { PAGASA_RAINFALL_WARNING_LABEL, SEVERITY_ACTION_STEP, type Severity } from "./severity";
 import type { AlertRecord, CenterStatus, LocalizedText } from "./types";
 
 /** "none" explicitly clears an active alert (admin marking the zone resolved); undefined means "no override, use the mock default". */
@@ -60,10 +60,25 @@ export function setZoneOccupancyOverride(zoneId: string, currentOccupancy: numbe
   });
 }
 
-const GENERIC_OVERRIDE_MESSAGE: LocalizedText = {
-  en: "Alert severity set by zone management.",
-  fil: "Severity ng alert na itinakda ng namamahala sa zone.",
-};
+/**
+ * The fallback alert message when an admin sets an override severity for a
+ * zone with no pre-existing mock alert to reuse. Includes the same action
+ * step and PAGASA rainfall-warning reference every real mock alert message
+ * carries, so an override-only alert doesn't read as less informative than
+ * one that started from crowd reports (PRD Climate Resilience plan, Gap E).
+ */
+function genericOverrideMessage(severity: Severity): LocalizedText {
+  const pagasaLabel = PAGASA_RAINFALL_WARNING_LABEL[severity];
+  const actionStep = SEVERITY_ACTION_STEP[severity];
+  return {
+    en: `Alert severity set by zone management. ${actionStep.en}${
+      pagasaLabel ? ` (${pagasaLabel.en}.)` : ""
+    }`,
+    fil: `Severity ng alert na itinakda ng namamahala sa zone. ${actionStep.fil}${
+      pagasaLabel ? ` (${pagasaLabel.fil}.)` : ""
+    }`,
+  };
+}
 
 /**
  * The alert the rest of the app should actually display for a zone: the
@@ -82,7 +97,7 @@ export function resolveEffectiveAlert(
     id: base?.id ?? `override-${zoneId}`,
     zoneId,
     severity: override,
-    message: base?.message ?? GENERIC_OVERRIDE_MESSAGE,
+    message: base?.message ?? genericOverrideMessage(override),
     source: "manual",
     confidence: base?.confidence ?? "validated",
     predictedTiming: base?.predictedTiming,
