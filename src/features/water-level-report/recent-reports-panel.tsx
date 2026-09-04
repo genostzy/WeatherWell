@@ -6,7 +6,8 @@ import { Users, TriangleAlert } from "lucide-react";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { REPORT_THRESHOLD } from "@/lib/mock-data";
-import { useWaterLevelReports, getRecentReportsForZoneLive, minutesSinceReport } from "@/lib/water-level-reports";
+import { useWaterLevelReports, getRecentReportsForZoneLive } from "@/lib/water-level-reports";
+import { TimeAgo } from "@/components/time-ago";
 import { DEPTH_LABEL, DEPTH_CM, DEPTH_SEVERITY } from "@/lib/depth";
 import { SEVERITY_HEX } from "@/lib/severity";
 import type { LocalizedText, Zone } from "@/lib/types";
@@ -20,7 +21,6 @@ const NO_REPORTS: LocalizedText = {
   en: "No reports from this zone yet — yours would be the first.",
   fil: "Wala pang ulat mula sa zone na ito — ikaw ang mauuna.",
 };
-const MINUTES_AGO: LocalizedText = { en: "min ago", fil: "min ang nakaraan" };
 const OUTLIER: LocalizedText = { en: "Outlier — downweighted", fil: "Outlier — binabaan ang timbang" };
 const AGREEING: LocalizedText = { en: "agreeing reports", fil: "magkatugmang ulat" };
 const THRESHOLD_NOTE: LocalizedText = {
@@ -90,9 +90,10 @@ export function RecentReportsPanel({ zone }: { zone: Zone }) {
                         {t(OUTLIER, lang)}
                       </Badge>
                     )}
-                    <span className="text-xs text-muted-foreground tabular-nums">
-                      {minutesSinceReport(report.reportedAt)} {t(MINUTES_AGO, lang)}
-                    </span>
+                    <TimeAgo
+                      reportedAt={report.reportedAt}
+                      className="text-xs text-muted-foreground tabular-nums"
+                    />
                   </span>
                 </li>
               ))}

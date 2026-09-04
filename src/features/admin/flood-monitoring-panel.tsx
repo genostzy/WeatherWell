@@ -9,7 +9,8 @@ import { SeverityBadge } from "@/features/alerts/severity-badge";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { getHazardSusceptibilityForZone, getReportsTodayForZone, REPORT_THRESHOLD } from "@/lib/mock-data";
-import { useWaterLevelReports, getRecentReportsForZoneLive, minutesSinceReport } from "@/lib/water-level-reports";
+import { useWaterLevelReports, getRecentReportsForZoneLive } from "@/lib/water-level-reports";
+import { TimeAgo } from "@/components/time-ago";
 import { getZoneStatus, getZoneStatusColor, ZONE_STATUS_LABEL } from "@/lib/zone-status";
 import { useZoneOverrides, resolveEffectiveAlert } from "@/lib/zone-overrides";
 import { DEPTH_LABEL } from "@/lib/depth";
@@ -27,7 +28,6 @@ const NO_REPORTS: LocalizedText = { en: "No reports yet", fil: "Wala pang ulat" 
 const THRESHOLD_MET: LocalizedText = { en: "Report threshold met", fil: "Naabot ang threshold" };
 const BELOW_THRESHOLD: LocalizedText = { en: "Below threshold", fil: "Wala pa sa threshold" };
 const MANAGE: LocalizedText = { en: "Manage", fil: "Pamahalaan" };
-const MINUTES_AGO: LocalizedText = { en: "min ago", fil: "min ang nakaraan" };
 
 const SUSCEPTIBILITY_LABEL: Record<HazardRiskLevel, LocalizedText> = {
   low: { en: "Low susceptibility", fil: "Mababang panganib" },
@@ -108,8 +108,8 @@ export function FloodMonitoringPanel({ zones }: { zones: Zone[] }) {
               <p className="text-xs text-muted-foreground">
                 {recent.length > 0 ? (
                   <>
-                    {t(LATEST_REPORT, lang)}: {t(DEPTH_LABEL[recent[0].depthLevel], lang)} ·{" "}
-                    {minutesSinceReport(recent[0].reportedAt)} {t(MINUTES_AGO, lang)}
+                    {t(LATEST_REPORT, lang)}: {t(DEPTH_LABEL[recent[0].depthLevel], lang)}{" "}
+                    <TimeAgo reportedAt={recent[0].reportedAt} prefix="· " />
                   </>
                 ) : (
                   t(NO_REPORTS, lang)
