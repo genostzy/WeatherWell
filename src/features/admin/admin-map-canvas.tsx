@@ -96,6 +96,10 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
   const center: [number, number] = [zones[0].lat, zones[0].lng];
   const zoneById = new Map(zones.map((zone) => [zone.id, zone]));
 
+  /** The risk score's cascade factor must follow the operator's own overrides, not the mock data underneath them. */
+  const hasEffectiveAlert = (zoneId: string) =>
+    resolveEffectiveAlert(zoneId, overrides[zoneId]?.alertSeverity) !== undefined;
+
   function toggleLayer(key: keyof LayerVisibility) {
     setLayers((current) => ({ ...current, [key]: !current[key] }));
   }
@@ -164,7 +168,9 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
         const alert = resolveEffectiveAlert(zone.id, override);
         const status = getZoneStatus(alert);
         const label = `${zone.name} — ${t(ZONE_STATUS_LABEL[status], lang)}`;
-        const riskScore = computeZoneState(buildZoneInputForZone(zone, zones)).riskScore;
+        const riskScore = computeZoneState(
+          buildZoneInputForZone(zone, zones, hasEffectiveAlert)
+        ).riskScore;
         return (
           <Marker
             key={`status-${zone.id}`}

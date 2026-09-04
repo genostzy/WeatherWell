@@ -66,6 +66,13 @@ function loadServiceWorker(options: {
       addAll: async (urls: string[]) => {
         for (const url of urls) entries.set(url, `precached:${url}`);
       },
+      add: async (url: string) => {
+        const res = await fetchImpl(url);
+        // Mirrors the real Cache.add, which rejects rather than storing a
+        // non-ok response — the behaviour the install path has to survive.
+        if (res.status !== 200) throw new Error(`bad response for ${url}`);
+        entries.set(url, res.body);
+      },
     };
   }
 
@@ -217,6 +224,42 @@ describe("service worker request routing", () => {
     const result = await handleFetch(listeners, { url: `${ORIGIN}/api/report`, method: "POST" });
 
     expect(result).toBeUndefined();
+  });
+});
+
+describe("service worker install", () => {
+  it("still caches every other route when one of them fails", async () => {
+    // cache.addAll is all-or-nothing: one route answering non-200 during a
+    // deploy would reject, fail the install, and leave the worker inactive —
+    // no cache, no fetch handler, no offline support, and nothing surfacing
+    // the failure. A bad route must cost only itself.
+    const { listeners, store } = loadServiceWorker({
+      fetch: async (url) => (url === "/admin/map" ? response("boom", 500) : response("ok")),
+    });
+
+    const waits: Promise<unknown>[] = [];
+    listeners.install({ waitUntil: (p: Promise<unknown>) => waits.push(p) });
+    await Promise.all(waits);
+
+    const shell = store.get(SHELL_CACHE)!;
+    expect(shell.has("/admin/map")).toBe(false);
+    expect(shell.has("/")).toBe(true);
+    expect(shell.has("/evacuation")).toBe(true);
+    expect(shell.size).toBeGreaterThanOrEqual(6);
+  });
+
+  it("resolves rather than rejecting when a route fails", async () => {
+    // A rejected waitUntil is what aborts the install.
+    const { listeners } = loadServiceWorker({
+      fetch: async () => {
+        throw new Error("offline during install");
+      },
+    });
+
+    const waits: Promise<unknown>[] = [];
+    listeners.install({ waitUntil: (p: Promise<unknown>) => waits.push(p) });
+
+    await expect(Promise.all(waits)).resolves.toBeDefined();
   });
 });
 

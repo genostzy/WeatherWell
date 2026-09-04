@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { routeCrossesHazard } from "./route-hazard";
-import { MOCK_ZONES } from "@/lib/mock-data";
+import { MOCK_ZONES, getActiveAlertForZone } from "@/lib/mock-data";
+import { getZoneStatus } from "@/lib/zone-status";
 import type { Zone } from "@/lib/types";
 
 /**
@@ -32,13 +33,16 @@ function syntheticZone(evacuationRoutePath: [number, number][]): Zone {
   };
 }
 
+/** The status every resident-facing surface shows, with no operator override set. */
+const mockStatusOf = (zoneId: string) => getZoneStatus(getActiveAlertForZone(zoneId));
+
 describe("routeCrossesHazard", () => {
   it("returns true when a route waypoint passes near a dangerous/hazardous zone", () => {
     const routeZone = syntheticZone([
       [zone2.lat, zone2.lng],
       [zone2.lat + 0.001, zone2.lng + 0.001],
     ]);
-    expect(routeCrossesHazard(routeZone, [routeZone, zone2, zone3])).toBe(true);
+    expect(routeCrossesHazard(routeZone, [routeZone, zone2, zone3], mockStatusOf)).toBe(true);
   });
 
   it("returns false when every waypoint stays clear of any dangerous/hazardous zone", () => {
@@ -46,12 +50,30 @@ describe("routeCrossesHazard", () => {
       [zone2.lat + 5, zone2.lng + 5],
       [zone3.lat + 5, zone3.lng + 5],
     ]);
-    expect(routeCrossesHazard(routeZone, [routeZone, zone2, zone3])).toBe(false);
+    expect(routeCrossesHazard(routeZone, [routeZone, zone2, zone3], mockStatusOf)).toBe(false);
+  });
+
+  it("sees a zone an operator has escalated, not just the mock status", () => {
+    // The regression this signature exists for. zone-4 is only Cautionary in
+    // mock data, so reading mock alerts directly says the route is clear. An
+    // operator who has just declared it Hazardous must be believed, or a
+    // resident is routed past a zone the operator is evacuating.
+    const zone4 = MOCK_ZONES.find((z) => z.id === "zone-4")!;
+    const routeZone = syntheticZone([
+      [zone4.lat, zone4.lng],
+      [zone4.lat + 0.001, zone4.lng + 0.001],
+    ]);
+
+    expect(routeCrossesHazard(routeZone, [routeZone, zone4], mockStatusOf)).toBe(false);
+
+    const withOperatorEscalation = (zoneId: string) =>
+      zoneId === "zone-4" ? ("hazardous" as const) : mockStatusOf(zoneId);
+    expect(routeCrossesHazard(routeZone, [routeZone, zone4], withOperatorEscalation)).toBe(true);
   });
 
   it("ignores the route zone's own status when checking itself", () => {
     // zone-3 itself is at evacuate/hazardous status, but passing just itself
     // (no "other" zones) should never trip.
-    expect(routeCrossesHazard(zone3, [zone3])).toBe(false);
+    expect(routeCrossesHazard(zone3, [zone3], mockStatusOf)).toBe(false);
   });
 });

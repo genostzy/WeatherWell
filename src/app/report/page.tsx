@@ -74,7 +74,16 @@ export default function ReportPage() {
   const status = getZoneStatus(alert);
   const statusColor = getZoneStatusColor(alert);
   const rainfall = getRainfallForZone(zone.id);
-  const centerStatus = resolveEffectiveCenterStatus(zone.centerStatus, overrides[zone.id]?.centerStatus);
+  // Capacity and occupancy are not optional in practice: without them a
+  // tracked headcount is skipped and this page shows the zone's default while
+  // every other surface shows the derived status, so the same centre reads
+  // "Full" on the evacuation page and "Space available" here.
+  const centerStatus = resolveEffectiveCenterStatus(
+    zone.centerStatus,
+    overrides[zone.id]?.centerStatus,
+    zone.evacuationCenterCapacity,
+    overrides[zone.id]?.currentOccupancy
+  );
 
   return (
     <main className="flex flex-1 flex-col items-center gap-6 p-4 sm:p-6 lg:p-8">

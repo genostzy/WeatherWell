@@ -93,14 +93,25 @@ export function resolveEffectiveAlert(
   if (override === "none") return undefined;
   const base = getActiveAlertForZone(zoneId);
   if (!override) return base;
+
+  // An alert's wording describes the severity it was written for: the
+  // `evacuate` copy says "Evacuate immediately", the `yellow` copy says "Stay
+  // alert for updates". Carrying that text onto a different severity puts the
+  // badge and the body in direct contradiction — an operator downgrading a
+  // zone would leave residents reading "Evacuate immediately" under an
+  // "Advisory" badge, and escalating one would order evacuation above copy
+  // telling them to stay put. So the base copy survives only while the
+  // severity it was written for does.
+  const keepsBaseSeverity = base?.severity === override;
+
   return {
     id: base?.id ?? `override-${zoneId}`,
     zoneId,
     severity: override,
-    message: base?.message ?? genericOverrideMessage(override),
+    message: keepsBaseSeverity && base ? base.message : genericOverrideMessage(override),
     source: "manual",
     confidence: base?.confidence ?? "validated",
-    predictedTiming: base?.predictedTiming,
+    predictedTiming: keepsBaseSeverity ? base?.predictedTiming : undefined,
     issuedAt: base?.issuedAt ?? new Date().toISOString(),
     isActive: true,
   };
@@ -124,12 +135,19 @@ export function deriveCenterStatusFromOccupancy(capacity: number, occupancy: num
  * headcount is being tracked (capacity + occupancy both known), that
  * derives the status directly — otherwise falls back to the manual
  * centerStatus override, then the zone's own mock default.
+ *
+ * capacity and occupancy are required rather than optional even though both
+ * accept undefined. Omitting them silently skipped a tracked headcount, so a
+ * caller that simply forgot got a plausible-looking wrong answer instead of an
+ * error — which is how one page came to show "Space available" for a centre
+ * every other surface was reporting as full. Passing undefined explicitly is
+ * a decision; leaving the arguments off was an accident waiting to repeat.
  */
 export function resolveEffectiveCenterStatus(
   zoneDefault: CenterStatus,
   override: CenterStatus | undefined,
-  capacity?: number,
-  occupancy?: number
+  capacity: number | undefined,
+  occupancy: number | undefined
 ): CenterStatus {
   if (capacity !== undefined && occupancy !== undefined) {
     return deriveCenterStatusFromOccupancy(capacity, occupancy);

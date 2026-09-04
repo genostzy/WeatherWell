@@ -97,7 +97,11 @@ export default function AdminPage() {
     );
     return status !== "space_available";
   }).length;
-  const zoneStates = MOCK_ZONES.map((zone) => computeZoneState(buildZoneInputForZone(zone, MOCK_ZONES)));
+  const hasEffectiveAlert = (zoneId: string) =>
+    resolveEffectiveAlert(zoneId, overrides[zoneId]?.alertSeverity) !== undefined;
+  const zoneStates = MOCK_ZONES.map((zone) =>
+    computeZoneState(buildZoneInputForZone(zone, MOCK_ZONES, hasEffectiveAlert))
+  );
   const highestRiskState = zoneStates.reduce((highest, state) =>
     state.riskScore > highest.riskScore ? state : highest
   );

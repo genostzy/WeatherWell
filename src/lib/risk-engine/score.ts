@@ -4,7 +4,6 @@ import {
   hasThunderstormWatch,
   getHazardSusceptibilityForZone,
   getReportsTodayForZone,
-  getActiveAlertForZone,
   REPORT_THRESHOLD,
 } from "../mock-data";
 import type { Zone } from "../types";
@@ -99,10 +98,21 @@ export function computeZoneState(input: ZoneInput): ZoneState {
  * requiring a separate upstream-state parameter; see plan doc's "Cascade
  * resolution" note for why a general topological sort isn't warranted for
  * a 4-node linear chain.
+ *
+ * `upstreamHasActiveAlert` is a required parameter rather than a defaulted
+ * one. It used to read the mock alert directly, so the cascade factor ignored
+ * an operator clearing or raising the upstream zone's alert and the dashboard
+ * tile silently disagreed with the operator's own decision. A default would
+ * have let a future call site reintroduce exactly that, quietly; requiring it
+ * forces each caller to say which notion of "alerting" it means.
  */
-export function buildZoneInputForZone(zone: Zone, allZones: Zone[]): ZoneInput {
+export function buildZoneInputForZone(
+  zone: Zone,
+  allZones: Zone[],
+  upstreamHasActiveAlert: (zoneId: string) => boolean
+): ZoneInput {
   const upstreamZone = allZones.find((z) => z.downstreamZoneId === zone.id);
-  const cascadeFromUpstream = upstreamZone ? getActiveAlertForZone(upstreamZone.id) !== undefined : false;
+  const cascadeFromUpstream = upstreamZone ? upstreamHasActiveAlert(upstreamZone.id) : false;
 
   return {
     zoneId: zone.id,

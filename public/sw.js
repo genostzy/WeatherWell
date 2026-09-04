@@ -49,8 +49,17 @@ const PRECACHED_ROUTES = [
 ];
 
 self.addEventListener("install", (event) => {
+  // Deliberately not cache.addAll: that is all-or-nothing, so a single route
+  // answering non-200 during a deploy would reject, fail the install, and
+  // leave the worker inactive — no cache, no fetch handler, no offline
+  // support at all, with nothing surfacing the failure. Caching route by
+  // route means a bad one costs only itself.
   event.waitUntil(
-    caches.open(SHELL_CACHE).then((cache) => cache.addAll(PRECACHED_ROUTES))
+    caches
+      .open(SHELL_CACHE)
+      .then((cache) =>
+        Promise.all(PRECACHED_ROUTES.map((route) => cache.add(route).catch(() => undefined)))
+      )
   );
   self.skipWaiting();
 });

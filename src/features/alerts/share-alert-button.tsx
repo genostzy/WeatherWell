@@ -4,6 +4,7 @@ import { Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
+import { SEVERITY_LABEL } from "@/lib/severity";
 import type { AlertRecord, LocalizedText, Zone } from "@/lib/types";
 
 const SHARE_ALERT: LocalizedText = { en: "Share Alert", fil: "Ibahagi" };
@@ -18,7 +19,12 @@ export function ShareAlertButton({
   const { lang } = useLanguage();
   const shareLabel = t(SHARE_ALERT, lang);
 
-  const shareText = `⚠️ ${alert.severity.toUpperCase()} — ${zone.name}\n${t(alert.message, lang)}\n📍 ${zone.evacuationCenterName}`;
+  // The severity has to be the label a person reads elsewhere in the app, and
+  // localised like the rest of the message. The raw enum put "YELLOW" and
+  // "EVACUATE" into the one text that leaves the app and reaches neighbours
+  // who may never have seen WeatherWell — an internal token that says nothing
+  // actionable, and that reads like a PAGASA colour code without being one.
+  const shareText = `⚠️ ${t(SEVERITY_LABEL[alert.severity], lang)} — ${zone.name}\n${t(alert.message, lang)}\n📍 ${zone.evacuationCenterName}`;
 
   const handleShare = async () => {
     if (navigator.share) {
