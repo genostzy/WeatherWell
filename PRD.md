@@ -314,8 +314,11 @@ IDEA describes this challenge as "hi-fi prototype first, then functional build, 
 ### Stage 1 — `hi-fi` · Prototype
 Every screen, on realistic mock data, no backend.
 
-**Done when:** a complete first-run click-through works from a cleared device, the operator demo is presentable, and the accessibility audit passes.
-**Status: complete.**
+**Done when:** a complete first-run click-through works from a cleared device, the operator demo is presentable, the automated accessibility sweep passes, and a review of the whole branch has been run with every finding resolved.
+
+**Status: complete.** The click-through was walked end to end from cleared storage across all nine routes. Continuous integration runs lint, type-checking, the test suite, an unused-code check and a production build on every push. The branch review raised seven correctness findings — five of them the same defect, where an operator's decision was not fully honoured downstream of the control that made it — and each is fixed with either a regression test proven to fail against the old behaviour, or a function signature that makes the mistake a compile error rather than a silently wrong answer.
+
+That last criterion is deliberately part of the bar rather than a note. Every item on the build list existed before the review, and the build still contained a path that showed residents "Evacuate immediately" under an "Advisory" badge. "Everything is built" and "everything works" are different claims, and only the second is worth making about a warning system.
 
 ### Stage 2 — `v0` · Functional build
 Real data and real offline capability. Supabase schema with Row Level Security, Server Actions, Auth, and the operator PIN gate. Service worker with Background Sync. Offline map tiles for the resident's home zone. Self-hosted OSRM for real safest-route calculation. Real PAGASA readings and real hazard data replacing the mocks. A decision on whether pin photos go live.
