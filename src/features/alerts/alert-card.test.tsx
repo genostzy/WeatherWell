@@ -2,10 +2,13 @@ import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { AlertCard } from "./alert-card";
 import { LanguageProvider } from "@/features/i18n/language-provider";
-import { MOCK_ZONES, MOCK_ALERTS } from "@/lib/mock-data";
+import { MOCK_ZONES, getActiveAlertForZone } from "@/lib/mock-data";
+import { zoneWithSeverity } from "@/test-utils/mock-fixtures";
 
-const zone = MOCK_ZONES[0];
-const alert = MOCK_ALERTS[0];
+// A red zone specifically, so the "Warning" label assertion below stays tied
+// to the severity under test rather than to whichever alert happens to be first.
+const zone = zoneWithSeverity("red");
+const alert = getActiveAlertForZone(zone.id)!;
 
 describe("AlertCard", () => {
   it("shows the zone name, severity, and English message by default", () => {

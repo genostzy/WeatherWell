@@ -3,10 +3,11 @@ import { render, screen } from "@testing-library/react";
 import { PersonalStatusHeadline } from "./personal-status-headline";
 import { LanguageProvider } from "@/features/i18n/language-provider";
 import { MOCK_ZONES, getActiveAlertForZone, getFriendlyWeatherRead } from "@/lib/mock-data";
+import { zoneWithSeverity } from "@/test-utils/mock-fixtures";
 import { t } from "@/lib/i18n";
 import type { Zone } from "@/lib/types";
 
-/** zone-1/2/3 all carry an active mock alert; this id matches none of them. */
+/** Every mock zone carries an active alert, so a Safe zone has to be synthesised — this id matches none of them. */
 const SAFE_ZONE: Zone = { ...MOCK_ZONES[0], id: "zone-with-no-alert" };
 
 describe("PersonalStatusHeadline", () => {
@@ -15,18 +16,18 @@ describe("PersonalStatusHeadline", () => {
     expect(screen.getByRole("heading", { name: "Safe" })).toBeInTheDocument();
   });
 
-  it("shows 'Cautionary' for a yellow alert (zone-4)", () => {
-    render(<PersonalStatusHeadline zone={MOCK_ZONES[3]} />);
+  it("shows 'Cautionary' for a yellow alert", () => {
+    render(<PersonalStatusHeadline zone={zoneWithSeverity("yellow")} />);
     expect(screen.getByRole("heading", { name: "Cautionary" })).toBeInTheDocument();
   });
 
-  it("shows 'Dangerous' for a red alert (zone-1)", () => {
-    render(<PersonalStatusHeadline zone={MOCK_ZONES[0]} />);
+  it("shows 'Dangerous' for a red alert", () => {
+    render(<PersonalStatusHeadline zone={zoneWithSeverity("red")} />);
     expect(screen.getByRole("heading", { name: "Dangerous" })).toBeInTheDocument();
   });
 
-  it("shows 'Hazardous' for an evacuate alert (zone-3)", () => {
-    render(<PersonalStatusHeadline zone={MOCK_ZONES[2]} />);
+  it("shows 'Hazardous' for an evacuate alert", () => {
+    render(<PersonalStatusHeadline zone={zoneWithSeverity("evacuate")} />);
     expect(screen.getByRole("heading", { name: "Hazardous" })).toBeInTheDocument();
   });
 
@@ -42,8 +43,9 @@ describe("PersonalStatusHeadline", () => {
   });
 
   it("follows a non-Safe headline with the zone's actual active alert message, not a weather read", () => {
-    render(<PersonalStatusHeadline zone={MOCK_ZONES[0]} />);
-    const alertMessage = t(getActiveAlertForZone(MOCK_ZONES[0].id)!.message, "en");
+    const alertingZone = zoneWithSeverity("red");
+    render(<PersonalStatusHeadline zone={alertingZone} />);
+    const alertMessage = t(getActiveAlertForZone(alertingZone.id)!.message, "en");
     expect(screen.getByText(alertMessage)).toBeInTheDocument();
   });
 

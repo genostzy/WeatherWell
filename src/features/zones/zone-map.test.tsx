@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ZoneMap } from "./zone-map";
 import { MOCK_ZONES } from "@/lib/mock-data";
+import { zonesWithStatus } from "@/test-utils/mock-fixtures";
 
 describe("ZoneMap", () => {
   it("renders a labeled region for every zone", () => {
@@ -47,10 +48,13 @@ describe("ZoneMap", () => {
     const user = userEvent.setup();
     const { container } = render(<ZoneMap zones={MOCK_ZONES} />);
 
-    // zone-2 and zone-3 both carry "evacuate" mock alerts (waist- and neck-deep
-    // reports respectively), so Hazardous shows two zones.
-    await user.click(screen.getByRole("button", { name: /hazardous \(2\)/i }));
-    expect(container.querySelectorAll('[data-testid="zone-region"]')).toHaveLength(2);
+    // Derived from the fixtures rather than hardcoded, so rebalancing which
+    // zones carry an "evacuate" alert doesn't break this test.
+    const hazardousCount = zonesWithStatus("hazardous").length;
+    expect(hazardousCount).toBeGreaterThan(0);
+
+    await user.click(screen.getByRole("button", { name: new RegExp(`hazardous \\(${hazardousCount}\\)`, "i") }));
+    expect(container.querySelectorAll('[data-testid="zone-region"]')).toHaveLength(hazardousCount);
 
     await user.click(screen.getByRole("button", { name: /^all/i }));
     expect(container.querySelectorAll('[data-testid="zone-region"]')).toHaveLength(
