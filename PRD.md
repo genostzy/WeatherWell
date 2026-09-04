@@ -1,80 +1,155 @@
-# PRD
+# WeatherWell — Product Requirements
 
-## WeatherWell
+*Challenge: Climate Resilience and Hydrometeorological Disaster Management*
 
-### Background
+A barangay-scale flood early-warning system built on one idea: **the neighbourhood itself becomes both the delivery network and the sensor network.**
 
-The Philippines experiences an average of twenty tropical cyclones a year. When severe typhoons strike, infrastructure collapse routinely severs internet and cellular connections, cutting off centralized, cloud-based early warning systems precisely when communities need them most. Local communities also struggle to translate broad national weather data into actionable, street-level evacuation protocols, and affordable, localized water-level sensors for real-time flood alerts remain largely unavailable.
+When a typhoon takes out the cell towers, every cloud-based warning system in the country goes quiet at the exact moment it matters. WeatherWell is designed for that moment. Alerts are cached on the device before the outage, forwarded person-to-person when the network is gone, and generated from what residents can see out their own windows — a zero-hardware substitute for water-level sensors no barangay can afford.
 
-### Why This Matters
+---
 
-- **Connectivity fails when you need it most** — existing early warning systems rely on live internet. When the network goes down during a typhoon, residents are left without guidance.
-- **National data isn't local enough** — weather bulletins give province-level warnings, not street-level "should I evacuate now?" answers.
-- **Sensors are expensive** — real water-level hardware costs more than most barangays can afford. The community itself is the best sensor.
-- **No training tool exists** — DRRMO officers have no safe way to practice issuing alerts and coordinating evacuations before a real event.
+## How to read this document
 
-**WeatherWell solves all four:** offline-first caching, crowdsourced flood reports, predictive early warning, and a built-in simulation/drill mode — all in a PWA that costs nothing to run.
+This PRD describes **what WeatherWell is and how it works** — the design, not a snapshot of today's code. It is written to stay true as the build progresses.
 
-### Governance
+Everything about the current state of implementation lives in one place: **[Build Status](#build-status)**, dated and versioned. That separation is deliberate. Adding a capability changes one row in that table; it does not make any other statement in this document false, because nothing else here claims a feature is absent.
 
-Two roles. No officers, no role-based access control.
+Two naming notes, so this document and the submitted IDEA read consistently:
 
-| Stakeholder | Role |
+- The IDEA document's **"Phase 1 (this challenge)"** means the challenge deliverable *as a whole* — the PWA with offline alerts, evacuation guidance, push with retry, and crowdsourced reporting. This document breaks that same deliverable into the four build stages IDEA names ("hi-fi prototype first, then functional build, full implementation, and final testing"). To avoid a collision, those are called **Stages 1–4** here, never "Phase 1."
+- Where IDEA says **DRRMO**, this document says **operator**. Same people; see [Who It Serves](#who-it-serves).
+
+---
+
+## The Problem
+
+The Philippines averages roughly twenty tropical cyclones a year. Four failures compound during each one:
+
+**Connectivity dies when warning matters most.** Existing early-warning systems assume a live connection to reach people. Infrastructure damage severs internet and cellular service precisely during the event they were built to warn about.
+
+**National data isn't local enough.** Bulletins warn by province. A resident needs to know whether *this street* floods and whether to leave *now* — a translation nobody performs at barangay scale.
+
+**Sensors cost more than barangays have.** Real-time water-level hardware is priced out of reach for the communities that need it most, so the ground truth simply doesn't exist.
+
+**Officers have nowhere to practise.** Disaster officers get no safe environment to rehearse issuing an alert and coordinating an evacuation before a real event forces them to do it live.
+
+---
+
+## The Solution
+
+Three mechanisms, each answering one of the failures above.
+
+### 1. Multi-channel alert delivery that survives the outage
+
+Alerts travel over live internet first, as a push notification with one retry after 60 seconds. If push fails, a mock-SMS fallback path demonstrates carrier-independent delivery. If everything fails, the alert is already cached on the device from before the outage and displays on next open, clearly labelled as last-known and possibly outdated.
+
+The final channel is human: a **Share Alert** button forwards the alert text into Messenger, WhatsApp, Viber, or SMS through the resident's own apps. The system never sends these — the resident does — which is what lets an alert keep moving through a network the system itself can no longer reach.
+
+### 2. Street-level evacuation guidance
+
+Every zone carries pre-authored evacuation instructions naming a specific centre and route, bundled ahead of time rather than computed live, so they work with no connectivity at all. Centre capacity shows as plain language — space available, limited, full — derived from a real headcount-to-capacity ratio when one is being tracked, so residents see actual spots remaining rather than a status word someone set by hand.
+
+A **safest-route** action recommends a path that avoids zones currently rated Dangerous or Hazardous rather than simply the shortest one. Alongside it, a live compass bearing and distance ("700m NE to Nilombot Elementary School") updates as the resident moves — straight-line direction, explicitly labelled as such, not a walkable path.
+
+All of this renders inside WeatherWell's own map. There is deliberately **no "open in Google Maps" handoff**, at any stage: a generic map has no idea which zones this system currently considers hazardous, and would happily route someone straight through one. Where every available path crosses a hazardous zone, the route is still shown as the best option available but visibly flagged — never presented as safe when it isn't.
+
+### 3. Crowdsourced water-level sensing
+
+Residents report flood depth against a visual reference anyone can use without training: **dry, ankle, knee, waist, neck**. Enough independent, agreeing reports in one zone cross a threshold and auto-generate an alert.
+
+This is the zero-hardware substitute for sensors. It scales instantly, costs nothing to deploy, and improves as more residents participate — but it inherits the trust problem that comes with any crowdsourced input, which is why [Anti-Abuse](#anti-abuse) is a first-class part of the design rather than an afterthought.
+
+### What makes this different
+
+Philippine tools already exist — national hazard maps, flood dashboards, cell broadcast, crowdsourced flood-report apps. Every one of them still assumes a live connection, either to reach people or to collect data. WeatherWell is built for the case where that assumption fails, and complements official sources by solving two specific problems at the moment their usual channels go dark: **distribution** and **ground truth**.
+
+---
+
+## Who It Serves
+
+| Audience | How they use it |
 |---|---|
-| **Admin (developer)** | System operator — issues alerts, edits content, moderates community pins, manages infrastructure. Protected by a 4-digit PIN (Phase 2 — Phase 1's `/admin` is an unauthenticated mock/demo surface, no real actions taken). |
-| **Residents** | End users — view alerts, report water levels, view evacuation instructions, share alerts. Guest mode default, no account required. |
+| **Residents** of flood-prone barangays | View alerts, report water levels, follow evacuation guidance, share alerts onward. Guest mode by default — no account required. |
+| **Operators** — the barangay's disaster officer (DRRMO) or a designated administrator | Issue and override alerts, track evacuation headcounts, moderate community reports, rehearse in drill mode. |
+| **Non-smartphone residents** | Reached through the community relay and printed emergency cards, not the app UI directly. |
 
-### Scope
+**On roles and access control.** The system models exactly two roles — operator and resident — with no per-officer accounts and no role-based permission tiers. This is a scale decision, not a statement about who operates it: one barangay pilot has one operator, and inventing a permission hierarchy for a single user would be complexity without a beneficiary. The operator role is precisely the DRRMO function IDEA describes. Multi-officer LGU deployments would need real per-user authentication, permissions, and audit requirements — that is a genuine future expansion, noted in [Scope Boundaries](#scope-boundaries).
 
-Software-only prototype. No physical hardware. PWA, not native app.
+---
 
-**Pilot scope:** one real barangay is the deployment target. The app itself is multi-zone from Phase 1 — four mock barangays (Mapandan, Mangaldan, Manaoag, Santa Barbara) carry the hi-fi build so zone selection, the upstream→downstream cascade chain, and the "no active alert" state are all exercisable.
+## How It Works
 
-**In scope:**
-1. Offline-first alert display (PWA with service worker cache)
-2. Push notification with retry → mock SMS fallback (demo) → offline cache
-3. Pre-authored, per-zone evacuation instructions, with headcount-derived capacity status and a resident post-evacuation check-in
-4. Interactive homepage map — live location, zone status (Safe/Cautionary/Dangerous/Hazardous), essential-service & evacuation POIs, safest-route guidance
-5. Crowdsourced water-level reporting with auto-alert trigger
-6. Community flood pins — citizen-dropped map pins (status tag, caption, optional photo), up/down voted with net-score removal; creator can edit or delete their own pin, admin can remove or restore any pin
-7. Predictive flood timing & depth (confidence-tagged)
-8. Cascade early warning (upstream → downstream)
-9. Hazard-tile map backdrop — static baseline Flood/Landslide/Storm Surge risk per zone, shown as the map's tile layer instead of drawn zone boundaries (mocked in Phase 1, real open government hazard data in Phase 2+)
-10. Current Conditions panel — read-only rainfall, wind, typhoon/tropical-storm track, and thunderstorm watch (near-real-time), plus Heat Index and a Drought/Dry-Spell Outlook (same public data family, slower refresh, informational only — no alert severity or crowd reports attached to either)
-11. Personal status headline — resident's zone status paired with a friendly weather read (Safe) or the active alert message (Cautionary/Dangerous/Hazardous), the most prominent line on the homepage
-12. Admin simulation & drill mode (6 pre-built scenarios, its own `/admin/simulation` page; PIN-protected from Phase 2, unauthenticated mock in Phase 1)
-13. Admin analytics dashboard — report/alert trend views, false-alarm rate, and a computed advisory risk score per zone, for the admin role, globally and per zone. Phase 1 ships it on mock data; Phase 3+ rewires it onto the real audit trail
-14. Share Alert button (user-initiated forwarding to Messenger/WhatsApp/Viber/SMS)
-15. Community relay system + printed emergency cards for non-smartphone residents
-16. Optional account with guest-first access (Phase 2)
+### The alert pipeline
 
-**Out of scope:**
-- Physical water-level sensor hardware
-- Live shortest/safest-path routing engine in Phase 1 (routes are pre-authored per zone→destination pair, same as evacuation instructions; a real routing engine — self-hosted, free — lands Phase 2+)
+An alert reaches a resident by one of three routes, tried in order:
 
-### Target Users
+```
+crowd reports cross threshold ─┐
+prediction engine forecast ────┼─→ alert created ─→ operator review ─→ push (retry once at 60s)
+upstream cascade warning ──────┘                                    ├─→ SMS fallback
+                                                                    └─→ device cache
+```
 
-- Residents of flood- and typhoon-prone barangays — guest mode, no account required
-- Alert captains and non-smartphone residents — served through community relay and printed emergency cards, not the app UI directly
-- The developer/admin who operates the system
+**Auto-trigger rule.** Multiple reports, different devices, same zone, within a short time window, average depth above threshold. Configurable per zone.
 
-### Design & UX
+**Conservative thresholds, tunable per zone.** Low-lying zones get lower thresholds — earlier alerts, fewer reports needed. Higher ground gets higher thresholds. The bias is deliberate and stated: *better to warn and be wrong than to miss a real event.*
 
-**shadcn/ui, High-Contrast Utility-First aesthetic. Dark-mode-default.**
+**Confidence tagging.** Estimated (no validation yet) → Validated (several real events matched) → Calibrated (many events, auto-tuned). Always shown in the UI, never hidden behind a number that implies more certainty than exists.
 
-- **Dark-mode-default** — OLED screens cut power draw significantly. Battery survival during an outage is a real design constraint.
-- **Homepage is the map** — first screen a resident sees. Top to bottom: the personal status headline (zone status + a friendly weather read or the active alert, whichever applies), a collapsed-by-default Current Conditions panel — progressive disclosure again: rainfall/wind/typhoon/heat-index/drought readings are useful, not urgent, so they don't compete for first-glance attention — then the full-bleed map itself, with a hazard-tile backdrop, zone-status/evacuation/essential-service markers, and one-tap route guidance. Alert detail, water-level report, and evacuation instructions are one tap from any marker.
-- **No drawn zone boundaries** — the map never renders barangay polygon outlines or fills. Baseline risk comes from a continuous hazard-tile backdrop, not administrative polygons; live per-zone status is a marker on top of it, not an area fill. Zone boundary data still exists and is still needed for geofencing (validating that a report or pin's GPS falls inside its claimed zone) — this removes boundaries from the map's visual rendering only, not from the data model. Simpler to build (no boundary styling/rendering work) and avoids implying false map precision at a zone's edges.
-- **Severity color system is the entire visual language** — Yellow / Orange / Red / Evacuate across alert banners, depth reference, zone status markers, buttons. One color grammar. The homepage map's Safe/Cautionary/Dangerous/Hazardous legend is a plain-language reading of this same grammar (see Zone Status Legend), not a second scale.
-- **Zone status is never color-only on the map** — a colored marker is still hard to distinguish by hue alone. Each zone's status marker pairs an icon or shape with its color, so colorblind users can read Safe/Cautionary/Dangerous/Hazardous without relying on color.
-- **A persistent marker legend** explains each map icon (zone status, evacuation center, health center, pharmacy, market, water station, barangay office) at a glance — with the hazard-tile backdrop, status markers, evacuation pins, and service markers all on one screen, an unexplained icon set would work against "large targets, minimal text," not for it.
-- **No decorative chrome** — flat shadcn components, thick borders over soft shadows (visible in sunlight), system font stack only.
-- **Progressive disclosure** — stressed user sees only the next needed action, not a dashboard.
+**Calibration loop.** After each real flood event, prediction is compared against what actually happened. Too many false alarms shifts thresholds up; missed events shift them down. Auto-adjusts within guardrails.
+
+### Prediction and cascade
+
+The prediction engine combines rainfall, terrain slope, and tidal data to estimate when flooding reaches a zone and how deep it gets. **Cascade warning** uses geography directly: an upstream zone's alert raises a heads-up downstream *before* those residents' own reports arrive, buying the lead time that matters most.
+
+### Human override — the spine of the whole design
+
+Auto-triggered alerts are a fast first response, never the final word. The operator can confirm, downgrade, or cancel any automated alert, and can remove or restore any community pin. Every automated signal in this system is explicitly advisory to a human decision.
+
+This is why the computed risk score is displayed as advisory only and drives nothing, and why community pins can never auto-promote themselves into an official alert. When an alert is downgraded, residents see it stated plainly — *"Alert downgraded — water levels below threshold"* — rather than having it silently disappear.
+
+### Anti-Abuse
+
+Crowdsourced reporting's biggest risk is fake data. Ten layers, defence in depth:
+
+| # | Layer | What it does |
+|---|---|---|
+| 1 | Geofence check | Report's GPS must fall inside the claimed zone, with generous per-zone tolerance |
+| 2 | Rate limiting | One report per device per short window |
+| 3 | Multi-report threshold | No single report triggers an alert; several independent, agreeing ones must arrive |
+| 4 | Outlier downweighting | A report disagreeing sharply with nearby ones is discounted, not deleted |
+| 5 | Device fingerprint | Random device ID raises the cost of abuse |
+| 6 | Reputation scoring | Devices whose past reports matched verified outcomes count for more. Self-correcting |
+| 7 | **Human override** | Operator can confirm, downgrade, or cancel any auto-triggered alert |
+| 8 | Audit trail | Every report retained with timestamp, location, device ID for later review |
+| 9 | Transparent downgrade | Downgrades are shown, never silent |
+| 10 | Pin vote protection | Pin votes reuse layers 1, 2 and 5. Removal triggers on **net score** — downvotes exceeding upvotes by 5 — so a well-corroborated pin survives a handful of bad-faith downvotes |
+
+Removals are **soft deletes**, both the vote-driven and operator kind, so a pin taken down wrongly by a brigading attack can be restored. That is layer 7's principle applied to community content.
+
+### Community relay
+
+Residents without smartphones are served by a low-tech, high-trust human system — coordinated with the barangay, not built in software:
+
+- **Alert captains** — three to five residents per zone with smartphones who knock on doors or call neighbours during an emergency. Trusted community members, not system accounts.
+- **Printed emergency cards** — zone name, evacuation centre, route with pictogram, hotline, QR code. Distributed during enrolment drives. The app generates these; the distribution is operational.
+- **Enrolment without a smartphone** — an alert captain or officer enters the zone assignment on the resident's behalf.
+
+---
+
+## The Resident Experience
+
+**shadcn/ui, high-contrast, utility-first. Dark-mode default.**
+
+- **Dark-mode default** — OLED screens cut power draw. Battery survival during an outage is a real design constraint, not a style preference.
+- **The homepage is the map.** Top to bottom: personal status headline, a collapsed Current Conditions panel, then the full-bleed map. Alert detail, water-level reporting, and evacuation instructions are one tap from any marker.
+- **Progressive disclosure** — a stressed user sees the next needed action, not a dashboard. Weather readings are useful but not urgent, so they don't compete for first-glance attention.
 - **Large targets, minimal text** — one-handed, injured, or shaking-hand use. Short plain-language fragments.
-- **Depth-reference visual** — adult (170cm) and child (110cm) silhouettes on a shared ground line under a single shared waterline, colored through Yellow→Orange→Red→Evacuate. At neck depth (150cm) the child is fully submerged while the adult is not.
-- **Checked under dim light and at arm's length**, not just in a bright design tool.
+- **No decorative chrome** — thick borders over soft shadows, because shadows vanish in direct sunlight. System fonts only.
+- **No drawn zone boundaries.** Baseline risk is a continuous hazard-tile backdrop; live status is a marker on top. Boundary data still exists and is still needed for geofencing — this removes boundaries from the *map's rendering*, not the data model. It avoids implying false precision at a zone's edges.
+- **Checked in dim light and at arm's length**, not only in a bright design tool.
 
-**Severity & Depth Values:**
+### Severity is one visual language
 
 | Severity | Label | Hex | Contrast |
 |---|---|---|---|
@@ -83,234 +158,235 @@ Software-only prototype. No physical hardware. PWA, not native app.
 | `red` | Warning | `#dc2626` | 4.8:1 |
 | `evacuate` | Evacuate Now | `#7f1d1d` | 10.0:1 |
 
-| Depth | Approx. depth | Maps to |
+Alert copy deliberately mirrors PAGASA's own Rainfall Warning vocabulary — Yellow, Orange, Red are the same three colours PAGASA uses on TV and radio. WeatherWell's "Evacuate Now" tier sits *above* that scale rather than pretending to be a fourth PAGASA colour. A resident should never have to reconcile two competing vocabularies mid-emergency.
+
+### The map legend is a plain-language reading of the same scale
+
+| Map label | Meaning | Severity | Colour |
+|---|---|---|---|
+| Safe | No active alert | *(zero-state, not a severity)* | Green `#22c55e` |
+| Cautionary | Early-stage risk | `yellow`, `orange` | Yellow / Orange |
+| Dangerous | Active flooding | `red` | Red |
+| Hazardous | Evacuate now | `evacuate` | Dark red |
+
+Four plain-language labels for at-a-glance reading. This is a legend simplification, not a second severity scale. Status markers **pair a shape or icon with colour**, never colour alone, so colourblind residents can read them.
+
+### Depth maps one tier hotter than it looks
+
+| Depth | Approx. | Maps to |
 |---|---|---|
 | `dry` | 0 cm | yellow |
 | `ankle` | 15 cm | orange |
 | `knee` | 45 cm | red |
-| `waist` | 90 cm | evacuate |
-| `neck` | 150 cm | evacuate |
+| `waist` | 90 cm | **evacuate** |
+| `neck` | 150 cm | **evacuate** |
 
-Shifted one severity tier earlier than a naive linear mapping would suggest: `waist` and `neck` both land on `evacuate`, not just `neck`. The depth-reference visual above exists precisely because the same nominal depth is far more dangerous for a child than an adult (a child is 110cm tall — "waist" on the adult scale is already near a child's shoulders) — waiting until the most extreme adult-scale reading to call for evacuation would already be too late for the more vulnerable person standing in the same water.
+Both `waist` and `neck` mean evacuate — shifted one tier earlier than a naive linear mapping. The reason is the depth-reference visual itself: adult (170cm) and child (110cm) silhouettes on a shared ground line under one waterline. "Waist" on the adult scale is already near a child's shoulders. Waiting for the most extreme adult-scale reading before calling for evacuation would already be too late for the more vulnerable person standing in the same water.
 
-**Homepage Map — Zone Status Legend:**
+---
 
-| Map label | Meaning | Maps to severity | Color |
-|---|---|---|---|
-| Safe | No active alert | *(zero-state, not an alert severity)* | Green `#22c55e` |
-| Cautionary | Early-stage risk | `yellow` (Advisory), `orange` (Watch) | Yellow / Orange |
-| Dangerous | Active flooding | `red` (Warning) | Red |
-| Hazardous | Evacuate now | `evacuate` (Evacuate Now) | Dark red |
+## Accessibility & Inclusion
 
-Four plain-language labels for at-a-glance map reading, in keeping with the low-literacy design principle. The underlying severity system — colors, contrast ratios, alert copy — is unchanged; this is a map-legend simplification, not a second severity scale. "Safe" is new: it names the already-existing "no active alert" state, which the zone map and admin simulation already render in green. On the homepage map this status renders as a colored marker at the zone's location, not an area fill — see "No drawn zone boundaries" above.
+Target users are a broad, often vulnerable population operating under disaster stress.
 
-### Core Features
+1. **Language** — Filipino and English from the start. Cebuano (~20M speakers) next, then the rest of the ten most-spoken Philippine languages as translation capacity allows: Ilocano, Hiligaynon, Waray, Bikol, Kapampangan, Pangasinan, Maranao, Maguindanao. This is a translation effort, not an engineering one — the localisation layer falls back to English per-string, so a language can ship with only the safety-critical strings done first (alerts, evacuation instructions, hotline) rather than waiting for full coverage.
+2. **WCAG 2.1 AA** — sufficient contrast, full keyboard navigation, screen-reader labels, minimum touch-target sizes, and no color-only signalling anywhere.
+3. **Low-literacy design** — evacuation instructions paired with pictogram cues; the depth reference is a picture, not a number.
+4. **Audio alerts** — critical alerts optionally read aloud via device TTS. Text delivery stays primary for deaf and hard-of-hearing users.
+5. **Enrolment without barriers** — the community relay and printed cards exist so that owning a smartphone is not a precondition for being warned.
 
-1. **Offline-first alert display** — PWA with service worker pre-caches latest alert and evacuation instructions. If connectivity drops, cached data continues showing.
+---
 
-2. **Push notification with retry** — Proactive delivery via Web Push API. Retried once after 60s if first attempt fails. Includes full alert content (severity, zone, depth, evacuation instruction), not just "open the app." Cache fallback if all push attempts fail. Alert copy references PAGASA's own Rainfall Warning vocabulary (Yellow/Orange/Red — the same three colors PAGASA itself uses; the app's own "Evacuate Now" tier sits above them, not as a fourth PAGASA color) and always ends with a concrete action step, so what a resident reads here matches what they'd hear on TV/radio instead of introducing a competing vocabulary.
+## Privacy & Data
 
-3. **Pre-authored evacuation instructions** — Each zone has static, pre-authored evacuation center and route, bundled ahead of time, not computed live. Center capacity shows as a plain-language status (space available/limited/full); when a real headcount is being tracked for a zone (admin-entered in Phase 1, via the evacuation management panel), that status is derived directly from the headcount-to-capacity ratio instead of needing a separate manual choice, and residents see the actual "X spots left" rather than just the status word — falls back to the existing manual status choice when no headcount is tracked. Separately, while an active Dangerous or Hazardous alert is in effect for a zone, residents can check in as "I'm safe" or "I need help" on the evacuation page; admin sees a per-zone count and a short needs-help list. This is a Phase 1 self-report only — no verification, no location check, and no real notification to responders — demonstrating the interaction pattern rather than a real accountability system.
+Location is personal data under the **Data Privacy Act of 2012 (RA 10173)**.
 
-4. **Crowdsourced water-level reporting** — Residents report water depth (dry/ankle/knee/waist/neck), geotagged and timestamped. Enough reports crossing a threshold auto-generates a zone alert. Offline reports queue via Background Sync.
+- Plain-language consent before the first location request — what is collected, why, and how. No pre-ticked boxes. A resident can decline and still see public alerts.
+- Location is used for geofence validation and zone auto-detection only, never retained beyond that purpose.
+- **The map's location dot is continuous, and consent says so.** While the map is open, position is tracked at low frequency to drive the direction-to-safety indicator, and stops when the map closes. It is never stored — it exists in memory only. The consent notice covers this separately from the one-time fetch used for zone detection.
+- Guest mode collects nothing beyond location. If an account is created, the email is for authentication only — never shared, never marketing.
+- **Community pin photos may incidentally capture identifiable people or property.** Consent and retention rules must be extended before any real photo upload ships.
 
-5. **Community flood pins** — Any resident can drop a pin on the homepage map with a status tag (Flooded / Rising / Receding / Impassable), a short caption, and an optional photo, and can view any pin's photo full-size, or edit or delete their own pin outright (device-ID authorship, same mechanism as Anti-Abuse layer 5) — a resident's own correction or takedown of their own content, distinct from the vote/admin removal below and with nothing to restore, since it's their own choice rather than part of the anti-abuse safety net. In Phase 1 the photo is attached client-side only — shown as a preview in the UI, never uploaded to any backend — so it costs nothing and needs no connectivity; whether photo upload goes live for real is a Phase 2+ decision weighed against storage cost and bandwidth during degraded connectivity. Other residents vote a pin up or down; a pin is removed once downvotes exceed upvotes by 5. The PRD's original design also called for notifying the pin's creator on removal by reusing the push-notification pipeline — deferred past Phase 1, since there's no real push infrastructure yet for a resident-side removal notice to reuse. Voting is geofenced and rate-limited exactly like water-level reports (one vote per device, only from within the pin's zone) to resist brigading. Pins are a clearly labeled, unverified community layer, separate from official Alerts — they never auto-promote into a Warning/Evacuate alert; that stays behind the existing multi-report threshold pipeline. Admin can manually remove or restore any pin, the same override the alert pipeline already has — net-score and admin removal are both soft-deletes for exactly this reason, so a pin a brigading attack took down wrongly can still be brought back.
+**Retention**
 
-6. **Predictive flood timing & depth** — Combines rainfall data, terrain slope, and tidal data to estimate when flooding will reach a zone and how deep it will get. Confidence level shown ("Estimated" until validated).
-
-7. **Cascade early warning** — Upstream zone alert triggers "heads-up" for downstream zones before their own crowd reports arrive.
-
-8. **Hazard-tile map backdrop** — Instead of drawn zone boundaries, the homepage map's persistent backdrop is a hazard-susceptibility tile shading showing each zone's baseline Flood/Landslide/Storm Surge risk (Low/Medium/High), independent of whether there's an active alert right now — a distinction between long-term hazard susceptibility and live conditions. Phase 1 mocks this styling for the four demo zones; Phase 2+ replaces it with real data from open Philippine government hazard datasets (DENR-MGB geohazard maps, PAGASA). Live per-zone alert status layers on top as a colored marker, never confused with this baseline backdrop since one is a tile fill and the other is a point marker.
-
-9. **Personal status headline** — The single most prominent line on the homepage, above the Current Conditions panel and the map: the resident's zone status (Safe / Cautionary / Dangerous / Hazardous, color-matched to the Zone Status Legend) paired with a short follow-up. When Safe, the follow-up is a friendly one-line weather read from the Current Conditions panel (e.g. "Safe — cloudy, with a bit of rain expected later"). When Cautionary, Dangerous, or Hazardous, the follow-up is the zone's actual active alert message instead of weather color — urgency is never diluted with weather trivia. Reads the zone the resident already selected during onboarding, the same zone every other page uses — not a fresh GPS lookup on every homepage load.
-
-10. **Current Conditions panel** — A compact, collapsed-by-default panel on the homepage (progressive disclosure — not a dashboard) showing near-real-time rainfall, wind, typhoon/tropical-storm track, and thunderstorm watch, read-only and sourced from the same public PAGASA/satellite data already used for flood prediction. Also shows a Heat Index reading and a Drought/Dry-Spell Outlook — same public data family, but on a much slower refresh cadence (roughly weekly, not real-time) and purely informational: no severity scale, no alert, no crowd reports, and no response coordination is attached to either — they exist to inform, not to trigger anything. When a zone's landslide susceptibility (from the Hazard-tile map backdrop) is Medium or High and rainfall is currently heavy, the panel adds a one-line caution note connecting the two — a derived read from data already collected, not a new hazard system with its own reports or thresholds. Phase 1 shows mock readings, matching the rest of the app; Phase 2+ wires in real PAGASA data.
-
-11. **Interactive homepage map** — The app's landing screen. Full-bleed map centered on the resident's live geolocation (manual pin-drop if permission is denied), backed by the hazard-tile layer (no drawn zone boundaries), with the personal status headline and Current Conditions panel available above it. Each zone's live alert status appears as a colored marker using the plain-language legend (Safe / Cautionary / Dangerous / Hazardous — see Zone Status Legend). Evacuation centers, essential-service points (health center, pharmacy, market, water refilling station, barangay office), and community flood pins are shown with distinct icons, explained by a persistent on-map legend so markers add clarity instead of clutter; tapping a marker opens its alert, evacuation, or pin detail. A "Safest Route" action recommends a path to the nearest evacuation center, favoring routes that avoid Dangerous/Hazardous zones over the merely-shortest one — pre-authored per zone→evacuation-center pair in Phase 1 (same static-route approach as evacuation instructions); routing to essential-service destinations and a real routing engine both arrive in Phase 2+. Alongside that pre-authored path, a **live direction-to-safety indicator** — compass bearing and distance, e.g. "700m NE to Nilombot Elementary School" — is computed straight from the resident's current live position to the evacuation center and updates as they move. It's pure bearing/distance math, not a routing engine, so it ships in Phase 1; it's labeled as a straight-line direction, not a walkable path, since it can't know what's physically between the resident and the center. Every bit of this routing and direction guidance renders on WeatherWell's own map, inside the app — there is no "open in a third-party maps app" option, on any phase, because a generic map has no knowledge of which zones this app currently considers Dangerous or Hazardous and could route someone straight through one; that hazard-awareness only exists here. If every path unavoidably crosses a Dangerous/Hazardous zone, that route is still shown as the best available option but visibly flagged as passing through a hazardous area — never presented as safe when it isn't. If no map tiles are cached (e.g. a fresh install with no connectivity), the homepage falls back to a simple list view of zone alerts — same data, no basemap — instead of rendering a blank map. Separately from that offline fallback, a persistent "Zones" navigation destination gives residents an always-available overview of every barangay at once — status, live conditions, baseline hazard risk, evacuation center and capacity, and community report/pin counts for each — useful for checking on other zones (family, work, the route home), not a substitute for the homepage map.
-
-12. **Zone onboarding** — GPS auto-detects likely zone, manual picker as fallback. In Phase 1 the auto-detect is a stub: a successful GPS fix proposes the first zone for the resident to confirm or correct, since matching a coordinate to a barangay needs the real boundary polygons that land with the PSGC/GeoRisk data in Phase 2. The manual picker is the real mechanism until then. Non-smartphone users enrolled by alert captain, receive printed emergency card.
-
-13. **One-tap emergency hotline** — Persistent call button to barangay emergency hotline, independent of connectivity.
-
-14. **Admin simulation & drill mode** — Dedicated `/admin/simulation` page with 6 pre-built scenarios, reached from the `/admin` monitoring dashboard. Admin selects zone and scenario, watches full alert flow unfold in real-time with explanation text. PIN-protected from Phase 2; Phase 1 ships it as an unauthenticated mock demo surface.
-
-15. **Admin analytics dashboard** — Aggregates report and alert history into trend views (reports over time per zone, alert frequency per zone with downgrades called out, false-alarm rate against the PRD's own ≤10% target) for the admin role. Phase 1 ships this on the same mock rainfall/report/alert history already used elsewhere in the app, so the layout and metrics are validated early rather than deferred entirely; Phase 3+ rewires it onto the real `audit_log` table once genuine report/alert volume exists to trend on. A per-zone version of the same trend views (plus that zone's community pins) is also reachable from each zone's own admin dashboard. The dashboard also shows a computed per-zone risk score (0–100, combining rainfall trend, crowd reports, hazard baseline, and cascade — see `src/lib/risk-engine/score.ts`) as one additional at-a-glance tile — advisory only, entirely separate from the actual alert severity residents see, which always comes from the existing Human Override–aware `resolveEffectiveAlert`. Nothing else in the app reads from this score yet; it's a first, reviewable step toward the risk-engine concept the Architecture section describes below, not a replacement for the current alert pipeline.
-
-16. **Share Alert button** — One-tap forward of alert text to any messaging app (Messenger, WhatsApp, Viber, SMS). User-initiated, viral, free.
-
-17. **Optional account** — App works fully without an account (device fingerprint, geofence, local storage). Optional email+password (Phase 2) adds cross-device sync. Guest mode is default, login prompt is dismissible.
-
-### Anti-Abuse
-
-Crowdsourced reports are the biggest fake-data risk. Layered defense:
-
-1. **Geofence check** — report must carry GPS falling inside the claimed zone's boundary. Configurable tolerance per zone (default generous).
-2. **Rate limiting** — one report per device per short window.
-3. **Multi-report threshold** — alert requires several independent, agreeing reports in the same zone; no single report triggers alone.
-4. **Outlier downweighting** — report disagreeing sharply with nearby reports is discounted.
-5. **Device fingerprint** — random device ID in localStorage raises abuse cost.
-6. **Reputation scoring** — devices with past reports matching verified outcomes count more. Self-correcting.
-7. **Human override** — auto-triggered alerts are a fast first response, not final word. Admin can confirm, downgrade, or cancel.
-8. **Audit trail** — every report retained with timestamp, location, device id for later review.
-9. **Transparent downgrade** — if alert is downgraded, shown transparently ("Alert downgraded — water levels below threshold"), not silently removed.
-10. **Pin vote protection** — community flood pin votes reuse layers 1, 2, and 5 (geofence, rate limit, device fingerprint): one vote per device per pin, only from within the pin's zone, so a single actor can't brigade a pin up or down. Removal triggers on **net score** (downvotes exceeding upvotes by 5), not a raw downvote count, so a well-corroborated pin isn't killed by a handful of bad-faith downvotes. Same human-override principle as layer 7: admin can manually remove a pin early or restore one that voting removed wrongly — a needed safety valve since layers 1, 2, and 5 aren't real until Phase 3/Final Phase (see note below).
-
-*Layers 1–3 and 8 (audit trail) ship in Phase 3; layers 4–6 ship in Final Phase. Layer 7 (human override) is the one defence already live in Phase 1 — admin severity and center-status overrides are real today (`src/lib/zone-overrides.ts`), which is why the rest of the architecture can treat it as the final authority over any automated signal. Layer 9 (transparent downgrade) is copy behaviour that lands with Phase 3's alert pipeline. Layer 10 (pin votes) ships alongside community flood pins in Phase 1 as a mock/UI-only rule. Its real enforcement follows the same two-stage schedule as the layers it reuses — geofence and rate limit in Phase 3, device-fingerprint hardening in Final Phase — so full real protection for pin votes isn't complete until Final Phase, exactly matching water-level reports' own timeline.*
-
-### Accessibility
-
-Target users are a broad, often vulnerable population under disaster stress.
-
-1. **Language** — Filipino and English baseline from Phase 1. Phase 2 adds Cebuano (~20M speakers). Phase 3/Final Phase adds the rest of the Philippines' ten most-spoken languages as translation capacity allows: Ilocano, Hiligaynon, Waray, Bikol, Kapampangan, Pangasinan, Maranao, Maguindanao. This is a content-translation effort, not a technical one — `LocalizedText`/`t()` already falls back to English for any missing translation, so a language can ship with only the safety-critical strings done first (alerts, evacuation instructions, hotline) and fill in the rest later, rather than needing every string translated before it can go live at all.
-2. **WCAG AA** — sufficient color contrast, full keyboard navigation, screen-reader labels, minimum touch target size, non-color-only signaling (e.g. the homepage map's zone-status markers pair color with an icon, not hue alone).
-3. **Low-literacy design** — evacuation instructions paired with icon/pictogram cues and the depth-reference visual, not text-only.
-4. **Audio alerts** — critical alerts can optionally be read aloud (device TTS). Text-based delivery stays primary for deaf/hard-of-hearing users.
-5. **Enrollment without barriers** — non-smartphone users served through community relay (alert captains) and printed emergency cards.
-
-### Privacy & Data
-
-Location is personal data under the **Philippines Data Privacy Act of 2012 (RA 10173)**.
-
-- Plain-language consent notice shown before first location request: what's collected, why, how — no pre-ticked boxes.
-- Location used only for geofence validation and zone auto-detection, never stored beyond what's needed.
-- **The homepage map's location dot is live** — continuous tracking (`watchPosition`, not a one-time fetch) while the map is open, stopping when the map is closed or the app is backgrounded. The consent notice covers this continuous use explicitly, distinct from the one-time fetch used for zone auto-detection. Position is never stored — it exists only in memory while the map is open.
-- If account created (Phase 2), email for authentication only — never shared, never marketing. Guest mode collects nothing beyond location (discarded after short-term period).
-- Consent and data-handling notice ships from Phase 1.
-- **Community pin photos, if they go live for real (Phase 2+ decision), may incidentally capture identifiable people or property.** Phase 1's photo attachment is a local preview only — never uploaded or stored — so this doesn't apply yet, but the consent notice and retention rules must be extended before any real photo upload ships.
-
-**Data retention:**
-
-| Data type | Retention | Reason |
+| Data | Retention | Reason |
 |---|---|---|
 | Location (from reports) | Short-term | Geofence validation only |
 | Crowd reports | Medium-term | Calibration loop |
 | Predictions / alerts | Long-term | Model improvement |
 | Device fingerprints | Until user clears | Rate limiting |
-| Alerts (issued) | Indefinite | Historical record |
-| Community pins | Short-term — auto-expires if not already removed by votes | Reflects current conditions, not a permanent record |
-| Pin votes | Tied to parent pin's lifetime | Vote tally only meaningful while the pin is live |
+| Alerts issued | Indefinite | Historical record |
+| Community pins | Short-term, auto-expiring | Reflects current conditions, not a permanent record |
+| Pin votes | Tied to parent pin | Tally only meaningful while the pin is live |
 
-**RA 10173 Article 16 compliance:** data export and deletion endpoints available from Phase 2, associated with device ID. No phone numbers stored.
+**RA 10173 Article 16** — data export and deletion, keyed to device ID. No phone numbers stored.
 
-### Delivery Channels
+---
 
-Push notification is the only proactive channel. This makes push reliability critical.
+## Architecture
 
-- **Retry:** if first push attempt fails, service worker retries once after 60 seconds.
-- **Mock SMS (demo):** UI shows "SMS sent ✓" to demonstrate fallback path. No real SMS sent. Real provider can be plugged in Phase 3+.
-- **Share Alert:** one-tap forward to any installed messaging app. User-initiated — the system doesn't send messages, the user does.
-- **Cache fallback:** if all push attempts fail and user hasn't opened app, alert stored in service worker cache, displayed on next open, marked "last known, may be outdated."
+**Frontend** — Next.js App Router, TypeScript strict, feature-based structure. shadcn/ui with Tailwind.
 
-### Community Relay
+**Backend** — Supabase: Postgres with Row Level Security, Server Actions, and Auth for optional accounts. Core tables: `zones`, `alerts`, `water_level_reports`, `push_subscriptions`, `audit_log`, `evacuation_centers`, `points_of_interest`, `community_pins`, `pin_votes`, `hazard_susceptibility`, `evacuation_check_ins`, `users`.
 
-Residents without smartphones are served through a low-tech, high-trust community relay system:
+**Map** — Leaflet with OpenStreetMap raster tiles: free and key-less, subject to OSM's fair-use policy. Self-hosted or paid tiles are the answer if traffic outgrows pilot scale.
 
-- **Alert captains:** 3–5 residents per zone with smartphones who knock on doors or call neighbors during emergencies. Trusted community members, not system accounts.
-- **Printed emergency cards:** zone name, evacuation center, route (with pictogram), hotline, QR code. Distributed during enrollment drives.
-- **Enrollment without a smartphone:** alert captain or officer enters zone assignment on their behalf. Resident receives printed card.
+**Offline** — service worker, cache-first for zone and evacuation data, network-first with cache fallback for alerts, Background Sync for reports submitted while offline. Basemap tiles need connectivity until per-zone tile caching ships; with no tiles cached at all, the homepage degrades to a plain list of zone alerts rather than a blank map.
 
-This is an operational system, not a technical one — requires coordination with the barangay during pilot.
+**Push** — Web Push API with VAPID keys; the service worker handles push events and retries once after 60 seconds.
 
-### Architecture
+**Routing** — pre-authored static routes to each zone's evacuation centre, plus a client-side bearing/distance calculation (haversine, pure arithmetic, no engine). A self-hosted OSRM instance later extends this to real path-finding with hazardous zones modelled as a routing cost penalty.
 
-- **Frontend:** Next.js (App Router), TypeScript strict, RSC-first, feature-based structure
-- **UI:** shadcn/ui + Tailwind, High-Contrast theme, dark-mode-default
-- **Backend/data:** Supabase — tables for `zones`, `alerts`, `water_level_reports`, `push_subscriptions`, `audit_log`, `evacuation_centers`, `points_of_interest`, `community_pins`, `pin_votes`, `hazard_susceptibility`, `users` (Phase 2); Row Level Security; Server Actions
-- **Map:** Leaflet + OpenStreetMap raster tiles — free, no API key, subject to OSM's fair-use tile policy (self-hosted or paid tile provider recommended if traffic grows beyond prototype/pilot scale)
-- **Community pins:** citizen-created markers (status tag, caption, optional photo) rendered on the Leaflet map alongside evacuation/POI markers. Phase 1's photo attachment is client-side only — a local preview, never uploaded — so it has no storage cost and works fully offline; real photo storage (Supabase Storage) is a Phase 2+ decision, weighed against its free-tier limits and upload bandwidth during degraded connectivity
-- **Routing:** Phase 1 uses pre-authored static routes to each zone's evacuation center only, same as evacuation instructions, plus a live bearing/distance indicator computed client-side from the resident's current position to the evacuation center (haversine distance + compass bearing — pure math, no routing engine). Phase 2+ extends routing to essential-service POIs and adds a self-hosted OSRM (Open Source Routing Machine) instance — free — with Dangerous/Hazardous zones modeled as a routing cost penalty, so the "safest route" avoids them rather than just finding the shortest path. All of it renders on WeatherWell's own map inside the app in every phase — never a handoff to a third-party maps app, since the hazard-avoidance is only possible using this app's own zone-status data, which no external map has
-- **Offline:** Service worker cache (cache-first for zones/evacuation data; network-first with cache fallback for alerts); Background Sync for offline report submission. Map basemap tiles need live connectivity to load in Phase 1 — offline tile caching for the resident's home zone ships in Phase 2. If no tiles are cached at all (e.g. a fresh install offline), the homepage renders a plain list view of zone alerts instead of a blank map
-- **Push:** Web Push API (VAPID keys), service worker handles push events, retries once after 60s
-- **SMS (Phase 1 mock):** UI displays "SMS sent ✓"; real provider plugged in Phase 3+
-- **Prediction engine:** server-side. Combines rainfall + slope + tides → timing + depth per zone. Conservative thresholds, confidence tagging, calibration loop
-- **Cascade warning:** upstream zone alert → downstream "heads-up" before crowd reports arrive
-- **Admin analytics dashboard:** hand-drawn SVG/CSS charts (no charting library — this ships to low-end phones), not a new infrastructure layer. Phase 1 draws them from the same mock rainfall/report/alert-history data already used elsewhere, both globally (`/admin`) and per zone (`/admin/zone/[zoneId]`); Phase 3+ swaps the data source to real `water_level_reports`, `alerts`, and `audit_log` tables via aggregation queries, once that audit trail exists and there's real volume worth trending
-- **Risk score (Stage 2 of a future risk engine):** `src/lib/risk-engine/score.ts` computes a clamped 0–100 score per zone from four weighted, already-existing signals (rainfall trend 40%, crowd reports 30%, flood hazard baseline 20%, upstream cascade 10%) plus a two-level confidence ladder (estimated/validated — "calibrated" needs Phase 3's real audit trail) and a trend direction from the last 12 hourly rainfall readings. This is intentionally scoped to scoring only: it's pure, synchronous, client-side arithmetic with no I/O, shown as one advisory admin dashboard tile, and doesn't decide anything — the actual alert severity always comes from `resolveEffectiveAlert`, which the admin's existing Human Override controls. Extending this into a full decide/deliver/feedback pipeline is deliberately deferred; see `docs/plans/2026-09-03-risk-engine-simulation-climate-resilience.md` for the open design questions (route-computation conflict with pre-authored routes, Human Override interaction, consent for any behavior tracking) that need resolving first
-- **Evacuation center capacity:** `Zone.evacuationCenterCapacity` (total headcount) paired with an admin-entered `ZoneOverride.currentOccupancy` derives `space_available`/`limited`/`full` from the real ratio (<70%/70–95%/≥95%) instead of a standalone manual choice; the manual choice still works when no headcount is tracked. Phase 2+ backs this with the `evacuation_centers.capacity` column already in the schema below, fed by a real check-in count instead of an admin estimate
-- **Post-evacuation check-in:** `src/lib/evacuation-checkins.ts`, same local-storage-store pattern as every other Phase 1 store, device-ID keyed. A resident's check-in replaces their own prior one for that zone rather than accumulating duplicates. Phase 1 has no verification, no location check, and no delivery to real responders — it demonstrates the interaction pattern the Final Phase's reputation/audit-trail work would need to make real
-- **Current Conditions panel:** read-only display, no crowd reports or anti-abuse layer needed since nothing is user-submitted. Rainfall/wind/typhoon-track/thunderstorm refresh near-real-time from PAGASA's public bulletins; Heat Index and Drought/Dry-Spell Outlook pull from the same source family but refresh roughly weekly, matching PAGASA's own publish cadence for those bulletins — not polled as if they were live. Phase 1 shows mock readings (no backend); Phase 2+ fetches the real bulletins server-side and caches them, same pattern as the prediction engine's rainfall input, following the PAGASA sourcing strategy below. Heat Index is the one reading with no identified programmatic source — if Phase 2 can't secure one, the panel should drop it rather than display a stale or invented value
-- **Hazard-tile map backdrop:** static per-zone Flood/Landslide/Storm Surge risk (Low/Medium/High), rendered as the map's persistent tile-style backdrop (no drawn zone boundaries) — a client-side area-shading overlay from stored classification data, not a separate raster tile-serving pipeline. Phase 1 mocks this styling for the four demo zones; Phase 2+ seeds it from real open Philippine government hazard datasets (DENR-MGB geohazard maps, PAGASA) — free, public, downloaded once and stored in Supabase, not fetched live from any hazard-mapping agency's own service. Live per-zone alert status renders separately as a colored marker, never a fill
-- **Auth (Phase 2):** Supabase Auth for optional accounts (email + password). Guest mode default. Admin PIN gate.
-- **Data sources:** Philippine weather agency (PAGASA) bulletins — rainfall, wind, typhoon track, thunderstorm watch, heat index, drought/dry-spell outlook — satellite rainfall, open government boundaries, open-source maps, open government hazard-susceptibility datasets — all free/public
-- **PAGASA sourcing strategy (Phase 2+), in order of preference:** (1) **PAGASA's own APIs** — a Ten-Day Weather Forecast API and a Seasonal Weather Forecast API exist (documented in a CGIAR review of PAGASA's API for the Climate+ agro-advisory programme), but they are not self-serve; access runs through PAGASA's formal data-request process. A barangay pilot with LGU backing has legitimate standing to ask, and the request is slow, so it should start early rather than being treated as a late integration task. (2) **PAGASA's own public file server** (`pubfiles.pagasa.dost.gov.ph`) — an open, unauthenticated directory index of date-prefixed PDF bulletins, actively maintained, covering drought/dry-spell assessments and weather advisories. Polling stable file paths is materially more durable than parsing rendered HTML, and carries no third-party dependency. (3) **Established community wrappers, used as a client and never forked** — for tropical cyclone bulletins specifically, `pagasa-parser-web` (hosted at `pagasa.chlod.net`) is the mature option. It is **AGPL-3.0**, and that licence's network clause reaches anything run as a service on top of it: calling the maintainer's hosted instance over HTTP leaves this codebase unaffected, while self-hosting or forking it would pull the surrounding service into AGPL. It is also volunteer-run infrastructure with no uptime or rate-limit commitment, so it sits behind the same cache-and-degrade behaviour as push delivery, and must not be polled hard during the typhoon peak when its traffic and ours spike together. (4) **Our own ingestion, built last and deliberately**, only where (1)–(3) don't reach — server-side and scheduled, never scraped per-request from a resident's device. **No programmatic source has been identified for heat index** (see Open Risks)
-- **Schema:** `zones` (id, name, boundary_polygon, evacuation info, slope, drainage, downstream_zone_id), `alerts` (id, zone_id, severity, message per-language, source, confidence, predicted_depth, predicted_timing, issued_at, expires_at), `water_level_reports` (id, zone_id, device_id, depth_level, lat/lng, trust_weight, is_outlier, reported_at), `push_subscriptions` (id, zone_id, device_id, endpoint, keys), `audit_log` (id, actor, action, target_id, timestamp, details), `evacuation_centers` (id, zone_id, name, capacity, current_status, updated_at — Phase 1 already exercises `capacity`/`current_status` via `Zone.evacuationCenterCapacity` and an admin-entered occupancy override), `points_of_interest` (id, zone_id, category, name, lat, lng), `community_pins` (id, zone_id, device_id, status_tag, caption, photo_url, lat/lng, upvotes, downvotes, created_at), `pin_votes` (id, pin_id, device_id, vote, voted_at), `hazard_susceptibility` (id, zone_id, hazard_type, risk_level, source, updated_at), `evacuation_check_ins` (id, zone_id, device_id, status, checked_in_at — Phase 1 mock: `src/lib/evacuation-checkins.ts`), `users` (Phase 2: id, email, zone_id)
+**Charts** — hand-drawn SVG and CSS, no charting library. This ships to low-end phones and a charting dependency is weight those devices cannot spare.
 
-**Auto-trigger rule:** multiple reports from different devices, same zone, within short time window, average depth above threshold → auto-creates alert. Configurable per zone.
+**Risk score** — a clamped 0–100 per-zone score from four weighted signals (rainfall trend 40%, crowd reports 30%, flood hazard baseline 20%, upstream cascade 10%), with a confidence ladder and a trend direction. Deliberately scoped to *scoring only*: pure client-side arithmetic, no I/O, displayed as one advisory tile. It decides nothing — alert severity always comes through the operator-override-aware path. Extending it into a full decide/deliver/feedback pipeline is deferred until the open design questions are resolved.
 
-**Conservative thresholds (tunable):** low-lying zones get lower thresholds → earlier alerts, fewer reports needed. High elevation zones get higher thresholds → later alerts, more reports needed. Start conservative — "Better to warn and be wrong than miss a real event."
+### Data sources
 
-**Confidence tagging:** Estimated (initial, no validation) → Validated (several real events matched) → Calibrated (many events, auto-tuned). Displayed in UI.
+All free and public: PAGASA bulletins (rainfall, wind, typhoon track, thunderstorm watch, heat index, drought outlook), satellite rainfall, open government boundaries, OpenStreetMap, and open government hazard-susceptibility datasets (DENR-MGB geohazard maps).
 
-**Calibration loop (Phase 3+):** after each real flood event, compare prediction vs actual. Too many false alarms → thresholds shift up. Missed events → thresholds shift down. Auto-adjusts within guardrails.
+**PAGASA sourcing strategy, in order of preference:**
 
-### Non-Functional Requirements
+1. **PAGASA's own APIs.** A Ten-Day Forecast API and a Seasonal Forecast API exist, documented in a CGIAR review of PAGASA's API for the Climate+ agro-advisory programme. They are not self-serve — access runs through PAGASA's formal data-request process. A barangay pilot with LGU backing has legitimate standing to ask, and the process is slow, so the request should open early rather than be treated as a late integration task.
+2. **PAGASA's public file server** (`pubfiles.pagasa.dost.gov.ph`) — an open, unauthenticated directory of date-prefixed PDF bulletins, actively maintained, covering drought assessments and weather advisories. Polling stable file paths is materially more durable than parsing rendered HTML and carries no third-party dependency.
+3. **Established community wrappers, used strictly as a client.** For tropical cyclone bulletins, `pagasa-parser-web` is the mature option. It is **AGPL-3.0**, and that licence's network clause reaches anything run as a service on top of it: calling the maintainer's hosted instance over HTTP leaves this codebase unaffected, while self-hosting or forking would pull the surrounding service into AGPL. It is also volunteer-run with no uptime or rate-limit commitment, so it sits behind the same cache-and-degrade behaviour as push delivery, and must not be polled hard during the typhoon peak when its traffic and ours spike together.
+4. **Our own ingestion, built last and deliberately** — server-side and scheduled, never scraped per-request from a resident's device — only where options 1–3 don't reach.
 
-- Runs on low-end Android devices common in flood-prone areas
-- Installable as PWA for reliable offline cache
-- Push retry must not block main thread or drain battery
-- Comply with RA 10173 consent before any location collection
-- UI legible in direct sunlight and in the dark
-- Map basemap tiles (the underlying street imagery) require live connectivity to load; fresh imagery isn't cached until Phase 2's offline tile caching ships. The hazard-tile backdrop is different — it's drawn client-side from cached classification data, not fetched as images, so it keeps working offline once that data is cached. Zone/alert/POI data is cached and available offline throughout
-- The homepage map's live location dot uses a low-frequency/low-accuracy watch mode, not maximum-accuracy continuous GPS, to limit battery drain during an already power-constrained outage
-- The Current Conditions panel's readings don't all refresh at the same rate — rainfall/wind/typhoon/thunderstorm are near-real-time, Heat Index and Drought/Dry-Spell Outlook are weekly — the UI must show each reading's own age/last-updated, not imply everything is equally live
+**No programmatic source has been identified for heat index.** If one cannot be secured, the panel should drop that reading rather than display a stale or invented value.
 
-### Success Metrics
+---
 
-Targets are hypotheses for the pilot, not guarantees.
+## Non-Functional Requirements
+
+- Runs on low-end Android devices, which is what flood-prone barangays actually own.
+- Installable as a PWA for reliable offline caching.
+- Push retry must not block the main thread or drain battery.
+- Location consent obtained before any collection, per RA 10173.
+- Legible in direct sunlight and in the dark.
+- The live location watch uses low-frequency, low-accuracy mode rather than continuous maximum-accuracy GPS, to limit battery drain during an already power-constrained outage.
+- Readings refresh at different rates and the UI must show each reading's own age rather than implying everything is equally live.
+
+---
+
+## Build Status
+
+**As of 4 September 2026 · Stage 1 (`hi-fi`) complete.**
+
+This table is the single source of truth for implementation state. Everything above describes the design; this describes what exists today.
+
+| Capability | Status | Note |
+|---|---|---|
+| All resident and operator screens | **Built** | 9 routes, full first-run click-through |
+| Bilingual UI (English / Filipino) | **Built** | Every user-facing string localised |
+| Onboarding, consent, zone selection | **Built** | GPS auto-detect is a stub — proposes a zone to confirm; real matching needs boundary polygons |
+| Homepage map, live position, markers, legend | **Built** | Leaflet with hazard backdrop and POI markers |
+| Community pins — create, edit, delete, vote, moderate | **Built** | Photos are a local preview, never uploaded |
+| Water-level reporting, recent reports, anti-abuse explainer | **Built** | Reports persist locally |
+| Evacuation guidance, capacity from headcount, resident check-in | **Built** | Check-in is a self-report — no verification, no responder delivery |
+| Safest route + live bearing/distance | **Built** | Routes pre-authored; bearing is client-side maths |
+| Operator dashboard, analytics, per-zone view, operations map | **Built** | Includes advisory risk score |
+| Drill/simulation mode | **Built** | 6 scenarios; notifies nobody |
+| Printed emergency card | **Built** | |
+| PWA manifest + service worker cache | **Built** | |
+| Human override (layer 7) | **Built** | Real today — severity and centre-status overrides persist |
+| Pin vote protection (layer 10) | **UI only** | Net-score rule works; enforcement waits on layers 1, 2, 5 |
+| All data | **Mock** | Four demo barangays; no backend |
+| Backend, auth, operator PIN | **Not started** | Stage 2 |
+| Real push delivery, SMS provider | **Not started** | Stage 3 |
+| Geofence, rate limit, audit trail (layers 1–3, 8) | **Not started** | Stage 3 |
+| Outlier downweighting, reputation, fingerprint hardening (layers 4–6) | **Not started** | Stage 4 |
+| Real PAGASA and hazard data | **Not started** | Stage 2 |
+| Offline map tile caching | **Not started** | Stage 2 |
+
+---
+
+## Roadmap
+
+IDEA describes this challenge as "hi-fi prototype first, then functional build, full implementation, and final testing." Those are the four stages below.
+
+### Stage 1 — `hi-fi` · Prototype
+Every screen, on realistic mock data, no backend.
+
+**Done when:** a complete first-run click-through works from a cleared device, the operator demo is presentable, and the accessibility audit passes.
+**Status: complete.**
+
+### Stage 2 — `v0` · Functional build
+Real data and real offline capability. Supabase schema with Row Level Security, Server Actions, Auth, and the operator PIN gate. Service worker with Background Sync. Offline map tiles for the resident's home zone. Self-hosted OSRM for real safest-route calculation. Real PAGASA readings and real hazard data replacing the mocks. A decision on whether pin photos go live.
+
+**Done when:** the app works fully offline on real seeded data, optional login works, and error/uptime monitoring is active.
+
+> Start the PAGASA data request at the *beginning* of this stage. It gates the highest-quality data option and moves on an institutional timeline, not ours.
+
+### Stage 3 — `v1` · Full implementation
+The core mechanism goes live: threshold engine, Web Push with retry, anti-abuse layers 1–3 and the audit trail, and the analytics dashboard rewired from mock data onto that real audit trail.
+
+**Done when:** a genuine crowd-report scenario auto-triggers an alert and delivers it via push with retry — end to end, no mocks in the path.
+
+### Stage 4 — `mvp` · Final testing
+Reputation scoring, outlier downweighting, device-fingerprint hardening, TTS, the calibration loop, and a field pilot.
+
+**Done when**, measurably:
+- Anti-abuse layers 1–6 are all live and a documented abuse-attempt test suite passes against them.
+- The calibration loop has run against at least one real event, with prediction-versus-actual recorded.
+- A full WCAG 2.1 AA audit passes with no outstanding violations.
+- The pilot barangay has completed at least one drill using the system, and the resulting feedback is either incorporated or explicitly logged as deferred.
+
+---
+
+## Measuring Success
+
+Targets are hypotheses for the pilot, not guarantees — no baseline exists from a comparable Philippine deployment.
 
 | Metric | Target |
 |---|---|
-| Alert reach (enrolled residents receiving alert) | ≥ 90% |
-| Outage reach (alerts during no connection) | ≥ 70% |
-| Time to delivery (alert created → first delivery) | < 60s |
-| Offline usefulness (showing evacuation instructions with no connectivity) | 100% |
-| Report validity (passing geofence + rate-limit) | ≥ 85% |
-| False-alarm rate (auto-triggered alerts later downgraded) | ≤ 10% |
-| Enrollment (households enrolled in pilot barangay) | ≥ 30% |
-| Map engagement (sessions reaching alert or evacuation detail via the homepage map within 2 taps) | ≥ 80% |
-| Pin removal rate (community pins removed via net-negative voting) | ≤ 15% |
+| Alert reach (enrolled residents receiving an alert) | ≥ 90% |
+| Outage reach (alerts delivered with no connection) | ≥ 70% |
+| Time to delivery (created → first delivery) | < 60s |
+| Offline usefulness (evacuation instructions with no connectivity) | 100% |
+| Report validity (passing geofence + rate limit) | ≥ 85% |
+| False-alarm rate (auto-alerts later downgraded) | ≤ 10% |
+| Enrolment (households in the pilot barangay) | ≥ 30% |
+| Map engagement (sessions reaching alert or evacuation detail within 2 taps) | ≥ 80% |
+| Pin removal rate (pins removed by net-negative voting) | ≤ 15% |
 
-Phase 1 (`hi-fi`) cannot move these — it has no backend and no users. Its exit bar: complete first-run click-through and passing accessibility audit.
+**These require real users and a real backend, so Stages 1 and 2 cannot move them.** Each earlier stage is measured on its own exit criteria instead, which is why those are written to be falsifiable.
 
-### Implementation Phases
+---
 
-**Phase 1 (`hi-fi`)** — UI only, no backend. Everything mock. [Detailed task breakdown](docs/superpowers/plans/2026-09-01-hi-fi-WeatherWell.md).
-- Build: all screens (homepage map with geolocation, a mocked hazard-tile backdrop, zone-status/evacuation/POI/community-pin markers with a client-side-only photo preview and full-size photo view, editable/deletable community pins, a pre-authored safest-route path to each zone's evacuation center with a live bearing/distance indicator, a mocked Current Conditions panel, and the personal status headline; alert, evacuation (with derived-from-headcount capacity and a resident "I'm safe"/"I need help" check-in), an always-available multi-zone "Zones" overview, water-level report form with recent-reports and anti-abuse explainer panels, consent, onboarding, language toggle, hotline, admin monitoring dashboard with a mocked analytics/trend view and a computed per-zone risk-score tile, a per-zone admin dashboard with a check-in summary, community pin moderation with restore, and admin simulation on its own page) on realistic mock data
-- Exit criteria: full mock click-through from fresh first-run, preview link ready, admin demo works
+## Scope Boundaries
 
-**Phase 2 (`v0`)** — Real data, real offline.
-- Build: Supabase schema + RLS (incl. `points_of_interest`, `community_pins`, `pin_votes`, `hazard_susceptibility`), Server Actions, service worker + Background Sync, offline map tile caching for the resident's home zone, self-hosted OSRM routing engine for real safest-route calculation (extended to essential-service POIs, not just evacuation centers), real hazard-tile data seeded from open government geohazard data replacing Phase 1's mock styling, real PAGASA data wired into the Current Conditions panel replacing Phase 1's mock readings (per the sourcing strategy in Architecture — start the PAGASA data-request conversation at the beginning of this phase, not the end, since it gates the best-quality option), PWA manifest, Supabase Auth, admin PIN gate, decision on whether community pin photos go live for real (Supabase Storage) or stay preview-only
-- Exit criteria: app works fully offline on real seeded data. Error/uptime monitoring active. Optional login works.
+**Committed** — everything in [How It Works](#how-it-works) and [The Resident Experience](#the-resident-experience).
 
-**Phase 3 (`v1`)** — Core mechanism live.
-- Build: threshold engine, Web Push with retry, 3 anti-abuse layers (geofence, rate limit, multi-report) — covering both water-level reports and pin votes — audit trail, rewiring Phase 1's mocked admin analytics dashboard (report/alert trend views, false-alarm rate) onto the new real audit trail
-- Exit criteria: crowd-report scenario correctly auto-triggers alert and delivers via push with retry
+**Explicitly out of scope**
 
-**Final Phase (`mvp`)** — Trust and polish.
-- Build: reputation scoring, outlier downweighting, device fingerprint, TTS, calibration loop, field pilot, full accessibility audit
-- Exit criteria: full feature set, audit passed, pilot feedback incorporated, submission-ready
+- Physical water-level sensor hardware. The schema supports it; the product does not depend on it.
+- A live routing engine in Stage 1 — routes are pre-authored per zone, exactly like evacuation instructions.
+- Climate adaptation planning tools for infrastructure, agriculture, or water management. Different audience (government planners) and different timescale (months and years) than this system's live-event focus.
 
-### Future Roadmap
+**Future expansion, deliberately deferred**
 
-- Real water-level sensor hardware integration (schema supports it)
-- Role-based access for LGU/responder tooling (if DRRMO officers eventually operate the system) — a deliberate reversal of the current no-RBAC governance model (see Governance), not a small add: real authentication, permissions, and audit requirements come with it
-- **Active** early-warning systems for landslide, storm surge, drought, and heatwave — meaning their own crowd reports, auto-alert thresholds, and response coordination, the same machinery flood already has. Not the same thing as what's already shipped for these four: landslide/storm-surge get a static risk rating (Hazard-tile map backdrop) and heat/drought get a read-only bulletin (Current Conditions panel) — both informational, neither has reports, thresholds, or alerts. Going from "informational" to "active" is still deferred: each would need its own data model and crowd-report vocabulary (there's no landslide/heatwave equivalent of the ankle/knee/waist/neck depth scale), so it's a set of parallel products, not an extension of the flood-specific engine
-- Climate adaptation planning tools (infrastructure/agriculture/water-management strategy) — considered and deliberately out of scope: a different audience (government planners) and timescale (months/years) than this app's live-event focus
+- **Role-based access for multi-officer LGU deployments.** A reversal of the two-role model, and not a small one — real authentication, permissions, and audit requirements come with it.
+- **Active early warning for landslide, storm surge, drought, and heatwave** — meaning their own crowd reports, thresholds, and response coordination. Note this is *not* the same as what already ships for those hazards: landslide and storm surge carry a static risk rating, heat and drought a read-only bulletin. Both are informational. Going from informational to active would need a separate data model and crowd-report vocabulary for each — there is no landslide equivalent of the ankle/knee/waist/neck scale — making them parallel products rather than extensions of the flood engine.
 
-### Open Risks
+### How new scope gets admitted
 
-- Web Push delivery isn't guaranteed (device/browser dependent) — retry and Share Alert compensate
-- RA 10173 compliance stated by design but not legally reviewed — recommend legal review before real deployment
-- Non-smartphone users have no direct app access — served only by community relay and printed cards
-- Success-metric targets are hypotheses — no baseline from comparable PH deployment yet
-- Basemap tiles depend on OpenStreetMap's free fair-use tile policy — not suitable for heavy production traffic without switching to a self-hosted or paid tile provider
-- Phase 1's "safest route" is a pre-authored path, not real routing — its accuracy depends on how well the pre-authored paths anticipate real hazard geometry until Phase 2's routing engine ships
-- Community pin voting is net-score-gated to resist casual brigading, but a determined actor with several devices can still out-vote genuine reports until real geofence/rate-limit enforcement ships in Phase 3 — Phase 1's vote rule is a UI-only mock, not a real defense
-- If community pin photos go live for real in Phase 2+, storage cost, upload bandwidth during degraded connectivity, and RA 10173 exposure (photos may capture identifiable people) all need a decision before shipping — not yet made
-- Barangay boundary data (used for geofencing reports and pins, not for map rendering) is PSA-sourced and indicative, not survey-grade — geofence tolerance must stay generous or legitimate reports near a zone's edge get rejected
-- Government geohazard maps (e.g. DENR-MGB) behind the Hazard-tile backdrop are periodically updated, not real-time — that backdrop is a slow-moving baseline and must never be read as current conditions, unlike the live per-zone status marker sitting on top of it
-- Heat Index and Drought/Dry-Spell Outlook are informational only — no severity scale, alert, or response is attached to either, so the app makes no evacuation-equivalent claim for heat or drought, only displays PAGASA's own published reading
-- Post-evacuation check-in ("I'm safe" / "I need help") is a self-report with no verification, no location check, and no real delivery to responders — a "needs help" flag reaching only the admin dashboard is not the same as reaching an actual responder; treat this as a Phase 1 interaction demo, not a working accountability system, until it's wired to something real
-- The admin dashboard's computed risk score (`src/lib/risk-engine/score.ts`) is a first, deliberately narrow slice — fixed weights, no calibration against real outcomes yet — shown as one advisory tile next to the real alert, never a replacement for it; treat its exact numbers as illustrative, not tuned
-- **Heat Index has no identified programmatic source.** The Current Conditions panel promises it, but nothing in the sourcing strategy currently reaches it — not PAGASA's public file server, not the community wrappers. Phase 2 must either secure it through the formal data request or drop the reading; displaying a stale or invented heat index would break the panel's own "show each reading's own age" requirement
-- **Tropical cyclone data depends on volunteer-run third-party infrastructure** (`pagasa.chlod.net`) until official API access is granted. Two consequences to hold: if it goes down, typhoon track degrades to cached last-known data like any other source, which is acceptable — but the AGPL licence position depends on calling it as a client. If implementation ever quietly switches to self-hosting or forking that service, the surrounding backend inherits AGPL obligations, so that decision can't be made casually mid-build
+This document is expected to grow. A proposed capability belongs in WeatherWell if it can answer yes to all four:
+
+1. **Does it serve the outage case?** The differentiator is working when connectivity fails. Features that assume a live connection compete with existing tools.
+2. **Does it work at barangay scale with one operator?** No feature may assume a staffed operations centre.
+3. **Does it degrade safely?** Every capability needs a defined behaviour when data is stale, absent, or wrong — and must never present a guess as a certainty.
+4. **Does a human stay in the loop for anything that tells a resident to move?** Automated signals are advisory. This is not negotiable.
+
+A capability meeting all four can be added to the design without contradicting anything in this document; it appears in [Build Status](#build-status) when it ships.
+
+---
+
+## Risks & Open Questions
+
+- **Web Push delivery is not guaranteed** — it varies by device and browser. Retry, cache fallback, and Share Alert exist specifically because this channel cannot be trusted alone.
+- **RA 10173 compliance is stated by design but not legally reviewed.** A legal review is recommended before any real deployment.
+- **Non-smartphone residents have no direct app access.** They depend entirely on the community relay and printed cards — an operational system requiring barangay coordination, and therefore the part of the design most likely to fail for reasons outside the software.
+- **Success-metric targets are unvalidated hypotheses.** No comparable Philippine deployment provides a baseline.
+- **No programmatic heat-index source has been found.** The reading should be dropped rather than faked if one cannot be secured.
+- **PAGASA's formal data-request process has an unknown timeline** and gates the best data option, which is why it opens at the start of Stage 2 rather than the end.
+- **`pagasa-parser-web` is volunteer infrastructure** with no uptime commitment, and its load peaks at exactly the moment ours does.
