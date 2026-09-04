@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
+    "knip": "knip",
     "test:watch": "vitest"
   },
   "dependencies": {
@@ -38,6 +39,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.4",
     "jsdom": "^30.0.1",
+    "knip": "^6.34.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.1.11"

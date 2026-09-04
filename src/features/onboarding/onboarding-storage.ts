@@ -1,5 +1,5 @@
 export const ONBOARDED_KEY = "weatherwell.onboarded";
-export const SELECTED_ZONE_KEY = "weatherwell.selectedZoneId";
+const SELECTED_ZONE_KEY = "weatherwell.selectedZoneId";
 
 /** Browser-only; safe to call from effects. Returns false during SSR. */
 export function hasOnboarded(): boolean {

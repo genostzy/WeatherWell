@@ -8,7 +8,7 @@ import type { AlertRecord, CenterStatus, LocalizedText } from "./types";
 /** "none" explicitly clears an active alert (admin marking the zone resolved); undefined means "no override, use the mock default". */
 export type AlertOverrideValue = Severity | "none";
 
-export interface ZoneOverride {
+interface ZoneOverride {
   alertSeverity?: AlertOverrideValue;
   centerStatus?: CenterStatus;
   /** Live headcount at the zone's evacuation center (PRD Gap B). When set, this — not centerStatus — drives the displayed status; see deriveCenterStatusFromOccupancy. */

@@ -11,7 +11,7 @@ export type LocalizedText = Record<LanguageCode, string>;
 
 export type ConfidenceLevel = "estimated" | "validated" | "calibrated";
 
-export type AlertSource = "manual" | "auto_crowdsourced" | "predicted" | "cascade";
+type AlertSource = "manual" | "auto_crowdsourced" | "predicted" | "cascade";
 
 export type CenterStatus = "space_available" | "limited" | "full";
 

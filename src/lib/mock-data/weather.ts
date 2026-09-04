@@ -5,7 +5,7 @@ import type { HazardRiskLevel, HazardType, LocalizedText } from "../types";
  * sourced from PAGASA in later phases — Phase 1 ships mock readings, same as
  * everything else. Values are in mm/hour.
  */
-export const MOCK_RAINFALL_MM_PER_HOUR: Record<string, number> = {
+const MOCK_RAINFALL_MM_PER_HOUR: Record<string, number> = {
   "zone-1": 18,
   "zone-2": 32,
   "zone-3": 9,
@@ -44,7 +44,7 @@ export const MOCK_TYPHOON: TyphoonTrack | null = {
 };
 
 /** Same near-real-time cadence as rainfall — PRD's Current Conditions panel groups these together. Values in km/h. */
-export const MOCK_WIND_KPH: Record<string, number> = {
+const MOCK_WIND_KPH: Record<string, number> = {
   "zone-1": 22,
   "zone-2": 35,
   "zone-3": 15,
@@ -56,7 +56,7 @@ export function getWindForZone(zoneId: string): number {
 }
 
 /** A forecast watch, not current rain — can be true even where MOCK_RAINFALL_MM_PER_HOUR is still low. */
-export const MOCK_THUNDERSTORM_WATCH: Record<string, boolean> = {
+const MOCK_THUNDERSTORM_WATCH: Record<string, boolean> = {
   "zone-1": true,
   "zone-2": true,
   "zone-3": false,
@@ -78,7 +78,7 @@ export function getHeatIndexCategory(celsius: number): HeatIndexCategory {
 }
 
 /** Weekly-refresh cadence, unlike rainfall/wind/typhoon/thunderstorm above — see Current Conditions panel's per-reading age requirement. */
-export const MOCK_HEAT_INDEX_C: Record<string, number> = {
+const MOCK_HEAT_INDEX_C: Record<string, number> = {
   "zone-1": 32,
   "zone-2": 29,
   "zone-3": 33,
@@ -127,7 +127,7 @@ export function getFriendlyWeatherRead(zoneId: string): LocalizedText {
  * the resident's Current Conditions reading can never disagree. Phase 2+
  * replaces this with real PAGASA history.
  */
-export const MOCK_RAINFALL_HISTORY: Record<string, number[]> = {
+const MOCK_RAINFALL_HISTORY: Record<string, number[]> = {
   "zone-1": [2, 3, 5, 4, 7, 9, 12, 14, 15, 17, 16, 18],
   "zone-2": [4, 6, 9, 12, 15, 19, 22, 26, 28, 30, 31, 32],
   "zone-3": [12, 14, 16, 15, 13, 12, 11, 10, 10, 9, 9, 9],

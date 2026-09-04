@@ -76,7 +76,7 @@ const TIMING = {
   in12h: { en: "12h", fil: "12 oras" },
 };
 
-export const MOCK_PREDICTIONS: Record<string, PredictionStep[]> = {
+const MOCK_PREDICTIONS: Record<string, PredictionStep[]> = {
   "zone-1": [
     { severity: "yellow", label: { en: "Advisory", fil: "Abiso" }, timing: TIMING.in6h },
     { severity: "orange", label: { en: "Watch", fil: "Bantay" }, timing: TIMING.in3h },

@@ -10,10 +10,10 @@ import type { Zone } from "@/lib/types";
  * blocked. The onboarding gate normally prevents reaching a page in that
  * state, but every consumer still needs a Zone to render.
  */
-export const DEFAULT_ZONE: Zone = MOCK_ZONES[0];
+const DEFAULT_ZONE: Zone = MOCK_ZONES[0];
 
 /** Resolves a stored zone id against the known zones, falling back to the default. */
-export function resolveZone(zoneId: string | null): Zone {
+function resolveZone(zoneId: string | null): Zone {
   return MOCK_ZONES.find((zone) => zone.id === zoneId) ?? DEFAULT_ZONE;
 }
 

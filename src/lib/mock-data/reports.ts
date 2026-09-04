@@ -1,7 +1,7 @@
 import type { DepthLevel } from "../depth";
 
 /** Daily crowd-report counts per zone for the last 7 days, oldest first — the "reports over time" trend the PRD's admin analytics dashboard calls for. */
-export const MOCK_REPORT_HISTORY: Record<string, number[]> = {
+const MOCK_REPORT_HISTORY: Record<string, number[]> = {
   "zone-1": [3, 5, 4, 8, 12, 18, 24],
   "zone-2": [6, 8, 11, 15, 22, 31, 44],
   "zone-3": [12, 15, 19, 26, 22, 17, 13],
@@ -24,7 +24,7 @@ export interface AlertHistory {
   downgraded: number;
 }
 
-export const MOCK_ALERT_HISTORY: Record<string, AlertHistory> = {
+const MOCK_ALERT_HISTORY: Record<string, AlertHistory> = {
   "zone-1": { issued: 4, downgraded: 1 },
   "zone-2": { issued: 7, downgraded: 1 },
   "zone-3": { issued: 9, downgraded: 2 },
