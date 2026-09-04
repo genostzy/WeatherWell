@@ -27,11 +27,20 @@ export const DEPTH_CM: Record<DepthLevel, number> = {
   neck: 150,
 };
 
+/**
+ * Shifted one severity tier earlier than a naive linear mapping would
+ * suggest: `waist` and `neck` both land on `evacuate`, not just `neck`. The
+ * same nominal depth is far more dangerous for a child than an adult (a
+ * child is 110cm tall — "waist" on the adult scale is already near a
+ * child's shoulders), so waiting for the most extreme adult-scale reading
+ * to call for evacuation would already be too late for the more vulnerable
+ * person standing in the same water.
+ */
 export const DEPTH_SEVERITY: Record<DepthLevel, Severity> = {
   dry: "yellow",
-  ankle: "yellow",
-  knee: "orange",
-  waist: "red",
+  ankle: "orange",
+  knee: "red",
+  waist: "evacuate",
   neck: "evacuate",
 };
 

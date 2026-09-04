@@ -38,9 +38,9 @@ describe("depth", () => {
 
   it("maps each depth level to a severity matching the PRD auto-trigger rule", () => {
     expect(DEPTH_SEVERITY.dry).toBe("yellow");
-    expect(DEPTH_SEVERITY.ankle).toBe("yellow");
-    expect(DEPTH_SEVERITY.knee).toBe("orange");
-    expect(DEPTH_SEVERITY.waist).toBe("red");
+    expect(DEPTH_SEVERITY.ankle).toBe("orange");
+    expect(DEPTH_SEVERITY.knee).toBe("red");
+    expect(DEPTH_SEVERITY.waist).toBe("evacuate");
     expect(DEPTH_SEVERITY.neck).toBe("evacuate");
   });
 
