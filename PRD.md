@@ -277,7 +277,7 @@ This table is the single source of truth for implementation state. Everything ab
 | Capability | Status | Note |
 |---|---|---|
 | All resident and operator screens | **Built** | 9 routes, full first-run click-through |
-| Bilingual UI (English / Filipino) | **Built** | Every user-facing string localised |
+| Bilingual UI (English / Filipino) | **Built** | Localised throughout, bar a short tail: three visible strings and two `aria-label`s are still English-only |
 | Onboarding, consent, zone selection | **Built** | GPS auto-detect is a stub — proposes a zone to confirm; real matching needs boundary polygons |
 | Homepage map, live position, markers, legend | **Built** | Leaflet with hazard backdrop and POI markers |
 | Community pins — create, edit, delete, vote, moderate | **Built** | Photos are a local preview, never uploaded |
@@ -288,15 +288,18 @@ This table is the single source of truth for implementation state. Everything ab
 | Drill/simulation mode | **Built** | 6 scenarios; notifies nobody |
 | Printed emergency card | **Built** | |
 | PWA manifest + service worker cache | **Built** | |
-| Human override (layer 7) | **Built** | Real today — severity and centre-status overrides persist |
-| Pin vote protection (layer 10) | **UI only** | Net-score rule works; enforcement waits on layers 1, 2, 5 |
+| Human override (layer 7) | **Built** | Real today — severity, centre-status and occupancy overrides persist |
+| Device fingerprint (layer 5) | **Built** | Random per-device ID, real today — it already gates one-vote-per-device and own-pin editing. Hardening against deliberate clearing comes later |
+| Pin vote protection (layer 10) | **UI only** | Net-score rule and one-vote-per-device work; the geofence and rate limit it also depends on (layers 1, 2) do not |
 | All data | **Mock** | Four demo barangays; no backend |
 | Backend, auth, operator PIN | **Not started** | Stage 2 |
-| Real push delivery, SMS provider | **Not started** | Stage 3 |
+| Real push delivery, SMS provider | **Not started** | Stage 3. The service worker's receive-and-display handler exists, but there is no subscription, no VAPID keys and nothing that sends |
 | Geofence, rate limit, audit trail (layers 1–3, 8) | **Not started** | Stage 3 |
-| Outlier downweighting, reputation, fingerprint hardening (layers 4–6) | **Not started** | Stage 4 |
+| Outlier downweighting (layer 4) | **UI only** | Downweighting behaviour is real — flagged reports are excluded from the agreeing count and badged — but the flag itself is set in fixture data, not detected |
+| Reputation scoring (layer 6) | **Not started** | Stage 4 — a trust weight exists on the data model but nothing reads it |
 | Real PAGASA and hazard data | **Not started** | Stage 2 |
 | Offline map tile caching | **Not started** | Stage 2 |
+| Offline fallback when the map cannot draw | **Built** | Degrades to a plain zone-alert list. Uses connectivity as a Stage 1 proxy for "are tiles available" |
 
 ---
 
