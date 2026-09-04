@@ -11,11 +11,14 @@ import {
 import { SEVERITY_HEX } from "@/lib/severity";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
+import type { LocalizedText } from "@/lib/types";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+
+const APPROXIMATELY: LocalizedText = { en: "Approximately", fil: "Humigit-kumulang" };
 
 export const ADULT_HEIGHT_CM = 170;
 export const CHILD_HEIGHT_CM = 110;
@@ -177,7 +180,9 @@ export function DepthReferenceVisual({ depthLevel }: { depthLevel: DepthLevel })
             {t(DEPTH_LABEL[depthLevel], lang)}
           </figcaption>
         </TooltipTrigger>
-        <TooltipContent>Approximately {DEPTH_CM[depthLevel]} cm</TooltipContent>
+        <TooltipContent>
+          {t(APPROXIMATELY, lang)} {DEPTH_CM[depthLevel]} cm
+        </TooltipContent>
       </Tooltip>
     </figure>
   );

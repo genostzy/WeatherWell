@@ -10,6 +10,8 @@ const ZONE_LABEL: LocalizedText = { en: "Zone", fil: "Zone" };
 const EVACUATION_CENTER: LocalizedText = { en: "Evacuation Center", fil: "Evacuation Center" };
 const HOW_TO_GET_THERE: LocalizedText = { en: "How to Get There", fil: "Paano Makarating" };
 const EMERGENCY_HOTLINE: LocalizedText = { en: "Emergency Hotline", fil: "Emergency Hotline" };
+/** "QR Code" is the same term in Filipino — localised anyway so no user-facing string bypasses t(). */
+const QR_CODE: LocalizedText = { en: "QR Code", fil: "QR Code" };
 const SCAN_TO_INSTALL: LocalizedText = {
   en: "Scan QR code to install the app",
   fil: "I-scan ang QR code para i-install ang app",
@@ -57,7 +59,7 @@ export function EmergencyCard({ zone }: { zone: Zone }) {
         <div className="border-t pt-3 text-center">
           <p className="text-xs text-muted-foreground">{t(SCAN_TO_INSTALL, lang)}</p>
           <div className="mx-auto mt-2 flex h-24 w-24 items-center justify-center border">
-            <span className="text-xs text-muted-foreground">QR Code</span>
+            <span className="text-xs text-muted-foreground">{t(QR_CODE, lang)}</span>
           </div>
         </div>
 

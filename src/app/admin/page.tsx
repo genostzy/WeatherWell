@@ -39,6 +39,7 @@ import { getZoneStatus } from "@/lib/zone-status";
 import { buildZoneInputForZone, computeZoneState } from "@/lib/risk-engine/score";
 import type { LocalizedText } from "@/lib/types";
 
+const PAGE_TITLE: LocalizedText = { en: "Admin Dashboard", fil: "Dashboard ng Admin" };
 const SUBTITLE: LocalizedText = {
   en: "Live picture of every zone — hazards, crowd reports, and evacuation capacity",
   fil: "Live na larawan ng bawat zone — panganib, ulat, at kapasidad ng evacuation",
@@ -106,7 +107,7 @@ export default function AdminPage() {
     <main className="flex min-h-screen flex-col items-center gap-6 p-4 sm:p-6 lg:p-8">
       <div className="w-full max-w-2xl space-y-6 lg:max-w-5xl">
         <div>
-          <h1 className="text-2xl font-bold">Admin Dashboard</h1>
+          <h1 className="text-2xl font-bold">{t(PAGE_TITLE, lang)}</h1>
           <p className="text-muted-foreground">{t(SUBTITLE, lang)}</p>
         </div>
 

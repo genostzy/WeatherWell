@@ -6,7 +6,12 @@ import { SeverityBadge } from "./severity-badge";
 import { ShareAlertButton } from "./share-alert-button";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
-import type { AlertRecord, Zone } from "@/lib/types";
+import type { AlertRecord, LocalizedText, Zone } from "@/lib/types";
+
+const NO_ACTIVE_ALERT: LocalizedText = {
+  en: "No active alert for this zone.",
+  fil: "Walang aktibong alerto para sa zone na ito.",
+};
 
 const CONFIDENCE_LABEL = {
   en: { estimated: "Estimated", validated: "Validated", calibrated: "Calibrated" },
@@ -47,7 +52,9 @@ export function AlertCard({
             </div>
           </>
         ) : (
-          <p className="text-muted-foreground">No active alert for this zone.</p>
+          <p lang={lang} className="text-muted-foreground">
+            {t(NO_ACTIVE_ALERT, lang)}
+          </p>
         )}
       </CardContent>
     </Card>

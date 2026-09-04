@@ -277,7 +277,7 @@ This table is the single source of truth for implementation state. Everything ab
 | Capability | Status | Note |
 |---|---|---|
 | All resident and operator screens | **Built** | 9 routes, full first-run click-through |
-| Bilingual UI (English / Filipino) | **Built** | Localised throughout, bar a short tail: three visible strings and two `aria-label`s are still English-only |
+| Bilingual UI (English / Filipino) | **Built** | Every user-facing string, including screen-reader labels, goes through the localisation layer |
 | Onboarding, consent, zone selection | **Built** | GPS auto-detect is a stub — proposes a zone to confirm; real matching needs boundary polygons |
 | Homepage map, live position, markers, legend | **Built** | Leaflet with hazard backdrop and POI markers |
 | Community pins — create, edit, delete, vote, moderate | **Built** | Photos are a local preview, never uploaded |
