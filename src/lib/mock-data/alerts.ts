@@ -4,28 +4,37 @@ export const MOCK_ALERTS: AlertRecord[] = [
   {
     id: "alert-1",
     zoneId: "zone-1",
-    severity: "orange",
+    // zone-1's own recent reports are knee-deep, which is a `red` reading
+    // under DEPTH_SEVERITY — so this alert follows its reports rather than
+    // sitting a tier below them.
+    severity: "red",
     message: {
-      en: "Water levels rising near Barangay Nilombot, Mapandan. Monitor conditions and prepare to evacuate. (Orange Rainfall Warning level.)",
-      fil: "Tumataas ang tubig malapit sa Barangay Nilombot, Mapandan. Bantayan ang sitwasyon at maghanda nang lumikas. (Antas ng Orange Rainfall Warning.)",
+      en: "Knee-deep flooding reported in Barangay Nilombot, Mapandan. Move to the evacuation center now. (Red Rainfall Warning level.)",
+      fil: "May baha na hanggang tuhod sa Barangay Nilombot, Mapandan. Pumunta na sa evacuation center ngayon. (Antas ng Red Rainfall Warning.)",
     },
     source: "auto_crowdsourced",
     confidence: "estimated",
-    predictedTiming: { en: "Watch in 3h", fil: "Pagbabantay sa 3h" },
+    predictedTiming: { en: "Warning now", fil: "Babala ngayon" },
     issuedAt: "2026-09-01T08:00:00.000Z",
     isActive: true,
   },
   {
     id: "alert-2",
     zoneId: "zone-2",
-    severity: "red",
+    // Waist-deep is an `evacuate` reading under DEPTH_SEVERITY (see depth.ts —
+    // waist on the adult scale is already near a child's shoulders), and this
+    // alert is auto_crowdsourced from zone-2's own waist-deep reports, so its
+    // severity has to follow them. No PAGASA rainfall-warning colour is cited
+    // here because PAGASA's scale stops at Red; "Evacuate Now" is this app's
+    // own tier above it.
+    severity: "evacuate",
     message: {
-      en: "Waist-deep flooding reported in Barangay Poblacion, Mangaldan. Move to the evacuation center now. (Red Rainfall Warning level.)",
-      fil: "May baha na hanggang baywang sa Barangay Poblacion, Mangaldan. Pumunta na sa evacuation center ngayon. (Antas ng Red Rainfall Warning.)",
+      en: "Waist-deep flooding reported in Barangay Poblacion, Mangaldan. Evacuate immediately.",
+      fil: "May baha na hanggang baywang sa Barangay Poblacion, Mangaldan. Lumikas kaagad.",
     },
     source: "auto_crowdsourced",
     confidence: "estimated",
-    predictedTiming: { en: "Warning now", fil: "Babala ngayon" },
+    predictedTiming: { en: "Evacuate now", fil: "Lumikas ngayon" },
     issuedAt: "2026-09-01T08:30:00.000Z",
     isActive: true,
   },

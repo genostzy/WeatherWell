@@ -15,13 +15,13 @@ describe("PersonalStatusHeadline", () => {
     expect(screen.getByRole("heading", { name: "Safe" })).toBeInTheDocument();
   });
 
-  it("shows 'Cautionary' for an orange alert (zone-1)", () => {
-    render(<PersonalStatusHeadline zone={MOCK_ZONES[0]} />);
+  it("shows 'Cautionary' for a yellow alert (zone-4)", () => {
+    render(<PersonalStatusHeadline zone={MOCK_ZONES[3]} />);
     expect(screen.getByRole("heading", { name: "Cautionary" })).toBeInTheDocument();
   });
 
-  it("shows 'Dangerous' for a red alert (zone-2)", () => {
-    render(<PersonalStatusHeadline zone={MOCK_ZONES[1]} />);
+  it("shows 'Dangerous' for a red alert (zone-1)", () => {
+    render(<PersonalStatusHeadline zone={MOCK_ZONES[0]} />);
     expect(screen.getByRole("heading", { name: "Dangerous" })).toBeInTheDocument();
   });
 

@@ -4,7 +4,7 @@ import { MOCK_ZONES } from "@/lib/mock-data";
 import type { Zone } from "@/lib/types";
 
 /**
- * zone-2 (red/dangerous) and zone-3 (evacuate/hazardous) are real mock zones
+ * zone-2 and zone-3 (both evacuate/hazardous) are real mock zones
  * with known coordinates and known statuses. They're used here as the
  * "other" hazardous zone a synthetic route can be placed near or far from —
  * decoupling this test from whatever real-world distance the shipped zones'

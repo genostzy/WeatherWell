@@ -47,9 +47,10 @@ describe("ZoneMap", () => {
     const user = userEvent.setup();
     const { container } = render(<ZoneMap zones={MOCK_ZONES} />);
 
-    // zone-3 carries the only "evacuate" mock alert, so Hazardous shows one zone.
-    await user.click(screen.getByRole("button", { name: /hazardous \(1\)/i }));
-    expect(container.querySelectorAll('[data-testid="zone-region"]')).toHaveLength(1);
+    // zone-2 and zone-3 both carry "evacuate" mock alerts (waist- and neck-deep
+    // reports respectively), so Hazardous shows two zones.
+    await user.click(screen.getByRole("button", { name: /hazardous \(2\)/i }));
+    expect(container.querySelectorAll('[data-testid="zone-region"]')).toHaveLength(2);
 
     await user.click(screen.getByRole("button", { name: /^all/i }));
     expect(container.querySelectorAll('[data-testid="zone-region"]')).toHaveLength(

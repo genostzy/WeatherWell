@@ -11,7 +11,7 @@ describe("AlertCard", () => {
   it("shows the zone name, severity, and English message by default", () => {
     render(<AlertCard alert={alert} zone={zone} />);
     expect(screen.getByText(zone.name)).toBeInTheDocument();
-    expect(screen.getByText("Watch")).toBeInTheDocument();
+    expect(screen.getByText("Warning")).toBeInTheDocument();
     expect(screen.getByText(alert.message.en)).toBeInTheDocument();
   });
 
