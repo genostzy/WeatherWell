@@ -38,4 +38,16 @@ describe("MarkerLegend", () => {
       "true"
     );
   });
+
+  it("explains the community pin marker and labels it unverified", async () => {
+    const user = userEvent.setup();
+    render(<MarkerLegend />);
+
+    await user.click(screen.getByRole("button", { name: /see more/i }));
+
+    // Pins are the only citizen-created marker on the map; the legend has to
+    // say so, or their dashed border is an unexplained visual difference.
+    expect(screen.getByText(/community pin/i)).toBeInTheDocument();
+    expect(screen.getByText(/unverified/i)).toBeInTheDocument();
+  });
 });

@@ -7,6 +7,7 @@ import {
   ChevronUp,
   Droplet,
   Landmark,
+  MapPin,
   Pill,
   ShoppingBasket,
   Stethoscope,
@@ -33,13 +34,33 @@ const STATUS_SWATCH_COLOR: Record<ZoneStatus, string> = {
   hazardous: SEVERITY_HEX.evacuate,
 };
 
-const MARKER_LEGEND_ITEMS: { key: string; label: LocalizedText; icon: ComponentType<{ size?: number }> }[] = [
+const MARKER_LEGEND_ITEMS: {
+  key: string;
+  label: LocalizedText;
+  icon: ComponentType<{ size?: number }>;
+  /** Drawn outlined-and-dashed rather than filled, mirroring the real marker — see the community-pin entry below. */
+  unverified?: boolean;
+}[] = [
   { key: "evacuation", label: { en: "Evacuation center", fil: "Evacuation center" }, icon: Building2 },
   { key: "health_center", label: { en: "Health center", fil: "Health center" }, icon: Stethoscope },
   { key: "pharmacy", label: { en: "Pharmacy", fil: "Botika" }, icon: Pill },
   { key: "market", label: { en: "Market", fil: "Palengke" }, icon: ShoppingBasket },
   { key: "water_station", label: { en: "Water refilling station", fil: "Water station" }, icon: Droplet },
   { key: "barangay_office", label: { en: "Barangay office", fil: "Barangay office" }, icon: Landmark },
+  /**
+   * Community pins are the one citizen-created marker type on the map, and
+   * createCommunityPinMarkerIcon draws them with a dashed border precisely so
+   * they're never mistaken for an official marker. The legend has to teach
+   * that distinction, or the dashed border is just an unexplained visual
+   * difference — so this swatch is outlined-and-dashed against the others'
+   * solid fill, and the label says plainly that pins aren't verified.
+   */
+  {
+    key: "community_pin",
+    label: { en: "Community pin — unverified", fil: "Community pin — hindi pa na-verify" },
+    icon: MapPin,
+    unverified: true,
+  },
 ];
 
 const LEGEND_TITLE: LocalizedText = { en: "Map legend", fil: "Legend ng Mapa" };
@@ -105,7 +126,11 @@ export function MarkerLegend() {
           {MARKER_LEGEND_ITEMS.map((item) => (
             <div key={item.key} className="flex items-center gap-1.5">
               <span
-                className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-sm bg-foreground/60 text-background"
+                className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-sm ${
+                  item.unverified
+                    ? "border border-dashed border-foreground/70 text-foreground"
+                    : "bg-foreground/60 text-background"
+                }`}
                 aria-hidden="true"
               >
                 <item.icon size={10} />
