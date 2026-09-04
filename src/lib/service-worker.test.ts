@@ -15,6 +15,21 @@ import vm from "node:vm";
  * not be confused for each other, which is what these assert.
  */
 
+const ORIGIN = "https://weatherwell.test";
+
+const SW_SOURCE = readFileSync(join(process.cwd(), "public", "sw.js"), "utf8");
+
+/**
+ * Read from the worker rather than restated here. Bumping VERSION is a routine
+ * deploy step, and a suite that broke every time someone did it would train
+ * people to distrust it exactly when it matters.
+ */
+const VERSION = /const VERSION = "([^"]+)"/.exec(SW_SOURCE)?.[1] ?? "";
+const SHELL_CACHE = `weatherwell-shell-${VERSION}`;
+const ASSET_CACHE = `weatherwell-assets-${VERSION}`;
+/** Unversioned by design — evacuation data must survive a deploy. */
+const ZONE_CACHE = "weatherwell-zones";
+
 interface FakeResponse {
   body: string;
   status: number;
@@ -89,9 +104,8 @@ function loadServiceWorker(options: {
     clients: { matchAll: async () => [], openWindow: async () => {} },
   };
 
-  const source = readFileSync(join(process.cwd(), "public", "sw.js"), "utf8");
   vm.createContext(sandbox);
-  vm.runInContext(source, sandbox);
+  vm.runInContext(SW_SOURCE, sandbox);
 
   return { listeners, store };
 }
@@ -111,15 +125,13 @@ async function handleFetch(
   return responded ? await responded : undefined;
 }
 
-const ORIGIN = "https://weatherwell.test";
-
 describe("service worker request routing", () => {
   it("serves a fresh page from the network rather than the cached copy", async () => {
     // The regression this rewrite exists for. Under the previous cache-first
     // rule an installed app kept serving its original build forever, so no
     // fix to alert logic could ever reach a resident's device.
     const { listeners } = loadServiceWorker({
-      caches: { "weatherwell-shell-v2": { [`${ORIGIN}/`]: "STALE PAGE" } },
+      caches: { [SHELL_CACHE]: { [`${ORIGIN}/`]: "STALE PAGE" } },
       fetch: async () => response("FRESH PAGE"),
     });
 
@@ -131,7 +143,7 @@ describe("service worker request routing", () => {
   it("falls back to the cached page when the network is gone", async () => {
     // The offline promise. This must keep working, or the product does not.
     const { listeners } = loadServiceWorker({
-      caches: { "weatherwell-shell-v2": { [`${ORIGIN}/evacuation`]: "CACHED EVACUATION" } },
+      caches: { [SHELL_CACHE]: { [`${ORIGIN}/evacuation`]: "CACHED EVACUATION" } },
       fetch: async () => {
         throw new Error("offline");
       },
@@ -147,7 +159,7 @@ describe("service worker request routing", () => {
 
   it("serves zone data from cache first, so an outage still shows a zone", async () => {
     const { listeners } = loadServiceWorker({
-      caches: { "weatherwell-zones": { [`${ORIGIN}/api/zones`]: "CACHED ZONES" } },
+      caches: { [ZONE_CACHE]: { [`${ORIGIN}/api/zones`]: "CACHED ZONES" } },
       fetch: async () => response("NETWORK ZONES"),
     });
 
@@ -158,7 +170,7 @@ describe("service worker request routing", () => {
 
   it("never serves a stale alert while a network exists", async () => {
     const { listeners } = loadServiceWorker({
-      caches: { "weatherwell-shell-v2": { [`${ORIGIN}/api/alerts`]: "STALE ALERT" } },
+      caches: { [SHELL_CACHE]: { [`${ORIGIN}/api/alerts`]: "STALE ALERT" } },
       fetch: async () => response("LIVE ALERT"),
     });
 
@@ -171,7 +183,7 @@ describe("service worker request routing", () => {
     let networkCalls = 0;
     const { listeners } = loadServiceWorker({
       caches: {
-        "weatherwell-assets-v2": { [`${ORIGIN}/_next/static/chunks/abc123.js`]: "CACHED CHUNK" },
+        [ASSET_CACHE]: { [`${ORIGIN}/_next/static/chunks/abc123.js`]: "CACHED CHUNK" },
       },
       fetch: async () => {
         networkCalls += 1;
@@ -215,7 +227,7 @@ describe("service worker cache lifecycle", () => {
       caches: {
         "weatherwell-v1": { old: "x" },
         "weatherwell-shell-v1": { old: "x" },
-        "weatherwell-shell-v2": { current: "x" },
+        [SHELL_CACHE]: { current: "x" },
       },
     });
 
@@ -225,20 +237,20 @@ describe("service worker cache lifecycle", () => {
 
     expect(store.has("weatherwell-v1")).toBe(false);
     expect(store.has("weatherwell-shell-v1")).toBe(false);
-    expect(store.has("weatherwell-shell-v2")).toBe(true);
+    expect(store.has(SHELL_CACHE)).toBe(true);
   });
 
   it("keeps zone data across a version bump", async () => {
     // Zone and evacuation data is content, not code. Wiping it on deploy
     // would leave a device that updated and then lost signal with nothing.
     const { listeners, store } = loadServiceWorker({
-      caches: { "weatherwell-zones": { [`${ORIGIN}/api/zones`]: "ZONES" } },
+      caches: { [ZONE_CACHE]: { [`${ORIGIN}/api/zones`]: "ZONES" } },
     });
 
     const waits: Promise<unknown>[] = [];
     listeners.activate({ waitUntil: (p: Promise<unknown>) => waits.push(p) });
     await Promise.all(waits);
 
-    expect(store.has("weatherwell-zones")).toBe(true);
+    expect(store.has(ZONE_CACHE)).toBe(true);
   });
 });
