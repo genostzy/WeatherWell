@@ -77,11 +77,5 @@ export const MOCK_WATER_LEVEL_REPORTS: WaterLevelReport[] = [
   { id: "report-11", zoneId: "zone-4", depthLevel: "ankle", minutesAgo: 63, trustWeight: 1.1, isOutlier: false },
 ];
 
-export function getRecentReportsForZone(zoneId: string): WaterLevelReport[] {
-  return MOCK_WATER_LEVEL_REPORTS.filter((report) => report.zoneId === zoneId).sort(
-    (a, b) => a.minutesAgo - b.minutesAgo
-  );
-}
-
 /** PRD Anti-Abuse layer 3: no single report triggers an alert — several agreeing ones must arrive first. */
 export const REPORT_THRESHOLD = 3;
