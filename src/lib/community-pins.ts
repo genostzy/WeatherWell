@@ -176,16 +176,11 @@ export function restoreCommunityPin(pinId: string): void {
  * Phase 1; real geofence + rate-limit enforcement lands Phase 3). Plain
  * function, not a hook: today's only call site (map-canvas.tsx) reads this
  * inline inside a component already subscribed to useCommunityPins(), which
- * re-renders on every vote anyway. Use useHasVotedOnPin below for any future
- * consumer that isn't already re-rendering off one of these stores.
+ * re-renders on every vote anyway. A consumer that isn't already re-rendering
+ * off one of these stores would need a reactive wrapper over votesStore.
  */
 export function hasVotedOnPin(pinId: string): boolean {
   return pinId in votesStore.getSnapshot();
-}
-
-/** Reactive equivalent of hasVotedOnPin — re-renders its own component when this pin's vote state changes, independent of the pins store. */
-export function useHasVotedOnPin(pinId: string): boolean {
-  return pinId in votesStore.useStore();
 }
 
 /**
