@@ -16,8 +16,8 @@ import { ConsentNotice } from "@/features/onboarding/consent-notice";
 import { ZonePicker } from "@/features/onboarding/zone-picker";
 import { EmergencyHotlineButton } from "@/components/emergency-hotline-button";
 import { ZoneAlertListFallback } from "@/features/homepage-map/zone-alert-list-fallback";
-import { MarkerLegend } from "@/features/homepage-map/marker-legend";
-import { HazardTypeSelector } from "@/features/homepage-map/hazard-type-selector";
+import { MarkerLegend } from "@/features/map/marker-legend";
+import { HazardTypeSelector } from "@/features/map/hazard-type-selector";
 import { PersonalStatusHeadline } from "@/features/homepage-map/personal-status-headline";
 import AdminPage from "@/app/admin/page";
 import {

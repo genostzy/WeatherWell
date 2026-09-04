@@ -1,23 +1,22 @@
 "use client";
 
-import { MapContainer, TileLayer, Marker, Circle, Polyline, Popup, useMapEvents } from "react-leaflet";
-import "leaflet/dist/leaflet.css";
+import { Marker, Polyline, Popup, useMapEvents } from "react-leaflet";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
-import { getPOIsForZone, getHazardSusceptibilityForZone } from "@/lib/mock-data";
 import { getZoneStatus, getZoneStatusColor, ZONE_STATUS_LABEL } from "@/lib/zone-status";
 import { useZoneOverrides, resolveEffectiveAlert } from "@/lib/zone-overrides";
 import { useCommunityPins, voteOnPin, hasVotedOnPin, isOwnPin, type CommunityPin } from "@/lib/community-pins";
 import { PIN_STATUS_LABEL } from "@/lib/community-pin";
-import { hazardRiskColor } from "./hazard-color";
+import { MapShell } from "@/features/map/map-shell";
+import { HazardBackdropLayer } from "@/features/map/hazard-backdrop-layer";
+import { PoiMarkerLayer } from "@/features/map/poi-marker-layer";
 import {
   createStatusMarkerIcon,
-  createPoiMarkerIcon,
   createEvacuationMarkerIcon,
   createCommunityPinMarkerIcon,
-} from "./marker-icons";
-import { MarkerLegend } from "./marker-legend";
-import { HazardTypeSelector } from "./hazard-type-selector";
+} from "@/features/map/marker-icons";
+import { MarkerLegend } from "@/features/map/marker-legend";
+import { HazardTypeSelector } from "@/features/map/hazard-type-selector";
 import type { HazardType, LocalizedText, Zone } from "@/lib/types";
 
 const MAP_ARIA_LABEL: LocalizedText = {
@@ -92,34 +91,29 @@ export function MapCanvas({
   const center: [number, number] = [zones[0].lat, zones[0].lng];
 
   return (
-    <div
-      className={`relative h-[340px] w-full overflow-hidden rounded-md border-2 border-border sm:h-[400px] lg:h-[600px] ${isPlacingPin ? "cursor-crosshair" : ""}`}
-      aria-label={t(MAP_ARIA_LABEL, lang)}
+    <MapShell
+      center={center}
+      ariaLabel={t(MAP_ARIA_LABEL, lang)}
+      className={isPlacingPin ? "cursor-crosshair" : ""}
+      overlay={
+        <>
+          <div className="pointer-events-auto absolute top-2 right-2">
+            <MarkerLegend />
+          </div>
+          <div className="pointer-events-auto absolute bottom-2 left-2">
+            <HazardTypeSelector value={hazardType} onChange={onHazardTypeChange} />
+          </div>
+          {isPlacingPin && (
+            <div className="pointer-events-none absolute top-2 left-1/2 -translate-x-1/2 rounded-md border-2 border-border bg-background/95 px-3 py-1 text-xs font-medium shadow-md">
+              {t(TAP_MAP_TO_PLACE, lang)}
+            </div>
+          )}
+        </>
+      }
     >
-      <MapContainer center={center} zoom={14} scrollWheelZoom={false} style={{ height: "100%", width: "100%" }}>
-        {isPlacingPin && onMapClickForPin && <PinPlacer onPlace={onMapClickForPin} />}
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
+      {isPlacingPin && onMapClickForPin && <PinPlacer onPlace={onMapClickForPin} />}
 
-        {zones.map((zone) => {
-          const risk = getHazardSusceptibilityForZone(zone.id)[hazardType];
-          return (
-            <Circle
-              key={`hazard-${zone.id}`}
-              center={[zone.lat, zone.lng]}
-              radius={500}
-              pathOptions={{
-                color: hazardRiskColor(risk),
-                fillColor: hazardRiskColor(risk),
-                fillOpacity: 0.2,
-                opacity: 0.3,
-                weight: 1,
-              }}
-            />
-          );
-        })}
+      <HazardBackdropLayer zones={zones} hazardType={hazardType} />
 
         {zones.map((zone) => {
           const alert = resolveEffectiveAlert(zone.id, overrides[zone.id]?.alertSeverity);
@@ -155,17 +149,7 @@ export function MapCanvas({
           </Marker>
         ))}
 
-        {zones.flatMap((zone) =>
-          getPOIsForZone(zone.id).map((poi) => (
-            <Marker
-              key={poi.id}
-              position={[poi.lat, poi.lng]}
-              icon={createPoiMarkerIcon(poi.category, poi.name)}
-            >
-              <Popup>{poi.name}</Popup>
-            </Marker>
-          ))
-        )}
+        <PoiMarkerLayer zones={zones} />
 
         {routeZone && (
           <Polyline
@@ -259,21 +243,6 @@ export function MapCanvas({
             </Marker>
           );
         })}
-      </MapContainer>
-
-      <div className="pointer-events-none absolute inset-0 z-[1000] p-2">
-        <div className="pointer-events-auto absolute top-2 right-2">
-          <MarkerLegend />
-        </div>
-        <div className="pointer-events-auto absolute bottom-2 left-2">
-          <HazardTypeSelector value={hazardType} onChange={onHazardTypeChange} />
-        </div>
-        {isPlacingPin && (
-          <div className="pointer-events-none absolute top-2 left-1/2 -translate-x-1/2 rounded-md border-2 border-border bg-background/95 px-3 py-1 text-xs font-medium shadow-md">
-            {t(TAP_MAP_TO_PLACE, lang)}
-          </div>
-        )}
-      </div>
-    </div>
+    </MapShell>
   );
 }

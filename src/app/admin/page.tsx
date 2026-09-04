@@ -9,6 +9,7 @@ import {
   AlertTriangle,
   Building2,
   CloudRain,
+  Map,
   MapPin,
   Play,
   Users,
@@ -46,6 +47,12 @@ const AT_A_GLANCE: LocalizedText = { en: "At a glance", fil: "Sa isang sulyap" }
 const HAZARDS: LocalizedText = { en: "Hazard monitoring", fil: "Pagsubaybay sa panganib" };
 const ANALYTICS: LocalizedText = { en: "Trends & analytics", fil: "Mga trend at analytics" };
 const OPERATIONS: LocalizedText = { en: "Operations", fil: "Operasyon" };
+const OPEN_MAP: LocalizedText = { en: "Operations map", fil: "Mapa ng operasyon" };
+const MAP_HINT: LocalizedText = {
+  en: "See every zone at once — override an alert, log a headcount, or moderate a pin where it actually sits.",
+  fil: "Tingnan ang lahat ng zone nang sabay — baguhin ang alerto, itala ang bilang, o pamahalaan ang pin kung saan ito naroon.",
+};
+const OPEN_MAP_ACTION: LocalizedText = { en: "Open map", fil: "Buksan ang mapa" };
 const RUN_SIMULATION: LocalizedText = { en: "Run alert flow simulation", fil: "Patakbuhin ang alert flow simulation" };
 const SIMULATION_HINT: LocalizedText = {
   en: "Practice issuing an alert and watch every delivery channel fire, without notifying anyone.",
@@ -181,6 +188,24 @@ export default function AdminPage() {
 
         <section className="space-y-4">
           <h2 className="text-lg font-semibold">{t(OPERATIONS, lang)}</h2>
+
+          <Card>
+            <CardContent className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-medium">{t(OPEN_MAP, lang)}</p>
+                <p lang={lang} className="text-sm text-muted-foreground">
+                  {t(MAP_HINT, lang)}
+                </p>
+              </div>
+              <Button asChild>
+                <Link href="/admin/map">
+                  <Map aria-hidden="true" className="h-4 w-4" />
+                  {t(OPEN_MAP_ACTION, lang)}
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+
           <EvacuationManagementPanel zones={MOCK_ZONES} />
           <CommunityPinModerationPanel zones={MOCK_ZONES} />
 
