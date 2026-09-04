@@ -49,7 +49,7 @@ The final channel is human: a **Share Alert** button forwards the alert text int
 
 Every zone carries pre-authored evacuation instructions naming a specific centre and route, bundled ahead of time rather than computed live, so they work with no connectivity at all. Centre capacity shows as plain language — space available, limited, full — derived from a real headcount-to-capacity ratio when one is being tracked, so residents see actual spots remaining rather than a status word someone set by hand.
 
-A **safest-route** action recommends a path that avoids zones currently rated Dangerous or Hazardous rather than simply the shortest one. Alongside it, a live compass bearing and distance ("700m NE to Nilombot Elementary School") updates as the resident moves — straight-line direction, explicitly labelled as such, not a walkable path.
+A **safest-route** action recommends a path that avoids zones currently rated Dangerous or Hazardous rather than simply the shortest one, and never names an evacuation centre that sits inside one — a clear path is no use if it ends somewhere being evacuated. Alongside it, a live compass bearing and distance ("700m NE to Nilombot Elementary School") updates as the resident moves — straight-line direction, explicitly labelled as such, not a walkable path.
 
 All of this renders inside WeatherWell's own map. There is deliberately **no "open in Google Maps" handoff**, at any stage: a generic map has no idea which zones this system currently considers hazardous, and would happily route someone straight through one. Where every available path crosses a hazardous zone, the route is still shown as the best option available but visibly flagged — never presented as safe when it isn't.
 
@@ -231,7 +231,11 @@ Location is personal data under the **Data Privacy Act of 2012 (RA 10173)**.
 
 **Map** — Leaflet with OpenStreetMap raster tiles: free and key-less, subject to OSM's fair-use policy. Self-hosted or paid tiles are the answer if traffic outgrows pilot scale.
 
-**Offline** — service worker, cache-first for zone and evacuation data, network-first with cache fallback for alerts, Background Sync for reports submitted while offline. Basemap tiles need connectivity until per-zone tile caching ships; with no tiles cached at all, the homepage degrades to a plain list of zone alerts rather than a blank map.
+**Offline** — a service worker choosing its strategy per kind of request rather than applying one rule to everything. Zone and evacuation data is cache-first, because surviving an outage is the point. Alerts are network-first, because a stale alert is worse than a slow one. Pages are network-first with a short timeout, so a good connection gets the current build while a degraded one still falls back to cache almost immediately. Content-hashed build assets are cache-first, since a change there produces a new URL. Reports submitted offline queue via Background Sync.
+
+Cache names carry a version that is bumped on deploy, and activation deletes anything not on the current list. This is what lets a fix reach a device that has already installed the app: without it, a cache-first shell pins a resident to whatever build they first received, and a correction to alert logic could never reach the people relying on it. The zone-data cache is deliberately exempt from that versioning, so a device that updates and then loses signal still has its evacuation instructions.
+
+Basemap tiles need connectivity until per-zone tile caching ships; with no tiles cached at all, the homepage degrades to a plain list of zone alerts rather than a blank map.
 
 **Push** — Web Push API with VAPID keys; the service worker handles push events and retries once after 60 seconds.
 
