@@ -42,3 +42,7 @@ next-env.d.ts
 
 # graphify generated output
 /graphify-out/
+
+# Agent skills installed via `npx skills add` — reproducible from skills-lock.json
+.agents/
+.claude/skills/

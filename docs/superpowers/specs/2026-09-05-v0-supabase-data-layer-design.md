@@ -202,51 +202,101 @@ Vote counts are **derived**, not stored: `community_pins` carries no `upvotes`/`
 
 Enabled on every table. Nothing is writable from a client except through a Server Action, and the policies below are the backstop that makes a forgotten check in TypeScript non-fatal.
 
-```sql
-create function is_operator(uid uuid) returns boolean
-  language sql security definer stable
-  as $$ select exists (
-       select 1 from profiles where id = uid and role = 'operator') $$;
+### Four rules this section obeys
 
+Supabase's own Postgres guidance names traps that a first-pass policy set walks straight into. Each of these changed the design:
+
+1. **Anonymous users carry the `authenticated` Postgres role.** Since every resident here signs in anonymously, `TO authenticated` includes them — which is what we want, but it means the role can never distinguish a guest from a real account. Anything needing that distinction must read `auth.jwt() ->> 'is_anonymous'`, not the role. `auth.role()` is deprecated and is specifically broken by anonymous sign-ins; it appears nowhere below.
+2. **`TO authenticated` alone is authentication without authorization.** Every policy pairs the role with an ownership predicate.
+3. **`UPDATE` needs both `USING` and `WITH CHECK`.** With only `USING`, a user can pass the check and then reassign the row's owner on the way out. `UPDATE` also silently returns zero rows with no error when there is no `SELECT` policy.
+4. **`auth.uid()` is wrapped in a subselect.** Bare, it is evaluated per row; `(select auth.uid())` is evaluated once.
+
+### The operator check
+
+`is_operator` is `SECURITY DEFINER`, which bypasses RLS — necessary to read `profiles` from inside a policy, and dangerous by default. Postgres grants `EXECUTE` to `PUBLIC` on every new function, so the same function in the `public` schema would be a callable endpoint that lets anyone enumerate operators by uuid. It therefore takes **no argument**, reads `auth.uid()` itself, lives in a private schema, pins `search_path`, and has execute revoked:
+
+```sql
+create schema if not exists private;
+
+create or replace function private.is_operator()
+  returns boolean
+  language sql
+  security definer
+  set search_path = ''      -- else the definer's path is an injection vector
+  stable
+as $$
+  select exists (
+    select 1 from public.profiles
+    where id = (select auth.uid()) and role = 'operator'
+  );
+$$;
+
+revoke execute on function private.is_operator()
+  from public, anon, authenticated, service_role;
+```
+
+> **Verify at implementation time.** Whether a policy can call a function the querying role lacks `EXECUTE` on is the one thing here not to take on trust. The first RLS test asserts both halves: a resident can still read pins, *and* cannot call `private.is_operator()` directly. If the revoke breaks policy evaluation, the fallback is to keep the revoke off `authenticated` and rely on the function taking no argument, which already removes the enumeration vector.
+
+### Policies
+
+```sql
 -- Reference data: world-readable, never client-writable.
 zones, evacuation_centers, points_of_interest, hazard_susceptibility
-  select using (true)
-  -- no insert/update/delete policy at all, so all writes are denied
+  for select to anon, authenticated using (true)
+  -- no insert/update/delete policy at all, so every write is denied
 
 alerts
-  select using (true)
-  insert with check (is_operator(auth.uid()))
-  update using      (is_operator(auth.uid()))
+  for select to anon, authenticated using (true)
+  for insert to authenticated with check ((select private.is_operator()))
+  for update to authenticated using       ((select private.is_operator()))
+                             with check   ((select private.is_operator()))
 
 water_level_reports
-  select using (true)
-  insert with check (auth.uid() = reporter_id)
+  for select to anon, authenticated using (true)
+  for insert to authenticated with check ((select auth.uid()) = reporter_id)
   -- no update or delete: a report is a historical observation
 
 community_pins
-  select using (true)
-  insert with check (auth.uid() = author_id)
-  update using      (auth.uid() = author_id or is_operator(auth.uid()))
+  for select to anon, authenticated using (true)
+  for insert to authenticated with check ((select auth.uid()) = author_id)
+  for update to authenticated
+      using      ((select auth.uid()) = author_id or (select private.is_operator()))
+      with check ((select auth.uid()) = author_id or (select private.is_operator()))
   -- no delete: removal is the soft-delete flag, so restore stays possible
 
 pin_votes
-  select using (true)
-  insert with check (auth.uid() = voter_id)
-  update using      (auth.uid() = voter_id)      -- changing your own vote
+  for select to anon, authenticated using (true)
+  for insert to authenticated with check ((select auth.uid()) = voter_id)
+  for update to authenticated                       -- changing your own vote
+      using      ((select auth.uid()) = voter_id)
+      with check ((select auth.uid()) = voter_id)
 
 evacuation_check_ins
-  select using (auth.uid() = user_id or is_operator(auth.uid()))
-  insert with check (auth.uid() = user_id)
-  update using      (auth.uid() = user_id)
+  for select to authenticated
+      using ((select auth.uid()) = user_id or (select private.is_operator()))
+  for insert to authenticated with check ((select auth.uid()) = user_id)
+  for update to authenticated
+      using      ((select auth.uid()) = user_id)
+      with check ((select auth.uid()) = user_id)
 
 profiles
-  select using (auth.uid() = id or is_operator(auth.uid()))
+  for select to authenticated
+      using ((select auth.uid()) = id or (select private.is_operator()))
   -- no client insert: a trigger on auth.users creates the row
+  -- no client update: role is not self-assignable, which is the entire point
 ```
+
+Every column named in a policy gets an index: `water_level_reports.reporter_id`, `community_pins.author_id`, `pin_votes.voter_id`, `evacuation_check_ins.user_id`.
 
 Check-ins are the one table that is **not** world-readable. A check-in says where a named person is and whether they need help; residents see their own, the operator sees the zone.
 
-`evacuation_centers.current_occupancy` is operator-written, which is why centers carry no client write policy — occupancy changes go through the alerts-and-centers Server Action.
+`evacuation_centers.current_occupancy` is operator-written, which is why centers carry no client write policy — occupancy changes go through a Server Action.
+
+### Two exposure traps
+
+**Tables created by SQL are not automatically reachable through the Data API.** That is a separate setting from RLS: RLS decides which *rows* are visible once a table is reachable at all. The migration grants `anon` and `authenticated` explicitly, and enables RLS on every table in `public` — including any that later look internal, because `public` is an exposed schema by default.
+
+**Views bypass RLS.** If `/api/zones` denormalises through a view rather than a query, it must be created `with (security_invoker = true)`, or the join silently returns rows the caller's policies would have refused.
 
 ---
 
@@ -371,9 +421,24 @@ Three layers, because they fail for different reasons.
 
 **Component tests — the bulk of the churn.** Tests that assume a synchronous `MOCK_ZONES` move to a seeded provider wrapper. `src/test-utils/mock-fixtures.ts` becomes the seed, and gains a `renderWithZones()` helper so the change is one wrapper per test file rather than a rewrite per test. This is mechanical and it is most of the diff — worth planning for rather than discovering at task six.
 
-**Database tests — new.** RLS policies are the security boundary, so they need tests that assert the *denials*, not just the permissions: a resident cannot insert an alert, cannot vote twice, cannot read another resident's check-in, cannot write to `zones`. These run against a local Supabase instance (`supabase start`) with pgTAP or plain SQL assertions.
+**Database tests — new.** RLS policies are the security boundary, so they need tests that assert the *denials*, not just the permissions. Each of these corresponds to a trap named above, so they are regression tests for real mistakes rather than a box-ticking sweep:
+
+- a resident cannot insert or update an alert
+- a resident cannot vote twice on one pin (primary key), nor change another person's vote
+- a resident cannot read another resident's check-in; an operator can read their zone's
+- a resident cannot write to `zones`, `evacuation_centers`, `points_of_interest` or `hazard_susceptibility`
+- a resident cannot update a pin to reassign `author_id` to someone else (the `WITH CHECK` trap)
+- a resident cannot set their own `profiles.role` to `operator`
+- an anonymous user is refused everywhere a resident is, since anonymous users carry the `authenticated` role and would otherwise pass a role-only check
+- `private.is_operator()` is not directly callable by `anon` or `authenticated`
+
+These run against a local Supabase instance (`supabase start`) with pgTAP or plain SQL assertions.
 
 CI gains a Supabase service container. The existing five gates (lint, typecheck, test, knip, build) stay.
+
+### Schema change workflow
+
+Iterate with `execute_sql` (MCP) or `supabase db query`, which run SQL without writing migration history. **Do not use `apply_migration` to iterate** — it writes a history entry per call, so `supabase db diff` and `db pull` then produce empty or conflicting diffs and the first attempt is the one you are stuck with. When a change is settled: run `supabase db advisors` (or MCP `get_advisors`) and fix what it reports, then `supabase db pull <name> --local --yes` to generate the migration, then `supabase migration list --local` to verify.
 
 ---
 
