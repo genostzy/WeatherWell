@@ -27,6 +27,10 @@ describe("onboarding → home zone threading", () => {
     await userEvent.click(screen.getByRole("button", { name: /i understand/i }));
     await userEvent.click(screen.getByText(zoneName));
     await userEvent.click(screen.getByRole("button", { name: /confirm zone/i }));
+    // Onboarding ends on the install step, not the zone picker. jsdom exposes
+    // no beforeinstallprompt, so it renders its manual-instructions form and
+    // the only way onward is the dismissal button.
+    await userEvent.click(screen.getByRole("button", { name: /not now/i }));
     unmount();
   }
 
