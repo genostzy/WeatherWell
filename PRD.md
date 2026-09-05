@@ -65,6 +65,22 @@ Philippine tools already exist — national hazard maps, flood dashboards, cell 
 
 ---
 
+## How This Answers the Challenge
+
+The challenge names three failures. Each maps to one of the mechanisms above — and each row also says how far it has actually been built, because "designed for" and "working today" are different claims and only one of them is worth trusting in an emergency.
+
+| The challenge's problem | WeatherWell's answer | Where it stands |
+|---|---|---|
+| Infrastructure collapse severs internet and cellular service, leaving centralised cloud early-warning inaccessible exactly when it is needed | Content is pre-positioned on the device *before* the outage, and the last delivery channel is a person: Share Alert pushes the alert text into the resident's own Messenger, Viber or SMS, so a warning keeps moving through a network the system itself can no longer reach. | Caching and Share Alert are built and work with no connection. Real push delivery, and a real backend to have cached *from*, are Stages 2–3. |
+| Communities struggle to translate broad national weather data into actionable, street-level evacuation protocols | Every zone carries a pre-authored evacuation centre and route. PAGASA's own Yellow/Orange/Red vocabulary is carried through so the wording matches what residents hear on radio and TV, then rendered as a plain-language status with one concrete action step, plus a depth reference drawn for an adult and a child rather than stated as a number. | Built end to end across four barangays. The translation is performed once by a person ahead of time: the app supplies the structure, the delivery and the offline guarantee, while the barangay supplies the local knowledge. |
+| No affordable, localised water-level sensors for real-time alerts | The community *is* the sensor network. Residents report depth against dry / ankle / knee / waist / neck, and enough independent, agreeing reports in one zone cross a threshold and raise an alert — no hardware, immediate coverage, and better the more people take part. | The reporting flow, the agreeing-report count and the threshold display are built, as is the per-device identity that limits casual abuse. The rest of what makes crowd data trustworthy is not: geofence and rate limit arrive in Stage 3 and reputation scoring in Stage 4, and while outlier downweighting behaves correctly, the flag it acts on is fixture data rather than something detected. This clause is answered in principle and demonstrated as an interaction, not yet enforced. |
+
+**On depending on a cloud backend.** Stage 2 introduces Supabase, which is centralised — the same category of system the challenge says fails. The distinction is what each part is responsible for: the cloud authors and aggregates, while *delivery* survives without it. A resident who has opened the app once already holds the alert, the evacuation instructions and the route on their own device, and from that point the network is optional and other people are the transport. Nothing in the design requires a resident to reach a server during the event itself.
+
+**What this does not solve.** It does not restore connectivity, and it does not replace official warnings — it complements PAGASA rather than competing with it. A resident who first installs the app during the typhoon, having never opened it before and with no signal, gets nothing from it; the community relay and the printed emergency cards exist for exactly that person, and they are an operational system requiring barangay coordination, not something software can deliver alone.
+
+---
+
 ## Who It Serves
 
 | Audience | How they use it |
