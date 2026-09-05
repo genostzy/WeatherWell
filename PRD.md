@@ -165,6 +165,18 @@ Residents without smartphones are served by a low-tech, high-trust human system 
 - **No drawn zone boundaries.** Baseline risk is a continuous hazard-tile backdrop; live status is a marker on top. Boundary data still exists and is still needed for geofencing — this removes boundaries from the *map's rendering*, not the data model. It avoids implying false precision at a zone's edges.
 - **Checked in dim light and at arm's length**, not only in a bright design tool.
 
+### Built to load on a bad connection
+
+The visual restraint above is not only a legibility choice — it is a performance budget, because the device this has to work on is a low-end Android phone on a degraded network during a power cut.
+
+- **No web fonts.** The system font stack only, so nothing blocks first paint waiting on a download.
+- **No charting library.** The admin trend views are hand-drawn SVG and CSS. A charting dependency is weight these phones cannot spare, for output that is a few polylines.
+- **No hero imagery, video, or decorative media.** The only images in the interface are icons and a resident's own locally-attached photo.
+- **Motion is limited to small interface transitions** — a dialog opening, a tooltip appearing. Nothing animates the content itself, and nothing is doing continuous work while a resident is reading an alert.
+- **The map is the one heavy dependency**, and it is loaded lazily rather than in the initial bundle, with a plain zone-alert list as the fallback when tiles cannot load at all.
+
+Measured on the deployed build, a first visit transfers roughly **230 KB compressed** across twelve files. That is the cost of arriving at the app with nothing cached; every subsequent visit is served from the device.
+
 ### Severity is one visual language
 
 | Severity | Label | Hex | Contrast |
@@ -339,7 +351,9 @@ That last criterion is deliberately part of the bar rather than a note. Every it
 ### Stage 2 — `v0` · Functional build
 Real data and real offline capability. Supabase schema with Row Level Security, Server Actions, Auth, and the operator PIN gate. Service worker with Background Sync. Offline map tiles for the resident's home zone. Self-hosted OSRM for real safest-route calculation. Real PAGASA readings and real hazard data replacing the mocks. A decision on whether pin photos go live.
 
-**Done when:** the app works fully offline on real seeded data, optional login works, and error/uptime monitoring is active.
+**Done when:** the app works fully offline on real seeded data, optional login works, the operator PIN gate is live, and error/uptime monitoring is active.
+
+> The PIN gate ships **in this stage, alongside the database — not after it.** Today `/admin` is unauthenticated and that is genuinely harmless: every override writes to the visitor's own device, so a stranger who opens it can only change what they themselves see. The moment a shared backend exists, that same unauthenticated screen can change what a whole barangay is told during a flood. The protection has to arrive with the thing that creates the risk, which is why it is an exit criterion rather than a task on a list.
 
 > Start the PAGASA data request at the *beginning* of this stage. It gates the highest-quality data option and moves on an institutional timeline, not ours.
 
