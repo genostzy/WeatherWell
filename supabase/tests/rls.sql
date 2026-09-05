@@ -101,4 +101,56 @@ begin
   end;
 end $$;
 
+-- Community tables: reports, pins, votes, check-ins — everything a resident
+-- writes. Two fixture users: 1111... acts as the resident under test,
+-- 2222... is the "someone else" every ownership trap tries to write as.
+-- 1111... already exists in auth.users from the self-promotion fixture
+-- above; 2222... is new here. Both are needed as real rows (not just UUIDs)
+-- because reporter_id/author_id/user_id all carry FK constraints to
+-- auth.users — without the FK target existing, these statements would fail
+-- with foreign_key_violation before ever reaching the RLS policy, proving
+-- nothing about ownership enforcement.
+insert into auth.users (id) values ('22222222-2222-2222-2222-222222222222');
+
+select tests.as_user('11111111-1111-1111-1111-111111111111');
+select tests.expect_denied(
+  'resident cannot file a report attributed to another user',
+  $$insert into public.water_level_reports (zone_id, depth_level, reporter_id)
+    values ('zone-1', 'knee', '22222222-2222-2222-2222-222222222222')$$);
+
+-- The WITH CHECK trap: passing USING on the way in, then reassigning on the
+-- way out. Against an empty table this UPDATE would match zero rows and
+-- succeed trivially (RLS filters rows, it does not raise) — so a real pin
+-- owned by 1111... is inserted first, as postgres, bypassing RLS.
+insert into public.community_pins (zone_id, status_tag, caption, lat, lng, author_id)
+values ('zone-1', 'passable', 'fixture pin', 14.0, 121.0,
+        '11111111-1111-1111-1111-111111111111');
+
+select tests.as_user('11111111-1111-1111-1111-111111111111');
+select tests.expect_denied(
+  'resident cannot reassign their own pin to another author',
+  $$update public.community_pins
+      set author_id = '22222222-2222-2222-2222-222222222222'
+    where author_id = '11111111-1111-1111-1111-111111111111'$$);
+
+-- Check-ins name a person and say whether they need help.
+select tests.as_user('11111111-1111-1111-1111-111111111111');
+select tests.expect_denied(
+  'resident cannot record a check-in as another user',
+  $$insert into public.evacuation_check_ins (zone_id, user_id, status)
+    values ('zone-1', '22222222-2222-2222-2222-222222222222', 'needs_help')$$);
+
+-- A resident reading another resident's check-in must return zero rows, not
+-- an error. Asserting this against an empty table would pass trivially, so a
+-- check-in owned by 2222... is inserted first, as postgres.
+insert into public.evacuation_check_ins (zone_id, user_id, status)
+values ('zone-1', '22222222-2222-2222-2222-222222222222', 'safe');
+
+select tests.as_user('11111111-1111-1111-1111-111111111111');
+select tests.expect_row_count(
+  'a resident cannot see another resident''s check-in',
+  $$select * from public.evacuation_check_ins
+    where user_id = '22222222-2222-2222-2222-222222222222'$$,
+  0);
+
 rollback;
