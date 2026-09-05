@@ -62,4 +62,43 @@ select tests.expect_denied(
   'authenticated cannot call private.is_operator() directly either (schema `private` has no USAGE grant)',
   $$select private.is_operator()$$);
 
+-- Alerts: the table the whole product exists to serve. zones is empty until
+-- Task 5, so a fixture zone is inserted here (as postgres, bypassing RLS)
+-- purely to satisfy alerts.zone_id's foreign key — it is not seed data.
+insert into public.zones
+  (id, psgc_barangay_code, name, evacuation_route_text, lat, lng, evacuation_route_path, hotline_number)
+values
+  ('zone-1', '000000000', 'Test Zone', '{"en":"x","fil":"x"}'::jsonb, 14.0, 121.0, '[]'::jsonb, '000');
+
+select tests.as_user('11111111-1111-1111-1111-111111111111');
+select tests.expect_denied(
+  'resident cannot issue an alert',
+  $$insert into public.alerts (zone_id, severity, message, source)
+    values ('zone-1', 'evacuate', '{"en":"x","fil":"x"}'::jsonb, 'manual')$$);
+
+select tests.as_anon();
+select tests.expect_denied(
+  'anonymous role cannot issue an alert',
+  $$insert into public.alerts (zone_id, severity, message, source)
+    values ('zone-1', 'evacuate', '{"en":"x","fil":"x"}'::jsonb, 'manual')$$);
+
+-- Plain assertion (not through expect_denied/expect_allowed) that the
+-- one-active-per-zone invariant is enforced by the database itself, not by
+-- client convention: running as postgres bypasses RLS entirely, so this
+-- proves the partial unique index, not a policy.
+do $$
+begin
+  set local role postgres;
+  insert into public.alerts (zone_id, severity, message, source)
+    values ('zone-1','red','{"en":"a","fil":"a"}'::jsonb,'manual');
+  begin
+    insert into public.alerts (zone_id, severity, message, source)
+      values ('zone-1','yellow','{"en":"b","fil":"b"}'::jsonb,'manual');
+    raise exception using errcode = 'TSTFL',
+      message = 'two active alerts were allowed for one zone';
+  exception
+    when unique_violation then raise notice 'ok: one active alert per zone enforced';
+  end;
+end $$;
+
 rollback;
