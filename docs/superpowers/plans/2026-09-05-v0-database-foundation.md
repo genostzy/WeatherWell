@@ -947,4 +947,4 @@ git push origin v0
 
 ## Resolved
 
-*(Task 2 Step 7 writes one line here. Plan 2 reads it.)*
+Revoking `EXECUTE` on `private.is_operator()` from `authenticated` breaks policy evaluation (confirmed both by the `profiles_read_own_or_operator` policy erroring with "permission denied for function is_operator" during an ordinary own-row query, and by an isolated scratch-table policy experiment). Applied the fallback: revoke from `public` and `anon` only, keep `EXECUTE` granted to `authenticated` and `service_role`; the no-argument signature (not the revoke) is what actually prevents operator enumeration.
