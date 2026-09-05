@@ -551,18 +551,12 @@ select tests.expect_denied(
     values ('zone-1', '22222222-2222-2222-2222-222222222222', 'needs_help')$$);
 
 -- A resident reading another resident's check-in must return zero rows, not an error.
-do $$
-declare visible int;
-begin
-  perform tests.as_user('11111111-1111-1111-1111-111111111111');
-  select count(*) into visible from public.evacuation_check_ins
-    where user_id = '22222222-2222-2222-2222-222222222222';
-  if visible <> 0 then
-    raise exception using errcode = 'TSTFL',
-      message = 'a resident could see another resident''s check-in';
-  end if;
-  raise notice 'ok: check-ins are not readable across residents';
-end $$;
+select tests.as_user('11111111-1111-1111-1111-111111111111');
+select tests.expect_row_count(
+  'a resident cannot see another resident''s check-in',
+  $$select * from public.evacuation_check_ins
+    where user_id = '22222222-2222-2222-2222-222222222222'$$,
+  0);
 ```
 
 - [ ] **Step 2: Run it to verify it fails**

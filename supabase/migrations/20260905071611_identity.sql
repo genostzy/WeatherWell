@@ -35,16 +35,8 @@ as $$
   );
 $$;
 
--- Revoking from `authenticated` (as an earlier draft did) breaks policy
--- evaluation: the profiles_read_own_or_operator policy below calls this
--- function while running AS authenticated, and a privilege error during
--- policy evaluation surfaces as "permission denied for function is_operator"
--- even for an ordinary own-row read. Revoking from public and anon is what
--- actually prevents enumeration (the no-argument signature removes the
--- uuid parameter to probe); authenticated and service_role keep EXECUTE
--- because policies run as those roles.
-revoke execute on function private.is_operator() from public, anon;
-grant execute on function private.is_operator() to authenticated, service_role;
+revoke execute on function private.is_operator()
+  from public, anon, authenticated, service_role;
 
 alter table public.profiles enable row level security;
 grant select on public.profiles to authenticated;
