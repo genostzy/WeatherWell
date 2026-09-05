@@ -37,11 +37,11 @@ The Philippines averages roughly twenty tropical cyclones a year. Four failures 
 
 ## The Solution
 
-Three mechanisms, each answering one of the failures above.
+Four mechanisms, each answering one of the failures above.
 
 ### 1. Multi-channel alert delivery that survives the outage
 
-Alerts travel over live internet first, as a push notification with one retry after 60 seconds. If push fails, a mock-SMS fallback path demonstrates carrier-independent delivery. If everything fails, the alert is already cached on the device from before the outage and displays on next open, clearly labelled as last-known and possibly outdated.
+Alerts travel over live internet first, as a push notification with one retry after 60 seconds. If push fails, a mock-SMS fallback path demonstrates delivery that does not depend on the data network — SMS rides the cellular voice/signalling path, which routinely survives when mobile data does not. If everything fails, the alert is already cached on the device from before the outage and displays on next open, clearly labelled as last-known and possibly outdated.
 
 The final channel is human: a **Share Alert** button forwards the alert text into Messenger, WhatsApp, Viber, or SMS through the resident's own apps. The system never sends these — the resident does — which is what lets an alert keep moving through a network the system itself can no longer reach.
 
@@ -61,6 +61,12 @@ Residents report flood depth against a visual reference anyone can use without t
 
 This is the zero-hardware substitute for sensors. It scales instantly, costs nothing to deploy, and improves as more residents participate — but it inherits the trust problem that comes with any crowdsourced input, which is why [Anti-Abuse](#anti-abuse) is a first-class part of the design rather than an afterthought.
 
+### 4. A place to rehearse before it is real
+
+The first time an officer issues an evacuation order should not be during an evacuation. **Drill mode** replays six scenarios end to end — prediction, alert issued, push sent, push failing, SMS fallback, cache, downstream cascade — on the operator's real dashboard, against real zones, with every step timed the way it would actually unfold.
+
+It notifies nobody. That is the point: the operator practises the decisions and the sequence without a single resident's phone lighting up, and can do it as often as they like at no cost and no risk. It doubles as the honest way to demonstrate the alert pipeline before any of it is wired to a real sender, which is why it is also how this build is shown.
+
 ### What makes this different
 
 Philippine tools already exist — national hazard maps, flood dashboards, cell broadcast, crowdsourced flood-report apps. Every one of them still assumes a live connection, either to reach people or to collect data. WeatherWell is built for the case where that assumption fails, and complements official sources by solving two specific problems at the moment their usual channels go dark: **distribution** and **ground truth**.
@@ -69,7 +75,7 @@ Philippine tools already exist — national hazard maps, flood dashboards, cell 
 
 ## How This Answers the Challenge
 
-The challenge names three failures. Each maps to one of the mechanisms above — and each row also says how far it has actually been built, because "designed for" and "working today" are different claims and only one of them is worth trusting in an emergency.
+The challenge names three failures, and they map onto the first three mechanisms above. (The fourth, drill mode, answers a problem the challenge does not raise but every disaster officer does: nowhere to practise. It is beyond the ask, not part of it.) Each row also says how far it has actually been built, because "designed for" and "working today" are different claims and only one of them is worth trusting in an emergency.
 
 | The challenge's problem | WeatherWell's answer | Where it stands |
 |---|---|---|
@@ -124,7 +130,9 @@ The prediction engine combines rainfall, terrain slope, and tidal data to estima
 
 Auto-triggered alerts are a fast first response, never the final word. The operator can confirm, downgrade, or cancel any automated alert, and can remove or restore any community pin. Every automated signal in this system is explicitly advisory to a human decision.
 
-This is why the computed risk score is displayed as advisory only and drives nothing, and why community pins can never auto-promote themselves into an official alert. When an alert is downgraded, residents see it stated plainly — *"Alert downgraded — water levels below threshold"* — rather than having it silently disappear.
+This is why the computed risk score is displayed as advisory only and drives nothing, and why community pins can never auto-promote themselves into an official alert.
+
+Override cuts both ways, so the retraction has to be as visible as the warning. When an operator lowers or withdraws an alert, residents are told in plain language — *"Alert lifted — zone management withdrew the earlier Evacuate Now"* — rather than watching it disappear. A warning system that can quietly retract a warning is one residents learn not to trust: someone who saw "Evacuate Now" and then sees an ordinary screen cannot tell an all-clear from a bug, and the safe reading of that ambiguity is the one that keeps people in a flooding house. The notice deliberately states no reason, because the operator is not asked for one and the system will not invent it.
 
 ### Anti-Abuse
 
@@ -177,7 +185,7 @@ The visual restraint above is not only a legibility choice — it is a performan
 - **Motion is limited to small interface transitions** — a dialog opening, a tooltip appearing. Nothing animates the content itself, and nothing is doing continuous work while a resident is reading an alert.
 - **The map is the one heavy dependency**, and it is loaded lazily rather than in the initial bundle, with a plain zone-alert list as the fallback when tiles cannot load at all.
 
-Measured on the deployed build, a first visit transfers roughly **230 KB compressed** across twelve files. That is the cost of arriving at the app with nothing cached; every subsequent visit is served from the device.
+Measured on the deployed build, a first visit to the homepage transfers roughly **250 KB compressed** across fifteen files — the document plus its JavaScript and CSS. That is the cost of arriving at the app with nothing cached; every subsequent visit is served from the device.
 
 ### Severity is one visual language
 
@@ -304,7 +312,7 @@ All free and public: PAGASA bulletins (rainfall, wind, typhoon track, thundersto
 
 ## Build Status
 
-**As of 4 September 2026 · Stage 1 (`hi-fi`) complete.**
+**As of 5 September 2026 · Stage 1 (`hi-fi`) complete.**
 
 This table is the single source of truth for implementation state. Everything above describes the design; this describes what exists today.
 
@@ -324,6 +332,7 @@ This table is the single source of truth for implementation state. Everything ab
 | Printed emergency card | **Built** | |
 | PWA manifest + service worker cache | **Built** | |
 | Human override (layer 7) | **Built** | Real today — severity, centre-status and occupancy overrides persist |
+| Transparent downgrade (layer 9) | **Built** | A lowered or withdrawn alert states itself on the homepage and the evacuation page, naming what was withdrawn. States no reason, because the operator is not asked for one |
 | Device fingerprint (layer 5) | **Built** | Random per-device ID, real today — it already gates one-vote-per-device and own-pin editing. Hardening against deliberate clearing comes later |
 | Pin vote protection (layer 10) | **UI only** | Net-score rule and one-vote-per-device work; the geofence and rate limit it also depends on (layers 1, 2) do not |
 | All data | **Mock** | Four demo barangays; no backend |
@@ -426,7 +435,9 @@ A capability meeting all four can be added to the design without contradicting a
 
 ## Risks & Open Questions
 
-- **Web Push delivery is not guaranteed** — it varies by device and browser. Retry, cache fallback, and Share Alert exist specifically because this channel cannot be trusted alone.
+- **The sensor network has a participation floor, and it is not yet known.** Crowdsourced sensing only fires when several independent, agreeing reports arrive in one zone inside the time window. In a single barangay, at the 30% enrolment target, with residents evacuating rather than reporting, that number may not be reached — and the mechanism answering the challenge's third clause is the one most exposed to it. The threshold is tunable per zone precisely because the right value is an empirical question, but the pilot needs to measure reports-per-zone-per-event before any claim about coverage is safe to make. Below the floor the system degrades to operator-issued and prediction-driven alerts, which is a working system, but not the one this clause promises.
+- **Cached content is only as fresh as the resident's last visit.** Someone who opens the app on Monday and loses signal on Thursday is reading Monday's picture. It is labelled with its own age, but there is nothing that nudges a refresh while a storm is still forecast and the network still works — the cheapest available mitigation and not yet designed. The freshness policy (how stale is too stale to show without a warning) is an open question, not a settled one.
+- **Web Push delivery is not guaranteed** — it varies by device and browser. Retry, cache fallback, and Share Alert exist specifically because this channel cannot be trusted alone. Share Alert also needs the *sender* to have a working channel: Messenger and Viber need data, so in a total data outage SMS is the relay's last working leg.
 - **RA 10173 compliance is stated by design but not legally reviewed.** A legal review is recommended before any real deployment.
 - **Non-smartphone residents have no direct app access.** They depend entirely on the community relay and printed cards — an operational system requiring barangay coordination, and therefore the part of the design most likely to fail for reasons outside the software.
 - **Success-metric targets are unvalidated hypotheses.** No comparable Philippine deployment provides a baseline.
