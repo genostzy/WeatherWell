@@ -4,7 +4,8 @@ import { ShieldCheck, TriangleAlert } from "lucide-react";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { getZoneStatus, getZoneStatusColor, ZONE_STATUS_LABEL } from "@/lib/zone-status";
-import { useZoneOverrides, resolveEffectiveAlert } from "@/lib/zone-overrides";
+import { useZoneOverrides, resolveEffectiveAlert, resolveAlertDowngrade } from "@/lib/zone-overrides";
+import { AlertDowngradeNotice } from "@/features/alerts/alert-downgrade-notice";
 import { getFriendlyWeatherRead } from "@/lib/mock-data";
 import type { Zone } from "@/lib/types";
 
@@ -20,6 +21,7 @@ export function PersonalStatusHeadline({ zone }: { zone: Zone }) {
   const { lang } = useLanguage();
   const overrides = useZoneOverrides();
   const alert = resolveEffectiveAlert(zone.id, overrides[zone.id]?.alertSeverity);
+  const downgrade = resolveAlertDowngrade(zone.id, overrides[zone.id]?.alertSeverity);
   const status = getZoneStatus(alert);
   const color = getZoneStatusColor(alert);
   const Icon = status === "safe" ? ShieldCheck : TriangleAlert;
@@ -29,22 +31,32 @@ export function PersonalStatusHeadline({ zone }: { zone: Zone }) {
   const followUp = status === "safe" ? getFriendlyWeatherRead(zone.id) : alert?.message;
 
   return (
-    <div
-      className="flex w-full max-w-2xl items-center gap-3 rounded-md border-2 p-3 lg:max-w-5xl"
-      style={{ borderColor: color, backgroundColor: `${color}1a` }}
-    >
-      <Icon aria-hidden="true" className="h-8 w-8 shrink-0" style={{ color }} />
-      <div>
-        <p className="text-xs text-muted-foreground">{zone.name}</p>
-        <h1 lang={lang} className="text-lg font-semibold md:text-xl" style={{ color }}>
-          {t(ZONE_STATUS_LABEL[status], lang)}
-        </h1>
-        {followUp && (
-          <p lang={lang} className="text-sm text-muted-foreground">
-            {t(followUp, lang)}
-          </p>
-        )}
+    <div className="w-full space-y-2">
+      <div
+        className="flex w-full max-w-2xl items-center gap-3 rounded-md border-2 p-3 lg:max-w-5xl"
+        style={{ borderColor: color, backgroundColor: `${color}1a` }}
+      >
+        <Icon aria-hidden="true" className="h-8 w-8 shrink-0" style={{ color }} />
+        <div>
+          <p className="text-xs text-muted-foreground">{zone.name}</p>
+          <h1 lang={lang} className="text-lg font-semibold md:text-xl" style={{ color }}>
+            {t(ZONE_STATUS_LABEL[status], lang)}
+          </h1>
+          {followUp && (
+            <p lang={lang} className="text-sm text-muted-foreground">
+              {t(followUp, lang)}
+            </p>
+          )}
+        </div>
       </div>
+
+      {/*
+        Sits directly under the status it explains. When an operator clears an
+        alert this headline flips to "Safe" with a weather blurb — a change
+        indistinguishable from nothing ever having been wrong, unless the
+        withdrawal is stated (PRD Anti-Abuse layer 9).
+      */}
+      {downgrade && <AlertDowngradeNotice notice={downgrade} />}
     </div>
   );
 }

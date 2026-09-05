@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import {
   deriveCenterStatusFromOccupancy,
+  resolveAlertDowngrade,
   resolveEffectiveAlert,
   resolveEffectiveCenterStatus,
   setZoneOccupancyOverride,
@@ -108,5 +109,43 @@ describe("resolveEffectiveAlert", () => {
 
   it("clears the alert entirely when the operator marks the zone resolved", () => {
     expect(resolveEffectiveAlert(zoneWithEvacuateAlert, "none")).toBeUndefined();
+  });
+});
+
+describe("resolveAlertDowngrade", () => {
+  const zoneWithEvacuateAlert = "zone-2";
+  const zoneWithYellowAlert = "zone-4";
+
+  it("reports a cleared alert, which would otherwise just vanish", () => {
+    // The case this exists for. Clearing an override returns no alert at all,
+    // so without a notice the most severe state in the system disappears from
+    // the resident's screen with nothing said.
+    const notice = resolveAlertDowngrade(zoneWithEvacuateAlert, "none")!;
+    expect(notice.from).toBe("evacuate");
+    expect(notice.to).toBe("none");
+  });
+
+  it("reports a lowered severity", () => {
+    const notice = resolveAlertDowngrade(zoneWithEvacuateAlert, "yellow")!;
+    expect(notice.from).toBe("evacuate");
+    expect(notice.to).toBe("yellow");
+  });
+
+  it("stays silent on an escalation, which speaks for itself", () => {
+    expect(resolveAlertDowngrade(zoneWithYellowAlert, "evacuate")).toBeUndefined();
+  });
+
+  it("stays silent when the override confirms the severity already in place", () => {
+    expect(resolveAlertDowngrade(zoneWithEvacuateAlert, "evacuate")).toBeUndefined();
+  });
+
+  it("stays silent when there is no override at all", () => {
+    expect(resolveAlertDowngrade(zoneWithEvacuateAlert, undefined)).toBeUndefined();
+  });
+
+  it("stays silent when there was no alert to downgrade", () => {
+    // Clearing a zone that was never alerting is a no-op, not a downgrade —
+    // announcing one would tell residents something changed when nothing did.
+    expect(resolveAlertDowngrade("zone-with-no-alert", "none")).toBeUndefined();
   });
 });

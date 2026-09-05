@@ -14,6 +14,9 @@ import { ReportForm } from "@/features/water-level-report/report-form";
 import { ZoneMap } from "@/features/zones/zone-map";
 import { ConsentNotice } from "@/features/onboarding/consent-notice";
 import { ZonePicker } from "@/features/onboarding/zone-picker";
+import { InstallStep } from "@/features/onboarding/install-step";
+import { AlertDowngradeNotice } from "@/features/alerts/alert-downgrade-notice";
+import { AdminMapCanvas } from "@/features/admin/admin-map-canvas";
 import { EmergencyHotlineButton } from "@/components/emergency-hotline-button";
 import { ZoneAlertListFallback } from "@/features/homepage-map/zone-alert-list-fallback";
 import { MarkerLegend } from "@/features/map/marker-legend";
@@ -115,8 +118,22 @@ describe("accessibility (WCAG 2.1 AA, automated subset)", () => {
     expect(await violationsFor(<EmergencyCard zone={MOCK_ZONES[0]} />)).toEqual([]);
   });
 
-  it("admin simulation page has no violations", async () => {
+  it("admin dashboard has no violations", async () => {
     expect(await violationsFor(<AdminPage />)).toEqual([]);
+  });
+
+  it("admin operations map has no violations", async () => {
+    expect(await violationsFor(<AdminMapCanvas zones={MOCK_ZONES} />)).toEqual([]);
+  });
+
+  it("install step has no violations", async () => {
+    expect(await violationsFor(<InstallStep onContinue={() => {}} />)).toEqual([]);
+  });
+
+  it("alert downgrade notice has no violations", async () => {
+    expect(
+      await violationsFor(<AlertDowngradeNotice notice={{ from: "evacuate", to: "none" }} />)
+    ).toEqual([]);
   });
 
   it("zone alert list fallback has no violations", async () => {

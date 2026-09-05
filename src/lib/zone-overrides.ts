@@ -2,7 +2,12 @@
 
 import { getActiveAlertForZone } from "./mock-data";
 import { createLocalStorageStore } from "./local-storage-store";
-import { PAGASA_RAINFALL_WARNING_LABEL, SEVERITY_ACTION_STEP, type Severity } from "./severity";
+import {
+  PAGASA_RAINFALL_WARNING_LABEL,
+  SEVERITY_ACTION_STEP,
+  SEVERITY_ORDER,
+  type Severity,
+} from "./severity";
 import type { AlertRecord, CenterStatus, LocalizedText } from "./types";
 
 /** "none" explicitly clears an active alert (admin marking the zone resolved); undefined means "no override, use the mock default". */
@@ -115,6 +120,51 @@ export function resolveEffectiveAlert(
     issuedAt: base?.issuedAt ?? new Date().toISOString(),
     isActive: true,
   };
+}
+
+/**
+ * A downgrade the resident is owed an explanation for — PRD Anti-Abuse layer 9
+ * ("Transparent downgrade"), the counterpart to layer 7's human override.
+ *
+ * `to` is `"none"` when the operator cleared the alert outright. That case is
+ * the reason this exists: `resolveEffectiveAlert` returns `undefined` for a
+ * cleared zone, so the alert simply stops being rendered. Silence is exactly
+ * how a resident who has been told to evacuate would experience an operator
+ * error, a bad automated trigger and a genuine all-clear — three very
+ * different situations that must not look identical.
+ */
+export interface AlertDowngradeNotice {
+  /** What the zone's own alert said before the operator acted. */
+  from: Severity;
+  /** What it says now, or `"none"` if the alert was withdrawn entirely. */
+  to: Severity | "none";
+}
+
+/**
+ * The downgrade notice for a zone, if the operator's override lowered or
+ * withdrew a real alert. Pure, and takes the override rather than reading the
+ * store, so it composes with a single `useZoneOverrides()` call the same way
+ * `resolveEffectiveAlert` does.
+ *
+ * Escalations return nothing deliberately: raising an alert already announces
+ * itself in the loudest way the interface has. Only the quiet direction needs
+ * words.
+ */
+export function resolveAlertDowngrade(
+  zoneId: string,
+  override: AlertOverrideValue | undefined
+): AlertDowngradeNotice | undefined {
+  if (!override) return undefined;
+
+  const base = getActiveAlertForZone(zoneId);
+  // Nothing was in place to downgrade. Clearing a quiet zone changes nothing a
+  // resident saw, so announcing it would invent an event.
+  if (!base) return undefined;
+
+  if (override === "none") return { from: base.severity, to: "none" };
+
+  const isLower = SEVERITY_ORDER.indexOf(override) < SEVERITY_ORDER.indexOf(base.severity);
+  return isLower ? { from: base.severity, to: override } : undefined;
 }
 
 /** Full-capacity threshold before "limited"/"full" band boundaries, per PRD Gap B. Kept low ("limited" well before literally full) since a shelter approaching capacity needs advance notice, not a last-minute one. */
