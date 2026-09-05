@@ -10,7 +10,8 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "knip": "knip",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "db:seed:generate": "tsx scripts/generate-seed.ts"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",
@@ -42,6 +43,7 @@
     "jsdom": "^30.0.1",
     "knip": "^6.34.0",
     "tailwindcss": "^4",
+    "tsx": "^4.23.13",
     "typescript": "^5",
     "vitest": "^4.1.11"
   }
