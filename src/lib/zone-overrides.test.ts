@@ -71,10 +71,12 @@ describe("setZoneOccupancyOverride", () => {
 describe("resolveEffectiveAlert", () => {
   const zoneWithEvacuateAlert = "zone-2";
   const zoneWithYellowAlert = "zone-4";
+  const baseForEvacuateZone = getActiveAlertForZone(zoneWithEvacuateAlert);
+  const baseForYellowZone = getActiveAlertForZone(zoneWithYellowAlert);
 
   it("keeps the original wording when the override matches the existing severity", () => {
     const base = getActiveAlertForZone(zoneWithEvacuateAlert)!;
-    const resolved = resolveEffectiveAlert(zoneWithEvacuateAlert, "evacuate")!;
+    const resolved = resolveEffectiveAlert(zoneWithEvacuateAlert, "evacuate", baseForEvacuateZone)!;
     expect(resolved.message.en).toBe(base.message.en);
   });
 
@@ -84,7 +86,7 @@ describe("resolveEffectiveAlert", () => {
     const base = getActiveAlertForZone(zoneWithEvacuateAlert)!;
     expect(base.message.en).toContain("Evacuate immediately");
 
-    const resolved = resolveEffectiveAlert(zoneWithEvacuateAlert, "yellow")!;
+    const resolved = resolveEffectiveAlert(zoneWithEvacuateAlert, "yellow", baseForEvacuateZone)!;
     expect(resolved.severity).toBe("yellow");
     expect(resolved.message.en).not.toContain("Evacuate immediately");
     expect(resolved.message.en).toContain(SEVERITY_ACTION_STEP.yellow.en);
@@ -96,56 +98,62 @@ describe("resolveEffectiveAlert", () => {
     const base = getActiveAlertForZone(zoneWithYellowAlert)!;
     expect(base.message.en).toContain("Stay alert");
 
-    const resolved = resolveEffectiveAlert(zoneWithYellowAlert, "evacuate")!;
+    const resolved = resolveEffectiveAlert(zoneWithYellowAlert, "evacuate", baseForYellowZone)!;
     expect(resolved.severity).toBe("evacuate");
     expect(resolved.message.en).not.toContain("Stay alert");
     expect(resolved.message.en).toContain(SEVERITY_ACTION_STEP.evacuate.en);
   });
 
   it("drops the predicted timing when the severity it described no longer applies", () => {
-    expect(resolveEffectiveAlert(zoneWithEvacuateAlert, "yellow")!.predictedTiming).toBeUndefined();
-    expect(resolveEffectiveAlert(zoneWithEvacuateAlert, "evacuate")!.predictedTiming).toBeDefined();
+    expect(
+      resolveEffectiveAlert(zoneWithEvacuateAlert, "yellow", baseForEvacuateZone)!.predictedTiming
+    ).toBeUndefined();
+    expect(
+      resolveEffectiveAlert(zoneWithEvacuateAlert, "evacuate", baseForEvacuateZone)!.predictedTiming
+    ).toBeDefined();
   });
 
   it("clears the alert entirely when the operator marks the zone resolved", () => {
-    expect(resolveEffectiveAlert(zoneWithEvacuateAlert, "none")).toBeUndefined();
+    expect(resolveEffectiveAlert(zoneWithEvacuateAlert, "none", baseForEvacuateZone)).toBeUndefined();
   });
 });
 
 describe("resolveAlertDowngrade", () => {
   const zoneWithEvacuateAlert = "zone-2";
   const zoneWithYellowAlert = "zone-4";
+  const baseForEvacuateZone = getActiveAlertForZone(zoneWithEvacuateAlert);
+  const baseForYellowZone = getActiveAlertForZone(zoneWithYellowAlert);
 
   it("reports a cleared alert, which would otherwise just vanish", () => {
     // The case this exists for. Clearing an override returns no alert at all,
     // so without a notice the most severe state in the system disappears from
     // the resident's screen with nothing said.
-    const notice = resolveAlertDowngrade(zoneWithEvacuateAlert, "none")!;
+    const notice = resolveAlertDowngrade(zoneWithEvacuateAlert, "none", baseForEvacuateZone)!;
     expect(notice.from).toBe("evacuate");
     expect(notice.to).toBe("none");
   });
 
   it("reports a lowered severity", () => {
-    const notice = resolveAlertDowngrade(zoneWithEvacuateAlert, "yellow")!;
+    const notice = resolveAlertDowngrade(zoneWithEvacuateAlert, "yellow", baseForEvacuateZone)!;
     expect(notice.from).toBe("evacuate");
     expect(notice.to).toBe("yellow");
   });
 
   it("stays silent on an escalation, which speaks for itself", () => {
-    expect(resolveAlertDowngrade(zoneWithYellowAlert, "evacuate")).toBeUndefined();
+    expect(resolveAlertDowngrade(zoneWithYellowAlert, "evacuate", baseForYellowZone)).toBeUndefined();
   });
 
   it("stays silent when the override confirms the severity already in place", () => {
-    expect(resolveAlertDowngrade(zoneWithEvacuateAlert, "evacuate")).toBeUndefined();
+    expect(resolveAlertDowngrade(zoneWithEvacuateAlert, "evacuate", baseForEvacuateZone)).toBeUndefined();
   });
 
   it("stays silent when there is no override at all", () => {
-    expect(resolveAlertDowngrade(zoneWithEvacuateAlert, undefined)).toBeUndefined();
+    expect(resolveAlertDowngrade(zoneWithEvacuateAlert, undefined, baseForEvacuateZone)).toBeUndefined();
   });
 
   it("stays silent when there was no alert to downgrade", () => {
     // Clearing a zone that was never alerting is a no-op, not a downgrade —
     // announcing one would tell residents something changed when nothing did.
-    expect(resolveAlertDowngrade("zone-with-no-alert", "none")).toBeUndefined();
+    expect(resolveAlertDowngrade("zone-with-no-alert", "none", undefined)).toBeUndefined();
   });
 });

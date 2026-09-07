@@ -36,6 +36,7 @@ import { useHazardsForZone } from "@/lib/reference-data/use-reference-data";
 import { getZoneStatus, getZoneStatusColor, ZONE_STATUS_LABEL, type ZoneStatus } from "@/lib/zone-status";
 import { CENTER_STATUS_LABEL, CENTER_STATUS_CLASS } from "@/lib/center-status";
 import { useZoneOverrides, resolveEffectiveAlert, resolveEffectiveCenterStatus } from "@/lib/zone-overrides";
+import { useAlerts, useActiveAlertForZone } from "@/lib/alerts-store";
 import type { HazardRiskLevel, HazardType, LanguageCode, LocalizedText, Zone } from "@/lib/types";
 
 const CLEAR_NO_ALERT: LocalizedText = { en: "Clear — no active alert", fil: "Ligtas — walang aktibong alerto" };
@@ -90,10 +91,17 @@ export function ZoneMap({ zones }: { zones: Zone[] }) {
   const overrides = useZoneOverrides();
   const pins = useCommunityPins();
   const selectedZone = useSelectedZone();
+  const alerts = useAlerts();
   const [statusFilter, setStatusFilter] = useState<ZoneStatus | "all">("all");
 
   const statusOf = (zone: Zone) =>
-    getZoneStatus(resolveEffectiveAlert(zone.id, overrides[zone.id]?.alertSeverity));
+    getZoneStatus(
+      resolveEffectiveAlert(
+        zone.id,
+        overrides[zone.id]?.alertSeverity,
+        alerts.find((a) => a.zoneId === zone.id && a.isActive)
+      )
+    );
 
   const countByStatus = (status: ZoneStatus) => zones.filter((zone) => statusOf(zone) === status).length;
   const visibleZones = statusFilter === "all" ? zones : zones.filter((zone) => statusOf(zone) === statusFilter);
@@ -164,7 +172,8 @@ function ZoneCard({
   isOwnZone: boolean;
 }) {
   const susceptibility = useHazardsForZone(zone.id);
-  const alert = resolveEffectiveAlert(zone.id, overrides[zone.id]?.alertSeverity);
+  const base = useActiveAlertForZone(zone.id);
+  const alert = resolveEffectiveAlert(zone.id, overrides[zone.id]?.alertSeverity, base);
   const status = getZoneStatus(alert);
   const color = getZoneStatusColor(alert);
   const centerStatus = resolveEffectiveCenterStatus(

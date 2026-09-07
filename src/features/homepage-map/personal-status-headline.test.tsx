@@ -2,15 +2,33 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { PersonalStatusHeadline } from "./personal-status-headline";
 import { setZoneAlertOverride } from "@/lib/zone-overrides";
+import { AlertsContext } from "@/lib/alerts-store";
 import { LanguageProvider } from "@/features/i18n/language-provider";
-import { getActiveAlertForZone, getFriendlyWeatherRead } from "@/lib/mock-data";
+import { getActiveAlertForZone, getFriendlyWeatherRead, MOCK_ALERTS } from "@/lib/mock-data";
 import { FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
 import { zoneWithSeverity } from "@/test-utils/mock-fixtures";
 import { t } from "@/lib/i18n";
-import type { Zone } from "@/lib/types";
+import type { LanguageCode, Zone } from "@/lib/types";
 
 /** Every mock zone carries an active alert, so a Safe zone has to be synthesised — this id matches none of them. */
 const SAFE_ZONE: Zone = { ...FIXTURE_REFERENCE_DATA.zones[0], id: "zone-with-no-alert" };
+
+/**
+ * PersonalStatusHeadline takes its zone as a prop rather than from
+ * ReferenceDataContext, so it only needs a LanguageProvider (which defaults
+ * to English without one) and an AlertsContext ancestor for
+ * useActiveAlertForZone — MOCK_ALERTS mirrors the same fixtures
+ * zoneWithSeverity/getActiveAlertForZone read below.
+ */
+function renderHeadline(zone: Zone, lang?: LanguageCode) {
+  return render(
+    <LanguageProvider initialLang={lang}>
+      <AlertsContext.Provider value={MOCK_ALERTS}>
+        <PersonalStatusHeadline zone={zone} />
+      </AlertsContext.Provider>
+    </LanguageProvider>
+  );
+}
 
 describe("PersonalStatusHeadline", () => {
   // Overrides persist to localStorage, so one test's downgrade would otherwise
@@ -20,39 +38,39 @@ describe("PersonalStatusHeadline", () => {
   });
 
   it("shows 'Safe' for a zone with no active alert", () => {
-    render(<PersonalStatusHeadline zone={SAFE_ZONE} />);
+    renderHeadline(SAFE_ZONE);
     expect(screen.getByRole("heading", { name: "Safe" })).toBeInTheDocument();
   });
 
   it("shows 'Cautionary' for a yellow alert", () => {
-    render(<PersonalStatusHeadline zone={zoneWithSeverity("yellow")} />);
+    renderHeadline(zoneWithSeverity("yellow"));
     expect(screen.getByRole("heading", { name: "Cautionary" })).toBeInTheDocument();
   });
 
   it("shows 'Dangerous' for a red alert", () => {
-    render(<PersonalStatusHeadline zone={zoneWithSeverity("red")} />);
+    renderHeadline(zoneWithSeverity("red"));
     expect(screen.getByRole("heading", { name: "Dangerous" })).toBeInTheDocument();
   });
 
   it("shows 'Hazardous' for an evacuate alert", () => {
-    render(<PersonalStatusHeadline zone={zoneWithSeverity("evacuate")} />);
+    renderHeadline(zoneWithSeverity("evacuate"));
     expect(screen.getByRole("heading", { name: "Hazardous" })).toBeInTheDocument();
   });
 
   it("shows the zone name under the headline", () => {
-    render(<PersonalStatusHeadline zone={FIXTURE_REFERENCE_DATA.zones[0]} />);
+    renderHeadline(FIXTURE_REFERENCE_DATA.zones[0]);
     expect(screen.getByText(FIXTURE_REFERENCE_DATA.zones[0].name)).toBeInTheDocument();
   });
 
   it("follows a Safe headline with a friendly weather read", () => {
-    render(<PersonalStatusHeadline zone={SAFE_ZONE} />);
+    renderHeadline(SAFE_ZONE);
     const weatherRead = t(getFriendlyWeatherRead(SAFE_ZONE.id), "en");
     expect(screen.getByText(weatherRead)).toBeInTheDocument();
   });
 
   it("follows a non-Safe headline with the zone's actual active alert message, not a weather read", () => {
     const alertingZone = zoneWithSeverity("red");
-    render(<PersonalStatusHeadline zone={alertingZone} />);
+    renderHeadline(alertingZone);
     const alertMessage = t(getActiveAlertForZone(alertingZone.id)!.message, "en");
     expect(screen.getByText(alertMessage)).toBeInTheDocument();
   });
@@ -64,7 +82,7 @@ describe("PersonalStatusHeadline", () => {
     // screen they would see if the order had been a bug (PRD layer 9).
     const zone = zoneWithSeverity("evacuate");
     setZoneAlertOverride(zone.id, "none");
-    render(<PersonalStatusHeadline zone={zone} />);
+    renderHeadline(zone);
 
     expect(screen.getByRole("heading", { name: "Safe" })).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent(/Alert lifted/i);
@@ -74,7 +92,7 @@ describe("PersonalStatusHeadline", () => {
   it("says so when an order is lowered rather than lifted", () => {
     const zone = zoneWithSeverity("evacuate");
     setZoneAlertOverride(zone.id, "yellow");
-    render(<PersonalStatusHeadline zone={zone} />);
+    renderHeadline(zone);
 
     expect(screen.getByRole("status")).toHaveTextContent(/downgraded/i);
   });
@@ -82,18 +100,14 @@ describe("PersonalStatusHeadline", () => {
   it("stays quiet when an operator escalates, which announces itself", () => {
     const zone = zoneWithSeverity("yellow");
     setZoneAlertOverride(zone.id, "evacuate");
-    render(<PersonalStatusHeadline zone={zone} />);
+    renderHeadline(zone);
 
     expect(screen.getByRole("heading", { name: "Hazardous" })).toBeInTheDocument();
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
   it("shows the Filipino headline when that language is active", () => {
-    render(
-      <LanguageProvider initialLang="fil">
-        <PersonalStatusHeadline zone={SAFE_ZONE} />
-      </LanguageProvider>
-    );
+    renderHeadline(SAFE_ZONE, "fil");
     expect(screen.getByRole("heading", { name: "Ligtas" })).toBeInTheDocument();
   });
 });

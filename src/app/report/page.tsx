@@ -26,6 +26,7 @@ import { DEPTH_LABEL, DEPTH_CM, DEPTH_SEVERITY, type DepthLevel } from "@/lib/de
 import { getRainfallForZone, isHeavyRainfall } from "@/lib/mock-data";
 import { addWaterLevelReport } from "@/lib/water-level-reports";
 import { useZoneOverrides, resolveEffectiveAlert, resolveEffectiveCenterStatus } from "@/lib/zone-overrides";
+import { useActiveAlertForZone } from "@/lib/alerts-store";
 import { getZoneStatus, getZoneStatusColor, ZONE_STATUS_LABEL } from "@/lib/zone-status";
 import { CENTER_STATUS_LABEL, CENTER_STATUS_CLASS } from "@/lib/center-status";
 import type { LocalizedText } from "@/lib/types";
@@ -70,7 +71,8 @@ export default function ReportPage() {
     setSubmitted(depthLevel);
   }
 
-  const alert = resolveEffectiveAlert(zone.id, overrides[zone.id]?.alertSeverity);
+  const base = useActiveAlertForZone(zone.id);
+  const alert = resolveEffectiveAlert(zone.id, overrides[zone.id]?.alertSeverity, base);
   const status = getZoneStatus(alert);
   const statusColor = getZoneStatusColor(alert);
   const rainfall = getRainfallForZone(zone.id);

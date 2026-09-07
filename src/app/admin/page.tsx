@@ -33,6 +33,7 @@ import {
   isHeavyRainfall,
 } from "@/lib/mock-data";
 import { useZoneOverrides, resolveEffectiveAlert, resolveEffectiveCenterStatus } from "@/lib/zone-overrides";
+import { useAlerts } from "@/lib/alerts-store";
 import { useCommunityPins } from "@/lib/community-pins";
 import { useZones, useHazards } from "@/lib/reference-data/use-reference-data";
 import { getZoneStatus } from "@/lib/zone-status";
@@ -84,9 +85,14 @@ export default function AdminPage() {
   const pins = useCommunityPins();
   const zones = useZones();
   const hazards = useHazards();
+  const alerts = useAlerts();
+  const baseAlertFor = (zoneId: string) => alerts.find((a) => a.zoneId === zoneId && a.isActive);
 
   const zonesUnderAlert = zones.filter(
-    (zone) => getZoneStatus(resolveEffectiveAlert(zone.id, overrides[zone.id]?.alertSeverity)) !== "safe"
+    (zone) =>
+      getZoneStatus(
+        resolveEffectiveAlert(zone.id, overrides[zone.id]?.alertSeverity, baseAlertFor(zone.id))
+      ) !== "safe"
   ).length;
   const reportsToday = zones.reduce((sum, zone) => sum + getReportsTodayForZone(zone.id), 0);
   const heaviestRain = Math.max(...zones.map((zone) => getRainfallForZone(zone.id)));
@@ -100,7 +106,7 @@ export default function AdminPage() {
     return status !== "space_available";
   }).length;
   const hasEffectiveAlert = (zoneId: string) =>
-    resolveEffectiveAlert(zoneId, overrides[zoneId]?.alertSeverity) !== undefined;
+    resolveEffectiveAlert(zoneId, overrides[zoneId]?.alertSeverity, baseAlertFor(zoneId)) !== undefined;
   const zoneStates = zones.map((zone) =>
     computeZoneState(buildZoneInputForZone(zone, zones, hasEffectiveAlert, hazards))
   );

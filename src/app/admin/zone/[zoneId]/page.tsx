@@ -21,6 +21,7 @@ import {
   isHeavyRainfall,
 } from "@/lib/mock-data";
 import { useHazardsForZone, useZones } from "@/lib/reference-data/use-reference-data";
+import { useActiveAlertForZone } from "@/lib/alerts-store";
 import { SEVERITY_ORDER, SEVERITY_LABEL, SEVERITY_HEX, type Severity } from "@/lib/severity";
 import { CENTER_STATUS_LABEL, CENTER_STATUS_ORDER } from "@/lib/center-status";
 import {
@@ -63,12 +64,13 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
   const overrides = useZoneOverrides();
   const zones = useZones();
   const susceptibility = useHazardsForZone(zoneId);
+  const base = useActiveAlertForZone(zoneId);
 
   const zone = zones.find((z) => z.id === zoneId);
   if (!zone) notFound();
 
   const alertOverride = overrides[zone.id]?.alertSeverity;
-  const effectiveAlert = resolveEffectiveAlert(zone.id, alertOverride);
+  const effectiveAlert = resolveEffectiveAlert(zone.id, alertOverride, base);
   const centerStatus = resolveEffectiveCenterStatus(
     zone.centerStatus,
     overrides[zone.id]?.centerStatus,

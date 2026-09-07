@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { getZoneStatus, type ZoneStatus } from "@/lib/zone-status";
 import { useZoneOverrides, resolveEffectiveAlert } from "@/lib/zone-overrides";
+import { useAlerts } from "@/lib/alerts-store";
 import { routeCrossesHazard } from "./route-hazard";
 import type { LocalizedText, Zone } from "@/lib/types";
 
@@ -32,6 +33,7 @@ export function useRouteFinding(zones: Zone[]) {
   const [routeZoneId, setRouteZoneId] = useState<string | null>(zones[0]?.id ?? null);
   const [notice, setNotice] = useState<LocalizedText | null>(null);
   const overrides = useZoneOverrides();
+  const alerts = useAlerts();
 
   /**
    * One override-aware definition of a zone's status, shared by every check
@@ -40,7 +42,13 @@ export function useRouteFinding(zones: Zone[]) {
    * hazardous?" two different ways in the same render.
    */
   const zoneStatusOf = (zoneId: string) =>
-    getZoneStatus(resolveEffectiveAlert(zoneId, overrides[zoneId]?.alertSeverity));
+    getZoneStatus(
+      resolveEffectiveAlert(
+        zoneId,
+        overrides[zoneId]?.alertSeverity,
+        alerts.find((a) => a.zoneId === zoneId && a.isActive)
+      )
+    );
 
   const routeZone = zones.find((z) => z.id === routeZoneId) ?? null;
   const routeHazard = routeZone ? routeCrossesHazard(routeZone, zones, zoneStatusOf) : false;

@@ -9,6 +9,7 @@ import { useSelectedZone } from "@/features/zones/use-selected-zone";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { useZoneOverrides, resolveEffectiveAlert, resolveAlertDowngrade } from "@/lib/zone-overrides";
+import { useActiveAlertForZone } from "@/lib/alerts-store";
 import { getZoneStatus } from "@/lib/zone-status";
 import type { LocalizedText } from "@/lib/types";
 
@@ -18,8 +19,9 @@ export default function EvacuationPage() {
   const { lang } = useLanguage();
   const zone = useSelectedZone();
   const overrides = useZoneOverrides();
-  const alert = resolveEffectiveAlert(zone.id, overrides[zone.id]?.alertSeverity);
-  const downgrade = resolveAlertDowngrade(zone.id, overrides[zone.id]?.alertSeverity);
+  const base = useActiveAlertForZone(zone.id);
+  const alert = resolveEffectiveAlert(zone.id, overrides[zone.id]?.alertSeverity, base);
+  const downgrade = resolveAlertDowngrade(zone.id, overrides[zone.id]?.alertSeverity, base);
   const status = getZoneStatus(alert);
   const showCheckIn = status === "dangerous" || status === "hazardous";
 

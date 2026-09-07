@@ -16,6 +16,7 @@ import {
   setZoneOccupancyOverride,
   type AlertOverrideValue,
 } from "@/lib/zone-overrides";
+import { useAlerts } from "@/lib/alerts-store";
 import {
   useAllCommunityPins,
   removePinByAdmin,
@@ -87,6 +88,8 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
   const overrides = useZoneOverrides();
   const allPins = useAllCommunityPins();
   const hazards = useHazards();
+  const alerts = useAlerts();
+  const baseAlertFor = (zoneId: string) => alerts.find((a) => a.zoneId === zoneId && a.isActive);
   const [hazardType, setHazardType] = useState<HazardType>("flood");
   const [layers, setLayers] = useState<LayerVisibility>({
     hazard: true,
@@ -100,7 +103,7 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
 
   /** The risk score's cascade factor must follow the operator's own overrides, not the mock data underneath them. */
   const hasEffectiveAlert = (zoneId: string) =>
-    resolveEffectiveAlert(zoneId, overrides[zoneId]?.alertSeverity) !== undefined;
+    resolveEffectiveAlert(zoneId, overrides[zoneId]?.alertSeverity, baseAlertFor(zoneId)) !== undefined;
 
   function toggleLayer(key: keyof LayerVisibility) {
     setLayers((current) => ({ ...current, [key]: !current[key] }));
@@ -167,7 +170,7 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
 
       {zones.map((zone) => {
         const override = overrides[zone.id]?.alertSeverity;
-        const alert = resolveEffectiveAlert(zone.id, override);
+        const alert = resolveEffectiveAlert(zone.id, override, baseAlertFor(zone.id));
         const status = getZoneStatus(alert);
         const label = `${zone.name} — ${t(ZONE_STATUS_LABEL[status], lang)}`;
         const riskScore = computeZoneState(

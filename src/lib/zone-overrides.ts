@@ -1,6 +1,5 @@
 "use client";
 
-import { getActiveAlertForZone } from "./mock-data";
 import { createLocalStorageStore } from "./local-storage-store";
 import {
   PAGASA_RAINFALL_WARNING_LABEL,
@@ -87,16 +86,23 @@ function genericOverrideMessage(severity: Severity): LocalizedText {
 
 /**
  * The alert the rest of the app should actually display for a zone: the
- * admin/zone override if one is set, otherwise the mock data's own alert.
- * `override` comes from a single useZoneOverrides() call higher up — never
- * call the hook here, so this stays a plain function usable inside loops.
+ * admin/zone override if one is set, otherwise the zone's own active alert.
+ * `override` comes from a single useZoneOverrides() call higher up, and
+ * `base` from useActiveAlertForZone(zoneId) — or, when looping over zones,
+ * from a single useAlerts() call at the top of the component. Never call a
+ * hook here: this stays a plain function usable inside loops.
+ *
+ * `base` is required rather than defaulted for the same reason
+ * buildZoneInputForZone's callback parameters are: a caller that forgot it
+ * used to get a plausible-looking wrong answer (whatever getActiveAlertForZone
+ * silently returned) instead of a compile error.
  */
 export function resolveEffectiveAlert(
   zoneId: string,
-  override: AlertOverrideValue | undefined
+  override: AlertOverrideValue | undefined,
+  base: AlertRecord | undefined
 ): AlertRecord | undefined {
   if (override === "none") return undefined;
-  const base = getActiveAlertForZone(zoneId);
   if (!override) return base;
 
   // An alert's wording describes the severity it was written for: the
@@ -142,9 +148,10 @@ export interface AlertDowngradeNotice {
 
 /**
  * The downgrade notice for a zone, if the operator's override lowered or
- * withdrew a real alert. Pure, and takes the override rather than reading the
- * store, so it composes with a single `useZoneOverrides()` call the same way
- * `resolveEffectiveAlert` does.
+ * withdrew a real alert. Pure, and takes the override and base alert rather
+ * than reading the store or calling a hook, so it composes with a single
+ * `useZoneOverrides()`/`useActiveAlertForZone()` (or `useAlerts()`) call the
+ * same way `resolveEffectiveAlert` does.
  *
  * Escalations return nothing deliberately: raising an alert already announces
  * itself in the loudest way the interface has. Only the quiet direction needs
@@ -152,11 +159,11 @@ export interface AlertDowngradeNotice {
  */
 export function resolveAlertDowngrade(
   zoneId: string,
-  override: AlertOverrideValue | undefined
+  override: AlertOverrideValue | undefined,
+  base: AlertRecord | undefined
 ): AlertDowngradeNotice | undefined {
   if (!override) return undefined;
 
-  const base = getActiveAlertForZone(zoneId);
   // Nothing was in place to downgrade. Clearing a quiet zone changes nothing a
   // resident saw, so announcing it would invent an event.
   if (!base) return undefined;

@@ -3,7 +3,8 @@
 import { createContext, useCallback, useEffect, useState, type ReactNode } from "react";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
-import type { LocalizedText } from "@/lib/types";
+import { AlertsContext } from "@/lib/alerts-store";
+import type { AlertRecord, LocalizedText } from "@/lib/types";
 import type { ReferenceData } from "./types";
 
 export const ReferenceDataContext = createContext<ReferenceData | null>(null);
@@ -17,7 +18,7 @@ const RETRY: LocalizedText = { en: "Try again", fil: "Subukang muli" };
 
 type State =
   | { status: "loading" }
-  | { status: "ready"; data: ReferenceData }
+  | { status: "ready"; data: ReferenceData; alerts: AlertRecord[] }
   | { status: "failed" };
 
 /**
@@ -27,6 +28,11 @@ type State =
  * ~23 files read zones, and `useSelectedZone()` must return a real Zone before
  * any page can render. One place to wait means one place to get the waiting
  * right, and consumers may assume the data exists.
+ *
+ * Alerts load alongside zones in the same gate: both must succeed before the
+ * app renders, because a page showing every zone with no alert data reads as
+ * "every barangay is safe" — the single most dangerous wrong answer this
+ * system can give.
  *
  * On a repeat visit the service worker answers /api/zones from cache with no
  * network, so this resolves immediately and the gate is invisible.
@@ -42,16 +48,20 @@ export function ReferenceDataProvider({ children }: { children: ReactNode }) {
   // The "loading" state on mount comes from useState's initial value instead,
   // and a retry re-arms it explicitly (see `retry` below) before calling this.
   const load = useCallback(() => {
-    fetch("/api/zones")
-      .then((response) => {
-        if (!response.ok) {
+    Promise.all([fetch("/api/zones"), fetch("/api/alerts")])
+      .then(([zonesResponse, alertsResponse]) => {
+        if (!zonesResponse.ok || !alertsResponse.ok) {
           // A partial or errored response must not become an empty zone list —
           // "no zones" and "no alerts" look identical to a resident.
           setState({ status: "failed" });
           return;
         }
-        return response.json().then((data) => {
-          setState({ status: "ready", data: data as ReferenceData });
+        return Promise.all([zonesResponse.json(), alertsResponse.json()]).then(([data, alerts]) => {
+          setState({
+            status: "ready",
+            data: data as ReferenceData,
+            alerts: alerts as AlertRecord[],
+          });
         });
       })
       .catch(() => {
@@ -94,6 +104,8 @@ export function ReferenceDataProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <ReferenceDataContext.Provider value={state.data}>{children}</ReferenceDataContext.Provider>
+    <ReferenceDataContext.Provider value={state.data}>
+      <AlertsContext.Provider value={state.alerts}>{children}</AlertsContext.Provider>
+    </ReferenceDataContext.Provider>
   );
 }

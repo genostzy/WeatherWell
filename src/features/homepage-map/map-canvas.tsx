@@ -5,6 +5,7 @@ import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { getZoneStatus, getZoneStatusColor, ZONE_STATUS_LABEL } from "@/lib/zone-status";
 import { useZoneOverrides, resolveEffectiveAlert } from "@/lib/zone-overrides";
+import { useAlerts } from "@/lib/alerts-store";
 import { useCommunityPins, voteOnPin, hasVotedOnPin, isOwnPin, type CommunityPin } from "@/lib/community-pins";
 import { PIN_STATUS_LABEL } from "@/lib/community-pin";
 import { MapShell } from "@/features/map/map-shell";
@@ -88,6 +89,7 @@ export function MapCanvas({
   const { lang } = useLanguage();
   const overrides = useZoneOverrides();
   const communityPins = useCommunityPins();
+  const alerts = useAlerts();
   const center: [number, number] = [zones[0].lat, zones[0].lng];
 
   return (
@@ -116,7 +118,8 @@ export function MapCanvas({
       <HazardBackdropLayer zones={zones} hazardType={hazardType} />
 
         {zones.map((zone) => {
-          const alert = resolveEffectiveAlert(zone.id, overrides[zone.id]?.alertSeverity);
+          const base = alerts.find((a) => a.zoneId === zone.id && a.isActive);
+          const alert = resolveEffectiveAlert(zone.id, overrides[zone.id]?.alertSeverity, base);
           const status = getZoneStatus(alert);
           const color = getZoneStatusColor(alert);
           const label = `${zone.name} — ${t(ZONE_STATUS_LABEL[status], lang)}`;

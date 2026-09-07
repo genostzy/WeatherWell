@@ -4,8 +4,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { LanguageProvider } from "@/features/i18n/language-provider";
 import { ReferenceDataContext } from "@/lib/reference-data/provider";
 import type { ReferenceData } from "@/lib/reference-data/types";
-import { MOCK_ZONES, MOCK_POIS, MOCK_HAZARD_SUSCEPTIBILITY } from "@/lib/mock-data";
-import type { LanguageCode } from "@/lib/types";
+import { AlertsContext } from "@/lib/alerts-store";
+import { MOCK_ZONES, MOCK_POIS, MOCK_HAZARD_SUSCEPTIBILITY, MOCK_ALERTS } from "@/lib/mock-data";
+import type { AlertRecord, LanguageCode } from "@/lib/types";
 
 /**
  * The seeded fixtures, as reference data. `mock-data` remains the single
@@ -23,13 +24,16 @@ export const FIXTURE_REFERENCE_DATA: ReferenceData = {
 
 export function renderWithData(
   ui: ReactElement,
-  options: { data?: Partial<ReferenceData>; lang?: LanguageCode } = {}
+  options: { data?: Partial<ReferenceData>; lang?: LanguageCode; alerts?: AlertRecord[] } = {}
 ): RenderResult {
   const data: ReferenceData = { ...FIXTURE_REFERENCE_DATA, ...options.data };
+  const alerts = options.alerts ?? MOCK_ALERTS;
   return render(
     <TooltipProvider>
       <LanguageProvider initialLang={options.lang}>
-        <ReferenceDataContext.Provider value={data}>{ui}</ReferenceDataContext.Provider>
+        <ReferenceDataContext.Provider value={data}>
+          <AlertsContext.Provider value={alerts}>{ui}</AlertsContext.Provider>
+        </ReferenceDataContext.Provider>
       </LanguageProvider>
     </TooltipProvider>
   );

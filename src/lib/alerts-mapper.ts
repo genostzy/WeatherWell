@@ -1,0 +1,37 @@
+import type { AlertRecord } from "./types";
+
+/**
+ * The pure row → AlertRecord mapping, split out of alerts-store.ts because
+ * that file is "use client" (it holds the AlertsContext hooks) and Next's
+ * RSC bundler turns every export of a "use client" module into a client
+ * reference for server callers — so /api/alerts's route handler, which runs
+ * on the server, cannot call a function imported from there directly. This
+ * module has no "use client" directive, so both the server route and the
+ * client store (which re-exports it) can use it.
+ */
+export interface AlertRow {
+  id: string;
+  zone_id: string;
+  severity: AlertRecord["severity"];
+  message: AlertRecord["message"];
+  source: AlertRecord["source"];
+  confidence: AlertRecord["confidence"];
+  predicted_timing: AlertRecord["predictedTiming"] | null;
+  issued_at: string;
+  is_active: boolean;
+  superseded_severity: AlertRecord["severity"] | null;
+}
+
+export function toAlertRecords(rows: AlertRow[]): AlertRecord[] {
+  return rows.map((row) => ({
+    id: row.id,
+    zoneId: row.zone_id,
+    severity: row.severity,
+    message: row.message,
+    source: row.source,
+    confidence: row.confidence,
+    predictedTiming: row.predicted_timing ?? undefined,
+    issuedAt: row.issued_at,
+    isActive: row.is_active,
+  }));
+}

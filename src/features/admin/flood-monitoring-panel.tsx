@@ -18,6 +18,7 @@ import { useHazardsForZone } from "@/lib/reference-data/use-reference-data";
 import { TimeAgo } from "@/components/time-ago";
 import { getZoneStatus, getZoneStatusColor, ZONE_STATUS_LABEL } from "@/lib/zone-status";
 import { useZoneOverrides, resolveEffectiveAlert } from "@/lib/zone-overrides";
+import { useActiveAlertForZone } from "@/lib/alerts-store";
 import { DEPTH_LABEL } from "@/lib/depth";
 import type { HazardRiskLevel, LanguageCode, LocalizedText, Zone } from "@/lib/types";
 
@@ -74,7 +75,8 @@ function FloodMonitoringRow({
   overrides: ReturnType<typeof useZoneOverrides>;
   allReports: LiveWaterLevelReport[];
 }) {
-  const alert = resolveEffectiveAlert(zone.id, overrides[zone.id]?.alertSeverity);
+  const base = useActiveAlertForZone(zone.id);
+  const alert = resolveEffectiveAlert(zone.id, overrides[zone.id]?.alertSeverity, base);
   const status = getZoneStatus(alert);
   const statusColor = getZoneStatusColor(alert);
   const susceptibility = useHazardsForZone(zone.id).flood;
