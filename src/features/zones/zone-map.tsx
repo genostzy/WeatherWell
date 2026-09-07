@@ -26,17 +26,17 @@ import {
   getRainfallForZone,
   getWindForZone,
   getHeatIndexForZone,
-  getHazardSusceptibilityForZone,
   getReportsTodayForZone,
   getPredictionsForZone,
   getCascadeForZone,
   isHeavyRainfall,
 } from "@/lib/mock-data";
-import { useCommunityPins } from "@/lib/community-pins";
+import { useCommunityPins, type CommunityPin } from "@/lib/community-pins";
+import { useHazardsForZone } from "@/lib/reference-data/use-reference-data";
 import { getZoneStatus, getZoneStatusColor, ZONE_STATUS_LABEL, type ZoneStatus } from "@/lib/zone-status";
 import { CENTER_STATUS_LABEL, CENTER_STATUS_CLASS } from "@/lib/center-status";
 import { useZoneOverrides, resolveEffectiveAlert, resolveEffectiveCenterStatus } from "@/lib/zone-overrides";
-import type { HazardRiskLevel, HazardType, LocalizedText, Zone } from "@/lib/types";
+import type { HazardRiskLevel, HazardType, LanguageCode, LocalizedText, Zone } from "@/lib/types";
 
 const CLEAR_NO_ALERT: LocalizedText = { en: "Clear — no active alert", fil: "Ligtas — walang aktibong alerto" };
 const PLACEHOLDER_BOUNDARY: LocalizedText = {
@@ -129,26 +129,58 @@ export function ZoneMap({ zones }: { zones: Zone[] }) {
       </div>
 
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-        {visibleZones.map((zone) => {
-          const alert = resolveEffectiveAlert(zone.id, overrides[zone.id]?.alertSeverity);
-          const status = getZoneStatus(alert);
-          const color = getZoneStatusColor(alert);
-          const susceptibility = getHazardSusceptibilityForZone(zone.id);
-          const centerStatus = resolveEffectiveCenterStatus(
-            zone.centerStatus,
-            overrides[zone.id]?.centerStatus,
-            zone.evacuationCenterCapacity,
-            overrides[zone.id]?.currentOccupancy
-          );
-          const rainfall = getRainfallForZone(zone.id);
-          const zonePins = pins.filter((pin) => pin.zoneId === zone.id).length;
-          const predictions = getPredictionsForZone(zone.id);
-          const nextPrediction = predictions.find((step) => step.severity !== alert?.severity);
-          const cascade = getCascadeForZone(zone.id);
-          const isOwnZone = zone.id === selectedZone.id;
+        {visibleZones.map((zone) => (
+          <ZoneCard
+            key={zone.id}
+            zone={zone}
+            lang={lang}
+            overrides={overrides}
+            pins={pins}
+            isOwnZone={zone.id === selectedZone.id}
+          />
+        ))}
+      </div>
 
-          return (
-            <Card key={zone.id} data-testid="zone-region" className="gap-0 overflow-hidden py-0">
+      {visibleZones.length === 0 && (
+        <p className="text-sm text-muted-foreground">{t(NO_ZONES_MATCH, lang)}</p>
+      )}
+
+      <p className="text-xs text-muted-foreground">{t(PLACEHOLDER_BOUNDARY, lang)}</p>
+    </div>
+  );
+}
+
+function ZoneCard({
+  zone,
+  lang,
+  overrides,
+  pins,
+  isOwnZone,
+}: {
+  zone: Zone;
+  lang: LanguageCode;
+  overrides: ReturnType<typeof useZoneOverrides>;
+  pins: CommunityPin[];
+  isOwnZone: boolean;
+}) {
+  const susceptibility = useHazardsForZone(zone.id);
+  const alert = resolveEffectiveAlert(zone.id, overrides[zone.id]?.alertSeverity);
+  const status = getZoneStatus(alert);
+  const color = getZoneStatusColor(alert);
+  const centerStatus = resolveEffectiveCenterStatus(
+    zone.centerStatus,
+    overrides[zone.id]?.centerStatus,
+    zone.evacuationCenterCapacity,
+    overrides[zone.id]?.currentOccupancy
+  );
+  const rainfall = getRainfallForZone(zone.id);
+  const zonePins = pins.filter((pin) => pin.zoneId === zone.id).length;
+  const predictions = getPredictionsForZone(zone.id);
+  const nextPrediction = predictions.find((step) => step.severity !== alert?.severity);
+  const cascade = getCascadeForZone(zone.id);
+
+  return (
+    <Card data-testid="zone-region" className="gap-0 overflow-hidden py-0">
               <div className="h-2 w-full" style={{ backgroundColor: color }} />
 
               <CardContent className="space-y-3 p-4">
@@ -278,17 +310,7 @@ export function ZoneMap({ zones }: { zones: Zone[] }) {
                     <Link href="/report">{t(REPORT_WATER, lang)}</Link>
                   </Button>
                 </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
-      {visibleZones.length === 0 && (
-        <p className="text-sm text-muted-foreground">{t(NO_ZONES_MATCH, lang)}</p>
-      )}
-
-      <p className="text-xs text-muted-foreground">{t(PLACEHOLDER_BOUNDARY, lang)}</p>
-    </div>
+      </CardContent>
+    </Card>
   );
 }

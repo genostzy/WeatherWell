@@ -24,18 +24,22 @@ import { HazardTypeSelector } from "@/features/map/hazard-type-selector";
 import { PersonalStatusHeadline } from "@/features/homepage-map/personal-status-headline";
 import AdminPage from "@/app/admin/page";
 import {
-  MOCK_ZONES,
   MOCK_ALERTS,
   MOCK_CASCADES,
   getPredictionsForZone,
 } from "@/lib/mock-data";
+import { renderWithData, FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
+
+const zones = FIXTURE_REFERENCE_DATA.zones;
 
 async function violationsFor(ui: ReactElement): Promise<string[]> {
   // ReportForm and EmergencyHotlineButton now render a shadcn Tooltip
   // (Radix), which requires an ancestor TooltipProvider — the real app
   // supplies this via layout.tsx. TooltipProvider renders no DOM of its
   // own, so wrapping every case here is harmless for the other components.
-  const { container } = render(<TooltipProvider>{ui}</TooltipProvider>);
+  // renderWithData also supplies the reference-data context that several
+  // of these components (ZoneMap, AdminPage, AdminMapCanvas, ...) now read.
+  const { container } = renderWithData(ui);
   const results = await axe.run(container, {
     rules: {
       // jsdom has no layout/paint, so axe cannot compute contrast here.
@@ -50,13 +54,13 @@ async function violationsFor(ui: ReactElement): Promise<string[]> {
 describe("accessibility (WCAG 2.1 AA, automated subset)", () => {
   it("alert card has no violations", async () => {
     expect(
-      await violationsFor(<AlertCard alert={MOCK_ALERTS[0]} zone={MOCK_ZONES[0]} />)
+      await violationsFor(<AlertCard alert={MOCK_ALERTS[0]} zone={zones[0]} />)
     ).toEqual([]);
   });
 
   it("evacuation instructions have no violations", async () => {
     expect(
-      await violationsFor(<EvacuationInstructions zone={MOCK_ZONES[0]} />)
+      await violationsFor(<EvacuationInstructions zone={zones[0]} />)
     ).toEqual([]);
   });
 
@@ -67,7 +71,7 @@ describe("accessibility (WCAG 2.1 AA, automated subset)", () => {
   });
 
   it("zone map has no violations", async () => {
-    expect(await violationsFor(<ZoneMap zones={MOCK_ZONES} />)).toEqual([]);
+    expect(await violationsFor(<ZoneMap zones={zones} />)).toEqual([]);
   });
 
   it("consent notice has no violations", async () => {
@@ -76,7 +80,7 @@ describe("accessibility (WCAG 2.1 AA, automated subset)", () => {
 
   it("zone picker has no violations", async () => {
     expect(
-      await violationsFor(<ZonePicker zones={MOCK_ZONES} onSelect={() => {}} />)
+      await violationsFor(<ZonePicker zones={zones} onSelect={() => {}} />)
     ).toEqual([]);
   });
 
@@ -88,8 +92,8 @@ describe("accessibility (WCAG 2.1 AA, automated subset)", () => {
 
   it("cascade warning has no violations", async () => {
     const cascade = MOCK_CASCADES[0];
-    const fromZone = MOCK_ZONES.find((z) => z.id === cascade.fromZoneId)!;
-    const toZone = MOCK_ZONES.find((z) => z.id === cascade.toZoneId)!;
+    const fromZone = zones.find((z) => z.id === cascade.fromZoneId)!;
+    const toZone = zones.find((z) => z.id === cascade.toZoneId)!;
     expect(
       await violationsFor(
         <CascadeWarning cascade={cascade} fromZone={fromZone} toZone={toZone} />
@@ -102,7 +106,7 @@ describe("accessibility (WCAG 2.1 AA, automated subset)", () => {
       await violationsFor(
         <PredictionTimeline
           steps={getPredictionsForZone("zone-1")}
-          zoneName={MOCK_ZONES[0].name}
+          zoneName={zones[0].name}
         />
       )
     ).toEqual([]);
@@ -110,12 +114,12 @@ describe("accessibility (WCAG 2.1 AA, automated subset)", () => {
 
   it("share alert button has no violations", async () => {
     expect(
-      await violationsFor(<ShareAlertButton alert={MOCK_ALERTS[0]} zone={MOCK_ZONES[0]} />)
+      await violationsFor(<ShareAlertButton alert={MOCK_ALERTS[0]} zone={zones[0]} />)
     ).toEqual([]);
   });
 
   it("emergency card has no violations", async () => {
-    expect(await violationsFor(<EmergencyCard zone={MOCK_ZONES[0]} />)).toEqual([]);
+    expect(await violationsFor(<EmergencyCard zone={zones[0]} />)).toEqual([]);
   });
 
   it("admin dashboard has no violations", async () => {
@@ -123,7 +127,7 @@ describe("accessibility (WCAG 2.1 AA, automated subset)", () => {
   });
 
   it("admin operations map has no violations", async () => {
-    expect(await violationsFor(<AdminMapCanvas zones={MOCK_ZONES} />)).toEqual([]);
+    expect(await violationsFor(<AdminMapCanvas zones={zones} />)).toEqual([]);
   });
 
   it("install step has no violations", async () => {
@@ -137,7 +141,7 @@ describe("accessibility (WCAG 2.1 AA, automated subset)", () => {
   });
 
   it("zone alert list fallback has no violations", async () => {
-    expect(await violationsFor(<ZoneAlertListFallback zones={MOCK_ZONES} />)).toEqual([]);
+    expect(await violationsFor(<ZoneAlertListFallback zones={zones} />)).toEqual([]);
   });
 
   it("marker legend has no violations", async () => {
@@ -152,7 +156,7 @@ describe("accessibility (WCAG 2.1 AA, automated subset)", () => {
 
   it("personal status headline has no violations", async () => {
     expect(
-      await violationsFor(<PersonalStatusHeadline zone={MOCK_ZONES[0]} />)
+      await violationsFor(<PersonalStatusHeadline zone={zones[0]} />)
     ).toEqual([]);
   });
 

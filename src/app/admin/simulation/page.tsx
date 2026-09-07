@@ -29,7 +29,8 @@ import {
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { PredictionTimeline } from "@/features/alerts/prediction-timeline";
-import { MOCK_ZONES, MOCK_SCENARIOS, getPredictionsForZone, MOCK_CASCADES } from "@/lib/mock-data";
+import { MOCK_SCENARIOS, getPredictionsForZone, MOCK_CASCADES } from "@/lib/mock-data";
+import { useZones } from "@/lib/reference-data/use-reference-data";
 import type { LocalizedText, Zone } from "@/lib/types";
 
 type SimulationStep =
@@ -177,7 +178,8 @@ function StepIndicator({
 
 export default function AdminSimulationPage() {
   const { lang } = useLanguage();
-  const [selectedZone, setSelectedZone] = useState<Zone>(MOCK_ZONES[0]);
+  const zones = useZones();
+  const [selectedZone, setSelectedZone] = useState<Zone>(zones[0]);
   const [selectedScenario, setSelectedScenario] = useState(MOCK_SCENARIOS[0].id);
   const [currentStep, setCurrentStep] = useState<SimulationStep>("idle");
   const [stepHistory, setStepHistory] = useState<SimulationStep[]>([]);
@@ -256,7 +258,7 @@ export default function AdminSimulationPage() {
             <Select
               value={selectedZone.id}
               onValueChange={(v) => {
-                setSelectedZone(MOCK_ZONES.find((z) => z.id === v) || MOCK_ZONES[0]);
+                setSelectedZone(zones.find((z) => z.id === v) || zones[0]);
                 resetSimulation();
               }}
             >
@@ -264,7 +266,7 @@ export default function AdminSimulationPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {MOCK_ZONES.map((zone) => (
+                {zones.map((zone) => (
                   <SelectItem key={zone.id} value={zone.id}>
                     {zone.name}
                   </SelectItem>

@@ -1,7 +1,7 @@
 "use client";
 
 import { Circle } from "react-leaflet";
-import { getHazardSusceptibilityForZone } from "@/lib/mock-data";
+import { useHazardsForZone } from "@/lib/reference-data/use-reference-data";
 import { hazardRiskColor } from "./hazard-color";
 import type { HazardType, Zone } from "@/lib/types";
 
@@ -23,23 +23,26 @@ export function HazardBackdropLayer({
 }) {
   return (
     <>
-      {zones.map((zone) => {
-        const risk = getHazardSusceptibilityForZone(zone.id)[hazardType];
-        return (
-          <Circle
-            key={`hazard-${zone.id}`}
-            center={[zone.lat, zone.lng]}
-            radius={500}
-            pathOptions={{
-              color: hazardRiskColor(risk),
-              fillColor: hazardRiskColor(risk),
-              fillOpacity: 0.2,
-              opacity: 0.3,
-              weight: 1,
-            }}
-          />
-        );
-      })}
+      {zones.map((zone) => (
+        <HazardCircle key={`hazard-${zone.id}`} zone={zone} hazardType={hazardType} />
+      ))}
     </>
+  );
+}
+
+function HazardCircle({ zone, hazardType }: { zone: Zone; hazardType: HazardType }) {
+  const risk = useHazardsForZone(zone.id)[hazardType];
+  return (
+    <Circle
+      center={[zone.lat, zone.lng]}
+      radius={500}
+      pathOptions={{
+        color: hazardRiskColor(risk),
+        fillColor: hazardRiskColor(risk),
+        fillOpacity: 0.2,
+        opacity: 0.3,
+        weight: 1,
+      }}
+    />
   );
 }

@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { EvacuationInstructions } from "./evacuation-instructions";
-import { MOCK_ZONES } from "@/lib/mock-data";
+import { FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
 
-const zone = MOCK_ZONES[0];
+const zone = FIXTURE_REFERENCE_DATA.zones[0];
 
 describe("EvacuationInstructions", () => {
   it("shows the evacuation center name and route text", () => {

@@ -8,13 +8,18 @@ import { Droplet, Users, Settings2 } from "lucide-react";
 import { SeverityBadge } from "@/features/alerts/severity-badge";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
-import { getHazardSusceptibilityForZone, getReportsTodayForZone, REPORT_THRESHOLD } from "@/lib/mock-data";
-import { useWaterLevelReports, getRecentReportsForZoneLive } from "@/lib/water-level-reports";
+import { getReportsTodayForZone, REPORT_THRESHOLD } from "@/lib/mock-data";
+import {
+  useWaterLevelReports,
+  getRecentReportsForZoneLive,
+  type LiveWaterLevelReport,
+} from "@/lib/water-level-reports";
+import { useHazardsForZone } from "@/lib/reference-data/use-reference-data";
 import { TimeAgo } from "@/components/time-ago";
 import { getZoneStatus, getZoneStatusColor, ZONE_STATUS_LABEL } from "@/lib/zone-status";
 import { useZoneOverrides, resolveEffectiveAlert } from "@/lib/zone-overrides";
 import { DEPTH_LABEL } from "@/lib/depth";
-import type { HazardRiskLevel, LocalizedText, Zone } from "@/lib/types";
+import type { HazardRiskLevel, LanguageCode, LocalizedText, Zone } from "@/lib/types";
 
 const TITLE: LocalizedText = { en: "Flood Monitoring", fil: "Pagsubaybay sa Baha" };
 const SUBTITLE: LocalizedText = {
@@ -50,75 +55,88 @@ export function FloodMonitoringPanel({ zones }: { zones: Zone[] }) {
         <p className="text-xs text-muted-foreground">{t(SUBTITLE, lang)}</p>
       </CardHeader>
       <CardContent className="space-y-3">
-        {zones.map((zone) => {
-          const alert = resolveEffectiveAlert(zone.id, overrides[zone.id]?.alertSeverity);
-          const status = getZoneStatus(alert);
-          const statusColor = getZoneStatusColor(alert);
-          const susceptibility = getHazardSusceptibilityForZone(zone.id).flood;
-          const reportsToday = getReportsTodayForZone(zone.id);
-          const recent = getRecentReportsForZoneLive(allReports, zone.id);
-          const agreeing = recent.filter((report) => !report.isOutlier).length;
-
-          return (
-            <div
-              key={zone.id}
-              className="space-y-2 rounded-md border-2 border-border p-3"
-              style={{ borderLeftColor: statusColor, borderLeftWidth: 6 }}
-            >
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="truncate font-medium">{zone.name}</p>
-                  <p className="text-xs" style={{ color: statusColor }}>
-                    {t(ZONE_STATUS_LABEL[status], lang)}
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  {alert ? (
-                    <SeverityBadge severity={alert.severity} />
-                  ) : (
-                    <span className="text-sm text-green-500">{t(CLEAR, lang)}</span>
-                  )}
-                  <Button asChild variant="outline" size="sm">
-                    <Link href={`/admin/zone/${zone.id}`}>
-                      <Settings2 aria-hidden="true" className="h-4 w-4" />
-                      {t(MANAGE, lang)}
-                    </Link>
-                  </Button>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2 text-xs">
-                <Badge variant="outline">{t(SUSCEPTIBILITY_LABEL[susceptibility], lang)}</Badge>
-                <span className="flex items-center gap-1 text-muted-foreground">
-                  <Users aria-hidden="true" className="h-3.5 w-3.5" />
-                  {reportsToday} {t(REPORTS_TODAY, lang)}
-                </span>
-                <Badge
-                  className={
-                    agreeing >= REPORT_THRESHOLD
-                      ? "bg-severity-orange text-black"
-                      : "bg-muted text-muted-foreground"
-                  }
-                >
-                  {t(agreeing >= REPORT_THRESHOLD ? THRESHOLD_MET : BELOW_THRESHOLD, lang)} ({agreeing}/
-                  {REPORT_THRESHOLD})
-                </Badge>
-              </div>
-
-              <p className="text-xs text-muted-foreground">
-                {recent.length > 0 ? (
-                  <>
-                    {t(LATEST_REPORT, lang)}: {t(DEPTH_LABEL[recent[0].depthLevel], lang)}{" "}
-                    <TimeAgo reportedAt={recent[0].reportedAt} prefix="· " />
-                  </>
-                ) : (
-                  t(NO_REPORTS, lang)
-                )}
-              </p>
-            </div>
-          );
-        })}
+        {zones.map((zone) => (
+          <FloodMonitoringRow key={zone.id} zone={zone} lang={lang} overrides={overrides} allReports={allReports} />
+        ))}
       </CardContent>
     </Card>
+  );
+}
+
+function FloodMonitoringRow({
+  zone,
+  lang,
+  overrides,
+  allReports,
+}: {
+  zone: Zone;
+  lang: LanguageCode;
+  overrides: ReturnType<typeof useZoneOverrides>;
+  allReports: LiveWaterLevelReport[];
+}) {
+  const alert = resolveEffectiveAlert(zone.id, overrides[zone.id]?.alertSeverity);
+  const status = getZoneStatus(alert);
+  const statusColor = getZoneStatusColor(alert);
+  const susceptibility = useHazardsForZone(zone.id).flood;
+  const reportsToday = getReportsTodayForZone(zone.id);
+  const recent = getRecentReportsForZoneLive(allReports, zone.id);
+  const agreeing = recent.filter((report) => !report.isOutlier).length;
+
+  return (
+    <div
+      className="space-y-2 rounded-md border-2 border-border p-3"
+      style={{ borderLeftColor: statusColor, borderLeftWidth: 6 }}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate font-medium">{zone.name}</p>
+          <p className="text-xs" style={{ color: statusColor }}>
+            {t(ZONE_STATUS_LABEL[status], lang)}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {alert ? (
+            <SeverityBadge severity={alert.severity} />
+          ) : (
+            <span className="text-sm text-green-500">{t(CLEAR, lang)}</span>
+          )}
+          <Button asChild variant="outline" size="sm">
+            <Link href={`/admin/zone/${zone.id}`}>
+              <Settings2 aria-hidden="true" className="h-4 w-4" />
+              {t(MANAGE, lang)}
+            </Link>
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <Badge variant="outline">{t(SUSCEPTIBILITY_LABEL[susceptibility], lang)}</Badge>
+        <span className="flex items-center gap-1 text-muted-foreground">
+          <Users aria-hidden="true" className="h-3.5 w-3.5" />
+          {reportsToday} {t(REPORTS_TODAY, lang)}
+        </span>
+        <Badge
+          className={
+            agreeing >= REPORT_THRESHOLD
+              ? "bg-severity-orange text-black"
+              : "bg-muted text-muted-foreground"
+          }
+        >
+          {t(agreeing >= REPORT_THRESHOLD ? THRESHOLD_MET : BELOW_THRESHOLD, lang)} ({agreeing}/
+          {REPORT_THRESHOLD})
+        </Badge>
+      </div>
+
+      <p className="text-xs text-muted-foreground">
+        {recent.length > 0 ? (
+          <>
+            {t(LATEST_REPORT, lang)}: {t(DEPTH_LABEL[recent[0].depthLevel], lang)}{" "}
+            <TimeAgo reportedAt={recent[0].reportedAt} prefix="· " />
+          </>
+        ) : (
+          t(NO_REPORTS, lang)
+        )}
+      </p>
+    </div>
   );
 }

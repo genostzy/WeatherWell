@@ -4,7 +4,7 @@ import { BackLink } from "@/components/back-link";
 import { ZoneMap } from "@/features/zones/zone-map";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
-import { MOCK_ZONES } from "@/lib/mock-data";
+import { useZones } from "@/lib/reference-data/use-reference-data";
 import type { LocalizedText } from "@/lib/types";
 
 const PAGE_TITLE: LocalizedText = { en: "Zones", fil: "Mga Zone" };
@@ -15,6 +15,7 @@ const PAGE_INTRO: LocalizedText = {
 
 export default function MapPage() {
   const { lang } = useLanguage();
+  const zones = useZones();
 
   return (
     <main className="flex flex-1 flex-col items-center gap-6 p-4 sm:p-6 lg:p-8">
@@ -27,7 +28,7 @@ export default function MapPage() {
           </p>
         </div>
       </div>
-      <ZoneMap zones={MOCK_ZONES} />
+      <ZoneMap zones={zones} />
     </main>
   );
 }

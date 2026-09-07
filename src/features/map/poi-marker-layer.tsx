@@ -1,7 +1,7 @@
 "use client";
 
 import { Marker, Popup } from "react-leaflet";
-import { getPOIsForZone } from "@/lib/mock-data";
+import { usePois } from "@/lib/reference-data/use-reference-data";
 import { createPoiMarkerIcon } from "./marker-icons";
 import type { Zone } from "@/lib/types";
 
@@ -12,15 +12,17 @@ import type { Zone } from "@/lib/types";
  * shared wholesale rather than duplicated per map.
  */
 export function PoiMarkerLayer({ zones }: { zones: Zone[] }) {
+  const pois = usePois();
+  const zoneIds = new Set(zones.map((zone) => zone.id));
+  const visiblePois = pois.filter((poi) => zoneIds.has(poi.zoneId));
+
   return (
     <>
-      {zones.flatMap((zone) =>
-        getPOIsForZone(zone.id).map((poi) => (
-          <Marker key={poi.id} position={[poi.lat, poi.lng]} icon={createPoiMarkerIcon(poi.category, poi.name)}>
-            <Popup>{poi.name}</Popup>
-          </Marker>
-        ))
-      )}
+      {visiblePois.map((poi) => (
+        <Marker key={poi.id} position={[poi.lat, poi.lng]} icon={createPoiMarkerIcon(poi.category, poi.name)}>
+          <Popup>{poi.name}</Popup>
+        </Marker>
+      ))}
     </>
   );
 }

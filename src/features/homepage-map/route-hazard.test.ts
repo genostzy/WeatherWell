@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { routeCrossesHazard } from "./route-hazard";
-import { MOCK_ZONES, getActiveAlertForZone } from "@/lib/mock-data";
+import { getActiveAlertForZone } from "@/lib/mock-data";
+import { FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
 import { getZoneStatus } from "@/lib/zone-status";
 import type { Zone } from "@/lib/types";
 
@@ -12,8 +13,8 @@ import type { Zone } from "@/lib/types";
  * own short local routes happen to sit at (they're real, properly-spaced
  * barangays several km apart; see mock-data.ts and route-hazard.ts).
  */
-const zone2 = MOCK_ZONES.find((z) => z.id === "zone-2")!;
-const zone3 = MOCK_ZONES.find((z) => z.id === "zone-3")!;
+const zone2 = FIXTURE_REFERENCE_DATA.zones.find((z) => z.id === "zone-2")!;
+const zone3 = FIXTURE_REFERENCE_DATA.zones.find((z) => z.id === "zone-3")!;
 
 function syntheticZone(evacuationRoutePath: [number, number][]): Zone {
   return {
@@ -58,7 +59,7 @@ describe("routeCrossesHazard", () => {
     // mock data, so reading mock alerts directly says the route is clear. An
     // operator who has just declared it Hazardous must be believed, or a
     // resident is routed past a zone the operator is evacuating.
-    const zone4 = MOCK_ZONES.find((z) => z.id === "zone-4")!;
+    const zone4 = FIXTURE_REFERENCE_DATA.zones.find((z) => z.id === "zone-4")!;
     const routeZone = syntheticZone([
       [zone4.lat, zone4.lng],
       [zone4.lat + 0.001, zone4.lng + 0.001],

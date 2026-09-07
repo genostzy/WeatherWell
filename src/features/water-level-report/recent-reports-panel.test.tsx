@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { RecentReportsPanel } from "./recent-reports-panel";
-import { MOCK_ZONES, MOCK_WATER_LEVEL_REPORTS, REPORT_THRESHOLD } from "@/lib/mock-data";
+import { MOCK_WATER_LEVEL_REPORTS, REPORT_THRESHOLD } from "@/lib/mock-data";
+import { FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
 import { addWaterLevelReport } from "@/lib/water-level-reports";
 import { DEPTH_LABEL } from "@/lib/depth";
 
@@ -11,7 +12,7 @@ describe("RecentReportsPanel", () => {
   });
 
   it("lists every recent report for the zone", () => {
-    const zone = MOCK_ZONES[0];
+    const zone = FIXTURE_REFERENCE_DATA.zones[0];
     render(<RecentReportsPanel zone={zone} />);
 
     for (const report of MOCK_WATER_LEVEL_REPORTS.filter((r) => r.zoneId === zone.id)) {
@@ -20,7 +21,7 @@ describe("RecentReportsPanel", () => {
   });
 
   it("counts only agreeing reports toward the threshold, excluding outliers", () => {
-    const zone = MOCK_ZONES[0];
+    const zone = FIXTURE_REFERENCE_DATA.zones[0];
     const zoneReports = MOCK_WATER_LEVEL_REPORTS.filter((r) => r.zoneId === zone.id);
     const agreeing = zoneReports.filter((report) => !report.isOutlier).length;
     // zone-1's fixture deliberately includes one outlier, so this proves the
@@ -33,19 +34,19 @@ describe("RecentReportsPanel", () => {
   });
 
   it("marks an outlier as downweighted rather than hiding it", () => {
-    render(<RecentReportsPanel zone={MOCK_ZONES[0]} />);
+    render(<RecentReportsPanel zone={FIXTURE_REFERENCE_DATA.zones[0]} />);
     expect(screen.getByText(/downweighted/i)).toBeInTheDocument();
   });
 
   it("invites the first report when a zone has none", () => {
     localStorage.setItem("weatherwell.waterLevelReports", "[]");
-    render(<RecentReportsPanel zone={{ ...MOCK_ZONES[0], id: "zone-with-no-reports" }} />);
+    render(<RecentReportsPanel zone={{ ...FIXTURE_REFERENCE_DATA.zones[0], id: "zone-with-no-reports" }} />);
     expect(screen.getByText(/yours would be the first/i)).toBeInTheDocument();
   });
 
   it("shows a freshly submitted report immediately, not just the seeded ones", () => {
     localStorage.setItem("weatherwell.waterLevelReports", "[]");
-    const zone = MOCK_ZONES[0];
+    const zone = FIXTURE_REFERENCE_DATA.zones[0];
     addWaterLevelReport(zone.id, "neck");
 
     render(<RecentReportsPanel zone={zone} />);

@@ -3,13 +3,14 @@ import { render, screen } from "@testing-library/react";
 import { PersonalStatusHeadline } from "./personal-status-headline";
 import { setZoneAlertOverride } from "@/lib/zone-overrides";
 import { LanguageProvider } from "@/features/i18n/language-provider";
-import { MOCK_ZONES, getActiveAlertForZone, getFriendlyWeatherRead } from "@/lib/mock-data";
+import { getActiveAlertForZone, getFriendlyWeatherRead } from "@/lib/mock-data";
+import { FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
 import { zoneWithSeverity } from "@/test-utils/mock-fixtures";
 import { t } from "@/lib/i18n";
 import type { Zone } from "@/lib/types";
 
 /** Every mock zone carries an active alert, so a Safe zone has to be synthesised — this id matches none of them. */
-const SAFE_ZONE: Zone = { ...MOCK_ZONES[0], id: "zone-with-no-alert" };
+const SAFE_ZONE: Zone = { ...FIXTURE_REFERENCE_DATA.zones[0], id: "zone-with-no-alert" };
 
 describe("PersonalStatusHeadline", () => {
   // Overrides persist to localStorage, so one test's downgrade would otherwise
@@ -39,8 +40,8 @@ describe("PersonalStatusHeadline", () => {
   });
 
   it("shows the zone name under the headline", () => {
-    render(<PersonalStatusHeadline zone={MOCK_ZONES[0]} />);
-    expect(screen.getByText(MOCK_ZONES[0].name)).toBeInTheDocument();
+    render(<PersonalStatusHeadline zone={FIXTURE_REFERENCE_DATA.zones[0]} />);
+    expect(screen.getByText(FIXTURE_REFERENCE_DATA.zones[0].name)).toBeInTheDocument();
   });
 
   it("follows a Safe headline with a friendly weather read", () => {

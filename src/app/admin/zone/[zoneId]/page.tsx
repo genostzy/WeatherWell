@@ -16,12 +16,11 @@ import {
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import {
-  MOCK_ZONES,
   getRainfallForZone,
   getRainfallHistoryForZone,
-  getHazardSusceptibilityForZone,
   isHeavyRainfall,
 } from "@/lib/mock-data";
+import { useHazardsForZone, useZones } from "@/lib/reference-data/use-reference-data";
 import { SEVERITY_ORDER, SEVERITY_LABEL, SEVERITY_HEX, type Severity } from "@/lib/severity";
 import { CENTER_STATUS_LABEL, CENTER_STATUS_ORDER } from "@/lib/center-status";
 import {
@@ -62,8 +61,10 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
   const { zoneId } = use(params);
   const { lang } = useLanguage();
   const overrides = useZoneOverrides();
+  const zones = useZones();
+  const susceptibility = useHazardsForZone(zoneId);
 
-  const zone = MOCK_ZONES.find((z) => z.id === zoneId);
+  const zone = zones.find((z) => z.id === zoneId);
   if (!zone) notFound();
 
   const alertOverride = overrides[zone.id]?.alertSeverity;
@@ -74,7 +75,6 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
     zone.evacuationCenterCapacity,
     overrides[zone.id]?.currentOccupancy
   );
-  const susceptibility = getHazardSusceptibilityForZone(zone.id);
   const rainfall = getRainfallForZone(zone.id);
   const rainfallHistory = getRainfallHistoryForZone(zone.id);
 
@@ -214,7 +214,7 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
 
         <CheckInSummaryPanel zoneId={zone.id} />
 
-        <CommunityPinModerationPanel zones={MOCK_ZONES} zoneId={zone.id} />
+        <CommunityPinModerationPanel zones={zones} zoneId={zone.id} />
 
         <p className="text-xs text-muted-foreground">{t(NOTE, lang)}</p>
       </div>

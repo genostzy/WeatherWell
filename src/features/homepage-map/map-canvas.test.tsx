@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { screen, fireEvent } from "@testing-library/react";
 import { MapCanvas } from "./map-canvas";
-import { MOCK_ZONES } from "@/lib/mock-data";
+import { renderWithData, FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
 import { addCommunityPin } from "@/lib/community-pins";
 
 /**
@@ -14,7 +14,7 @@ import { addCommunityPin } from "@/lib/community-pins";
  */
 describe("MapCanvas", () => {
   const baseProps = {
-    zones: MOCK_ZONES,
+    zones: FIXTURE_REFERENCE_DATA.zones,
     hazardType: "flood" as const,
     onHazardTypeChange: () => {},
     routeZone: null,
@@ -23,18 +23,18 @@ describe("MapCanvas", () => {
   };
 
   it("renders without throwing and shows the marker legend and hazard selector", () => {
-    render(<MapCanvas {...baseProps} />);
+    renderWithData(<MapCanvas {...baseProps} />);
     expect(screen.getByText(/map legend/i)).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: /flood/i })).toBeInTheDocument();
   });
 
   it("calls onSelectZone when a zone status marker is clicked", () => {
     const onSelectZone = vi.fn();
-    render(<MapCanvas {...baseProps} onSelectZone={onSelectZone} />);
+    renderWithData(<MapCanvas {...baseProps} onSelectZone={onSelectZone} />);
 
     fireEvent.click(screen.getByRole("img", { name: /Barangay Nilombot, Mapandan/i }));
 
-    expect(onSelectZone).toHaveBeenCalledWith(MOCK_ZONES[0].id);
+    expect(onSelectZone).toHaveBeenCalledWith(FIXTURE_REFERENCE_DATA.zones[0].id);
   });
 
   describe("community pin actions", () => {
@@ -50,7 +50,7 @@ describe("MapCanvas", () => {
       addCommunityPin({ zoneId: "zone-1", statusTag: "rising", caption: "Mine", lat: 16.03, lng: 120.44 });
       const onDeletePin = vi.fn();
 
-      render(<MapCanvas {...baseProps} onDeletePin={onDeletePin} />);
+      renderWithData(<MapCanvas {...baseProps} onDeletePin={onDeletePin} />);
       fireEvent.click(screen.getByRole("img", { name: /Rising/i }));
       fireEvent.click(screen.getByRole("button", { name: /^Delete$/i }));
 
@@ -64,7 +64,7 @@ describe("MapCanvas", () => {
       pins[0].deviceId = "a-different-device";
       localStorage.setItem("weatherwell.communityPins", JSON.stringify(pins));
 
-      render(<MapCanvas {...baseProps} />);
+      renderWithData(<MapCanvas {...baseProps} />);
       fireEvent.click(screen.getByRole("img", { name: /Flooded/i }));
 
       expect(screen.queryByRole("button", { name: /^Delete$/i })).not.toBeInTheDocument();

@@ -25,7 +25,7 @@ export function usePois(): PointOfInterest[] {
   return useData().pois;
 }
 
-/** Replaces getHazardSusceptibilityForZone. Returns an empty record for an unknown zone. */
+/** Replaces the old per-zone mock-data hazard lookup. Returns an empty record for an unknown zone. */
 export function useHazardsForZone(zoneId: string): Record<HazardType, HazardRiskLevel> {
   return useData().hazards[zoneId] ?? ({} as Record<HazardType, HazardRiskLevel>);
 }

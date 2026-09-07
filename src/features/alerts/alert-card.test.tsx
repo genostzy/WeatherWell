@@ -2,7 +2,8 @@ import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { AlertCard } from "./alert-card";
 import { LanguageProvider } from "@/features/i18n/language-provider";
-import { MOCK_ZONES, getActiveAlertForZone } from "@/lib/mock-data";
+import { getActiveAlertForZone } from "@/lib/mock-data";
+import { FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
 import { zoneWithSeverity } from "@/test-utils/mock-fixtures";
 
 // A red zone specifically, so the "Warning" label assertion below stays tied
@@ -38,7 +39,7 @@ describe("AlertCard", () => {
   });
 
   it("shows a 'no active alert' state when there is no alert", () => {
-    render(<AlertCard alert={undefined} zone={MOCK_ZONES[2]} />);
+    render(<AlertCard alert={undefined} zone={FIXTURE_REFERENCE_DATA.zones[2]} />);
     expect(screen.getByText(/no active alert/i)).toBeInTheDocument();
   });
 });

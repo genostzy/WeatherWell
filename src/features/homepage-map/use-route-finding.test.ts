@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useRouteFinding } from "./use-route-finding";
-import { MOCK_ZONES } from "@/lib/mock-data";
+import { FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
 import { setZoneAlertOverride } from "@/lib/zone-overrides";
 import { getZoneStatus } from "@/lib/zone-status";
 import { resolveEffectiveAlert } from "@/lib/zone-overrides";
@@ -21,7 +21,7 @@ describe("useRouteFinding", () => {
     // proximity check and the route test alone says every zone is fine —
     // which previously meant zone-1 (Dangerous in mock data) was offered as
     // the "safe evacuation center".
-    const { result } = renderHook(() => useRouteFinding(MOCK_ZONES));
+    const { result } = renderHook(() => useRouteFinding(FIXTURE_REFERENCE_DATA.zones));
 
     act(() => result.current.handleFindSafeEvacuationCenter());
 
@@ -35,7 +35,7 @@ describe("useRouteFinding", () => {
   });
 
   it("moves to another center once an operator escalates the one it offered", () => {
-    const { result, rerender } = renderHook(() => useRouteFinding(MOCK_ZONES));
+    const { result, rerender } = renderHook(() => useRouteFinding(FIXTURE_REFERENCE_DATA.zones));
 
     // Clear zone-1 so there are two acceptable destinations, and the hook has
     // somewhere to move to rather than simply running out of options.
@@ -53,10 +53,10 @@ describe("useRouteFinding", () => {
   });
 
   it("reports a notice rather than a destination when every zone is hazardous", () => {
-    const { result, rerender } = renderHook(() => useRouteFinding(MOCK_ZONES));
+    const { result, rerender } = renderHook(() => useRouteFinding(FIXTURE_REFERENCE_DATA.zones));
 
     act(() => {
-      for (const zone of MOCK_ZONES) setZoneAlertOverride(zone.id, "evacuate");
+      for (const zone of FIXTURE_REFERENCE_DATA.zones) setZoneAlertOverride(zone.id, "evacuate");
     });
     rerender();
     act(() => result.current.handleFindSafeEvacuationCenter());
@@ -65,7 +65,7 @@ describe("useRouteFinding", () => {
   });
 
   it("finds a Safe zone for the separate find-safe-area action", () => {
-    const { result, rerender } = renderHook(() => useRouteFinding(MOCK_ZONES));
+    const { result, rerender } = renderHook(() => useRouteFinding(FIXTURE_REFERENCE_DATA.zones));
 
     // Clear zone-4's alert so exactly one zone reads Safe.
     act(() => setZoneAlertOverride("zone-4", "none"));

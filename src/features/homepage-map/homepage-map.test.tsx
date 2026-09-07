@@ -1,10 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
 import { lazy, Suspense, type ComponentType } from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HomepageMap } from "./homepage-map";
-import { MOCK_ZONES } from "@/lib/mock-data";
-import { LanguageProvider } from "@/features/i18n/language-provider";
+import { renderWithData, FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
 import type { Zone } from "@/lib/types";
 
 /**
@@ -67,11 +66,7 @@ describe("HomepageMap", () => {
       },
     });
 
-    render(
-      <LanguageProvider initialLang="fil">
-        <HomepageMap zones={MOCK_ZONES} />
-      </LanguageProvider>
-    );
+    renderWithData(<HomepageMap zones={FIXTURE_REFERENCE_DATA.zones} />, { lang: "fil" });
 
     // Clicking the zone-1 status marker selects it as the active evacuation route.
     fireEvent.click(await screen.findByRole("img", { name: /Barangay Nilombot, Mapandan/i }));
@@ -83,7 +78,7 @@ describe("HomepageMap", () => {
 
   it("finds a hazard-free evacuation route when the default one crosses a hazard", async () => {
     const user = userEvent.setup();
-    render(<HomepageMap zones={MOCK_ZONES} />);
+    renderWithData(<HomepageMap zones={FIXTURE_REFERENCE_DATA.zones} />);
 
     // zone-1 (the default route) is mocked above to cross a hazard.
     expect(screen.getByText(/passes through a hazardous area/i)).toBeInTheDocument();
@@ -95,7 +90,7 @@ describe("HomepageMap", () => {
 
   it("reports when no zone is currently Safe", async () => {
     const user = userEvent.setup();
-    render(<HomepageMap zones={MOCK_ZONES} />);
+    renderWithData(<HomepageMap zones={FIXTURE_REFERENCE_DATA.zones} />);
 
     // All four mock zones carry an active alert, so none qualify as Safe.
     await user.click(screen.getByRole("button", { name: /^find safe area$/i }));

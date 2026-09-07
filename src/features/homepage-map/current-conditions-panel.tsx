@@ -12,12 +12,12 @@ import {
   hasThunderstormWatch,
   getHeatIndexForZone,
   getHeatIndexCategory,
-  getHazardSusceptibilityForZone,
   hasElevatedLandslideRisk,
   MOCK_TYPHOON,
   MOCK_DROUGHT_OUTLOOK,
   type HeatIndexCategory,
 } from "@/lib/mock-data";
+import { useHazardsForZone } from "@/lib/reference-data/use-reference-data";
 import type { LocalizedText, Zone } from "@/lib/types";
 
 const TITLE: LocalizedText = { en: "Current Conditions", fil: "Kasalukuyang Kondisyon" };
@@ -62,7 +62,7 @@ export function CurrentConditionsPanel({ zone }: { zone: Zone }) {
   const thunderstorm = hasThunderstormWatch(zone.id);
   const heatIndex = getHeatIndexForZone(zone.id);
   const heatCategory = getHeatIndexCategory(heatIndex);
-  const landslideSusceptibility = getHazardSusceptibilityForZone(zone.id).landslide;
+  const landslideSusceptibility = useHazardsForZone(zone.id).landslide;
   const landslideCaution = hasElevatedLandslideRisk(landslideSusceptibility, rainfall);
   const ChevronIcon = expanded ? ChevronUp : ChevronDown;
 

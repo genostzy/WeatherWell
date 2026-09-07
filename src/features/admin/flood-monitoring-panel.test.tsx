@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import { FloodMonitoringPanel } from "./flood-monitoring-panel";
-import { MOCK_ZONES, MOCK_WATER_LEVEL_REPORTS, REPORT_THRESHOLD } from "@/lib/mock-data";
+import { MOCK_WATER_LEVEL_REPORTS, REPORT_THRESHOLD } from "@/lib/mock-data";
+import { renderWithData, FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
 
 describe("FloodMonitoringPanel", () => {
   beforeEach(() => {
@@ -9,18 +10,18 @@ describe("FloodMonitoringPanel", () => {
   });
 
   it("shows every zone with a manage link back to its dashboard", () => {
-    render(<FloodMonitoringPanel zones={MOCK_ZONES} />);
-    for (const zone of MOCK_ZONES) {
+    renderWithData(<FloodMonitoringPanel zones={FIXTURE_REFERENCE_DATA.zones} />);
+    for (const zone of FIXTURE_REFERENCE_DATA.zones) {
       expect(screen.getByText(zone.name)).toBeInTheDocument();
     }
     const manageLinks = screen.getAllByRole("link", { name: /manage/i });
-    expect(manageLinks).toHaveLength(MOCK_ZONES.length);
-    expect(manageLinks[0]).toHaveAttribute("href", `/admin/zone/${MOCK_ZONES[0].id}`);
+    expect(manageLinks).toHaveLength(FIXTURE_REFERENCE_DATA.zones.length);
+    expect(manageLinks[0]).toHaveAttribute("href", `/admin/zone/${FIXTURE_REFERENCE_DATA.zones[0].id}`);
   });
 
   it("flags a zone whose agreeing reports have met the auto-trigger threshold", () => {
-    render(<FloodMonitoringPanel zones={MOCK_ZONES} />);
-    const zoneWithEnough = MOCK_ZONES.find(
+    renderWithData(<FloodMonitoringPanel zones={FIXTURE_REFERENCE_DATA.zones} />);
+    const zoneWithEnough = FIXTURE_REFERENCE_DATA.zones.find(
       (zone) =>
         MOCK_WATER_LEVEL_REPORTS.filter((r) => r.zoneId === zone.id && !r.isOutlier).length >=
         REPORT_THRESHOLD
@@ -30,8 +31,8 @@ describe("FloodMonitoringPanel", () => {
   });
 
   it("shows the latest report's depth for a zone with reports", () => {
-    render(<FloodMonitoringPanel zones={MOCK_ZONES} />);
-    const zoneWithReports = MOCK_ZONES.find(
+    renderWithData(<FloodMonitoringPanel zones={FIXTURE_REFERENCE_DATA.zones} />);
+    const zoneWithReports = FIXTURE_REFERENCE_DATA.zones.find(
       (z) => MOCK_WATER_LEVEL_REPORTS.filter((r) => r.zoneId === z.id).length > 0
     )!;
     const latest = [...MOCK_WATER_LEVEL_REPORTS]

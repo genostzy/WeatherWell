@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { screen, fireEvent } from "@testing-library/react";
 import { AdminMapCanvas } from "./admin-map-canvas";
-import { MOCK_ZONES } from "@/lib/mock-data";
+import { renderWithData, FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
 import { addCommunityPin, type CommunityPin } from "@/lib/community-pins";
 
 /**
@@ -28,8 +28,8 @@ function seedPin(overrides: Partial<CommunityPin> = {}): void {
     zoneId: "zone-1",
     statusTag: "flooded",
     caption: "Test pin",
-    lat: MOCK_ZONES[0].lat,
-    lng: MOCK_ZONES[0].lng,
+    lat: FIXTURE_REFERENCE_DATA.zones[0].lat,
+    lng: FIXTURE_REFERENCE_DATA.zones[0].lng,
   });
   if (Object.keys(overrides).length > 0) {
     const pins = storedPins();
@@ -37,7 +37,7 @@ function seedPin(overrides: Partial<CommunityPin> = {}): void {
   }
 }
 
-const zone = MOCK_ZONES[0];
+const zone = FIXTURE_REFERENCE_DATA.zones[0];
 
 describe("AdminMapCanvas", () => {
   beforeEach(() => {
@@ -46,7 +46,7 @@ describe("AdminMapCanvas", () => {
   });
 
   it("renders the legend, hazard selector, and layer toggles", () => {
-    render(<AdminMapCanvas zones={MOCK_ZONES} />);
+    renderWithData(<AdminMapCanvas zones={FIXTURE_REFERENCE_DATA.zones} />);
     expect(screen.getByText(/map legend/i)).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: /flood/i })).toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: /community pins/i })).toBeChecked();
@@ -54,7 +54,7 @@ describe("AdminMapCanvas", () => {
   });
 
   it("writes a severity override when an admin picks one from a zone popup", () => {
-    render(<AdminMapCanvas zones={MOCK_ZONES} />);
+    renderWithData(<AdminMapCanvas zones={FIXTURE_REFERENCE_DATA.zones} />);
     fireEvent.click(screen.getByRole("img", { name: new RegExp(zone.name, "i") }));
 
     fireEvent.change(screen.getByRole("combobox", { name: new RegExp(zone.name, "i") }), {
@@ -65,7 +65,7 @@ describe("AdminMapCanvas", () => {
   });
 
   it("clears the override back to automatic", () => {
-    render(<AdminMapCanvas zones={MOCK_ZONES} />);
+    renderWithData(<AdminMapCanvas zones={FIXTURE_REFERENCE_DATA.zones} />);
     fireEvent.click(screen.getByRole("img", { name: new RegExp(zone.name, "i") }));
     const select = screen.getByRole("combobox", { name: new RegExp(zone.name, "i") });
 
@@ -77,7 +77,7 @@ describe("AdminMapCanvas", () => {
   });
 
   it("shows the zone's computed risk score alongside the override control", () => {
-    render(<AdminMapCanvas zones={MOCK_ZONES} />);
+    renderWithData(<AdminMapCanvas zones={FIXTURE_REFERENCE_DATA.zones} />);
     fireEvent.click(screen.getByRole("img", { name: new RegExp(zone.name, "i") }));
 
     expect(screen.getByText(/risk score/i)).toBeInTheDocument();
@@ -85,7 +85,7 @@ describe("AdminMapCanvas", () => {
   });
 
   it("writes an evacuation center headcount from its marker popup", () => {
-    render(<AdminMapCanvas zones={MOCK_ZONES} />);
+    renderWithData(<AdminMapCanvas zones={FIXTURE_REFERENCE_DATA.zones} />);
     fireEvent.click(screen.getByRole("img", { name: new RegExp(zone.evacuationCenterName, "i") }));
 
     fireEvent.change(
@@ -98,7 +98,7 @@ describe("AdminMapCanvas", () => {
 
   it("removes a community pin from its popup", () => {
     seedPin();
-    render(<AdminMapCanvas zones={MOCK_ZONES} />);
+    renderWithData(<AdminMapCanvas zones={FIXTURE_REFERENCE_DATA.zones} />);
 
     fireEvent.click(screen.getByRole("img", { name: /flooded/i }));
     fireEvent.click(screen.getByRole("button", { name: /remove pin/i }));
@@ -111,7 +111,7 @@ describe("AdminMapCanvas", () => {
     // The whole point of the soft delete — a pin taken down by brigading
     // votes has to stay reachable for an admin to bring back.
     seedPin({ removed: true, removedReason: "net_score" });
-    render(<AdminMapCanvas zones={MOCK_ZONES} />);
+    renderWithData(<AdminMapCanvas zones={FIXTURE_REFERENCE_DATA.zones} />);
 
     fireEvent.click(screen.getByRole("img", { name: /removed/i }));
     fireEvent.click(screen.getByRole("button", { name: /restore pin/i }));
@@ -121,7 +121,7 @@ describe("AdminMapCanvas", () => {
 
   it("hides the pin layer when its toggle is unchecked", () => {
     seedPin();
-    render(<AdminMapCanvas zones={MOCK_ZONES} />);
+    renderWithData(<AdminMapCanvas zones={FIXTURE_REFERENCE_DATA.zones} />);
     expect(screen.getByRole("img", { name: /flooded/i })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("checkbox", { name: /community pins/i }));

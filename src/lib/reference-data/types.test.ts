@@ -51,7 +51,7 @@ describe("toReferenceData", () => {
     expect(zones[0].downstreamZoneId).toBeUndefined();
   });
 
-  it("groups hazard rows by zone then type, the shape getHazardSusceptibilityForZone returned", () => {
+  it("groups hazard rows by zone then type, the shape the old per-zone mock-data lookup returned", () => {
     const { hazards } = toReferenceData(
       [ZONE_ROW],
       [],

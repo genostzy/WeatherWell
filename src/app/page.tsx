@@ -10,7 +10,7 @@ import { useIsOnline } from "@/features/homepage-map/use-tiles-cached";
 import { useSelectedZone } from "@/features/zones/use-selected-zone";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
-import { MOCK_ZONES } from "@/lib/mock-data";
+import { useZones } from "@/lib/reference-data/use-reference-data";
 import { orderZonesWithSelectedFirst } from "@/lib/order-zones";
 import { Button } from "@/components/ui/button";
 import type { LocalizedText } from "@/lib/types";
@@ -24,8 +24,9 @@ const NAV_LINKS: { href: string; label: LocalizedText; icon: typeof Building2 }[
 
 export default function Home() {
   const isOnline = useIsOnline();
+  const zones = useZones();
   const selectedZone = useSelectedZone();
-  const orderedZones = orderZonesWithSelectedFirst(MOCK_ZONES, selectedZone.id);
+  const orderedZones = orderZonesWithSelectedFirst(zones, selectedZone.id);
   const { lang } = useLanguage();
 
   return (

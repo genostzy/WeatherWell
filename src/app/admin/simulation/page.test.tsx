@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { act, render, screen } from "@testing-library/react";
+import { act, screen } from "@testing-library/react";
 import AdminSimulationPage from "./page";
+import { renderWithData } from "@/test-utils/render-with-data";
 
 const TOTAL_SIMULATION_MS = 1500 + 1500 + 2000 + 1500 + 1500 + 1500 + 1500;
 
@@ -14,18 +15,18 @@ describe("AdminSimulationPage", () => {
   });
 
   it("starts idle, with no reset button and the start action enabled", () => {
-    render(<AdminSimulationPage />);
+    renderWithData(<AdminSimulationPage />);
     expect(screen.getByRole("button", { name: /start simulation/i })).toBeEnabled();
     expect(screen.queryByRole("button", { name: /reset/i })).not.toBeInTheDocument();
   });
 
   it("shows a cascade step for the default zone, which has downstream impact", () => {
-    render(<AdminSimulationPage />);
+    renderWithData(<AdminSimulationPage />);
     expect(screen.getByText("Cascade Warning")).toBeInTheDocument();
   });
 
   it("runs the alert flow to completion and offers to run again", () => {
-    render(<AdminSimulationPage />);
+    renderWithData(<AdminSimulationPage />);
     act(() => {
       screen.getByRole("button", { name: /start simulation/i }).click();
     });
@@ -36,7 +37,7 @@ describe("AdminSimulationPage", () => {
   });
 
   it("resets back to idle after a completed run", () => {
-    render(<AdminSimulationPage />);
+    renderWithData(<AdminSimulationPage />);
     act(() => {
       screen.getByRole("button", { name: /start simulation/i }).click();
     });

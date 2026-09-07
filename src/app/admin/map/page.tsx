@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
-import { MOCK_ZONES } from "@/lib/mock-data";
+import { useZones } from "@/lib/reference-data/use-reference-data";
 import type { LocalizedText } from "@/lib/types";
 
 /** Leaflet is browser-only, same constraint as the resident map — see homepage-map.tsx. */
@@ -32,6 +32,7 @@ const NOTE: LocalizedText = {
 
 export default function AdminMapPage() {
   const { lang } = useLanguage();
+  const zones = useZones();
 
   return (
     <main className="flex min-h-screen flex-col items-center gap-6 p-4 sm:p-6 lg:p-8">
@@ -50,7 +51,7 @@ export default function AdminMapPage() {
           </p>
         </div>
 
-        <AdminMapCanvas zones={MOCK_ZONES} />
+        <AdminMapCanvas zones={zones} />
 
         <p lang={lang} className="text-xs text-muted-foreground">
           {t(NOTE, lang)}

@@ -2,7 +2,8 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { ShareAlertButton } from "./share-alert-button";
 import { LanguageProvider } from "@/features/i18n/language-provider";
-import { MOCK_ZONES, getActiveAlertForZone } from "@/lib/mock-data";
+import { getActiveAlertForZone } from "@/lib/mock-data";
+import { FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
 import type { LanguageCode } from "@/lib/types";
 
 /**
@@ -11,7 +12,7 @@ import type { LanguageCode } from "@/lib/types";
  * has never seen WeatherWell and has nothing to interpret it with. So what
  * matters here is the wording that escapes, not the button's markup.
  */
-const zone = MOCK_ZONES.find((z) => z.id === "zone-2")!;
+const zone = FIXTURE_REFERENCE_DATA.zones.find((z) => z.id === "zone-2")!;
 const alert = getActiveAlertForZone(zone.id)!;
 
 function shareTextFrom(lang: LanguageCode): string {

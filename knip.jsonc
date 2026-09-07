@@ -17,16 +17,9 @@
   // TablesUpdate, Enums, CompositeTypes, Json, Constants) are part of
   // Supabase's standard generated output and are kept whole rather than
   // trimmed, for the same regeneration-conflict reason as the shadcn files.
-  //
-  // src/test-utils/render-with-data.tsx is the harness every future
-  // ReferenceData-consuming component test will use, but it lands in this
-  // task before its first consumer (Task 4 converts the mock-data
-  // consumers). A test helper can't honestly be made "used" by inventing a
-  // caller, so it stays ignored until Task 4 wires one up.
   "ignore": [
     "src/components/ui/*.tsx",
     "!src/components/ui/*.test.tsx",
-    "src/lib/supabase/database.types.ts",
-    "src/test-utils/render-with-data.tsx"
+    "src/lib/supabase/database.types.ts"
   ]
 }

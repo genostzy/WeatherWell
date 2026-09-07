@@ -27,7 +27,6 @@ import { ReportTrendPanel } from "@/features/admin/report-trend-panel";
 import { AlertAnalyticsPanel } from "@/features/admin/alert-analytics-panel";
 import { CommunityPinModerationPanel } from "@/features/admin/community-pin-moderation-panel";
 import {
-  MOCK_ZONES,
   MOCK_TYPHOON,
   getRainfallForZone,
   getReportsTodayForZone,
@@ -35,6 +34,7 @@ import {
 } from "@/lib/mock-data";
 import { useZoneOverrides, resolveEffectiveAlert, resolveEffectiveCenterStatus } from "@/lib/zone-overrides";
 import { useCommunityPins } from "@/lib/community-pins";
+import { useZones } from "@/lib/reference-data/use-reference-data";
 import { getZoneStatus } from "@/lib/zone-status";
 import { buildZoneInputForZone, computeZoneState } from "@/lib/risk-engine/score";
 import type { LocalizedText } from "@/lib/types";
@@ -82,13 +82,14 @@ export default function AdminPage() {
   const { lang } = useLanguage();
   const overrides = useZoneOverrides();
   const pins = useCommunityPins();
+  const zones = useZones();
 
-  const zonesUnderAlert = MOCK_ZONES.filter(
+  const zonesUnderAlert = zones.filter(
     (zone) => getZoneStatus(resolveEffectiveAlert(zone.id, overrides[zone.id]?.alertSeverity)) !== "safe"
   ).length;
-  const reportsToday = MOCK_ZONES.reduce((sum, zone) => sum + getReportsTodayForZone(zone.id), 0);
-  const heaviestRain = Math.max(...MOCK_ZONES.map((zone) => getRainfallForZone(zone.id)));
-  const constrainedCenters = MOCK_ZONES.filter((zone) => {
+  const reportsToday = zones.reduce((sum, zone) => sum + getReportsTodayForZone(zone.id), 0);
+  const heaviestRain = Math.max(...zones.map((zone) => getRainfallForZone(zone.id)));
+  const constrainedCenters = zones.filter((zone) => {
     const status = resolveEffectiveCenterStatus(
       zone.centerStatus,
       overrides[zone.id]?.centerStatus,
@@ -99,13 +100,13 @@ export default function AdminPage() {
   }).length;
   const hasEffectiveAlert = (zoneId: string) =>
     resolveEffectiveAlert(zoneId, overrides[zoneId]?.alertSeverity) !== undefined;
-  const zoneStates = MOCK_ZONES.map((zone) =>
-    computeZoneState(buildZoneInputForZone(zone, MOCK_ZONES, hasEffectiveAlert))
+  const zoneStates = zones.map((zone) =>
+    computeZoneState(buildZoneInputForZone(zone, zones, hasEffectiveAlert))
   );
   const highestRiskState = zoneStates.reduce((highest, state) =>
     state.riskScore > highest.riskScore ? state : highest
   );
-  const highestRiskZone = MOCK_ZONES.find((zone) => zone.id === highestRiskState.zoneId)!;
+  const highestRiskZone = zones.find((zone) => zone.id === highestRiskState.zoneId)!;
 
   return (
     <main className="flex min-h-screen flex-col items-center gap-6 p-4 sm:p-6 lg:p-8">
@@ -121,7 +122,7 @@ export default function AdminPage() {
             <StatCard
               label={t(ZONES_UNDER_ALERT, lang)}
               value={zonesUnderAlert}
-              hint={`${t(OF_TOTAL, lang)} ${MOCK_ZONES.length}`}
+              hint={`${t(OF_TOTAL, lang)} ${zones.length}`}
               icon={AlertTriangle}
               accentClass={zonesUnderAlert > 0 ? "text-severity-orange" : "text-green-500"}
             />
@@ -173,11 +174,11 @@ export default function AdminPage() {
 
         <section className="space-y-4">
           <h2 className="text-lg font-semibold">{t(HAZARDS, lang)}</h2>
-          <FloodMonitoringPanel zones={MOCK_ZONES} />
-          <RainfallMonitoringPanel zones={MOCK_ZONES} />
+          <FloodMonitoringPanel zones={zones} />
+          <RainfallMonitoringPanel zones={zones} />
           <div className="grid gap-4 lg:grid-cols-2">
             <TyphoonTrackingPanel />
-            <LandslideRiskPanel zones={MOCK_ZONES} />
+            <LandslideRiskPanel zones={zones} />
           </div>
         </section>
 
@@ -185,8 +186,8 @@ export default function AdminPage() {
 
         <section className="space-y-4">
           <h2 className="text-lg font-semibold">{t(ANALYTICS, lang)}</h2>
-          <ReportTrendPanel zones={MOCK_ZONES} />
-          <AlertAnalyticsPanel zones={MOCK_ZONES} />
+          <ReportTrendPanel zones={zones} />
+          <AlertAnalyticsPanel zones={zones} />
         </section>
 
         <Separator />
@@ -211,8 +212,8 @@ export default function AdminPage() {
             </CardContent>
           </Card>
 
-          <EvacuationManagementPanel zones={MOCK_ZONES} />
-          <CommunityPinModerationPanel zones={MOCK_ZONES} />
+          <EvacuationManagementPanel zones={zones} />
+          <CommunityPinModerationPanel zones={zones} />
 
           <Card>
             <CardContent className="flex flex-wrap items-center justify-between gap-3">
