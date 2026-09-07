@@ -1,6 +1,7 @@
 import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { readSupabaseEnv } from "./env";
+import type { Database } from "./database.types";
 
 /**
  * Used only inside route handlers. `server-only` makes an accidental import
@@ -9,10 +10,15 @@ import { readSupabaseEnv } from "./env";
  *
  * No session is persisted: every read in this plan is public data under
  * `select using (true)`, and there is no authenticated user yet.
+ *
+ * Typed with the generated `Database` schema so postgrest-js can infer
+ * result shapes (including join cardinality, e.g. the one-to-one
+ * `evacuation_centers` embed) instead of route handlers falling back to
+ * a blanket `as unknown as` cast at the query boundary.
  */
-export function createSupabaseServerClient(): SupabaseClient {
+export function createSupabaseServerClient(): SupabaseClient<Database> {
   const { url, publishableKey } = readSupabaseEnv();
-  return createClient(url, publishableKey, {
+  return createClient<Database>(url, publishableKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 }

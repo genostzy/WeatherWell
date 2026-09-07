@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { toReferenceData } from "@/lib/reference-data/types";
+import type { HazardRiskLevel, HazardType, PointOfInterest, Zone } from "@/lib/types";
 
 /**
  * All reference data in one response. Route handlers are not cached by default
@@ -22,25 +23,51 @@ export async function GET() {
     supabase.from("hazard_susceptibility").select("zone_id, hazard_type, risk_level"),
   ]);
 
-  const failure = zonesResult.error ?? poisResult.error ?? hazardsResult.error;
-  if (failure) {
-    // Never 200 with partial reference data: a zone list missing entries reads
-    // as "that barangay is fine" to whoever is looking at it.
-    return NextResponse.json({ error: failure.message }, { status: 502 });
+  // Checked and returned individually (rather than combined into one
+  // `a ?? b ?? c` failure value) so TypeScript's discriminated-union
+  // narrowing on each PostgrestResponse actually applies below: after all
+  // three checks, `.data` on each result is known non-null without a `!`.
+  // Never 200 with partial reference data: a zone list missing entries
+  // reads as "that barangay is fine" to whoever is looking at it.
+  if (zonesResult.error) {
+    return NextResponse.json({ error: zonesResult.error.message }, { status: 502 });
+  }
+  if (poisResult.error) {
+    return NextResponse.json({ error: poisResult.error.message }, { status: 502 });
+  }
+  if (hazardsResult.error) {
+    return NextResponse.json({ error: hazardsResult.error.message }, { status: 502 });
   }
 
   try {
-    // The client returned from createSupabaseServerClient() has no Database
-    // generic (Task 1 keeps it that way — see that file), so postgrest-js
-    // can't know evacuation_centers is a one-to-one embed and infers `.data`
-    // as a loosely-typed array-shaped guess rather than ZoneRow[]. The select
-    // strings above are what actually pin the shape; this cast just tells
-    // the compiler what the query already guarantees at runtime.
-    const data = toReferenceData(
-      zonesResult.data as unknown as Parameters<typeof toReferenceData>[0],
-      poisResult.data as unknown as Parameters<typeof toReferenceData>[1],
-      hazardsResult.data as unknown as Parameters<typeof toReferenceData>[2]
-    );
+    // The client is typed with the generated `Database` schema (see
+    // server.ts), so postgrest-js infers the rest of each row correctly,
+    // including evacuation_centers as a one-to-one embed. What's left below
+    // are `text` columns with CHECK constraints rather than Postgres enums
+    // (`evacuation_route_text`/`evacuation_route_path` are `jsonb`, `status`,
+    // `category`, `hazard_type` and `risk_level` are `text`), so the
+    // generated types render them as `Json`/`string`. Each assertion below
+    // narrows exactly one such field to the literal union the CHECK
+    // constraint already guarantees at runtime — no whole-result cast.
+    const zones = zonesResult.data.map((row) => ({
+      ...row,
+      evacuation_route_text: row.evacuation_route_text as Zone["evacuationRouteText"],
+      evacuation_route_path: row.evacuation_route_path as Zone["evacuationRoutePath"],
+      evacuation_centers: row.evacuation_centers
+        ? { ...row.evacuation_centers, status: row.evacuation_centers.status as Zone["centerStatus"] }
+        : null,
+    }));
+    const pois = poisResult.data.map((row) => ({
+      ...row,
+      category: row.category as PointOfInterest["category"],
+    }));
+    const hazards = hazardsResult.data.map((row) => ({
+      ...row,
+      hazard_type: row.hazard_type as HazardType,
+      risk_level: row.risk_level as HazardRiskLevel,
+    }));
+
+    const data = toReferenceData(zones, pois, hazards);
     return NextResponse.json(data);
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 502 });
