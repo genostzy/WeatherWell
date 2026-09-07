@@ -5,6 +5,7 @@ import { LanguageProvider } from "@/features/i18n/language-provider";
 import { LanguageToggle } from "@/features/i18n/language-toggle";
 import { SelectedZoneHotlineButton } from "@/components/selected-zone-hotline-button";
 import { ServiceWorkerRegistration } from "@/components/service-worker-registration";
+import { ReferenceDataProvider } from "@/lib/reference-data/provider";
 
 export const viewport: Viewport = {
   themeColor: "#0a0a0a",
@@ -36,8 +37,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               <span className="font-semibold">WeatherWell</span>
               <LanguageToggle />
             </header>
-            {children}
-            <SelectedZoneHotlineButton />
+            <ReferenceDataProvider>
+              {children}
+              <SelectedZoneHotlineButton />
+            </ReferenceDataProvider>
           </LanguageProvider>
         </TooltipProvider>
       </body>
