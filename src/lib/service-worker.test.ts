@@ -27,6 +27,7 @@ const SW_SOURCE = readFileSync(join(process.cwd(), "public", "sw.js"), "utf8");
 const VERSION = /const VERSION = "([^"]+)"/.exec(SW_SOURCE)?.[1] ?? "";
 const SHELL_CACHE = `weatherwell-shell-${VERSION}`;
 const ASSET_CACHE = `weatherwell-assets-${VERSION}`;
+const API_CACHE = `weatherwell-api-${VERSION}`;
 /** Unversioned by design — evacuation data must survive a deploy. */
 const ZONE_CACHE = "weatherwell-zones";
 
@@ -241,14 +242,19 @@ describe("service worker request routing", () => {
 
   it("keeps serving zones from the unversioned zone cache", async () => {
     // The one cache deliberately exempt from version bumps, so a device that
-    // updates and then loses signal keeps its evacuation instructions.
+    // updates and then loses signal keeps its evacuation instructions. This
+    // is only true if the /api/zones branch is the one that actually serves
+    // the request — store.has(ZONE_CACHE) alone is seeded true before any
+    // fetch runs and proves nothing about which branch handled it, so pin
+    // both the served body and that the generic /api/ branch never ran.
     const { listeners, store } = loadServiceWorker({
       caches: { [ZONE_CACHE]: { [`${ORIGIN}/api/zones`]: "CACHED ZONES" } },
     });
 
-    await handleFetch(listeners, { url: `${ORIGIN}/api/zones` });
+    const result = await handleFetch(listeners, { url: `${ORIGIN}/api/zones` });
 
-    expect(store.has(ZONE_CACHE)).toBe(true);
+    expect(result?.body).toBe("CACHED ZONES");
+    expect(store.has(API_CACHE)).toBe(false);
   });
 });
 
