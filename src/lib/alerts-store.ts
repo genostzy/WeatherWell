@@ -3,11 +3,6 @@
 import { createContext, useContext } from "react";
 import type { AlertRecord } from "./types";
 
-// Re-exported for callers that only need the pure mapper, and for the test
-// suite (alerts-store.test.tsx). The route handler imports it from
-// "./alerts-mapper" directly instead — see that file for why.
-export { toAlertRecords } from "./alerts-mapper";
-
 export const AlertsContext = createContext<AlertRecord[] | null>(null);
 
 /** Every alert the response carried, active and recently superseded alike. */

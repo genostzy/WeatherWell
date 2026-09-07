@@ -5,9 +5,14 @@ import type { AlertRecord } from "./types";
  * that file is "use client" (it holds the AlertsContext hooks) and Next's
  * RSC bundler turns every export of a "use client" module into a client
  * reference for server callers — so /api/alerts's route handler, which runs
- * on the server, cannot call a function imported from there directly. This
- * module has no "use client" directive, so both the server route and the
- * client store (which re-exports it) can use it.
+ * on the server, cannot call a function imported from there directly.
+ *
+ * This module must stay free of "use client" and must NOT be merged back
+ * into alerts-store.ts, and alerts-store.ts must not re-export from here
+ * either — any of those would put toAlertRecords behind a client boundary
+ * again and reintroduce the same 500 for the next route handler that calls
+ * it. Import toAlertRecords directly from this file, not from alerts-store.
+ * The separation is load-bearing, not incidental file-splitting.
  */
 export interface AlertRow {
   id: string;

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { toAlertRecords } from "./alerts-store";
+import { toAlertRecords } from "./alerts-mapper";
 
 const ROW = {
   id: "11111111-1111-1111-1111-111111111111",
