@@ -20,10 +20,11 @@
  * CURRENT_CACHES, so a bump is what evicts a bad build from installed devices.
  * Leaving it unchanged is what pins users to a stale app forever.
  */
-const VERSION = "v3";
+const VERSION = "v4";
 
 const SHELL_CACHE = `weatherwell-shell-${VERSION}`;
 const ASSET_CACHE = `weatherwell-assets-${VERSION}`;
+const API_CACHE = `weatherwell-api-${VERSION}`;
 
 /**
  * Deliberately NOT versioned. This holds the zone and evacuation data a
@@ -33,7 +34,7 @@ const ASSET_CACHE = `weatherwell-assets-${VERSION}`;
  */
 const ZONE_CACHE = "weatherwell-zones";
 
-const CURRENT_CACHES = [SHELL_CACHE, ASSET_CACHE, ZONE_CACHE];
+const CURRENT_CACHES = [SHELL_CACHE, ASSET_CACHE, API_CACHE, ZONE_CACHE];
 
 /** How long a navigation waits for the network before falling back to cache. */
 const NETWORK_TIMEOUT_MS = 3000;
@@ -169,6 +170,14 @@ self.addEventListener("fetch", (event) => {
   // Zone and evacuation data: instant from cache, refreshed behind the scenes.
   if (url.pathname === "/api/zones" || url.pathname.startsWith("/api/zones/")) {
     event.respondWith(staleWhileRevalidate(request, ZONE_CACHE));
+    return;
+  }
+
+  // Everything else under /api/. Named explicitly so no API response can fall
+  // through to the asset cache — the next plan adds /api/check-ins, where a
+  // shared cache would serve one resident's response to another.
+  if (url.pathname.startsWith("/api/")) {
+    event.respondWith(staleWhileRevalidate(request, API_CACHE));
     return;
   }
 

@@ -225,6 +225,31 @@ describe("service worker request routing", () => {
 
     expect(result).toBeUndefined();
   });
+
+  it("never puts an API response in the asset cache", async () => {
+    // The catch-all was written when no /api/ route existed. Community data
+    // and, in the next plan, per-person check-ins must not land in the
+    // shared asset cache just because they missed the two named branches.
+    const { listeners, store } = loadServiceWorker({
+      fetch: async () => response("PINS"),
+    });
+
+    await handleFetch(listeners, { url: `${ORIGIN}/api/pins` });
+
+    expect(store.has(ASSET_CACHE)).toBe(false);
+  });
+
+  it("keeps serving zones from the unversioned zone cache", async () => {
+    // The one cache deliberately exempt from version bumps, so a device that
+    // updates and then loses signal keeps its evacuation instructions.
+    const { listeners, store } = loadServiceWorker({
+      caches: { [ZONE_CACHE]: { [`${ORIGIN}/api/zones`]: "CACHED ZONES" } },
+    });
+
+    await handleFetch(listeners, { url: `${ORIGIN}/api/zones` });
+
+    expect(store.has(ZONE_CACHE)).toBe(true);
+  });
 });
 
 describe("service worker install", () => {
