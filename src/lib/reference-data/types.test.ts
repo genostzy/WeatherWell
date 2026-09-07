@@ -1,0 +1,90 @@
+import { describe, it, expect } from "vitest";
+import { toReferenceData } from "./types";
+
+/**
+ * The whole point of this route is that the database's normalised rows come
+ * back in exactly the shape the app's existing `Zone` type already uses, so
+ * no consumer has to change more than an import. These tests pin that shape.
+ */
+const ZONE_ROW = {
+  id: "zone-1",
+  psgc_barangay_code: "0105528012",
+  name: "Barangay Nilombot, Mapandan",
+  evacuation_route_text: { en: "Head to the barangay road.", fil: "Dumaan sa barangay road." },
+  lat: 16.0288,
+  lng: 120.4366,
+  evacuation_route_path: [[16.0288, 120.4366], [16.0295, 120.436]] as [number, number][],
+  hotline_number: "09171234567",
+  downstream_zone_id: "zone-2",
+  evacuation_centers: {
+    name: "Nilombot Elementary School",
+    lat: 16.0295,
+    lng: 120.436,
+    capacity: 300,
+    status: "space_available" as const,
+  },
+};
+
+describe("toReferenceData", () => {
+  it("flattens the centre onto the zone, matching the app's Zone type", () => {
+    const { zones } = toReferenceData([ZONE_ROW], [], []);
+    expect(zones[0]).toMatchObject({
+      id: "zone-1",
+      psgcBarangayCode: "0105528012",
+      evacuationCenterName: "Nilombot Elementary School",
+      evacuationCenterLat: 16.0295,
+      evacuationCenterCapacity: 300,
+      centerStatus: "space_available",
+      downstreamZoneId: "zone-2",
+    });
+  });
+
+  it("carries the localised route text through unchanged", () => {
+    const { zones } = toReferenceData([ZONE_ROW], [], []);
+    expect(zones[0].evacuationRouteText.fil).toBe("Dumaan sa barangay road.");
+  });
+
+  it("omits downstreamZoneId rather than setting it null, since the type says optional", () => {
+    // `zone-4` has no downstream zone. `null` would break `if (zone.downstreamZoneId)`
+    // consumers less obviously than undefined does, so pin it.
+    const { zones } = toReferenceData([{ ...ZONE_ROW, downstream_zone_id: null }], [], []);
+    expect(zones[0].downstreamZoneId).toBeUndefined();
+  });
+
+  it("groups hazard rows by zone then type, the shape getHazardSusceptibilityForZone returned", () => {
+    const { hazards } = toReferenceData(
+      [ZONE_ROW],
+      [],
+      [
+        { zone_id: "zone-1", hazard_type: "flood", risk_level: "high" },
+        { zone_id: "zone-1", hazard_type: "landslide", risk_level: "low" },
+      ]
+    );
+    expect(hazards["zone-1"]).toEqual({ flood: "high", landslide: "low" });
+  });
+
+  it("maps points of interest to the camelCase the app uses", () => {
+    const { pois } = toReferenceData(
+      [ZONE_ROW],
+      [{ id: "poi-1", zone_id: "zone-1", category: "health_center", name: "Nilombot Health Center", lat: 16.02, lng: 120.43 }],
+      []
+    );
+    expect(pois[0]).toEqual({
+      id: "poi-1",
+      zoneId: "zone-1",
+      category: "health_center",
+      name: "Nilombot Health Center",
+      lat: 16.02,
+      lng: 120.43,
+    });
+  });
+
+  it("throws when a zone has no evacuation centre rather than shipping a broken zone", () => {
+    // Every zone must have a centre — it is the thing the app tells people to
+    // walk to. A zone rendered with an undefined centre name is worse than a
+    // loud failure the operator can see.
+    expect(() => toReferenceData([{ ...ZONE_ROW, evacuation_centers: null }], [], [])).toThrow(
+      /zone-1/
+    );
+  });
+});
