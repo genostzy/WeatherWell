@@ -142,3 +142,14 @@ begin
 end $$;
 
 revoke all on schema tests from public, anon, authenticated;
+
+-- Defence in depth, same reasoning as private.handle_new_user(): schema
+-- `tests` already has no USAGE grant for anon/authenticated, so these
+-- functions are unreachable today. But every new function keeps Postgres's
+-- default PUBLIC EXECUTE grant unless revoked explicitly, so a later,
+-- unrelated USAGE grant on `tests` would silently reopen these five.
+revoke execute on function tests.as_user(uuid) from public, anon, authenticated;
+revoke execute on function tests.as_anon() from public, anon, authenticated;
+revoke execute on function tests.expect_denied(text, text) from public, anon, authenticated;
+revoke execute on function tests.expect_allowed(text, text) from public, anon, authenticated;
+revoke execute on function tests.expect_row_count(text, text, int) from public, anon, authenticated;

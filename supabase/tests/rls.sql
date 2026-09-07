@@ -99,7 +99,44 @@ begin
   exception
     when unique_violation then raise notice 'ok: one active alert per zone enforced';
   end;
+  -- Minor 8: this block set local role postgres and never reset it. Harmless
+  -- while the whole suite runs as postgres, but it would leak the role into
+  -- every assertion after this block the moment the suite runs under any
+  -- other role. Every helper resets on every exit path (see helpers.sql);
+  -- this raw block must hold itself to the same rule.
+  reset role;
 end $$;
+
+-- Critical 1: an operator fixture. tests.expect_allowed exists in
+-- helpers.sql and, before this change, was never called anywhere in this
+-- suite — every assertion was a denial, so a total failure of
+-- private.is_operator() (it always returning false, e.g. because a future
+-- migration touching `private` grants breaks its EXECUTE grant) would still
+-- leave every existing test green. These assertions require is_operator()
+-- to actually return true at least once, which is the property nothing
+-- here tested before.
+do $$
+declare
+  operator_id uuid := '33333333-3333-3333-3333-333333333333';
+begin
+  insert into auth.users (id) values (operator_id);
+  update public.profiles set role = 'operator' where id = operator_id;
+end $$;
+
+-- A second fixture zone, isolated from tests-fixture-zone (which already
+-- carries an active 'red' alert from the uniqueness block above) so the
+-- operator's insert below cannot collide with alerts_one_active_per_zone
+-- and fail with unique_violation instead of proving the allow path.
+insert into public.zones
+  (id, psgc_barangay_code, name, evacuation_route_text, lat, lng, evacuation_route_path, hotline_number)
+values
+  ('tests-fixture-zone-2', '000000001', 'Test Zone 2', '{"en":"x","fil":"x"}'::jsonb, 14.1, 121.1, '[]'::jsonb, '000');
+
+select tests.as_user('33333333-3333-3333-3333-333333333333');
+select tests.expect_allowed(
+  'an operator CAN issue an alert',
+  $$insert into public.alerts (zone_id, severity, message, source)
+    values ('tests-fixture-zone-2', 'red', '{"en":"x","fil":"x"}'::jsonb, 'manual')$$);
 
 -- Community tables: reports, pins, votes, check-ins — everything a resident
 -- writes. Two fixture users: 1111... acts as the resident under test,
@@ -152,5 +189,254 @@ select tests.expect_row_count(
   $$select * from public.evacuation_check_ins
     where user_id = '22222222-2222-2222-2222-222222222222'$$,
   0);
+
+-- Critical 1, continued: an operator CAN read another resident's check-in —
+-- the other half of checkins_read_own_or_operator that the denial test above
+-- never exercised. Reuses the 2222... check-in inserted above.
+select tests.as_user('33333333-3333-3333-3333-333333333333');
+select tests.expect_row_count(
+  'an operator CAN see another resident''s check-in',
+  $$select * from public.evacuation_check_ins
+    where user_id = '22222222-2222-2222-2222-222222222222'$$,
+  1);
+
+-- Critical 1, continued: the spec's own framing — "a resident can still read
+-- pins, and cannot call private.is_operator() directly" — only ever had its
+-- second half tested. Reuses the fixture pin inserted above.
+select tests.as_user('11111111-1111-1111-1111-111111111111');
+select tests.expect_row_count(
+  'a resident CAN read pins',
+  $$select * from public.community_pins where author_id = '11111111-1111-1111-1111-111111111111'$$,
+  1);
+
+-- Important 2: pins_update_own_or_operator grants the author UPDATE on every
+-- column, including removed/removed_reason — so an author can undo an
+-- operator's moderation by simply reissuing their own pin. An operator
+-- removes the fixture pin first (as postgres, bypassing RLS, purely to set
+-- up the fixture state — this is not the assertion).
+update public.community_pins set removed = true, removed_reason = 'admin'
+  where author_id = '11111111-1111-1111-1111-111111111111';
+
+select tests.as_user('11111111-1111-1111-1111-111111111111');
+select tests.expect_denied(
+  'the pin''s own author cannot un-remove it',
+  $$update public.community_pins set removed = false
+    where author_id = '11111111-1111-1111-1111-111111111111'$$);
+
+select tests.as_user('11111111-1111-1111-1111-111111111111');
+select tests.expect_denied(
+  'the pin''s own author cannot change removed_reason either',
+  $$update public.community_pins set removed_reason = null
+    where author_id = '11111111-1111-1111-1111-111111111111'$$);
+
+select tests.as_user('33333333-3333-3333-3333-333333333333');
+select tests.expect_allowed(
+  'an operator CAN restore a removed pin',
+  $$update public.community_pins set removed = false, removed_reason = null
+    where author_id = '11111111-1111-1111-1111-111111111111'$$);
+
+-- Important 3: trust_weight/is_outlier feed the weighted-consensus engine
+-- and must not be client-settable. reports_insert_own only ever checked
+-- reporter_id; the column-scoped INSERT grant is what actually stops this.
+select tests.as_user('11111111-1111-1111-1111-111111111111');
+select tests.expect_denied(
+  'a resident cannot inflate their own report''s trust_weight',
+  $$insert into public.water_level_reports (zone_id, depth_level, reporter_id, trust_weight)
+    values ('tests-fixture-zone', 'neck', '11111111-1111-1111-1111-111111111111', 1000000000)$$);
+
+select tests.as_user('11111111-1111-1111-1111-111111111111');
+select tests.expect_denied(
+  'a resident cannot mark their own report a non-outlier by fiat',
+  $$insert into public.water_level_reports (zone_id, depth_level, reporter_id, is_outlier)
+    values ('tests-fixture-zone', 'neck', '11111111-1111-1111-1111-111111111111', false)$$);
+
+-- Important 4, bullet 1: reference tables have no write policy at all, so
+-- the only thing stopping a resident from rewriting the literal evacuation
+-- instructions is the absence of a policy — nothing exercised that absence.
+select tests.as_user('11111111-1111-1111-1111-111111111111');
+select tests.expect_denied(
+  'a resident cannot insert a zone',
+  $$insert into public.zones
+      (id, psgc_barangay_code, name, evacuation_route_text, lat, lng, evacuation_route_path, hotline_number)
+    values ('tests-fixture-rogue-zone', '999999999', 'Rogue', '{"en":"x","fil":"x"}'::jsonb, 0, 0, '[]'::jsonb, '000')$$);
+
+-- zones has no UPDATE policy at all, so — exactly like the profiles
+-- self-promotion case at the top of this file — a resident's UPDATE is not
+-- denied with an error. It silently matches zero rows (confirmed: an
+-- UPDATE whose USING clause excludes every row succeeds with row_count 0,
+-- it does not raise). expect_denied cannot express this; it requires a
+-- thrown exception. Proven here as an unchanged-value assertion instead.
+do $$
+declare
+  original jsonb;
+  observed jsonb;
+begin
+  select evacuation_route_text into original from public.zones where id = 'tests-fixture-zone';
+
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', '11111111-1111-1111-1111-111111111111', 'role', 'authenticated')::text, true);
+
+  update public.zones set evacuation_route_text = '{"en":"go the wrong way","fil":"x"}'::jsonb
+    where id = 'tests-fixture-zone';
+
+  reset role;
+
+  select evacuation_route_text into observed from public.zones where id = 'tests-fixture-zone';
+
+  if observed is distinct from original then
+    raise exception using errcode = 'TSTFL',
+      message = 'SECURITY TEST FAILED — resident updated zones.evacuation_route_text (the literal evacuation instructions)';
+  end if;
+  raise notice 'ok: resident cannot update zones.evacuation_route_text (no policy exists, update matched zero rows)';
+end $$;
+
+select tests.as_user('11111111-1111-1111-1111-111111111111');
+select tests.expect_denied(
+  'a resident cannot insert an evacuation center',
+  $$insert into public.evacuation_centers (id, zone_id, name, lat, lng, capacity)
+    values ('tests-fixture-center', 'tests-fixture-zone', 'Rogue Center', 0, 0, 1)$$);
+
+select tests.as_user('11111111-1111-1111-1111-111111111111');
+select tests.expect_denied(
+  'a resident cannot insert a point of interest',
+  $$insert into public.points_of_interest (id, zone_id, category, name, lat, lng)
+    values ('tests-fixture-poi', 'tests-fixture-zone', 'market', 'Rogue POI', 0, 0)$$);
+
+select tests.as_user('11111111-1111-1111-1111-111111111111');
+select tests.expect_denied(
+  'a resident cannot insert a hazard susceptibility rating',
+  $$insert into public.hazard_susceptibility (id, zone_id, hazard_type, risk_level)
+    values ('tests-fixture-hazard', 'tests-fixture-zone', 'flood', 'low')$$);
+
+-- Important 4, bullet 2: pin_votes appeared nowhere in this suite. The
+-- primary key (pin_id, voter_id) is what stops a double vote — a database
+-- constraint, not RLS — so it is proven the same way the one-active-alert
+-- invariant above is: a raw role switch catching the constraint violation,
+-- with an explicit reset on every path per Minor 8.
+do $$
+begin
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', '11111111-1111-1111-1111-111111111111', 'role', 'authenticated')::text, true);
+
+  insert into public.pin_votes (pin_id, voter_id, direction)
+  select id, '11111111-1111-1111-1111-111111111111', 1
+  from public.community_pins
+  where author_id = '11111111-1111-1111-1111-111111111111';
+
+  begin
+    insert into public.pin_votes (pin_id, voter_id, direction)
+    select id, '11111111-1111-1111-1111-111111111111', -1
+    from public.community_pins
+    where author_id = '11111111-1111-1111-1111-111111111111';
+    raise exception using errcode = 'TSTFL',
+      message = 'a resident voted twice on the same pin';
+  exception
+    when unique_violation then raise notice 'ok: one vote per person per pin enforced';
+  end;
+
+  reset role;
+end $$;
+
+-- Important 4, bullet 2, continued: nor can a resident change someone
+-- else's vote. 2222... votes on the fixture pin (as postgres); 1111... then
+-- tries to overwrite it.
+insert into public.pin_votes (pin_id, voter_id, direction)
+select id, '22222222-2222-2222-2222-222222222222', 1
+from public.community_pins
+where author_id = '11111111-1111-1111-1111-111111111111';
+
+-- votes_update_own's USING clause excludes 2222...'s row for a caller who
+-- isn't 2222..., so — same reasoning as the zones update above — this is
+-- not an error, it is a silent zero-row update. Unchanged-value assertion.
+do $$
+declare
+  original smallint;
+  observed smallint;
+begin
+  select direction into original from public.pin_votes
+    where voter_id = '22222222-2222-2222-2222-222222222222';
+
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', '11111111-1111-1111-1111-111111111111', 'role', 'authenticated')::text, true);
+
+  update public.pin_votes set direction = -1
+    where voter_id = '22222222-2222-2222-2222-222222222222';
+
+  reset role;
+
+  select direction into observed from public.pin_votes
+    where voter_id = '22222222-2222-2222-2222-222222222222';
+
+  if observed is distinct from original then
+    raise exception using errcode = 'TSTFL',
+      message = 'SECURITY TEST FAILED — resident changed another resident''s vote';
+  end if;
+  raise notice 'ok: resident cannot change another resident''s vote (unchanged, update matched zero rows)';
+end $$;
+
+-- Important 4, bullet 3: insert was tested, update was not. Reuses the
+-- active 'red' alert on tests-fixture-zone from the uniqueness block above.
+-- alerts_update_operator's USING clause is is_operator(), which is false
+-- for a resident on every row, so — same reasoning again — no error, just
+-- a zero-row update. Unchanged-value assertion.
+do $$
+declare
+  original text;
+  observed text;
+begin
+  select severity into original from public.alerts
+    where zone_id = 'tests-fixture-zone' and is_active;
+
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', '11111111-1111-1111-1111-111111111111', 'role', 'authenticated')::text, true);
+
+  update public.alerts set severity = 'yellow'
+    where zone_id = 'tests-fixture-zone' and is_active;
+
+  reset role;
+
+  select severity into observed from public.alerts
+    where zone_id = 'tests-fixture-zone' and is_active;
+
+  if observed is distinct from original then
+    raise exception using errcode = 'TSTFL',
+      message = 'SECURITY TEST FAILED — resident updated an alert';
+  end if;
+  raise notice 'ok: resident cannot update an alert (unchanged, update matched zero rows)';
+end $$;
+
+-- Important 4, bullet 4: anon was only ever tested against alerts insert.
+-- Anonymous users carry the `authenticated` Postgres role, so a role-only
+-- check would pass them — every ownership-scoped policy here is what
+-- actually stops them, and none of it was exercised for anon before.
+select tests.as_anon();
+select tests.expect_denied(
+  'anon cannot create a pin',
+  $$insert into public.community_pins (zone_id, status_tag, caption, lat, lng, author_id)
+    values ('tests-fixture-zone', 'passable', 'anon pin', 14.0, 121.0,
+            '11111111-1111-1111-1111-111111111111')$$);
+
+select tests.as_anon();
+select tests.expect_denied(
+  'anon cannot vote on a pin',
+  $$insert into public.pin_votes (pin_id, voter_id, direction)
+    select id, '11111111-1111-1111-1111-111111111111', 1
+    from public.community_pins where author_id = '11111111-1111-1111-1111-111111111111'$$);
+
+select tests.as_anon();
+select tests.expect_denied(
+  'anon cannot file a water-level report',
+  $$insert into public.water_level_reports (zone_id, depth_level, reporter_id)
+    values ('tests-fixture-zone', 'knee', '11111111-1111-1111-1111-111111111111')$$);
+
+select tests.as_anon();
+select tests.expect_denied(
+  'anon cannot record a check-in',
+  $$insert into public.evacuation_check_ins (zone_id, user_id, status)
+    values ('tests-fixture-zone', '11111111-1111-1111-1111-111111111111', 'safe')$$);
 
 rollback;

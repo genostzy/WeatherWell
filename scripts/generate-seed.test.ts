@@ -23,7 +23,7 @@ describe("buildSeedSql", () => {
     );
   });
 
-  it("marks every seeded row so a pilot can delete demo data", () => {
+  it("emits a -- weatherwell-seed comment marking the generated SQL as seed output", () => {
     expect(buildSeedSql()).toContain("-- weatherwell-seed");
   });
 });
