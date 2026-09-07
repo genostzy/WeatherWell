@@ -11,7 +11,7 @@ create schema if not exists tests;
 -- The uuid need not exist in auth.users for RLS to evaluate
 -- (select auth.uid()) — only for foreign keys to be satisfiable.
 create or replace function tests.as_user(user_id uuid) returns void
-language plpgsql as $$
+language plpgsql set search_path = '' as $$
 begin
   perform set_config('tests.impersonate_role', 'authenticated', true);
   perform set_config('request.jwt.claims',
@@ -19,7 +19,7 @@ begin
 end $$;
 
 create or replace function tests.as_anon() returns void
-language plpgsql as $$
+language plpgsql set search_path = '' as $$
 begin
   perform set_config('tests.impersonate_role', 'anon', true);
   perform set_config('request.jwt.claims', '{"role":"anon"}', true);
@@ -36,7 +36,7 @@ end $$;
 -- the policy under test, so it is re-raised (with the label attached) rather
 -- than silently counted as a pass or a plain "denied".
 create or replace function tests.expect_denied(label text, stmt text) returns void
-language plpgsql as $$
+language plpgsql set search_path = '' as $$
 declare
   target_role text := current_setting('tests.impersonate_role', true);
   was_denied boolean := false;
@@ -69,7 +69,7 @@ begin
 end $$;
 
 create or replace function tests.expect_allowed(label text, stmt text) returns void
-language plpgsql as $$
+language plpgsql set search_path = '' as $$
 declare
   target_role text := current_setting('tests.impersonate_role', true);
   was_denied boolean := false;
@@ -110,7 +110,7 @@ end $$;
 -- path exactly like expect_denied/expect_allowed, and re-raises (rather than
 -- swallowing) any exception other than the row-count mismatch itself.
 create or replace function tests.expect_row_count(label text, query text, expected int) returns void
-language plpgsql as $$
+language plpgsql set search_path = '' as $$
 declare
   target_role text := current_setting('tests.impersonate_role', true);
   actual int;

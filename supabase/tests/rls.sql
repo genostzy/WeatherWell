@@ -68,19 +68,19 @@ select tests.expect_denied(
 insert into public.zones
   (id, psgc_barangay_code, name, evacuation_route_text, lat, lng, evacuation_route_path, hotline_number)
 values
-  ('zone-1', '000000000', 'Test Zone', '{"en":"x","fil":"x"}'::jsonb, 14.0, 121.0, '[]'::jsonb, '000');
+  ('tests-fixture-zone', '000000000', 'Test Zone', '{"en":"x","fil":"x"}'::jsonb, 14.0, 121.0, '[]'::jsonb, '000');
 
 select tests.as_user('11111111-1111-1111-1111-111111111111');
 select tests.expect_denied(
   'resident cannot issue an alert',
   $$insert into public.alerts (zone_id, severity, message, source)
-    values ('zone-1', 'evacuate', '{"en":"x","fil":"x"}'::jsonb, 'manual')$$);
+    values ('tests-fixture-zone', 'evacuate', '{"en":"x","fil":"x"}'::jsonb, 'manual')$$);
 
 select tests.as_anon();
 select tests.expect_denied(
   'anonymous role cannot issue an alert',
   $$insert into public.alerts (zone_id, severity, message, source)
-    values ('zone-1', 'evacuate', '{"en":"x","fil":"x"}'::jsonb, 'manual')$$);
+    values ('tests-fixture-zone', 'evacuate', '{"en":"x","fil":"x"}'::jsonb, 'manual')$$);
 
 -- Plain assertion (not through expect_denied/expect_allowed) that the
 -- one-active-per-zone invariant is enforced by the database itself, not by
@@ -90,10 +90,10 @@ do $$
 begin
   set local role postgres;
   insert into public.alerts (zone_id, severity, message, source)
-    values ('zone-1','red','{"en":"a","fil":"a"}'::jsonb,'manual');
+    values ('tests-fixture-zone','red','{"en":"a","fil":"a"}'::jsonb,'manual');
   begin
     insert into public.alerts (zone_id, severity, message, source)
-      values ('zone-1','yellow','{"en":"b","fil":"b"}'::jsonb,'manual');
+      values ('tests-fixture-zone','yellow','{"en":"b","fil":"b"}'::jsonb,'manual');
     raise exception using errcode = 'TSTFL',
       message = 'two active alerts were allowed for one zone';
   exception
@@ -116,14 +116,14 @@ select tests.as_user('11111111-1111-1111-1111-111111111111');
 select tests.expect_denied(
   'resident cannot file a report attributed to another user',
   $$insert into public.water_level_reports (zone_id, depth_level, reporter_id)
-    values ('zone-1', 'knee', '22222222-2222-2222-2222-222222222222')$$);
+    values ('tests-fixture-zone', 'knee', '22222222-2222-2222-2222-222222222222')$$);
 
 -- The WITH CHECK trap: passing USING on the way in, then reassigning on the
 -- way out. Against an empty table this UPDATE would match zero rows and
 -- succeed trivially (RLS filters rows, it does not raise) — so a real pin
 -- owned by 1111... is inserted first, as postgres, bypassing RLS.
 insert into public.community_pins (zone_id, status_tag, caption, lat, lng, author_id)
-values ('zone-1', 'passable', 'fixture pin', 14.0, 121.0,
+values ('tests-fixture-zone', 'passable', 'fixture pin', 14.0, 121.0,
         '11111111-1111-1111-1111-111111111111');
 
 select tests.as_user('11111111-1111-1111-1111-111111111111');
@@ -138,13 +138,13 @@ select tests.as_user('11111111-1111-1111-1111-111111111111');
 select tests.expect_denied(
   'resident cannot record a check-in as another user',
   $$insert into public.evacuation_check_ins (zone_id, user_id, status)
-    values ('zone-1', '22222222-2222-2222-2222-222222222222', 'needs_help')$$);
+    values ('tests-fixture-zone', '22222222-2222-2222-2222-222222222222', 'needs_help')$$);
 
 -- A resident reading another resident's check-in must return zero rows, not
 -- an error. Asserting this against an empty table would pass trivially, so a
 -- check-in owned by 2222... is inserted first, as postgres.
 insert into public.evacuation_check_ins (zone_id, user_id, status)
-values ('zone-1', '22222222-2222-2222-2222-222222222222', 'safe');
+values ('tests-fixture-zone', '22222222-2222-2222-2222-222222222222', 'safe');
 
 select tests.as_user('11111111-1111-1111-1111-111111111111');
 select tests.expect_row_count(
