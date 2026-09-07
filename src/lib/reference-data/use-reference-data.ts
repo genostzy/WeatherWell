@@ -29,3 +29,8 @@ export function usePois(): PointOfInterest[] {
 export function useHazardsForZone(zoneId: string): Record<HazardType, HazardRiskLevel> {
   return useData().hazards[zoneId] ?? ({} as Record<HazardType, HazardRiskLevel>);
 }
+
+/** Every zone's hazard ratings, keyed by zone id. For callers that need many zones at once — pure functions taking this as a parameter, rather than calling a hook per zone. */
+export function useHazards(): Record<string, Record<HazardType, HazardRiskLevel>> {
+  return useData().hazards;
+}

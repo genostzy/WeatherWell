@@ -23,6 +23,7 @@ import {
 } from "@/lib/community-pins";
 import { PIN_STATUS_LABEL } from "@/lib/community-pin";
 import { buildZoneInputForZone, computeZoneState } from "@/lib/risk-engine/score";
+import { useHazards } from "@/lib/reference-data/use-reference-data";
 import { MapShell } from "@/features/map/map-shell";
 import { HazardBackdropLayer } from "@/features/map/hazard-backdrop-layer";
 import { PoiMarkerLayer } from "@/features/map/poi-marker-layer";
@@ -85,6 +86,7 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
   const { lang } = useLanguage();
   const overrides = useZoneOverrides();
   const allPins = useAllCommunityPins();
+  const hazards = useHazards();
   const [hazardType, setHazardType] = useState<HazardType>("flood");
   const [layers, setLayers] = useState<LayerVisibility>({
     hazard: true,
@@ -169,7 +171,7 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
         const status = getZoneStatus(alert);
         const label = `${zone.name} — ${t(ZONE_STATUS_LABEL[status], lang)}`;
         const riskScore = computeZoneState(
-          buildZoneInputForZone(zone, zones, hasEffectiveAlert)
+          buildZoneInputForZone(zone, zones, hasEffectiveAlert, hazards)
         ).riskScore;
         return (
           <Marker

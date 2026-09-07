@@ -2,11 +2,10 @@ import {
   getRainfallForZone,
   getRainfallHistoryForZone,
   hasThunderstormWatch,
-  getHazardSusceptibilityForZone,
   getReportsTodayForZone,
   REPORT_THRESHOLD,
 } from "../mock-data";
-import type { Zone } from "../types";
+import type { HazardRiskLevel, HazardType, Zone } from "../types";
 import type { Factor, TrendDirection, ZoneInput, ZoneState } from "./types";
 
 const WEIGHTS = {
@@ -105,11 +104,19 @@ export function computeZoneState(input: ZoneInput): ZoneState {
  * tile silently disagreed with the operator's own decision. A default would
  * have let a future call site reintroduce exactly that, quietly; requiring it
  * forces each caller to say which notion of "alerting" it means.
+ *
+ * `hazards` is likewise required rather than defaulted. This function is a
+ * plain (non-hook) function called from inside `.map()` over arbitrary zones,
+ * so it cannot call `useHazardsForZone` itself — the caller must fetch the
+ * bulk map once via `useHazards()` and pass it in. A default here would let a
+ * future call site silently fall back to stale or empty data instead of
+ * wiring the hook up correctly.
  */
 export function buildZoneInputForZone(
   zone: Zone,
   allZones: Zone[],
-  upstreamHasActiveAlert: (zoneId: string) => boolean
+  upstreamHasActiveAlert: (zoneId: string) => boolean,
+  hazards: Record<string, Record<HazardType, HazardRiskLevel>>
 ): ZoneInput {
   const upstreamZone = allZones.find((z) => z.downstreamZoneId === zone.id);
   const cascadeFromUpstream = upstreamZone ? upstreamHasActiveAlert(upstreamZone.id) : false;
@@ -119,7 +126,7 @@ export function buildZoneInputForZone(
     rainfallMmPerHour: getRainfallForZone(zone.id),
     rainfallHistory: getRainfallHistoryForZone(zone.id),
     thunderstormWatch: hasThunderstormWatch(zone.id),
-    hazardSusceptibility: getHazardSusceptibilityForZone(zone.id),
+    hazardSusceptibility: hazards[zone.id],
     reportCount24h: getReportsTodayForZone(zone.id),
     cascadeFromUpstream,
   };

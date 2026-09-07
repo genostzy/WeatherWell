@@ -34,7 +34,7 @@ import {
 } from "@/lib/mock-data";
 import { useZoneOverrides, resolveEffectiveAlert, resolveEffectiveCenterStatus } from "@/lib/zone-overrides";
 import { useCommunityPins } from "@/lib/community-pins";
-import { useZones } from "@/lib/reference-data/use-reference-data";
+import { useZones, useHazards } from "@/lib/reference-data/use-reference-data";
 import { getZoneStatus } from "@/lib/zone-status";
 import { buildZoneInputForZone, computeZoneState } from "@/lib/risk-engine/score";
 import type { LocalizedText } from "@/lib/types";
@@ -83,6 +83,7 @@ export default function AdminPage() {
   const overrides = useZoneOverrides();
   const pins = useCommunityPins();
   const zones = useZones();
+  const hazards = useHazards();
 
   const zonesUnderAlert = zones.filter(
     (zone) => getZoneStatus(resolveEffectiveAlert(zone.id, overrides[zone.id]?.alertSeverity)) !== "safe"
@@ -101,7 +102,7 @@ export default function AdminPage() {
   const hasEffectiveAlert = (zoneId: string) =>
     resolveEffectiveAlert(zoneId, overrides[zoneId]?.alertSeverity) !== undefined;
   const zoneStates = zones.map((zone) =>
-    computeZoneState(buildZoneInputForZone(zone, zones, hasEffectiveAlert))
+    computeZoneState(buildZoneInputForZone(zone, zones, hasEffectiveAlert, hazards))
   );
   const highestRiskState = zoneStates.reduce((highest, state) =>
     state.riskScore > highest.riskScore ? state : highest

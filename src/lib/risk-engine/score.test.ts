@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { computeZoneState, buildZoneInputForZone } from "./score";
-import { MOCK_ZONES, getActiveAlertForZone } from "../mock-data";
+import { MOCK_ZONES, MOCK_HAZARD_SUSCEPTIBILITY, getActiveAlertForZone } from "../mock-data";
 import type { ZoneInput } from "./types";
 
 const FLAT_HISTORY = new Array(12).fill(10);
@@ -134,7 +134,7 @@ describe("buildZoneInputForZone", () => {
     // zone-1 -> zone-2 -> zone-3 -> zone-4 per MOCK_ZONES' downstreamZoneId chain;
     // zone-1's mock alert (alert-1) is active, so zone-2's upstream neighbor has an alert.
     const zone2 = MOCK_ZONES.find((z) => z.id === "zone-2")!;
-    const input = buildZoneInputForZone(zone2, MOCK_ZONES, alertingByMockData);
+    const input = buildZoneInputForZone(zone2, MOCK_ZONES, alertingByMockData, MOCK_HAZARD_SUSCEPTIBILITY);
     expect(input.zoneId).toBe("zone-2");
     expect(input.cascadeFromUpstream).toBe(true);
   });
@@ -147,14 +147,15 @@ describe("buildZoneInputForZone", () => {
     const operatorClearedUpstream = (zoneId: string) =>
       zoneId === "zone-1" ? false : alertingByMockData(zoneId);
 
-    expect(buildZoneInputForZone(zone2, MOCK_ZONES, operatorClearedUpstream).cascadeFromUpstream).toBe(
-      false
-    );
+    expect(
+      buildZoneInputForZone(zone2, MOCK_ZONES, operatorClearedUpstream, MOCK_HAZARD_SUSCEPTIBILITY)
+        .cascadeFromUpstream
+    ).toBe(false);
   });
 
   it("is false for a zone with no upstream neighbor", () => {
     const zone1 = MOCK_ZONES.find((z) => z.id === "zone-1")!;
-    const input = buildZoneInputForZone(zone1, MOCK_ZONES, alertingByMockData);
+    const input = buildZoneInputForZone(zone1, MOCK_ZONES, alertingByMockData, MOCK_HAZARD_SUSCEPTIBILITY);
     expect(input.cascadeFromUpstream).toBe(false);
   });
 });
