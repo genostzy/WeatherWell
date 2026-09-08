@@ -16,6 +16,26 @@ const UNREACHABLE: LocalizedText = {
 };
 const RETRY: LocalizedText = { en: "Try again", fil: "Subukang muli" };
 
+/**
+ * How long each fetch waits before this hook gives up and reaches "failed".
+ *
+ * This is independent of the service worker's own timeouts (see sw.js's
+ * NETWORK_TIMEOUT_MS / ALERTS_TIMEOUT_MS) and matters even when the worker is
+ * healthy: on a first visit the worker may not control the page yet (it is
+ * still downloading/installing), so nothing intercepts this fetch at all — a
+ * stalled-but-open connection (a captive portal, a congested cell site) would
+ * otherwise leave the gate in "loading" forever with no retry button. 10s is
+ * comfortably past ALERTS_TIMEOUT_MS so a worker-mediated request that is
+ * about to resolve from cache is not raced and cut off first.
+ */
+export const FETCH_TIMEOUT_MS = 10_000;
+
+function fetchWithTimeout(input: string, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(input, { signal: controller.signal }).finally(() => clearTimeout(timer));
+}
+
 type State =
   | { status: "loading" }
   | { status: "ready"; data: ReferenceData; alerts: AlertRecord[] }
@@ -48,7 +68,10 @@ export function ReferenceDataProvider({ children }: { children: ReactNode }) {
   // The "loading" state on mount comes from useState's initial value instead,
   // and a retry re-arms it explicitly (see `retry` below) before calling this.
   const load = useCallback(() => {
-    Promise.all([fetch("/api/zones"), fetch("/api/alerts")])
+    Promise.all([
+      fetchWithTimeout("/api/zones", FETCH_TIMEOUT_MS),
+      fetchWithTimeout("/api/alerts", FETCH_TIMEOUT_MS),
+    ])
       .then(([zonesResponse, alertsResponse]) => {
         if (!zonesResponse.ok || !alertsResponse.ok) {
           // A partial or errored response must not become an empty zone list —

@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import vm from "node:vm";
@@ -30,15 +30,20 @@ const ASSET_CACHE = `weatherwell-assets-${VERSION}`;
 const API_CACHE = `weatherwell-api-${VERSION}`;
 /** Unversioned by design — evacuation data must survive a deploy. */
 const ZONE_CACHE = "weatherwell-zones";
+/** Read from the worker rather than restated here, same reasoning as VERSION. */
+const ALERTS_TIMEOUT_MS = Number(/const ALERTS_TIMEOUT_MS = (\d+)/.exec(SW_SOURCE)?.[1] ?? "0");
 
 interface FakeResponse {
   body: string;
   status: number;
+  ok: boolean;
   clone(): FakeResponse;
 }
 
 function response(body: string, status = 200): FakeResponse {
-  return { body, status, clone: () => response(body, status) };
+  // Mirrors the real Response: `.ok` is derived from status, not a separate
+  // field a caller can forget to set — networkFirst's C1 branch reads it.
+  return { body, status, ok: status >= 200 && status < 300, clone: () => response(body, status) };
 }
 
 function loadServiceWorker(options: {
@@ -227,6 +232,58 @@ describe("service worker request routing", () => {
     expect(result).toBeUndefined();
   });
 
+  it("serves a cached alert when the network answers with a non-ok status (C1)", async () => {
+    // The 3am-Supabase-pauses scenario: the network is reachable and answers
+    // fast, but with a 502, not a rejection. A resident who has a cached
+    // alert must see it rather than the failure card. Without the C1 fix
+    // (fetch's .then unconditionally settles on whatever it got, ok or not),
+    // this test fails and the network's 502 body comes back instead.
+    const { listeners } = loadServiceWorker({
+      caches: { [SHELL_CACHE]: { [`${ORIGIN}/api/alerts`]: "CACHED ALERT" } },
+      fetch: async () => response("Bad Gateway", 502),
+    });
+
+    const result = await handleFetch(listeners, { url: `${ORIGIN}/api/alerts` });
+
+    expect(result?.body).toBe("CACHED ALERT");
+  });
+
+  it("passes a non-ok alert response through when nothing is cached", async () => {
+    // The other half of C1: there is nothing better to show, so the route
+    // must not invent a success. The gate in provider.tsx relies on seeing
+    // the real non-ok status here.
+    const { listeners } = loadServiceWorker({
+      fetch: async () => response("Bad Gateway", 502),
+    });
+
+    const result = await handleFetch(listeners, { url: `${ORIGIN}/api/alerts` });
+
+    expect(result?.status).toBe(502);
+    expect(result?.body).toBe("Bad Gateway");
+  });
+
+  it("falls back to a cached alert once the network hangs past ALERTS_TIMEOUT_MS (C2)", async () => {
+    // A stalled-but-open connection (a captive portal, a congested cell site)
+    // never rejects and never resolves. Before the fix, timeoutMs was 0 for
+    // this route, so no timer ever fired and the gate hung in "loading"
+    // forever with no retry button.
+    vi.useFakeTimers();
+    try {
+      const { listeners } = loadServiceWorker({
+        caches: { [SHELL_CACHE]: { [`${ORIGIN}/api/alerts`]: "CACHED ALERT" } },
+        fetch: () => new Promise(() => {}),
+      });
+
+      const resultPromise = handleFetch(listeners, { url: `${ORIGIN}/api/alerts` });
+      await vi.advanceTimersByTimeAsync(ALERTS_TIMEOUT_MS);
+      const result = await resultPromise;
+
+      expect(result?.body).toBe("CACHED ALERT");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("never puts an API response in the asset cache", async () => {
     // The catch-all was written when no /api/ route existed. Community data
     // and, in the next plan, per-person check-ins must not land in the
@@ -291,6 +348,40 @@ describe("service worker install", () => {
     listeners.install({ waitUntil: (p: Promise<unknown>) => waits.push(p) });
 
     await expect(Promise.all(waits)).resolves.toBeDefined();
+  });
+
+  it("precaches zones and alerts, so one prior visit is enough to work offline (I3/I4)", async () => {
+    // Before this fix, nothing populated either cache until a manual fetch
+    // happened to land after the worker already controlled the page — so a
+    // resident who opened the app once in fair weather and next opened it
+    // offline got the shell from cache and then the failure card, with no
+    // zones and no evacuation instructions.
+    const { listeners, store } = loadServiceWorker({
+      fetch: async () => response("ok"),
+    });
+
+    const waits: Promise<unknown>[] = [];
+    listeners.install({ waitUntil: (p: Promise<unknown>) => waits.push(p) });
+    await Promise.all(waits);
+
+    expect(store.get(ZONE_CACHE)?.has("/api/zones")).toBe(true);
+    expect(store.get(SHELL_CACHE)?.has("/api/alerts")).toBe(true);
+  });
+
+  it("still resolves install when zones or alerts fail to precache", async () => {
+    const { listeners, store } = loadServiceWorker({
+      fetch: async (url) =>
+        url === "/api/zones" || url === "/api/alerts" ? response("boom", 500) : response("ok"),
+    });
+
+    const waits: Promise<unknown>[] = [];
+    listeners.install({ waitUntil: (p: Promise<unknown>) => waits.push(p) });
+
+    await expect(Promise.all(waits)).resolves.toBeDefined();
+    expect(store.get(ZONE_CACHE)?.has("/api/zones")).toBe(false);
+    expect(store.get(SHELL_CACHE)?.has("/api/alerts")).toBe(false);
+    // The routes that did succeed are unaffected by the two that failed.
+    expect(store.get(SHELL_CACHE)?.has("/")).toBe(true);
   });
 });
 

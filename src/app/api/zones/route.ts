@@ -38,6 +38,13 @@ export async function GET() {
   if (hazardsResult.error) {
     return NextResponse.json({ error: hazardsResult.error.message }, { status: 502 });
   }
+  // RLS and grant regressions don't error, they return zero rows — a 200 with
+  // an empty zone list opens the gate in provider.tsx and then crashes every
+  // page that calls useSelectedZone(). Empty pois/hazards stay legitimate (a
+  // barangay may genuinely have neither), so only zones is checked here.
+  if (zonesResult.data.length === 0) {
+    return NextResponse.json({ error: "zones query returned no rows" }, { status: 502 });
+  }
 
   try {
     // The client is typed with the generated `Database` schema (see

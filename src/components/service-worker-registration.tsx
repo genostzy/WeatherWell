@@ -39,7 +39,10 @@ export function ServiceWorkerRegistration() {
     }
 
     navigator.serviceWorker.register("/sw.js").catch(() => {
-      // Registration failed — the app still works, just without offline caching.
+      // Registration failed — there is no offline mode at all without the
+      // worker: it is what precaches /api/zones and /api/alerts (see
+      // sw.js's install handler), and reference data is fetched from the
+      // network on every mount with no other cache to fall back to.
     });
   }, []);
 

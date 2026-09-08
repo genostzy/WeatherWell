@@ -20,7 +20,7 @@
  * CURRENT_CACHES, so a bump is what evicts a bad build from installed devices.
  * Leaving it unchanged is what pins users to a stale app forever.
  */
-const VERSION = "v4";
+const VERSION = "v5";
 
 const SHELL_CACHE = `weatherwell-shell-${VERSION}`;
 const ASSET_CACHE = `weatherwell-assets-${VERSION}`;
@@ -39,6 +39,19 @@ const CURRENT_CACHES = [SHELL_CACHE, ASSET_CACHE, API_CACHE, ZONE_CACHE];
 /** How long a navigation waits for the network before falling back to cache. */
 const NETWORK_TIMEOUT_MS = 3000;
 
+/**
+ * How long /api/alerts waits for the network before falling back to cache.
+ * Longer than NETWORK_TIMEOUT_MS on purpose: a page falling back early just
+ * shows slightly older HTML, but alerts gate the entire app, so a resident on
+ * a genuinely slow-but-working connection (a congested cell site during a
+ * typhoon, not a dead one) should still get the live network answer rather
+ * than be bounced to cache the moment a page would be. 8s is well past normal
+ * round-trip time for this API but still short enough that a hung connection
+ * (e.g. a captive portal that accepts the TCP connection and never answers)
+ * cannot leave the app waiting indefinitely — see the C2 finding.
+ */
+const ALERTS_TIMEOUT_MS = 8000;
+
 const PRECACHED_ROUTES = [
   "/",
   "/evacuation",
@@ -55,12 +68,28 @@ self.addEventListener("install", (event) => {
   // leave the worker inactive — no cache, no fetch handler, no offline
   // support at all, with nothing surfacing the failure. Caching route by
   // route means a bad one costs only itself.
+  //
+  // /api/zones and /api/alerts are precached here too, into the same caches
+  // their fetch branches read from, so a resident who has only ever opened
+  // the app once still has zones and evacuation instructions offline —
+  // before this, nothing populated either cache until the first *manual*
+  // fetch happened to land while the worker already controlled the page.
+  // This also repopulates /api/alerts's cache (in the versioned SHELL_CACHE)
+  // on every deploy, since install re-runs then and activate had just wiped
+  // it.
   event.waitUntil(
-    caches
-      .open(SHELL_CACHE)
-      .then((cache) =>
-        Promise.all(PRECACHED_ROUTES.map((route) => cache.add(route).catch(() => undefined)))
-      )
+    Promise.all([
+      caches
+        .open(SHELL_CACHE)
+        .then((cache) =>
+          Promise.all(
+            [...PRECACHED_ROUTES, "/api/alerts"].map((route) =>
+              cache.add(route).catch(() => undefined)
+            )
+          )
+        ),
+      caches.open(ZONE_CACHE).then((cache) => cache.add("/api/zones").catch(() => undefined)),
+    ])
   );
   self.skipWaiting();
 });
@@ -90,6 +119,13 @@ function putInCache(cacheName, request, response) {
  * a dead one. The timeout matters more than usual here — a resident on a
  * degraded connection during a storm should not stare at a blank screen
  * waiting for a request that is never going to arrive.
+ *
+ * A non-ok network response (a 502, say) is treated the same as no network at
+ * all when a cached response exists: serve the cache rather than pass the
+ * failure through. A backend outage during a storm must not lock a resident
+ * out of data already on their device just because the server answered
+ * quickly. Only when nothing is cached does the non-ok response go through
+ * unchanged — there is nothing better to show.
  */
 function networkFirst(request, cacheName, timeoutMs) {
   return new Promise((resolve) => {
@@ -111,8 +147,14 @@ function networkFirst(request, cacheName, timeoutMs) {
     fetch(request)
       .then((response) => {
         if (timer) clearTimeout(timer);
-        putInCache(cacheName, request, response);
-        settle(response);
+        if (response && response.ok) {
+          putInCache(cacheName, request, response);
+          settle(response);
+          return;
+        }
+        caches.match(request).then((cached) => {
+          settle(cached || response);
+        });
       })
       .catch(() => {
         if (timer) clearTimeout(timer);
@@ -163,7 +205,7 @@ self.addEventListener("fetch", (event) => {
 
   // Alerts are the one thing that must never be stale when a network exists.
   if (url.pathname === "/api/alerts" || url.pathname.startsWith("/api/alerts/")) {
-    event.respondWith(networkFirst(request, SHELL_CACHE, 0));
+    event.respondWith(networkFirst(request, SHELL_CACHE, ALERTS_TIMEOUT_MS));
     return;
   }
 
