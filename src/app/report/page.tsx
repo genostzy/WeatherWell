@@ -48,8 +48,8 @@ const SAFETY_BODY: LocalizedText = {
 };
 const THANKS: LocalizedText = { en: "Report recorded", fil: "Naitala ang ulat" };
 const THANKS_BODY: LocalizedText = {
-  en: "Thanks — your report is in. In Phase 1 it stays on this device; from Phase 3 it joins the threshold that can trigger a real alert.",
-  fil: "Salamat — naitala ang ulat mo. Sa Phase 1 dito lang ito sa device; mula Phase 3 ito na ang bahagi ng threshold para sa totoong alerto.",
+  en: "Thanks — your report is in. It is on your device now and reaches the barangay record as soon as you have signal; from Phase 3 it joins the threshold that can trigger a real alert.",
+  fil: "Salamat — naitala ang ulat mo. Nasa device mo na ito at makakarating sa talaan ng barangay pagkaroon ng signal; mula Phase 3 ito na ang bahagi ng threshold para sa totoong alerto.",
 };
 const YOU_REPORTED: LocalizedText = { en: "You reported", fil: "Iniulat mo" };
 const MAPS_TO: LocalizedText = { en: "maps to", fil: "katumbas ng" };
@@ -66,7 +66,8 @@ export default function ReportPage() {
 
   function handleSubmit(depthLevel: DepthLevel) {
     // Persisted so it actually shows up in "What neighbours are reporting"
-    // and moves the threshold bar below, on this device — not just a thank-you screen.
+    // and moves the threshold bar below straight away — not just a thank-you
+    // screen. The queue, not the network, is what makes that immediate.
     addWaterLevelReport(zone.id, depthLevel);
     setSubmitted(depthLevel);
   }
