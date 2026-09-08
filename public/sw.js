@@ -20,7 +20,7 @@
  * CURRENT_CACHES, so a bump is what evicts a bad build from installed devices.
  * Leaving it unchanged is what pins users to a stale app forever.
  */
-const VERSION = "v5";
+const VERSION = "v6";
 
 const SHELL_CACHE = `weatherwell-shell-${VERSION}`;
 const ASSET_CACHE = `weatherwell-assets-${VERSION}`;
@@ -51,6 +51,24 @@ const NETWORK_TIMEOUT_MS = 3000;
  * cannot leave the app waiting indefinitely — see the C2 finding.
  */
 const ALERTS_TIMEOUT_MS = 8000;
+
+/**
+ * API paths known to be safe to cache and share across every requester.
+ * Adding a path here is a decision about whether ITS RESPONSE IS PUBLIC —
+ * not merely that the route exists — because staleWhileRevalidate below puts
+ * whatever comes back into one cache read by every visitor's next request.
+ *
+ * /api/reports qualifies: it has no per-user variation, is served by the
+ * sessionless public client, and its table policy is `select using (true)`.
+ *
+ * Anything NOT listed here goes straight to the network, uncached. That is
+ * the safe default when this file does not know whether a response is
+ * public — a future endpoint like /api/check-ins is user-scoped, and
+ * inheriting a shared cache silently (as the old blanket /api/ rule would
+ * have done) is exactly how one resident ends up served another resident's
+ * response.
+ */
+const PUBLIC_API_PATHS = ["/api/reports"];
 
 const PRECACHED_ROUTES = [
   "/",
@@ -229,11 +247,16 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Everything else under /api/. Named explicitly so no API response can fall
-  // through to the asset cache — the next plan adds /api/check-ins, where a
-  // shared cache would serve one resident's response to another.
+  // Everything else under /api/: an explicit allowlist, not a catch-all. Only
+  // a path named in PUBLIC_API_PATHS is safe to put in the shared API cache;
+  // an unrecognised /api/ path goes straight to the network, uncached, since
+  // this file has no way to know whether its response is public. See
+  // PUBLIC_API_PATHS above for why that has to be the default.
   if (url.pathname.startsWith("/api/")) {
-    event.respondWith(staleWhileRevalidate(request, API_CACHE));
+    const isPublic = PUBLIC_API_PATHS.some(
+      (path) => url.pathname === path || url.pathname.startsWith(`${path}/`)
+    );
+    event.respondWith(isPublic ? staleWhileRevalidate(request, API_CACHE) : fetch(request));
     return;
   }
 

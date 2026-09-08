@@ -334,6 +334,38 @@ describe("service worker request routing", () => {
     expect(store.has(ASSET_CACHE)).toBe(false);
   });
 
+  it("sends an unrecognised /api/ path straight to the network, uncached", async () => {
+    // The allowlist inversion: /api/ used to be a catch-all into the shared
+    // API_CACHE, which a future user-scoped endpoint (/api/check-ins) would
+    // silently inherit. An unlisted path must not land in ANY cache — not
+    // just avoid the asset cache, the point of the test above, but avoid
+    // being cached at all.
+    const { listeners, store } = loadServiceWorker({
+      fetch: async () => response("CHECK-IN DATA"),
+    });
+
+    const result = await handleFetch(listeners, { url: `${ORIGIN}/api/check-ins` });
+
+    expect(result?.body).toBe("CHECK-IN DATA");
+    expect(store.has(API_CACHE)).toBe(false);
+    expect(store.size).toBe(0);
+  });
+
+  it("still caches /api/reports, the allowlisted public API path", async () => {
+    // The other half of the allowlist: a path that IS named must keep
+    // getting the stale-while-revalidate treatment it had under the old
+    // catch-all, so the inversion doesn't quietly regress the one endpoint
+    // it exists to keep working.
+    const { listeners, store } = loadServiceWorker({
+      fetch: async () => response("REPORTS"),
+    });
+
+    const result = await handleFetch(listeners, { url: `${ORIGIN}/api/reports` });
+
+    expect(result?.body).toBe("REPORTS");
+    expect(store.get(API_CACHE)?.has(`${ORIGIN}/api/reports`)).toBe(true);
+  });
+
   it("keeps serving zones from the unversioned zone cache", async () => {
     // The one cache deliberately exempt from version bumps, so a device that
     // updates and then loses signal keeps its evacuation instructions. This

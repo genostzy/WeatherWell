@@ -3,13 +3,6 @@ import { render, screen } from "@testing-library/react";
 import { renderToString } from "react-dom/server";
 import { TimeAgo } from "./time-ago";
 
-// TimeAgo pulls in minutesSinceReport from water-level-reports.ts, which now
-// imports the real Server Action at module scope — and that action pulls in
-// user-server.ts's `import "server-only"`, which throws unconditionally
-// outside a real server bundler. Stub both away; this file never submits.
-vi.mock("@/app/actions/submit-water-level-report", () => ({
-  submitWaterLevelReport: vi.fn().mockResolvedValue({ ok: true }),
-}));
 vi.mock("@/lib/auth/anonymous-session", () => ({
   ensureAnonymousSession: vi.fn().mockResolvedValue(null),
 }));

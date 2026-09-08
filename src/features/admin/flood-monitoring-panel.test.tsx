@@ -4,12 +4,6 @@ import { FloodMonitoringPanel } from "./flood-monitoring-panel";
 import { MOCK_WATER_LEVEL_REPORTS, REPORT_THRESHOLD } from "@/lib/mock-data";
 import { renderWithData, FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
 
-// See recent-reports-panel.test.tsx: water-level-reports.ts now imports the
-// real Server Action (which pulls in user-server.ts's `import "server-only"`)
-// and ensureAnonymousSession — stub both away since this file only reads.
-vi.mock("@/app/actions/submit-water-level-report", () => ({
-  submitWaterLevelReport: vi.fn().mockResolvedValue({ ok: true }),
-}));
 vi.mock("@/lib/auth/anonymous-session", () => ({
   ensureAnonymousSession: vi.fn().mockResolvedValue(null),
 }));

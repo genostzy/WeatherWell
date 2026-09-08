@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { renderHook } from "@testing-library/react";
 
 const submitWaterLevelReport = vi.fn().mockResolvedValue({ ok: true });
 const ensureAnonymousSession = vi.fn().mockResolvedValue(null);
@@ -22,8 +23,9 @@ import {
   getRecentReportsForZoneLive,
   minutesSinceReport,
   mergeReports,
+  useWaterLevelReports,
 } from "./water-level-reports";
-import { readOutbox, OutboxWriteFailed } from "@/lib/outbox/outbox";
+import { readOutbox, enqueue, markFailed, OutboxWriteFailed } from "@/lib/outbox/outbox";
 
 /** No server rows in this file — every case here is about the outbox side of the merge. */
 function currentReports() {
@@ -35,6 +37,10 @@ describe("water-level-reports", () => {
     localStorage.clear();
     submitWaterLevelReport.mockClear();
     ensureAnonymousSession.mockClear();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("shows a queued report immediately, before it has reached the server", () => {
@@ -56,6 +62,17 @@ describe("water-level-reports", () => {
 
     const merged = mergeReports([], readOutbox());
     expect(merged.map((r) => r.id)).toEqual([queued.id]);
+  });
+
+  it("does not display or count a permanently-failed report", () => {
+    // A report the server permanently rejected (RLS denial, CHECK/FK
+    // violation) must stop voting: drainOutbox skips a permanentlyFailed
+    // entry forever, so if mergeReports kept rendering it, it would count
+    // toward the agreeing-report consensus threshold forever too.
+    const entry = enqueue("submitWaterLevelReport", { zoneId: "zone-1", depthLevel: "knee" });
+    markFailed(entry.id, "new row violates row-level security policy", true);
+
+    expect(mergeReports([], readOutbox())).toHaveLength(0);
   });
 
   it("does not show a queued report twice once the server row arrives", () => {
@@ -153,5 +170,40 @@ describe("water-level-reports", () => {
     expect(submitWaterLevelReport).toHaveBeenCalledWith(
       expect.objectContaining({ zoneId: "zone-1", depthLevel: "knee" })
     );
+  });
+
+  it("still shows a queued report, and lets nothing throw, when /api/reports fails to fetch", async () => {
+    // The brief's bolded requirement: a resident with no network still sees
+    // their own queued reports, which is the whole point of the outbox. The
+    // queued row is visible immediately from mergeReports regardless of
+    // fetch, so the part actually at risk is the un-awaited fetch chain in
+    // useServerReports: if its `.catch` let the rejection through instead of
+    // swallowing it, nothing in the component tree would observe a
+    // different render, but the rejection would go unhandled — so that is
+    // what this asserts directly.
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
+    addWaterLevelReport("zone-1", "knee");
+
+    const unhandled: unknown[] = [];
+    const onUnhandledRejection = (reason: unknown) => unhandled.push(reason);
+    process.on("unhandledRejection", onUnhandledRejection);
+
+    try {
+      const { result } = renderHook(() => useWaterLevelReports());
+
+      // Queued row is present from the first render, synchronously.
+      expect(result.current).toHaveLength(1);
+      expect(result.current[0].zoneId).toBe("zone-1");
+
+      // Give the rejected fetch promise's microtask chain, and Node's
+      // unhandled-rejection check (which runs after the current turn), time
+      // to complete.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off("unhandledRejection", onUnhandledRejection);
+    }
   });
 });

@@ -75,7 +75,17 @@ export function mergeReports(
   const serverIds = new Set(serverRows.map((row) => row.id));
 
   const optimistic: LiveWaterLevelReport[] = queued
-    .filter((entry) => entry.operation === "submitWaterLevelReport" && !serverIds.has(entry.id))
+    .filter(
+      (entry) =>
+        entry.operation === "submitWaterLevelReport" &&
+        !serverIds.has(entry.id) &&
+        // A permanently-failed entry (RLS denial, CHECK/FK violation) will
+        // never be delivered — drainOutbox skips it forever. Rendering it as
+        // an ordinary live row would show it as sent when it was rejected,
+        // and would silently and permanently inflate the agreeing-report
+        // consensus count that gates a zone's flood signal.
+        !entry.permanentlyFailed
+    )
     .map((entry) => {
       const payload = entry.payload as OutboxPayloads["submitWaterLevelReport"];
       return {
