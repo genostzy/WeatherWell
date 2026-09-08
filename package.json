@@ -14,6 +14,7 @@
     "db:seed:generate": "tsx scripts/generate-seed.ts"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.12.6",
     "@supabase/supabase-js": "^2.115.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
