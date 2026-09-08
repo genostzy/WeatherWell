@@ -120,12 +120,16 @@ function putInCache(cacheName, request, response) {
  * degraded connection during a storm should not stare at a blank screen
  * waiting for a request that is never going to arrive.
  *
- * A non-ok network response (a 502, say) is treated the same as no network at
- * all when a cached response exists: serve the cache rather than pass the
- * failure through. A backend outage during a storm must not lock a resident
- * out of data already on their device just because the server answered
- * quickly. Only when nothing is cached does the non-ok response go through
- * unchanged — there is nothing better to show.
+ * A *server* error (a 502, say) is treated the same as no network at all when
+ * a cached response exists: serve the cache rather than pass the failure
+ * through. A backend outage during a storm must not lock a resident out of
+ * data already on their device just because the server answered quickly.
+ * Only when nothing is cached does it go through unchanged — there is nothing
+ * better to show.
+ *
+ * A *client* error passes through untouched, cached copy or not. 4xx is the
+ * server's real answer about this URL, and a 404 served as a stale 200 would
+ * show a resident a page that no longer exists while reporting success.
  */
 function networkFirst(request, cacheName, timeoutMs) {
   return new Promise((resolve) => {
@@ -149,6 +153,16 @@ function networkFirst(request, cacheName, timeoutMs) {
         if (timer) clearTimeout(timer);
         if (response && response.ok) {
           putInCache(cacheName, request, response);
+          settle(response);
+          return;
+        }
+        // A client error is the server's real answer about this URL — a 404
+        // means the page is gone. Covering that with a copy the device
+        // happens to still hold would flip the status to 200 and show content
+        // that no longer exists. Only a server error falls back, because a 502
+        // mid-deploy says nothing about whether the resource exists, so what
+        // is already on the device is the better answer.
+        if (response && response.status < 500) {
           settle(response);
           return;
         }

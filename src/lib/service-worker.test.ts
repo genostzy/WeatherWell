@@ -248,6 +248,43 @@ describe("service worker request routing", () => {
     expect(result?.body).toBe("CACHED ALERT");
   });
 
+  it("lets a genuine 404 through instead of masking it with a stale cached page", async () => {
+    // The C1 fix made networkFirst fall back to cache on any non-ok response,
+    // and navigations share that function — so a route that was removed
+    // between deploys kept serving its old page, status silently flipped from
+    // 404 to 200. A client error is the server's real answer about a URL;
+    // covering it with a copy the resident happens to still hold is a lie.
+    const { listeners } = loadServiceWorker({
+      caches: { [SHELL_CACHE]: { [`${ORIGIN}/removed-page`]: "STALE PAGE" } },
+      fetch: async () => response("Not Found", 404),
+    });
+
+    const result = await handleFetch(listeners, {
+      url: `${ORIGIN}/removed-page`,
+      mode: "navigate",
+    });
+
+    expect(result?.status).toBe(404);
+    expect(result?.body).toBe("Not Found");
+  });
+
+  it("still falls back to the cached page on a server error, which is transient", async () => {
+    // The other side of the same condition, and the reason it is 500 rather
+    // than "any non-ok": a 502 mid-deploy says nothing about whether the page
+    // exists, so the copy on the device is the better answer.
+    const { listeners } = loadServiceWorker({
+      caches: { [SHELL_CACHE]: { [`${ORIGIN}/evacuation`]: "CACHED EVACUATION" } },
+      fetch: async () => response("Bad Gateway", 502),
+    });
+
+    const result = await handleFetch(listeners, {
+      url: `${ORIGIN}/evacuation`,
+      mode: "navigate",
+    });
+
+    expect(result?.body).toBe("CACHED EVACUATION");
+  });
+
   it("passes a non-ok alert response through when nothing is cached", async () => {
     // The other half of C1: there is nothing better to show, so the route
     // must not invent a success. The gate in provider.tsx relies on seeing
