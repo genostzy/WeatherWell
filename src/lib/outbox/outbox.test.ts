@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { enqueue, readOutbox, markDelivered, markFailed } from "./outbox";
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import { enqueue, readOutbox, markDelivered, markFailed, OutboxWriteFailed } from "./outbox";
 
 beforeEach(() => {
   localStorage.clear();
@@ -50,5 +50,32 @@ describe("outbox", () => {
     const first = enqueue("submitWaterLevelReport", { zoneId: "zone-1", depthLevel: "ankle" });
     const second = enqueue("submitWaterLevelReport", { zoneId: "zone-1", depthLevel: "knee" });
     expect(readOutbox().map((e) => e.id)).toEqual([first.id, second.id]);
+  });
+
+  it("throws rather than returning a well-formed entry when the write silently fails", () => {
+    // createLocalStorageStore's write() swallows every setItem error in a
+    // bare catch (quota exceeded, private-mode, blocked storage), so
+    // store.update() can return successfully having persisted nothing.
+    // Simulate that with a real QuotaExceededError from setItem itself,
+    // rather than a no-op stub: this exercises the actual failure mode
+    // (setItem throwing mid-write) and proves enqueue's post-write
+    // verification — re-reading the snapshot and checking the new id is
+    // present — is what catches it, not some assumption about how the
+    // stub behaves.
+    const setItemSpy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("The quota has been exceeded.", "QuotaExceededError");
+    });
+
+    try {
+      expect(() =>
+        enqueue("submitWaterLevelReport", { zoneId: "zone-1", depthLevel: "knee" })
+      ).toThrow(OutboxWriteFailed);
+    } finally {
+      setItemSpy.mockRestore();
+    }
+
+    // Nothing was persisted — the throw must not have been paired with a
+    // half-written queue.
+    expect(readOutbox()).toHaveLength(0);
   });
 });

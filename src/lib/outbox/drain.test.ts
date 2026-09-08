@@ -67,7 +67,20 @@ describe("drainOutbox", () => {
       await new Promise((r) => setTimeout(r, 10));
     });
 
-    await Promise.all([drainOutbox(dispatch), drainOutbox(dispatch)]);
+    const [first, second] = await Promise.all([drainOutbox(dispatch), drainOutbox(dispatch)]);
     expect(dispatch).toHaveBeenCalledOnce();
+
+    // Exactly one of the two calls actually ran; the other must be
+    // identifiable as declined rather than looking like an empty queue.
+    const results = [first, second];
+    expect(results.filter((r) => r.skipped)).toHaveLength(1);
+    expect(results.filter((r) => !r.skipped)).toHaveLength(1);
+
+    const skippedResult = results.find((r) => r.skipped)!;
+    expect(skippedResult.delivered).toBe(0);
+    expect(skippedResult.failed).toBe(0);
+
+    const ranResult = results.find((r) => !r.skipped)!;
+    expect(ranResult.delivered).toBe(1);
   });
 });

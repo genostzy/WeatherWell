@@ -25,6 +25,24 @@ export function readOutbox(): OutboxEntry[] {
   return store.getSnapshot();
 }
 
+/**
+ * Thrown by `enqueue` when `store.update` returns without error but the
+ * entry is not actually present afterward — e.g. `localStorage.setItem`
+ * silently swallowed a `QuotaExceededError`. A caller that believes a
+ * report was queued when it was not is the exact failure this module
+ * exists to prevent, so this is surfaced as a thrown error rather than a
+ * quietly-wrong return value.
+ */
+export class OutboxWriteFailed extends Error {
+  constructor(id: string) {
+    super(
+      `Outbox entry ${id} was not persisted after enqueue. Local storage is ` +
+        "the likely cause (full, private-mode, or blocked)."
+    );
+    this.name = "OutboxWriteFailed";
+  }
+}
+
 export function enqueue<K extends OutboxOperation>(
   operation: K,
   payload: OutboxPayloads[K]
@@ -38,6 +56,16 @@ export function enqueue<K extends OutboxOperation>(
     permanentlyFailed: false,
   };
   store.update((all) => [...all, entry]);
+
+  // store.write() swallows every localStorage error (quota exceeded,
+  // private-mode, blocked storage) in a bare catch, so a call above can
+  // return having persisted nothing. Verify the entry actually landed
+  // before handing it back as if it had.
+  const persisted = store.getSnapshot().some((stored) => stored.id === entry.id);
+  if (!persisted) {
+    throw new OutboxWriteFailed(entry.id);
+  }
+
   return entry;
 }
 
