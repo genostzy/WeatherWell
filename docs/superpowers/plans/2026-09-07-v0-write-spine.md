@@ -65,6 +65,18 @@ The window was zero while nothing wrote alerts. **This plan does not write alert
 
 ---
 
+## Staying on the free tier
+
+The Supabase organisation is on the **Free** plan and the Vercel deployment on **Hobby**. Neither has a card on file, so nothing here can generate a bill — exceeding a limit throttles or pauses the project rather than charging for it. Keeping it that way is a design constraint, not an afterthought:
+
+- **`auth.users` rows are permanent and count toward the free tier's monthly-active-user allowance.** Nothing reaps them. This is why sign-in is deferred to the first write (Task 2 Step 6) rather than happening on page load. A change that signs users in earlier is a change to the bill.
+- **`trust_weight` and `is_outlier` stay server-controlled** — unrelated to cost, but the same column-grant discipline that protects them is what keeps a client from writing arbitrary volume into columns nobody validates.
+- **The database is 11 MB of a 500 MB allowance** with zero rows of real data. Reports and pins are a few hundred bytes each; this is not the constraint to worry about.
+- **A free project pauses after about a week with no activity.** That costs nothing, and unpausing is a click — but a paused backend means a cold visitor hits the reference-data gate's failure card. Worth knowing before showing the deployed app to anyone after a quiet stretch.
+- **No Supabase branches.** `create_branch` bills per branch; this plan uses none, and none should be created to work around a migration problem.
+
+---
+
 ## Two client factories, and which is which
 
 `src/lib/supabase/server.ts` already exports `createSupabaseServerClient()` — no session, publishable key, used by `/api/zones` and `/api/alerts` for data that is world-readable under `select using (true)`. **It stays exactly as it is.** Public reads should not depend on a session.
@@ -511,11 +523,19 @@ npx vitest run src/lib/auth/anonymous-session.test.ts
 ```
 Expected: PASS, 4 tests.
 
-- [ ] **Step 6: Start the session alongside the reference-data fetch**
+- [ ] **Step 6: Do NOT sign anyone in on page load**
 
-In `src/lib/reference-data/provider.tsx`, call `void ensureAnonymousSession()` inside the existing `useEffect` that triggers `load()`.
+There is nothing to do in this step except understand why it is empty, because the obvious implementation is wrong in two ways at once.
 
-**It must not be awaited and must not gate rendering.** Reads are public; a resident whose sign-in is slow or impossible must still see their zone and evacuation instructions. Add a comment saying exactly that, because the natural instinct is to await it.
+**Do not call `ensureAnonymousSession()` from `provider.tsx`, from `layout.tsx`, or from anything that runs on mount.** Sign-in happens on the first *write*, and nowhere else — Task 5 wires it to exactly two places: `addWaterLevelReport`, and the outbox drain when the queue is non-empty.
+
+Two reasons, and the second is the one that bites:
+
+1. **Reads are public.** Zones, alerts, centres, POIs, hazards all carry `select using (true)`. A resident who only looks at their zone needs no identity, and creating one adds a network round trip to first paint on exactly the degraded connections this app is built for.
+
+2. **Every anonymous sign-in is a permanent row in `auth.users` that counts toward the Supabase free tier's monthly-active-user allowance, and nothing reaps it.** Signing in on page load means every casual visitor, every judge opening the link, every crawler and every fresh browser profile becomes a user forever. Signing in on first write means only people who actually contribute do. The difference is roughly two orders of magnitude, and it is the single decision in this plan with a real bill attached.
+
+This also makes the privacy story truthful rather than merely defensible: the app does not manufacture an identity for someone who only read.
 
 - [ ] **Step 7: Verify a real anonymous user and profile appear**
 
@@ -1306,6 +1326,7 @@ Create `src/lib/outbox/use-outbox-drain.ts`:
 import { useEffect } from "react";
 import { submitWaterLevelReport } from "@/app/actions/submit-water-level-report";
 import { drainOutbox, PermanentFailure } from "./drain";
+import { readOutbox } from "./outbox";
 import { ensureAnonymousSession } from "@/lib/auth/anonymous-session";
 import type { OutboxEntry } from "./types";
 
@@ -1329,6 +1350,11 @@ async function dispatch(entry: OutboxEntry): Promise<void> {
 export function useOutboxDrain(): void {
   useEffect(() => {
     const run = () => {
+      // Nothing queued means nothing to attribute, so do not sign anyone in.
+      // This guard is what keeps a visitor who only reads from becoming a
+      // permanent row in auth.users — see Task 2 Step 6.
+      if (readOutbox().length === 0) return;
+
       void ensureAnonymousSession().then((userId) => {
         if (userId) void drainOutbox(dispatch);
       });
