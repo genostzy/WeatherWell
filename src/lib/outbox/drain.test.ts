@@ -58,6 +58,16 @@ describe("drainOutbox", () => {
     expect(readOutbox()).toHaveLength(1);
   });
 
+  it("dispatches a queued entry with its own id, then drops it once delivered", async () => {
+    const entry = enqueue("submitWaterLevelReport", { zoneId: "zone-1", depthLevel: "knee" });
+    const dispatch = vi.fn().mockResolvedValue(undefined);
+
+    await drainOutbox(dispatch);
+
+    expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ id: entry.id }));
+    expect(readOutbox()).toHaveLength(0);
+  });
+
   it("runs one drain at a time", async () => {
     // Two concurrent drains would dispatch the same entry twice. The database
     // rejects the duplicate on its primary key, but the wasted request is a

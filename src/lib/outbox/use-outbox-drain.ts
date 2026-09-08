@@ -1,0 +1,40 @@
+"use client";
+
+import { useEffect } from "react";
+import { drainOutbox } from "./drain";
+import { readOutbox } from "./outbox";
+import { ensureAnonymousSession } from "@/lib/auth/anonymous-session";
+import { dispatchQueuedReport } from "@/lib/water-level-reports";
+
+/**
+ * Replays queued writes when a session and a network exist. Mounted once.
+ *
+ * Attribution happens here, not at queue time: a report made before the
+ * resident had any identity gets the uid they eventually receive. That is
+ * honest — the report genuinely is from that device — and it is the only
+ * option, since there was no identity to record when they made it.
+ *
+ * dispatchQueuedReport lives in water-level-reports.ts, not here, and is
+ * imported statically from there: that module dynamically imports the real
+ * Server Action (which pulls in user-server.ts's `import "server-only"`)
+ * precisely so this file, and every component that only reads the report
+ * list, never pays that cost just from being loaded.
+ */
+export function useOutboxDrain(): void {
+  useEffect(() => {
+    const run = () => {
+      // Nothing queued means nothing to attribute, so do not sign anyone in.
+      // This guard is what keeps a visitor who only reads from becoming a
+      // permanent row in auth.users — see Task 2 Step 6.
+      if (readOutbox().length === 0) return;
+
+      void ensureAnonymousSession().then((userId) => {
+        if (userId) void drainOutbox(dispatchQueuedReport);
+      });
+    };
+
+    run();
+    window.addEventListener("online", run);
+    return () => window.removeEventListener("online", run);
+  }, []);
+}

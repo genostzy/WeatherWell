@@ -1,12 +1,43 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { screen } from "@testing-library/react";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { screen, waitFor } from "@testing-library/react";
 import { FloodMonitoringPanel } from "./flood-monitoring-panel";
 import { MOCK_WATER_LEVEL_REPORTS, REPORT_THRESHOLD } from "@/lib/mock-data";
 import { renderWithData, FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
 
+// See recent-reports-panel.test.tsx: water-level-reports.ts now imports the
+// real Server Action (which pulls in user-server.ts's `import "server-only"`)
+// and ensureAnonymousSession — stub both away since this file only reads.
+vi.mock("@/app/actions/submit-water-level-report", () => ({
+  submitWaterLevelReport: vi.fn().mockResolvedValue({ ok: true }),
+}));
+vi.mock("@/lib/auth/anonymous-session", () => ({
+  ensureAnonymousSession: vi.fn().mockResolvedValue(null),
+}));
+
+/** What /api/reports would return for the seeded mock reports. */
+function seededServerReports() {
+  return MOCK_WATER_LEVEL_REPORTS.map((report) => ({
+    id: report.id,
+    zoneId: report.zoneId,
+    depthLevel: report.depthLevel,
+    reporterId: "seed-user",
+    reportedAt: new Date(Date.now() - report.minutesAgo * 60 * 1000).toISOString(),
+    trustWeight: report.trustWeight,
+    isOutlier: report.isOutlier,
+  }));
+}
+
 describe("FloodMonitoringPanel", () => {
   beforeEach(() => {
     localStorage.clear();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, json: async () => seededServerReports() })
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("shows every zone with a manage link back to its dashboard", () => {
@@ -19,7 +50,7 @@ describe("FloodMonitoringPanel", () => {
     expect(manageLinks[0]).toHaveAttribute("href", `/admin/zone/${FIXTURE_REFERENCE_DATA.zones[0].id}`);
   });
 
-  it("flags a zone whose agreeing reports have met the auto-trigger threshold", () => {
+  it("flags a zone whose agreeing reports have met the auto-trigger threshold", async () => {
     renderWithData(<FloodMonitoringPanel zones={FIXTURE_REFERENCE_DATA.zones} />);
     const zoneWithEnough = FIXTURE_REFERENCE_DATA.zones.find(
       (zone) =>
@@ -27,10 +58,10 @@ describe("FloodMonitoringPanel", () => {
         REPORT_THRESHOLD
     );
     expect(zoneWithEnough).toBeDefined();
-    expect(screen.getAllByText(/report threshold met/i).length).toBeGreaterThan(0);
+    await waitFor(() => expect(screen.getAllByText(/report threshold met/i).length).toBeGreaterThan(0));
   });
 
-  it("shows the latest report's depth for a zone with reports", () => {
+  it("shows the latest report's depth for a zone with reports", async () => {
     renderWithData(<FloodMonitoringPanel zones={FIXTURE_REFERENCE_DATA.zones} />);
     const zoneWithReports = FIXTURE_REFERENCE_DATA.zones.find(
       (z) => MOCK_WATER_LEVEL_REPORTS.filter((r) => r.zoneId === z.id).length > 0
@@ -38,6 +69,8 @@ describe("FloodMonitoringPanel", () => {
     const latest = [...MOCK_WATER_LEVEL_REPORTS]
       .filter((r) => r.zoneId === zoneWithReports.id)
       .sort((a, b) => a.minutesAgo - b.minutesAgo)[0];
-    expect(screen.getAllByText(new RegExp(latest.depthLevel, "i")).length).toBeGreaterThan(0);
+    await waitFor(() =>
+      expect(screen.getAllByText(new RegExp(latest.depthLevel, "i")).length).toBeGreaterThan(0)
+    );
   });
 });
