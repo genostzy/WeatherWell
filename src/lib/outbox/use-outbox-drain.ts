@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { drainOutbox } from "./drain";
+import { flushOutbox } from "./drain";
 import { readOutbox } from "./outbox";
 import { ensureAnonymousSession } from "@/lib/auth/anonymous-session";
 import { dispatchQueuedReport } from "@/lib/water-level-reports";
@@ -29,7 +29,10 @@ export function useOutboxDrain(): void {
       if (readOutbox().length === 0) return;
 
       void ensureAnonymousSession().then((userId) => {
-        if (userId) void drainOutbox(dispatchQueuedReport);
+        // flushOutbox, not drainOutbox: an "online" event that arrives while
+        // a drain is already in flight would otherwise be declined and
+        // silently dropped, which is the one moment this listener exists for.
+        if (userId) void flushOutbox(dispatchQueuedReport);
       });
     };
 

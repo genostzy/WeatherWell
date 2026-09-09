@@ -13,9 +13,12 @@ vi.mock("@/lib/supabase/user-server", () => ({
 import { submitWaterLevelReport } from "./submit-water-level-report";
 
 describe("submitWaterLevelReport", () => {
-  it("refuses a report with no session, permanently", async () => {
-    // Not transient: without a principal there is no reporter_id to attribute
-    // it to, and retrying with the same absent session cannot help.
+  it("treats a missing session as transient, so the queued report is retried rather than binned", async () => {
+    // A missing or expired cookie is the most TEMPORARY failure in this
+    // system, and the one most likely to coincide with the bad connectivity
+    // the outbox exists for. Classifying it permanent makes drainOutbox skip
+    // the entry forever and mergeReports drop it from the screen — so a
+    // resident already shown "Report recorded" loses the report silently.
     getClaims.mockResolvedValue({ data: null });
 
     const result = await submitWaterLevelReport({
@@ -24,7 +27,11 @@ describe("submitWaterLevelReport", () => {
       depthLevel: "knee",
     });
 
-    expect(result).toEqual({ ok: false, permanent: true, error: expect.stringMatching(/sign|session|auth/i) });
+    expect(result).toEqual({
+      ok: false,
+      permanent: false,
+      error: expect.stringMatching(/sign|session|auth/i),
+    });
     expect(insert).not.toHaveBeenCalled();
   });
 

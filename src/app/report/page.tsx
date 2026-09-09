@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import {
+  AlertTriangle,
   ArrowRight,
   CheckCircle2,
   CloudRain,
@@ -51,6 +52,14 @@ const THANKS_BODY: LocalizedText = {
   en: "Thanks — your report is in. It is on your device now and reaches the barangay record as soon as you have signal; from Phase 3 it joins the threshold that can trigger a real alert.",
   fil: "Salamat — naitala ang ulat mo. Nasa device mo na ito at makakarating sa talaan ng barangay pagkaroon ng signal; mula Phase 3 ito na ang bahagi ng threshold para sa totoong alerto.",
 };
+const NOT_SAVED: LocalizedText = {
+  en: "Report not saved",
+  fil: "Hindi naitala ang ulat",
+};
+const NOT_SAVED_BODY: LocalizedText = {
+  en: "This report was not saved and has not reached the barangay. Your phone's storage is full or blocked, so there was nowhere to keep it until you have signal. Free up some space, or close other tabs, then report again.",
+  fil: "Hindi naitala ang ulat na ito at hindi ito nakarating sa barangay. Puno o naka-block ang storage ng telepono mo, kaya walang mapaglagyan nito hanggang magkaroon ka ng signal. Magbakante ng espasyo, o isara ang ibang tab, tapos mag-ulat muli.",
+};
 const YOU_REPORTED: LocalizedText = { en: "You reported", fil: "Iniulat mo" };
 const MAPS_TO: LocalizedText = { en: "maps to", fil: "katumbas ng" };
 const WHAT_NOW: LocalizedText = { en: "What now", fil: "Ano ngayon" };
@@ -60,16 +69,31 @@ const REPORT_AGAIN: LocalizedText = { en: "Report again", fil: "Mag-ulat muli" }
 
 export default function ReportPage() {
   const [submitted, setSubmitted] = useState<DepthLevel | null>(null);
+  const [saveFailed, setSaveFailed] = useState(false);
   const zone = useSelectedZone();
   const { lang } = useLanguage();
   const overrides = useZoneOverrides();
 
-  function handleSubmit(depthLevel: DepthLevel) {
-    // Persisted so it actually shows up in "What neighbours are reporting"
-    // and moves the threshold bar below straight away — not just a thank-you
-    // screen. The queue, not the network, is what makes that immediate.
-    addWaterLevelReport(zone.id, depthLevel);
+  function handleSubmit(depthLevel: DepthLevel): boolean {
+    try {
+      // Persisted so it actually shows up in "What neighbours are reporting"
+      // and moves the threshold bar below straight away — not just a thank-you
+      // screen. The queue, not the network, is what makes that immediate.
+      addWaterLevelReport(zone.id, depthLevel);
+    } catch {
+      // `enqueue` throws OutboxWriteFailed when local storage is full or
+      // blocked, so the report reached neither the queue nor the network. Any
+      // other throw leaves us equally unable to say it was saved. Showing the
+      // thank-you screen here would tell a resident their report is with the
+      // barangay when nothing anywhere holds it — the one lie this page must
+      // not tell.
+      setSaveFailed(true);
+      setSubmitted(null);
+      return false;
+    }
+    setSaveFailed(false);
     setSubmitted(depthLevel);
+    return true;
   }
 
   const base = useActiveAlertForZone(zone.id);
@@ -208,6 +232,24 @@ export default function ReportPage() {
               </Card>
             ) : (
               <>
+                {/* Above the form, not instead of it: the resident's next move
+                    is to free some space and file the same report again. */}
+                {saveFailed && (
+                  <Card className="border-severity-red/60">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-base text-severity-red">
+                        <AlertTriangle aria-hidden="true" className="h-5 w-5" />
+                        {t(NOT_SAVED, lang)}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p role="alert" lang={lang} className="text-sm">
+                        {t(NOT_SAVED_BODY, lang)}
+                      </p>
+                    </CardContent>
+                  </Card>
+                )}
+
                 <ReportForm zoneId={zone.id} onSubmit={handleSubmit} />
 
                 <Card className="border-severity-yellow/40">

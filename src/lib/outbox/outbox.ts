@@ -75,9 +75,16 @@ export function markDelivered(id: string): void {
 }
 
 /**
- * The write did not land. The entry stays: a resident's report is the only
- * evidence that a street is flooding, and losing it silently is worse than
- * showing it as unsent.
+ * The write did not land. The entry stays queued: a resident's report is the
+ * only evidence that a street is flooding, so it is retained for the next
+ * attempt rather than dropped.
+ *
+ * Retained, not surfaced. Nothing in the UI shows a queued or failed state
+ * today — `mergeReports` renders a still-queued report as an ordinary live
+ * row and drops a permanently-failed one entirely. A pending/failed indicator
+ * is a Plan 4 feature, alongside the other four stores that move onto this
+ * outbox; until it exists, do not read this retention as the resident being
+ * told anything.
  */
 export function markFailed(id: string, error: string, permanent: boolean): void {
   store.update((all) =>

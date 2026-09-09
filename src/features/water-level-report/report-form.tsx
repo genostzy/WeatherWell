@@ -18,7 +18,12 @@ export function ReportForm({
   onSubmit,
 }: {
   zoneId: string;
-  onSubmit: (depthLevel: DepthLevel) => void;
+  /**
+   * Return `false` to say the report was NOT accepted (the outbox write
+   * failed). Anything else — including nothing — means accepted, which is the
+   * path where this form is unmounted and replaced by the thank-you card.
+   */
+  onSubmit: (depthLevel: DepthLevel) => boolean | void;
 }) {
   const [depthLevel, setDepthLevel] = useState<DepthLevel>("dry");
   const [submitting, setSubmitting] = useState(false);
@@ -33,7 +38,11 @@ export function ReportForm({
         // on the assumption the write succeeds — Phase 3 reconciles this
         // against the real Server Action result instead of a blocking wait.
         setSubmitting(true);
-        onSubmit(depthLevel);
+        // A rejected report leaves this form on screen under a "not saved,
+        // try again" message. Staying disabled would make that message
+        // impossible to act on, so re-enable — keeping the depth they picked,
+        // so trying again is one tap rather than a fresh start.
+        if (onSubmit(depthLevel) === false) setSubmitting(false);
       }}
     >
       <input type="hidden" name="zoneId" value={zoneId} />

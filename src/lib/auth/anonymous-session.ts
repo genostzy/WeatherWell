@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { getBrowserClient } from "@/lib/supabase/browser";
 
 /**
@@ -37,21 +36,4 @@ export async function ensureAnonymousSession(): Promise<string | null> {
       });
   }
   return inFlight;
-}
-
-/** The resident's user id once known, or null while signing in or offline. */
-export function useSessionUserId(): string | null {
-  const [userId, setUserId] = useState<string | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    void ensureAnonymousSession().then((id) => {
-      if (active) setUserId(id);
-    });
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  return userId;
 }

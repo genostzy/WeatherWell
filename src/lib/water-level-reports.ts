@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { drainOutbox, PermanentFailure } from "./outbox/drain";
+import { flushOutbox, onDelivered, PermanentFailure } from "./outbox/drain";
 import { enqueue, useOutbox } from "./outbox/outbox";
 import { ensureAnonymousSession } from "./auth/anonymous-session";
 import type { OutboxEntry, OutboxPayloads } from "./outbox/types";
@@ -21,22 +21,69 @@ export interface LiveWaterLevelReport {
 }
 
 const NO_SERVER_ROWS: LiveWaterLevelReport[] = [];
+const NO_DELIVERED: OutboxEntry[] = [];
 
 /**
- * The server's rows for `/api/reports`, refetched on every mount.
+ * The delivery refetch below deliberately carries a unique query parameter;
+ * the mount fetch deliberately does not.
+ *
+ * `sw.js` serves `/api/reports` with staleWhileRevalidate — it answers from
+ * the copy cached on a previous load and refreshes behind that. Right for the
+ * mount fetch: a resident with no network still gets the neighbours' last
+ * known reports. Wrong for the refetch that follows a delivery, because the
+ * row it is fetching FOR is the one row the cached copy is guaranteed not to
+ * contain, so a cached answer would withdraw the resident's own just-delivered
+ * report from the screen — exactly what this refetch exists to prevent. The
+ * parameter keeps the pathname (so sw.js's public-API allowlist still matches)
+ * but misses the cache entry, so this one request reaches the network.
+ */
+function reportsUrl(afterDeliveries: number): string {
+  return afterDeliveries === 0 ? "/api/reports" : `/api/reports?delivered=${afterDeliveries}`;
+}
+
+/**
+ * The server's rows for `/api/reports` — fetched on mount, and again after any
+ * drain that actually delivered something — plus the entries that drain
+ * delivered, held until their real rows arrive.
+ *
+ * Both halves exist for one failure. `markDelivered` drops the entry from the
+ * outbox the moment the server confirms it, which withdraws the optimistic row
+ * `mergeReports` was rendering. Without the refetch the resident's own report
+ * is gone for good, a second after they filed it, next to a green tick telling
+ * them it worked — success looking identical to loss. Without the held
+ * entries it is gone only until the refetch lands, which on the connection
+ * this app assumes is still long enough to read "No reports from this zone
+ * yet" beside "Report recorded".
+ *
+ * A held entry needs no expiry: `mergeReports` drops it as soon as a server
+ * row carries its id, which is exactly what the refetch is fetching.
+ *
+ * The refetch fires on delivery only — never on render, never on a drain that
+ * delivered nothing — so an offline or idle resident costs no requests.
  *
  * A failed fetch must never throw or blank the list: a resident with no
  * network still sees their own queued reports (via mergeReports below),
  * which is the entire point of the outbox. So a failure here just leaves
  * `rows` at whatever it already held (empty, on a first failed load).
  */
-function useServerReports(): LiveWaterLevelReport[] {
+function useServerReports(): { rows: LiveWaterLevelReport[]; delivered: OutboxEntry[] } {
   const [rows, setRows] = useState<LiveWaterLevelReport[]>(NO_SERVER_ROWS);
+  const [delivered, setDelivered] = useState<OutboxEntry[]>(NO_DELIVERED);
 
+  // Subscribing signs nobody in: the drain this hears from is already gated
+  // behind "something is queued", so a visitor who only reads never reaches
+  // it. This cannot become a back door to an anonymous sign-in.
+  useEffect(
+    () => onDelivered((entries) => setDelivered((held) => [...held, ...entries])),
+    []
+  );
+
+  // `delivered` is the dependency rather than a render-time value: its
+  // identity changes when, and only when, a drain delivered something.
   useEffect(() => {
     let cancelled = false;
 
-    fetch("/api/reports")
+    fetch(reportsUrl(delivered.length))
       .then((response) =>
         response.ok
           ? (response.json() as Promise<LiveWaterLevelReport[]>)
@@ -54,9 +101,9 @@ function useServerReports(): LiveWaterLevelReport[] {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [delivered]);
 
-  return rows;
+  return { rows, delivered };
 }
 
 /**
@@ -107,11 +154,18 @@ export function mergeReports(
   return [...serverRows, ...optimistic];
 }
 
-/** Every live water-level report: confirmed server rows plus anything still queued. */
+/**
+ * Every live water-level report: confirmed server rows, plus anything still
+ * queued, plus anything delivered whose server row has not come back yet.
+ *
+ * Delivered entries go through the same merge as queued ones because they need
+ * the same rule — render optimistically, and stand down the moment a server row
+ * carries the id.
+ */
 export function useWaterLevelReports(): LiveWaterLevelReport[] {
-  const serverRows = useServerReports();
+  const { rows, delivered } = useServerReports();
   const queued = useOutbox();
-  return mergeReports(serverRows, queued);
+  return mergeReports(rows, [...queued, ...delivered]);
 }
 
 /** Newest first, matching the previous mock-data helper's ordering contract. */
@@ -153,7 +207,12 @@ export async function dispatchQueuedReport(entry: OutboxEntry): Promise<void> {
  */
 function triggerDrain(): void {
   void ensureAnonymousSession().then((userId) => {
-    if (userId) void drainOutbox(dispatchQueuedReport);
+    // flushOutbox, not drainOutbox: this is the call most likely to be
+    // declined, because the resident tapping "Report again" during a flood is
+    // filing while the previous report's drain is still on the wire. A
+    // declined drain that nobody re-runs is a report that never leaves the
+    // device while the app is open.
+    if (userId) void flushOutbox(dispatchQueuedReport);
   });
 }
 

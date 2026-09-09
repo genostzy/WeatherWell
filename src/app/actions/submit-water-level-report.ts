@@ -42,7 +42,24 @@ export async function submitWaterLevelReport(
   const { data } = await supabase.auth.getClaims();
   const userId = data?.claims?.sub;
   if (!userId) {
-    return { ok: false, permanent: true, error: "No session — cannot attribute this report." };
+    // TRANSIENT, deliberately — and it is the one classification in this file
+    // that has to be argued for. The other three permanent codes are
+    // structurally permanent: an RLS denial, a CHECK violation and a bad FK
+    // cannot become true later. The absence of a session is the opposite. A
+    // blocked or chunked `sb-` cookie, a refresh token that expired while the
+    // device was offline for days, a cookie stripped in transit — every one of
+    // those resolves on a later attempt, and every one of them is most likely
+    // to happen during exactly the bad connectivity the outbox exists for.
+    //
+    // Calling it permanent would make drainOutbox skip the entry forever AND
+    // mergeReports drop it from the screen, so a resident already told "Report
+    // recorded" would lose the report silently and irrecoverably — the precise
+    // failure this whole write path was built to prevent.
+    return {
+      ok: false,
+      permanent: false,
+      error: "No session yet — cannot attribute this report. Will retry.",
+    };
   }
 
   const { error } = await supabase.from("water_level_reports").insert({

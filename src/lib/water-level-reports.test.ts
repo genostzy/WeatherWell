@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { renderHook } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 
 const submitWaterLevelReport = vi.fn().mockResolvedValue({ ok: true });
 const ensureAnonymousSession = vi.fn().mockResolvedValue(null);
@@ -26,6 +26,21 @@ import {
   useWaterLevelReports,
 } from "./water-level-reports";
 import { readOutbox, enqueue, markFailed, OutboxWriteFailed } from "@/lib/outbox/outbox";
+import { drainOutbox } from "@/lib/outbox/drain";
+
+function serverRowFor(id: string) {
+  return {
+    id,
+    zoneId: "zone-1",
+    depthLevel: "knee" as const,
+    reportedAt: new Date().toISOString(),
+    trustWeight: 1,
+    isOutlier: false,
+    // The one field that tells a real server row apart from an optimistic
+    // one: attribution happens at delivery, so a queued row reads "pending".
+    reporterId: "user-1",
+  };
+}
 
 /** No server rows in this file — every case here is about the outbox side of the merge. */
 function currentReports() {
@@ -205,5 +220,100 @@ describe("water-level-reports", () => {
     } finally {
       process.off("unhandledRejection", onUnhandledRejection);
     }
+  });
+
+  it("keeps a delivered report on screen, then replaces it with its server row", async () => {
+    // The failure this guards: markDelivered drops the entry the moment the
+    // server confirms it, withdrawing the optimistic row — and /api/reports was
+    // only ever fetched on mount, so nothing replaced it. The resident watched
+    // their own report vanish beside a green tick saying "Report recorded".
+    // Success looked identical to loss, and the agreeing count that gates the
+    // auto-trigger threshold dropped with it.
+    const entry = enqueue("submitWaterLevelReport", { zoneId: "zone-1", depthLevel: "knee" });
+
+    // The refetch is held open deliberately. Letting it resolve inside the
+    // same act() would make the assertion below pass whether or not the
+    // delivered row is held on screen — the refetch is a round trip on a bad
+    // connection, and this test is about what the resident sees during it.
+    let respond!: (rows: unknown[]) => void;
+    const heldRefetch = new Promise((resolve) => {
+      respond = (rows) => resolve({ ok: true, json: async () => rows });
+    });
+
+    const fetchMock = vi
+      .fn()
+      // On mount the row does not exist server-side yet.
+      .mockResolvedValueOnce({ ok: true, json: async () => [] })
+      .mockReturnValueOnce(heldRefetch);
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { result } = renderHook(() => useWaterLevelReports());
+
+    expect(result.current).toHaveLength(1);
+    expect(result.current[0].reporterId).toBe("pending");
+
+    await act(async () => {
+      await drainOutbox(async () => {});
+    });
+
+    // Delivered: out of the outbox, refetch on the wire — and still on screen.
+    expect(readOutbox()).toHaveLength(0);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(result.current).toHaveLength(1);
+
+    // And then the real row takes its place — once, not twice.
+    await act(async () => {
+      respond([serverRowFor(entry.id)]);
+      await heldRefetch;
+    });
+    await vi.waitFor(() => expect(result.current[0].reporterId).toBe("user-1"));
+    expect(result.current).toHaveLength(1);
+  });
+
+  it("does not refetch when a drain delivered nothing", async () => {
+    // The refetch is spent on a resident's behalf. An offline pass that
+    // delivered nothing has nothing new to fetch.
+    enqueue("submitWaterLevelReport", { zoneId: "zone-1", depthLevel: "knee" });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => [] });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderHook(() => useWaterLevelReports());
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    await act(async () => {
+      await drainOutbox(async () => {
+        throw new Error("offline");
+      });
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not let the service worker's cached copy answer the post-delivery refetch", async () => {
+    // sw.js serves /api/reports with staleWhileRevalidate — `cached || network`
+    // — so a plain refetch would be answered from the copy captured on the
+    // previous load: the one copy guaranteed not to contain the row this
+    // refetch exists to collect. The mount fetch stays plain (that cache is
+    // what a resident with no network reads); this one must miss it while
+    // keeping the pathname sw.js's public-API allowlist matches on.
+    const entry = enqueue("submitWaterLevelReport", { zoneId: "zone-1", depthLevel: "knee" });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => [] })
+      .mockResolvedValueOnce({ ok: true, json: async () => [serverRowFor(entry.id)] });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderHook(() => useWaterLevelReports());
+    await act(async () => {
+      await drainOutbox(async () => {});
+    });
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+
+    const mountUrl = String(fetchMock.mock.calls[0][0]);
+    const refetchUrl = String(fetchMock.mock.calls[1][0]);
+
+    expect(mountUrl).toBe("/api/reports");
+    expect(refetchUrl).not.toBe(mountUrl);
+    expect(new URL(refetchUrl, "https://weatherwell.test").pathname).toBe("/api/reports");
   });
 });
