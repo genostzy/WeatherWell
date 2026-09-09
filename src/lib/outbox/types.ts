@@ -1,10 +1,28 @@
 import type { DepthLevel } from "@/lib/depth";
+import type { PinStatusTag } from "@/lib/community-pin";
+import type { CheckInStatus } from "@/lib/types";
 
-/** Widened in the next plan as pins, votes, check-ins and overrides migrate. */
-export type OutboxOperation = "submitWaterLevelReport";
+export type OutboxOperation =
+  | "submitWaterLevelReport"
+  | "createPin"
+  | "editPin"
+  | "deleteOwnPin"
+  | "voteOnPin"
+  | "recordCheckIn";
 
 export interface OutboxPayloads {
   submitWaterLevelReport: { zoneId: string; depthLevel: DepthLevel };
+  createPin: {
+    zoneId: string;
+    statusTag: PinStatusTag;
+    caption: string;
+    lat: number;
+    lng: number;
+  };
+  editPin: { pinId: string; statusTag: PinStatusTag; caption: string };
+  deleteOwnPin: { pinId: string };
+  voteOnPin: { pinId: string; direction: 1 | -1 };
+  recordCheckIn: { zoneId: string; status: CheckInStatus };
 }
 
 export interface OutboxEntry {

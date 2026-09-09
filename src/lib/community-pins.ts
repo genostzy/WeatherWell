@@ -3,6 +3,7 @@
 import { getDeviceId } from "./device-id";
 import { createLocalStorageStore } from "./local-storage-store";
 import type { PinStatusTag } from "./community-pin";
+import type { OutboxEntry } from "./outbox/types";
 
 const VOTES_KEY = "weatherwell.communityPinVotes";
 
@@ -214,4 +215,26 @@ export function voteOnPin(pinId: string, direction: 1 | -1): void {
     })
   );
   votesStore.update((votes) => ({ ...votes, [pinId]: direction }));
+}
+
+/**
+ * Placeholder until Task 3 replaces it. Throwing rather than no-op'ing: a
+ * silent success would make drainOutbox call markDelivered and destroy the
+ * queued write. Throwing leaves the entry queued for the real dispatcher.
+ */
+export async function dispatchQueuedPinWrite(entry: OutboxEntry): Promise<void> {
+  throw new Error(`Pin writes are not wired up yet (${entry.operation})`);
+}
+
+/**
+ * Placeholder until Task 4 replaces it. See dispatchQueuedPinWrite.
+ *
+ * This one placeholder survives one task longer than its sibling: Task 3
+ * rewrites pin writes and this whole file, but only replaces
+ * dispatchQueuedPinWrite. Do not drop this export in that rewrite —
+ * dispatchers.ts imports it and would fail to compile without it until
+ * Task 4 lands.
+ */
+export async function dispatchQueuedVote(entry: OutboxEntry): Promise<void> {
+  throw new Error(`Pin votes are not wired up yet (${entry.id})`);
 }

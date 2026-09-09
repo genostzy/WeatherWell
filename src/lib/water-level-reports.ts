@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { flushOutbox, onDelivered, PermanentFailure } from "./outbox/drain";
 import { enqueue, useOutbox } from "./outbox/outbox";
 import { ensureAnonymousSession } from "./auth/anonymous-session";
+import { dispatchQueued } from "./outbox/dispatchers";
 import type { OutboxEntry, OutboxPayloads } from "./outbox/types";
 import type { DepthLevel } from "./depth";
 
@@ -248,6 +249,11 @@ export async function dispatchQueuedReport(entry: OutboxEntry): Promise<void> {
  * "online" event (useOutboxDrain's job) to see their own report reach the
  * server. Signing in only happens here because there is something queued to
  * attribute — see Task 2 Step 6 / useOutboxDrain's own guard.
+ *
+ * Drains through dispatchQueued, not dispatchQueuedReport directly: a
+ * resident with a queued pin and no signal who then files a report would
+ * otherwise flush only the report and leave the pin sitting there. One
+ * queue, one dispatcher.
  */
 function triggerDrain(): void {
   void ensureAnonymousSession().then((userId) => {
@@ -256,7 +262,7 @@ function triggerDrain(): void {
     // filing while the previous report's drain is still on the wire. A
     // declined drain that nobody re-runs is a report that never leaves the
     // device while the app is open.
-    if (userId) void flushOutbox(dispatchQueuedReport);
+    if (userId) void flushOutbox(dispatchQueued);
   });
 }
 

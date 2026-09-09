@@ -11,6 +11,22 @@ export type LocalizedText = Record<LanguageCode, string>;
 
 export type ConfidenceLevel = "estimated" | "validated" | "calibrated";
 
+/**
+ * PRD Gap D (post-evacuation accountability, from the Climate Resilience
+ * plan): the app tells residents to evacuate but has no signal on whether
+ * they did or whether they need help. Phase 1 scope only — this is an
+ * unverified self-report, same trust model as community pins, with no
+ * location check and no real notification to responders.
+ *
+ * Lives here rather than in evacuation-checkins.ts because outbox/types.ts
+ * needs it and already imports OutboxEntry from evacuation-checkins.ts's
+ * sibling — importing back from there would be circular. This is a leaf
+ * module (imports only from ./severity), so it's the honest home for a
+ * two-value union. evacuation-checkins.ts re-exports it so existing
+ * importers do not change.
+ */
+export type CheckInStatus = "safe" | "needs_help";
+
 type AlertSource = "manual" | "auto_crowdsourced" | "predicted" | "cascade";
 
 export type CenterStatus = "space_available" | "limited" | "full";

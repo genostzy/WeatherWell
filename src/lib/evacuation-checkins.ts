@@ -2,15 +2,15 @@
 
 import { getDeviceId } from "./device-id";
 import { createLocalStorageStore } from "./local-storage-store";
+import type { CheckInStatus } from "./types";
+import type { OutboxEntry } from "./outbox/types";
 
 /**
- * PRD Gap D (post-evacuation accountability, from the Climate Resilience
- * plan): the app tells residents to evacuate but has no signal on whether
- * they did or whether they need help. Phase 1 scope only — this is an
- * unverified self-report, same trust model as community pins, with no
- * location check and no real notification to responders.
+ * Now defined in ./types.ts — outbox/types.ts needs it, and importing it
+ * back from here would be circular since this file imports OutboxEntry from
+ * that very module. Re-exported so existing importers do not change.
  */
-export type CheckInStatus = "safe" | "needs_help";
+export type { CheckInStatus };
 
 export interface EvacuationCheckIn {
   id: string;
@@ -57,4 +57,9 @@ export function recordCheckIn(zoneId: string, status: CheckInStatus): void {
       checkedInAt: new Date().toISOString(),
     },
   ]);
+}
+
+/** Placeholder until Task 5 replaces it. See dispatchQueuedPinWrite in community-pins.ts. */
+export async function dispatchQueuedCheckIn(entry: OutboxEntry): Promise<void> {
+  throw new Error(`Check-ins are not wired up yet (${entry.id})`);
 }
