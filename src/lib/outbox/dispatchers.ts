@@ -5,7 +5,7 @@ import type { OutboxEntry, OutboxOperation, OutboxPayloads } from "./types";
 /**
  * Narrows an entry's payload by its operation.
  *
- * Six operations now share one queue, so every consumer that reads the outbox
+ * Seven operations now share one queue, so every consumer that reads the outbox
  * — the stores merging their own queued writes onto server rows — must filter
  * by operation before touching a payload. Returning `undefined` rather than
  * throwing lets a store write `.map(...).filter(Boolean)` over a mixed queue,
@@ -41,7 +41,8 @@ export async function dispatchQueued(entry: OutboxEntry): Promise<void> {
     }
     case "createPin":
     case "editPin":
-    case "deleteOwnPin": {
+    case "deleteOwnPin":
+    case "setPinRemoved": {
       const { dispatchQueuedPinWrite } = await import("@/lib/community-pins");
       return dispatchQueuedPinWrite(entry);
     }

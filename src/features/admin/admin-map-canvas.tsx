@@ -54,6 +54,8 @@ const RESTORE_PIN: LocalizedText = { en: "Restore pin", fil: "Ibalik ang pin" };
 const REMOVED: LocalizedText = { en: "Removed", fil: "Naalis" };
 const REMOVED_BY_VOTES: LocalizedText = { en: "removed by net score", fil: "naalis dahil sa net score" };
 const REMOVED_BY_ADMIN: LocalizedText = { en: "removed by admin", fil: "inalis ng admin" };
+/** No reason recorded means the author withdrew it themselves — see deleteOwnPin. */
+const REMOVED_BY_AUTHOR: LocalizedText = { en: "withdrawn by author", fil: "inalis ng may-akda" };
 const LAYERS: LocalizedText = { en: "Layers", fil: "Mga layer" };
 const LAYER_HAZARD: LocalizedText = { en: "Hazard backdrop", fil: "Hazard backdrop" };
 const LAYER_PINS: LocalizedText = { en: "Community pins", fil: "Community pins" };
@@ -285,7 +287,14 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
                   {pin.removed && (
                     <p className="text-xs font-medium text-severity-red">
                       {t(REMOVED, lang)} —{" "}
-                      {t(pin.removedReason === "admin" ? REMOVED_BY_ADMIN : REMOVED_BY_VOTES, lang)}
+                      {t(
+                        pin.removedReason === "admin"
+                          ? REMOVED_BY_ADMIN
+                          : pin.removedReason === "net_score"
+                            ? REMOVED_BY_VOTES
+                            : REMOVED_BY_AUTHOR,
+                        lang
+                      )}
                     </p>
                   )}
                   {pin.caption && <p>{pin.caption}</p>}

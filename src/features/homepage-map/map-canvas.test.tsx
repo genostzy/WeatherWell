@@ -1,8 +1,23 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { screen, fireEvent } from "@testing-library/react";
+
+/**
+ * MapCanvas asks who the resident is (to decide whose pins get Edit/Delete)
+ * and the store tries to drain the outbox after a write. Both reach the real
+ * Supabase browser client, which in a test would mean a network call to a
+ * project that must never be touched from here. The hoisted `session` object
+ * is how each case chooses an answer.
+ */
+const session = vi.hoisted(() => ({ userId: null as string | null }));
+vi.mock("@/lib/auth/anonymous-session", () => ({
+  ensureAnonymousSession: async () => null,
+  useSessionUserId: () => session.userId,
+}));
+
 import { MapCanvas } from "./map-canvas";
 import { renderWithData, FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
-import { addCommunityPin } from "@/lib/community-pins";
+import { readOutbox } from "@/lib/outbox/outbox";
+import type { CommunityPin } from "@/lib/community-pins";
 
 /**
  * jsdom has no real layout engine, and Leaflet computes marker/tile
@@ -22,6 +37,36 @@ describe("MapCanvas", () => {
     onSelectZone: () => {},
   };
 
+  /** Pins come from /api/pins now, so a test that wants one serves one. */
+  function servePins(pins: CommunityPin[]): void {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => pins }));
+  }
+
+  const pin = (over: Partial<CommunityPin> = {}): CommunityPin => ({
+    id: "pin-1",
+    zoneId: "zone-1",
+    statusTag: "rising",
+    caption: "Mine",
+    lat: 16.03,
+    lng: 120.44,
+    upvotes: 0,
+    downvotes: 0,
+    createdAt: new Date().toISOString(),
+    authorId: "user-1",
+    removed: false,
+    ...over,
+  });
+
+  beforeEach(() => {
+    localStorage.clear();
+    session.userId = null;
+    servePins([]);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("renders without throwing and shows the marker legend and hazard selector", () => {
     renderWithData(<MapCanvas {...baseProps} />);
     expect(screen.getByText(/map legend/i)).toBeInTheDocument();
@@ -38,37 +83,53 @@ describe("MapCanvas", () => {
   });
 
   describe("community pin actions", () => {
-    beforeEach(() => {
-      localStorage.clear();
-      localStorage.setItem("weatherwell.communityPins", "[]");
-    });
-
-    it("hands this device's own pin back to onDeletePin rather than deleting it itself", () => {
+    it("hands this resident's own pin back to onDeletePin rather than deleting it itself", async () => {
       // MapCanvas only reports the intent — HomepageMap owns the actual
-      // confirm-then-delete flow (see ConfirmDialog), so this pin must still
-      // exist in storage after the click.
-      addCommunityPin({ zoneId: "zone-1", statusTag: "rising", caption: "Mine", lat: 16.03, lng: 120.44 });
+      // confirm-then-delete flow (see ConfirmDialog), so nothing must be
+      // queued by this click.
+      session.userId = "user-1";
+      servePins([pin()]);
       const onDeletePin = vi.fn();
 
       renderWithData(<MapCanvas {...baseProps} onDeletePin={onDeletePin} />);
-      fireEvent.click(screen.getByRole("img", { name: /Rising/i }));
+      fireEvent.click(await screen.findByRole("img", { name: /Rising/i }));
       fireEvent.click(screen.getByRole("button", { name: /^Delete$/i }));
 
       expect(onDeletePin).toHaveBeenCalledWith(expect.objectContaining({ caption: "Mine" }));
-      expect(JSON.parse(localStorage.getItem("weatherwell.communityPins")!)).toHaveLength(1);
+      expect(readOutbox()).toHaveLength(0);
     });
 
-    it("only offers Edit/Delete on a pin this device created", () => {
-      addCommunityPin({ zoneId: "zone-1", statusTag: "flooded", caption: "Someone else's", lat: 16.03, lng: 120.44 });
-      const pins = JSON.parse(localStorage.getItem("weatherwell.communityPins")!);
-      pins[0].deviceId = "a-different-device";
-      localStorage.setItem("weatherwell.communityPins", JSON.stringify(pins));
+    it("only offers Edit/Delete on a pin this resident authored", async () => {
+      // Authorship is the server's uid now, not a device id this browser made
+      // up — the identity RLS actually enforces.
+      session.userId = "user-1";
+      servePins([pin({ statusTag: "flooded", caption: "Someone else's", authorId: "user-2" })]);
 
       renderWithData(<MapCanvas {...baseProps} />);
-      fireEvent.click(screen.getByRole("img", { name: /Flooded/i }));
+      fireEvent.click(await screen.findByRole("img", { name: /Flooded/i }));
 
       expect(screen.queryByRole("button", { name: /^Delete$/i })).not.toBeInTheDocument();
       expect(screen.queryByRole("button", { name: /^Edit$/i })).not.toBeInTheDocument();
+    });
+
+    it("offers Edit/Delete on a pin still queued on this device, which has no author id yet", async () => {
+      // Attribution happens at replay, so a queued pin carries no uid. Hiding
+      // its own controls from the resident who just placed it would make the
+      // app look broken for exactly as long as they have no signal.
+      const { addCommunityPin } = await import("@/lib/community-pins");
+      addCommunityPin({
+        zoneId: "zone-1",
+        statusTag: "impassable",
+        caption: "Just placed",
+        lat: 16.03,
+        lng: 120.44,
+      });
+
+      renderWithData(<MapCanvas {...baseProps} onEditPin={() => {}} onDeletePin={() => {}} />);
+      fireEvent.click(await screen.findByRole("img", { name: /Impassable/i }));
+
+      expect(screen.getByRole("button", { name: /^Edit$/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /^Delete$/i })).toBeInTheDocument();
     });
   });
 });

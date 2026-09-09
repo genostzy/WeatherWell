@@ -1,16 +1,24 @@
 "use client";
 
-import { getDeviceId } from "./device-id";
-import { createLocalStorageStore } from "./local-storage-store";
-import type { PinStatusTag } from "./community-pin";
-import type { OutboxEntry } from "./outbox/types";
+import { useEffect, useState } from "react";
+import { flushOutbox, onDelivered, PermanentFailure } from "./outbox/drain";
+import { enqueue, readOutbox, useOutbox } from "./outbox/outbox";
+import { dispatchQueued, payloadOf } from "./outbox/dispatchers";
+import { ensureAnonymousSession } from "./auth/anonymous-session";
+import type { PinStatusTag, PinRemovalReason } from "./community-pin";
+import type { OutboxEntry, OutboxOperation } from "./outbox/types";
 
-const VOTES_KEY = "weatherwell.communityPinVotes";
+/**
+ * The author id an optimistic pin carries until its real row comes back.
+ *
+ * Attribution happens at replay (see useOutboxDrain), not at queue time — a
+ * resident with no signal has no uid yet — so there is genuinely nothing to
+ * put here. It is never displayed; `isOwnPin` is its only reader.
+ */
+export const PENDING_AUTHOR_ID = "pending";
 
-/** Net-score removal threshold — PRD Anti-Abuse layer 10: downvotes exceeding upvotes by this much removes the pin. */
-const NET_SCORE_REMOVAL_THRESHOLD = 5;
-
-export type PinRemovalReason = "net_score" | "admin";
+/** The four operations in the shared queue that this store owns. */
+const PIN_OPERATIONS: OutboxOperation[] = ["createPin", "editPin", "deleteOwnPin", "setPinRemoved"];
 
 export interface CommunityPin {
   id: string;
@@ -18,222 +26,448 @@ export interface CommunityPin {
   statusTag: PinStatusTag;
   /** Free text typed by the resident — never auto-translated, unlike the app's own LocalizedText copy. */
   caption: string;
-  /** Phase 1: a local data URL only, never uploaded to any backend (PRD Core Feature #5). */
+  /**
+   * Kept on the interface, never written by this store. Photo upload has no
+   * server side yet: `photo_path` was revoked from the resident's insert
+   * grant, and there is no bucket behind it. A pin created today has no
+   * photo, and the viewers (map popup, lightbox) already handle its absence.
+   */
   photoDataUrl?: string;
   lat: number;
   lng: number;
   upvotes: number;
   downvotes: number;
+  /** This caller's own vote, from pin_votes. Replaces the old local votes store. */
+  ownVote?: 1 | -1;
   createdAt: string;
-  deviceId: string;
+  /**
+   * The authenticated (anonymous) user who dropped this pin — issued and
+   * verified by the server, which is what anti-abuse layer 5 always claimed
+   * and the old random device id could not deliver.
+   */
+  authorId: string;
   /**
    * Soft-delete, not a filter-out: PRD says admin can "remove or restore any
    * pin" — a net-score removal is a fast automated response, not final,
-   * exactly like the alert pipeline's own Human Override. A hard delete would
-   * make that promise false, so removed pins stay in storage, just hidden
+   * exactly like the alert pipeline's own Human Override. It is also not a
+   * choice: DELETE is revoked from every role on every table, so removal is
+   * the only removal there is. Removed pins stay in the database, just hidden
    * from the public map (see useCommunityPins).
    */
   removed?: boolean;
+  /** Undefined on a removed pin means its own author withdrew it — see PinRemovalReason. */
   removedReason?: PinRemovalReason;
 }
 
+const NO_SERVER_ROWS: CommunityPin[] = [];
+const NO_DELIVERED: OutboxEntry[] = [];
+
 /**
- * Ships with the app so a fresh install already shows realistic mock
- * activity (Phase 1 exit criteria) instead of an empty layer — also gives
- * the pre-staged public/mock/community-pin-example.jpg a purpose. Offset
- * slightly from their zone's own marker so they read as distinct points.
+ * The delivery refetch carries a unique query parameter; the mount fetch
+ * deliberately does not. Same reasoning as `/api/reports`, which
+ * water-level-reports.ts sets out at length: sw.js serves this path with
+ * staleWhileRevalidate, which is right for the mount fetch (a resident with no
+ * network still sees the neighbours' pins) and wrong for the refetch that
+ * follows a delivery, because the row it is fetching FOR is the one row the
+ * cached copy cannot contain. The parameter keeps the pathname, so sw.js's
+ * allowlist still matches, but misses the cache entry.
  */
-const SEED_COMMUNITY_PINS: CommunityPin[] = [
-  {
-    id: "pin-seed-1",
-    zoneId: "zone-2",
-    statusTag: "flooded",
-    caption: "Alagang-tuhod na ang baha sa may palengke, iwasan muna.",
-    photoDataUrl: "/mock/community-pin-example.jpg",
-    lat: 16.0698,
-    lng: 120.4045,
-    upvotes: 6,
-    downvotes: 1,
-    createdAt: new Date(Date.now() - 40 * 60 * 1000).toISOString(),
-    deviceId: "seed-device-1",
-  },
-  {
-    id: "pin-seed-2",
-    zoneId: "zone-3",
-    statusTag: "impassable",
-    caption: "Road near the bridge is impassable, water above the tires.",
-    lat: 16.0441,
-    lng: 120.4869,
-    upvotes: 3,
-    downvotes: 0,
-    createdAt: new Date(Date.now() - 90 * 60 * 1000).toISOString(),
-    deviceId: "seed-device-2",
-  },
-];
+function pinsUrl(afterDeliveries: number): string {
+  return afterDeliveries === 0 ? "/api/pins" : `/api/pins?delivered=${afterDeliveries}`;
+}
 
-const pinsStore = createLocalStorageStore<CommunityPin[]>(
-  "weatherwell.communityPins",
-  "weatherwell:community-pins-changed",
-  SEED_COMMUNITY_PINS
-);
+/**
+ * Warms the cache entry the NEXT mount will read.
+ *
+ * The busted URL above stores its fresh copy under `?delivered=1`, a key
+ * nothing reads again, leaving the plain `/api/pins` entry — the one the next
+ * mount hits — holding the pre-delivery body. Without this the resident closes
+ * the app, reopens it, and their own pin is missing from the map: the busting
+ * parameter guaranteeing the staleness it was introduced to route around.
+ *
+ * The response is discarded on purpose; this call is for its side effect on
+ * the cache. It fails silently for the same reason the fetch above does.
+ */
+function refreshCachedPins(): void {
+  void fetch("/api/pins").catch(() => undefined);
+}
 
-type VotesMap = Record<string, 1 | -1>;
+function isPinEntry(entry: OutboxEntry): boolean {
+  return PIN_OPERATIONS.includes(entry.operation) || entry.operation === "voteOnPin";
+}
 
-const votesStore = createLocalStorageStore<VotesMap>(
-  VOTES_KEY,
-  "weatherwell:community-pin-votes-changed",
-  {}
-);
+/**
+ * The server's rows for `/api/pins` — fetched on mount, and again after any
+ * drain that delivered a pin write — plus the entries that drain delivered,
+ * held until their real rows arrive.
+ *
+ * Both halves exist for one failure, the same one `useServerReports`
+ * documents: `markDelivered` drops the entry the moment the server confirms
+ * it, withdrawing the optimistic pin that `mergePins` was drawing. Without the
+ * refetch the resident's own pin is gone for good a second after they placed
+ * it; without the held entries it is gone only until the refetch lands, which
+ * on the connection this app assumes is long enough to watch a marker vanish
+ * off the map.
+ *
+ * A held entry needs no expiry: `mergePins` drops it as soon as a server row
+ * carries its id, which is exactly what the refetch is fetching.
+ *
+ * Unlike the reports hook, this one filters the delivery notification by
+ * operation. Seven operations share one queue, so an undelivered notification
+ * for a check-in or a water-level report would otherwise spend a resident's
+ * bandwidth refetching pins that cannot have changed.
+ *
+ * A failed fetch must never throw or blank the map: a resident with no network
+ * still sees their own queued pins (via mergePins), which is the entire point
+ * of the outbox. So a failure here leaves `rows` at whatever it already held.
+ */
+function useServerPins(): { rows: CommunityPin[]; delivered: OutboxEntry[] } {
+  const [rows, setRows] = useState<CommunityPin[]>(NO_SERVER_ROWS);
+  const [delivered, setDelivered] = useState<OutboxEntry[]>(NO_DELIVERED);
 
-/** Active pins only — what the public map and KPI counts show. Re-renders whenever any pin is added, voted on, removed, or restored. */
-export function useCommunityPins(): CommunityPin[] {
-  const all = pinsStore.useStore();
-  return all.filter((pin) => !pin.removed);
+  // Subscribing signs nobody in: the drain this hears from is already gated
+  // behind "something is queued", so a visitor who only reads never reaches
+  // it. This cannot become a back door to an anonymous sign-in.
+  useEffect(
+    () =>
+      onDelivered((entries) => {
+        const mine = entries.filter(isPinEntry);
+        if (mine.length > 0) setDelivered((held) => [...held, ...mine]);
+      }),
+    []
+  );
+
+  // `delivered` is the dependency rather than a render-time value: its
+  // identity changes when, and only when, a drain delivered a pin write.
+  useEffect(() => {
+    let cancelled = false;
+
+    fetch(pinsUrl(delivered.length))
+      .then((response) =>
+        response.ok
+          ? (response.json() as Promise<CommunityPin[]>)
+          : Promise.reject(new Error(`/api/pins responded ${response.status}`))
+      )
+      .then((data) => {
+        if (!cancelled) setRows(data);
+        // Only after a delivery: the mount fetch IS the plain request, so
+        // doing this there would be a second copy of the same call.
+        if (delivered.length > 0) refreshCachedPins();
+      })
+      .catch(() => {
+        // Offline, timed out, or a 5xx — degrade, don't fail. Whatever rows
+        // this hook already had stay on screen, and queued pins still come
+        // through the outbox regardless.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [delivered]);
+
+  return { rows, delivered };
+}
+
+/**
+ * Server rows with this device's queued writes laid over them.
+ *
+ * A queued create appears as a pin at once; a queued edit rewrites the row it
+ * names; a queued delete hides it; a queued moderation write flips its removed
+ * flag; a queued vote counts. The resident sees the map they just acted on,
+ * whether or not any of it has reached the server.
+ *
+ * The optimistic pin and its eventual server row share an id — `enqueue`
+ * generates it and `createPin` inserts it as the primary key — so reconciling
+ * them is exact rather than heuristic: the server row replaces the optimistic
+ * one instead of appearing beside it. Two markers on one spot is not a
+ * cosmetic duplicate; it is the zone's pin count saying two people reported a
+ * flooded road when one did.
+ */
+export function mergePins(serverRows: CommunityPin[], queued: OutboxEntry[]): CommunityPin[] {
+  // Keyed by id, which dedupes server rows and optimistic ones in one step.
+  const pins = new Map<string, CommunityPin>();
+  for (const row of serverRows) pins.set(row.id, row);
+
+  // A permanently-failed entry (RLS denial, CHECK/FK violation, a rejected
+  // caption) will never be delivered — drainOutbox skips it forever. Drawing
+  // it as an ordinary pin would show a rejected report as posted, on a map
+  // whose entire purpose is telling people which roads are passable.
+  const live = queued.filter((entry) => !entry.permanentlyFailed);
+
+  for (const entry of live) {
+    const payload = payloadOf(entry, "createPin");
+    if (!payload) continue;
+    // Already present means either the server row has arrived (it replaces
+    // this) or the same entry was passed twice — useAllCommunityPins feeds
+    // this the queue AND the delivered-but-unconfirmed entries, and an id can
+    // legitimately sit in both for a moment, because markDelivered's write to
+    // local storage can fail silently.
+    if (pins.has(entry.id)) continue;
+    pins.set(entry.id, {
+      id: entry.id,
+      zoneId: payload.zoneId,
+      statusTag: payload.statusTag,
+      caption: payload.caption,
+      lat: payload.lat,
+      lng: payload.lng,
+      upvotes: 0,
+      downvotes: 0,
+      createdAt: entry.queuedAt,
+      authorId: PENDING_AUTHOR_ID,
+      removed: false,
+    });
+  }
+
+  // Second pass, in queue order, so a resident who edited twice sees the
+  // second edit and an operator who removed then restored sees it active.
+  const withdrawn = new Set<string>();
+  for (const entry of live) {
+    const edit = payloadOf(entry, "editPin");
+    if (edit) {
+      const pin = pins.get(edit.pinId);
+      if (pin) pins.set(edit.pinId, { ...pin, statusTag: edit.statusTag, caption: edit.caption });
+      continue;
+    }
+
+    const deletion = payloadOf(entry, "deleteOwnPin");
+    if (deletion) {
+      withdrawn.add(deletion.pinId);
+      continue;
+    }
+
+    const moderation = payloadOf(entry, "setPinRemoved");
+    if (moderation) {
+      const pin = pins.get(moderation.pinId);
+      if (pin) {
+        pins.set(moderation.pinId, {
+          ...pin,
+          removed: moderation.removed,
+          removedReason: moderation.removed ? moderation.reason : undefined,
+        });
+      }
+      continue;
+    }
+
+    const vote = payloadOf(entry, "voteOnPin");
+    if (vote) {
+      const pin = pins.get(vote.pinId);
+      if (pin) {
+        pins.set(vote.pinId, {
+          ...pin,
+          upvotes: pin.upvotes + (vote.direction === 1 ? 1 : 0),
+          downvotes: pin.downvotes + (vote.direction === -1 ? 1 : 0),
+          ownVote: vote.direction,
+        });
+      }
+    }
+  }
+
+  // Applied last so it beats any edit or vote queued behind it.
+  for (const id of withdrawn) pins.delete(id);
+
+  return [...pins.values()];
 }
 
 /** Every pin including removed ones — for admin moderation, where a removed pin must still be visible to restore. */
 export function useAllCommunityPins(): CommunityPin[] {
-  return pinsStore.useStore();
+  const { rows, delivered } = useServerPins();
+  const queued = useOutbox();
+  return mergePins(rows, [...queued, ...delivered]);
 }
 
+/** Active pins only — what the public map and KPI counts show. */
+export function useCommunityPins(): CommunityPin[] {
+  return useAllCommunityPins().filter((pin) => !pin.removed);
+}
+
+/**
+ * Fire-and-forget attempt to flush the outbox right after a write, so a
+ * resident who is online does not wait for a reload or an "online" event
+ * (useOutboxDrain's job) to see their pin reach the server. Signing in happens
+ * here because there is now something queued to attribute — the rule this plan
+ * is bound by is that a visitor who only READS never becomes an auth.users row.
+ *
+ * Drains through dispatchQueued, not dispatchQueuedPinWrite directly: one
+ * queue, one dispatcher. A resident with a queued report and no signal who
+ * then drops a pin must not flush only the pin.
+ *
+ * flushOutbox, not drainOutbox: this is the call most likely to be declined,
+ * because a resident marking three flooded streets in a row is writing while
+ * the previous write's drain is still on the wire. A declined drain nobody
+ * re-runs is a write that never leaves the device while the app is open.
+ */
+function triggerDrain(): void {
+  void ensureAnonymousSession().then((userId) => {
+    if (userId) void flushOutbox(dispatchQueued);
+  });
+}
+
+/**
+ * Queues a new pin and asks the outbox to send it now.
+ *
+ * Stays void-returning so its call sites do not change — but `enqueue` can
+ * throw `OutboxWriteFailed` when the queue itself did not persist (storage
+ * full or blocked), and that is left to propagate: a caller that believes a
+ * pin was queued when it was not is exactly the failure the outbox exists to
+ * prevent.
+ */
 export function addCommunityPin(input: {
   zoneId: string;
   statusTag: PinStatusTag;
   caption: string;
   lat: number;
   lng: number;
-  photoDataUrl?: string;
 }): void {
-  const pin: CommunityPin = {
-    id: `pin-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    zoneId: input.zoneId,
-    statusTag: input.statusTag,
-    caption: input.caption,
-    photoDataUrl: input.photoDataUrl,
-    lat: input.lat,
-    lng: input.lng,
-    upvotes: 0,
-    downvotes: 0,
-    createdAt: new Date().toISOString(),
-    deviceId: getDeviceId(),
-  };
-  pinsStore.update((pins) => [...pins, pin]);
+  enqueue("createPin", input);
+  triggerDrain();
 }
 
 /**
- * Whether this device created the pin — the only handle Phase 1 has on
- * authorship (no accounts, PRD Anti-Abuse layer 5). Edit and delete are
- * offered only for a resident's own pins; an admin override to remove
- * anyone's pin lives on the admin dashboard instead, per PRD Core Feature #5.
+ * Whether this resident created the pin.
+ *
+ * Takes the uid rather than reading a session, because it is called inside the
+ * loop that draws every marker — a hook or an await per pin would be a session
+ * lookup per marker. Callers get the uid once from `useSessionUserId()`.
+ *
+ * This decides which BUTTONS to show. Authorisation is RLS's, and RLS reads
+ * the verified claim, so a resident who forced this to true still cannot edit
+ * anyone else's pin.
  */
-export function isOwnPin(pin: CommunityPin): boolean {
-  return pin.deviceId === getDeviceId();
+export function isOwnPin(pin: CommunityPin, userId: string | null): boolean {
+  // A pin still in this device's outbox has no author id yet. It is this
+  // resident's own by construction — the outbox only ever holds writes made
+  // here — and saying otherwise would take Edit and Delete away from them for
+  // the whole time their own pin sits unsent.
+  if (pin.authorId === PENDING_AUTHOR_ID) return true;
+  return userId !== null && pin.authorId === userId;
 }
 
+/**
+ * A resident correcting their own pin.
+ *
+ * The photo is not carried: `CommunityPinFormValues` still has a
+ * `photoDataUrl` field, and it is dropped here along with the rest of Phase
+ * 1's local-only photo handling. See CommunityPin.photoDataUrl.
+ */
 export function updateCommunityPin(
   pinId: string,
-  patch: { statusTag?: PinStatusTag; caption?: string; photoDataUrl?: string }
+  patch: { statusTag: PinStatusTag; caption: string }
 ): void {
-  pinsStore.update((pins) =>
-    pins.map((pin) => {
-      if (pin.id !== pinId) return pin;
-      return {
-        ...pin,
-        statusTag: patch.statusTag ?? pin.statusTag,
-        caption: patch.caption ?? pin.caption,
-        // An explicit empty string clears the photo; undefined leaves it alone.
-        photoDataUrl: patch.photoDataUrl === "" ? undefined : patch.photoDataUrl ?? pin.photoDataUrl,
-      };
-    })
-  );
+  enqueue("editPin", { pinId, statusTag: patch.statusTag, caption: patch.caption });
+  triggerDrain();
 }
 
 /**
- * A resident permanently removing their own pin (gated by isOwnPin at the
- * call site) — their own choice about their own content, not part of the
- * anti-abuse safety net, so unlike admin/net-score removal there's nothing
- * to restore.
+ * The author withdrawing their own pin (gated by isOwnPin at the call site).
+ * A soft delete server-side — see the Server Action of the same name for why
+ * that is not a choice, and why it records no reason.
  */
 export function deleteOwnPin(pinId: string): void {
-  pinsStore.update((pins) => pins.filter((pin) => pin.id !== pinId));
+  enqueue("deleteOwnPin", { pinId });
+  triggerDrain();
 }
 
-/** Admin's own manual removal — PRD Anti-Abuse layer 7/10's human override. Soft-delete so it can be undone via restoreCommunityPin. */
+/** Admin's own manual removal — PRD Anti-Abuse layer 7/10's human override. Reversible via restoreCommunityPin. */
 export function removePinByAdmin(pinId: string): void {
-  pinsStore.update((pins) =>
-    pins.map((pin) => (pin.id === pinId ? { ...pin, removed: true, removedReason: "admin" as const } : pin))
-  );
-}
-
-/** Clears a removal (net-score or admin) — the other half of "admin can remove or restore any pin". */
-export function restoreCommunityPin(pinId: string): void {
-  pinsStore.update((pins) =>
-    pins.map((pin) => (pin.id === pinId ? { ...pin, removed: false, removedReason: undefined } : pin))
-  );
+  enqueue("setPinRemoved", { pinId, removed: true, reason: "admin" });
+  triggerDrain();
 }
 
 /**
- * One vote per device per pin — PRD Anti-Abuse layer 10 (mock/UI-only in
- * Phase 1; real geofence + rate-limit enforcement lands Phase 3). Plain
- * function, not a hook: today's only call site (map-canvas.tsx) reads this
- * inline inside a component already subscribed to useCommunityPins(), which
- * re-renders on every vote anyway. A consumer that isn't already re-rendering
- * off one of these stores would need a reactive wrapper over votesStore.
+ * Clears a removal (net-score or admin) — the other half of "admin can remove
+ * or restore any pin". The reason travels but is ignored on a restore, which
+ * clears the column; see the setPinRemoved payload type.
  */
-export function hasVotedOnPin(pinId: string): boolean {
-  return pinId in votesStore.getSnapshot();
+export function restoreCommunityPin(pinId: string): void {
+  enqueue("setPinRemoved", { pinId, removed: false, reason: "admin" });
+  triggerDrain();
 }
 
 /**
- * Casts a vote and applies net-score removal in one step (downvotes
- * exceeding upvotes by NET_SCORE_REMOVAL_THRESHOLD removes the pin) — a
- * well-corroborated pin isn't killed by a handful of bad-faith downvotes,
- * per PRD Anti-Abuse layer 10. Removal is a soft delete (see CommunityPin.removed)
- * so admin can restore a pin a brigading attack took down wrongly — the same
- * Human Override principle the alert pipeline already has. No-ops if this
- * device already voted on this pin.
- * PRD also calls for notifying the pin's creator on removal by "reusing the
- * push-notification pipeline" — deferred, since Phase 1 has no real push
- * infrastructure for a resident-side removal notice to reuse yet.
+ * Whether this resident has already voted on a pin.
+ *
+ * Reads the pin rather than a store: `ownVote` comes from pin_votes for a
+ * server row, and from the queued vote laid over it by mergePins for one that
+ * has not been sent yet. That second case is why this takes the merged pin —
+ * a resident whose vote is still queued must see the buttons disabled, or they
+ * tap again and one opinion becomes two writes.
+ *
+ * Plain function, not a hook: its only call site reads it inline inside a
+ * component already subscribed to useCommunityPins().
+ */
+export function hasVotedOnPin(pin: CommunityPin): boolean {
+  return pin.ownVote !== undefined;
+}
+
+/**
+ * Casts a vote — PRD Anti-Abuse layer 10, one vote per resident per pin.
+ *
+ * Queued like every other write. The dispatcher for `voteOnPin` is still the
+ * throwing placeholder Task 4 replaces, which means a vote cast today stays in
+ * the outbox and retries rather than being lost: that is exactly what the
+ * placeholder was written to guarantee, and mergePins draws it in the meantime
+ * so the resident sees their vote land.
+ *
+ * Net-score auto-removal moved to the database with the tallies. It cannot be
+ * computed here any more and should not be: a threshold evaluated on one
+ * device against that device's view of the counts is a different answer per
+ * device.
  */
 export function voteOnPin(pinId: string, direction: 1 | -1): void {
-  if (pinId in votesStore.getSnapshot()) return;
-
-  pinsStore.update((pins) =>
-    pins.map((pin) => {
-      if (pin.id !== pinId) return pin;
-      const upvotes = pin.upvotes + (direction === 1 ? 1 : 0);
-      const downvotes = pin.downvotes + (direction === -1 ? 1 : 0);
-      const netRemoved = downvotes - upvotes >= NET_SCORE_REMOVAL_THRESHOLD;
-      return {
-        ...pin,
-        upvotes,
-        downvotes,
-        removed: netRemoved || pin.removed,
-        removedReason: netRemoved ? "net_score" : pin.removedReason,
-      };
-    })
+  // The buttons are disabled once a vote is queued (see hasVotedOnPin), so
+  // this is the belt to that braces: a second queued vote for one pin is a
+  // duplicate the server refuses and the outbox then carries forever.
+  const alreadyQueued = readOutbox().some(
+    (entry) => payloadOf(entry, "voteOnPin")?.pinId === pinId
   );
-  votesStore.update((votes) => ({ ...votes, [pinId]: direction }));
+  if (alreadyQueued) return;
+
+  enqueue("voteOnPin", { pinId, direction });
+  triggerDrain();
 }
 
 /**
- * Placeholder until Task 3 replaces it. Throwing rather than no-op'ing: a
- * silent success would make drainOutbox call markDelivered and destroy the
- * queued write. Throwing leaves the entry queued for the real dispatcher.
+ * Replays one queued pin write. Thrown errors are what tell drainOutbox
+ * whether to retry.
+ *
+ * The Server Actions are imported dynamically, not at module scope: they pull
+ * in user-server.ts's `import "server-only"` transitively, and this file is
+ * imported by every component that only READS pins (the map, the zone list,
+ * the admin dashboard). A static import would make evaluating this module fail
+ * server-only's guard for all of them.
  */
 export async function dispatchQueuedPinWrite(entry: OutboxEntry): Promise<void> {
-  throw new Error(`Pin writes are not wired up yet (${entry.operation})`);
+  const actions = await import("@/app/actions/pins");
+
+  const create = payloadOf(entry, "createPin");
+  if (create) return settle(await actions.createPin({ id: entry.id, ...create }));
+
+  const edit = payloadOf(entry, "editPin");
+  if (edit) return settle(await actions.editPin(edit));
+
+  const deletion = payloadOf(entry, "deleteOwnPin");
+  if (deletion) return settle(await actions.deleteOwnPin(deletion));
+
+  const moderation = payloadOf(entry, "setPinRemoved");
+  if (moderation) return settle(await actions.setPinRemoved(moderation));
+
+  // dispatchers.ts routes four operations here. A fifth added there without a
+  // branch here must fail loudly rather than succeed silently and drop the
+  // write.
+  throw new Error(`Pin dispatcher received an entry it does not handle (${entry.operation})`);
+}
+
+function settle(result: { ok: true } | { ok: false; permanent: boolean; error: string }): void {
+  if (result.ok) return;
+  throw result.permanent ? new PermanentFailure(result.error) : new Error(result.error);
 }
 
 /**
- * Placeholder until Task 4 replaces it. See dispatchQueuedPinWrite.
- *
- * This one placeholder survives one task longer than its sibling: Task 3
- * rewrites pin writes and this whole file, but only replaces
- * dispatchQueuedPinWrite. Do not drop this export in that rewrite —
- * dispatchers.ts imports it and would fail to compile without it until
- * Task 4 lands.
+ * Placeholder until Task 4 replaces it. Throwing rather than no-op'ing: a
+ * silent success would make the drain call markDelivered and destroy the
+ * queued vote. Throwing leaves the entry queued for the real dispatcher, and
+ * because the failure is not a PermanentFailure, mergePins keeps drawing the
+ * vote in the meantime.
  */
 export async function dispatchQueuedVote(entry: OutboxEntry): Promise<void> {
   throw new Error(`Pin votes are not wired up yet (${entry.id})`);

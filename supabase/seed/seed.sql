@@ -29,3 +29,10 @@ insert into public.hazard_susceptibility (id, zone_id, hazard_type, risk_level) 
 insert into public.hazard_susceptibility (id, zone_id, hazard_type, risk_level) values ('zone-4-flood', 'zone-4', 'flood', 'medium') on conflict (id) do update set risk_level = excluded.risk_level;
 insert into public.hazard_susceptibility (id, zone_id, hazard_type, risk_level) values ('zone-4-landslide', 'zone-4', 'landslide', 'low') on conflict (id) do update set risk_level = excluded.risk_level;
 insert into public.hazard_susceptibility (id, zone_id, hazard_type, risk_level) values ('zone-4-storm_surge', 'zone-4', 'storm_surge', 'low') on conflict (id) do update set risk_level = excluded.risk_level;
+
+-- SEED ACCOUNT — obviously fake, and not to survive into a pilot.
+-- Removed, with everything attributed to it, by supabase/seed/teardown.sql.
+insert into auth.users (id, instance_id, aud, role, is_anonymous, created_at, updated_at, raw_app_meta_data, raw_user_meta_data) values ('00000000-0000-4000-8000-00000000dead', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', true, now(), now(), '{}'::jsonb, '{}'::jsonb) on conflict (id) do nothing;
+insert into public.profiles (id, role) values ('00000000-0000-4000-8000-00000000dead', 'resident') on conflict (id) do nothing;
+insert into public.community_pins (id, zone_id, status_tag, caption, lat, lng, author_id, created_at) values ('00000000-0000-4000-8000-0000dead0001', 'zone-2', 'flooded', 'Alagang-tuhod na ang baha sa may palengke, iwasan muna.', 16.0698, 120.4045, '00000000-0000-4000-8000-00000000dead', now() - interval '40 minutes') on conflict (id) do update set caption = excluded.caption, status_tag = excluded.status_tag;
+insert into public.community_pins (id, zone_id, status_tag, caption, lat, lng, author_id, created_at) values ('00000000-0000-4000-8000-0000dead0002', 'zone-3', 'impassable', 'Road near the bridge is impassable, water above the tires.', 16.0441, 120.4869, '00000000-0000-4000-8000-00000000dead', now() - interval '90 minutes') on conflict (id) do update set caption = excluded.caption, status_tag = excluded.status_tag;

@@ -1,5 +1,5 @@
 import type { DepthLevel } from "@/lib/depth";
-import type { PinStatusTag } from "@/lib/community-pin";
+import type { PinStatusTag, PinRemovalReason } from "@/lib/community-pin";
 import type { CheckInStatus } from "@/lib/types";
 
 export type OutboxOperation =
@@ -7,6 +7,7 @@ export type OutboxOperation =
   | "createPin"
   | "editPin"
   | "deleteOwnPin"
+  | "setPinRemoved"
   | "voteOnPin"
   | "recordCheckIn";
 
@@ -21,6 +22,18 @@ export interface OutboxPayloads {
   };
   editPin: { pinId: string; statusTag: PinStatusTag; caption: string };
   deleteOwnPin: { pinId: string };
+  /**
+   * An operator removing or restoring someone else's pin. Queued rather than
+   * sent straight through, because an operator moderating from a barangay
+   * hall during a storm is on the same connection as everyone else — and a
+   * removal that silently failed is a pin the public map keeps showing.
+   *
+   * `reason` is carried even when `removed` is false, where it is ignored: a
+   * restore clears the column, so there is nothing for the reason to say. It
+   * stays non-optional so that a future third reason cannot be added to the
+   * union and quietly omitted here on the removal path.
+   */
+  setPinRemoved: { pinId: string; removed: boolean; reason: PinRemovalReason };
   voteOnPin: { pinId: string; direction: 1 | -1 };
   recordCheckIn: { zoneId: string; status: CheckInStatus };
 }

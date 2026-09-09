@@ -61,6 +61,18 @@ const ALERTS_TIMEOUT_MS = 8000;
  * /api/reports qualifies: it has no per-user variation, is served by the
  * sessionless public client, and its table policy is `select using (true)`.
  *
+ * /api/pins qualifies with an argument rather than by inspection, because it
+ * IS per-caller: it carries `ownVote`, the caller's own vote direction. The
+ * sensitive half of a vote would be "who voted", and that half is already
+ * public — pin_votes carries `select using (true)`, the tallies beside every
+ * pin are the point of the feature, and the route reads nothing a stranger
+ * could not read. What a shared cache can get wrong is only "did *I* vote",
+ * and being wrong about that costs a resident one refused duplicate vote (the
+ * table's own unique key is the real gate), not a disclosure. Set against a
+ * resident during a flood seeing every neighbour's pin with no network, that
+ * is the right way round. If ownVote ever gates something that matters, this
+ * entry comes out in the same change.
+ *
  * Anything NOT listed here goes straight to the network, uncached. That is
  * the safe default when this file does not know whether a response is
  * public — a future endpoint like /api/check-ins is user-scoped, and
@@ -68,7 +80,7 @@ const ALERTS_TIMEOUT_MS = 8000;
  * have done) is exactly how one resident ends up served another resident's
  * response.
  */
-const PUBLIC_API_PATHS = ["/api/reports"];
+const PUBLIC_API_PATHS = ["/api/reports", "/api/pins"];
 
 const PRECACHED_ROUTES = [
   "/",

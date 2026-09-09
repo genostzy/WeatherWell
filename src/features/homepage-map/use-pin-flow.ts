@@ -58,11 +58,13 @@ export function usePinFlow(zones: Zone[]) {
       return distance < closestDistance ? zone : closest;
     }, zones[0]);
 
+    // No photoDataUrl: photo upload has no server side in this phase, so the
+    // form's photo field is collected and dropped rather than written to a
+    // column the resident's grant does not include. See CommunityPin.photoDataUrl.
     addCommunityPin({
       zoneId: nearestZone.id,
       statusTag: input.statusTag,
       caption: input.caption,
-      photoDataUrl: input.photoDataUrl,
       lat: pendingPinLocation.lat,
       lng: pendingPinLocation.lng,
     });

@@ -6,8 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { MapPin, Trash2, RotateCcw } from "lucide-react";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
-import { useAllCommunityPins, removePinByAdmin, restoreCommunityPin, type PinRemovalReason } from "@/lib/community-pins";
-import { PIN_STATUS_LABEL, PIN_STATUS_COLOR } from "@/lib/community-pin";
+import { useAllCommunityPins, removePinByAdmin, restoreCommunityPin } from "@/lib/community-pins";
+import { PIN_STATUS_LABEL, PIN_STATUS_COLOR, type PinRemovalReason } from "@/lib/community-pin";
 import type { LocalizedText, Zone } from "@/lib/types";
 
 const TITLE: LocalizedText = { en: "Community Pin Moderation", fil: "Pagmo-moderate ng Community Pins" };
@@ -24,11 +24,23 @@ const UNKNOWN_ZONE: LocalizedText = { en: "Unassigned", fil: "Walang zone" };
 const REMOVED_SECTION: LocalizedText = { en: "Removed (restorable)", fil: "Inalis (maaaring ibalik)" };
 const REMOVED_BY_VOTES: LocalizedText = { en: "Removed by votes", fil: "Inalis ng boto" };
 const REMOVED_BY_ADMIN: LocalizedText = { en: "Removed by admin", fil: "Inalis ng admin" };
+const REMOVED_BY_AUTHOR: LocalizedText = { en: "Withdrawn by author", fil: "Inalis ng may-akda" };
 
 const REMOVAL_REASON_LABEL: Record<PinRemovalReason, LocalizedText> = {
   net_score: REMOVED_BY_VOTES,
   admin: REMOVED_BY_ADMIN,
 };
+
+/**
+ * No reason is a reason: deleteOwnPin removes a pin without stamping the
+ * column, because neither allowed code describes an author withdrawing their
+ * own content and the moderation trigger refuses a resident writing one
+ * anyway. Defaulting the blank case to "Removed by admin" would tell an
+ * operator their own team took a pin down when nobody did.
+ */
+function removalLabel(reason: PinRemovalReason | undefined): LocalizedText {
+  return reason ? REMOVAL_REASON_LABEL[reason] : REMOVED_BY_AUTHOR;
+}
 
 /**
  * Shared by the global admin dashboard and the per-zone dashboard — pass
@@ -116,7 +128,7 @@ export function CommunityPinModerationPanel({ zones, zoneId }: { zones: Zone[]; 
                         </span>
                       )}
                       <Badge variant="outline" className="text-xs">
-                        {t(REMOVAL_REASON_LABEL[pin.removedReason ?? "admin"], lang)}
+                        {t(removalLabel(pin.removedReason), lang)}
                       </Badge>
                     </div>
                     {pin.caption && <p className="text-sm break-words">{pin.caption}</p>}

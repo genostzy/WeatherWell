@@ -7,6 +7,7 @@ import { getZoneStatus, getZoneStatusColor, ZONE_STATUS_LABEL } from "@/lib/zone
 import { useZoneOverrides, resolveEffectiveAlert } from "@/lib/zone-overrides";
 import { useAlerts } from "@/lib/alerts-store";
 import { useCommunityPins, voteOnPin, hasVotedOnPin, isOwnPin, type CommunityPin } from "@/lib/community-pins";
+import { useSessionUserId } from "@/lib/auth/anonymous-session";
 import { PIN_STATUS_LABEL } from "@/lib/community-pin";
 import { MapShell } from "@/features/map/map-shell";
 import { HazardBackdropLayer } from "@/features/map/hazard-backdrop-layer";
@@ -89,6 +90,10 @@ export function MapCanvas({
   const { lang } = useLanguage();
   const overrides = useZoneOverrides();
   const communityPins = useCommunityPins();
+  // Read once for the whole layer, not per marker: isOwnPin runs inside the
+  // loop below and must not do a session lookup per pin. Null until this
+  // resident has written something — see useSessionUserId.
+  const userId = useSessionUserId();
   const alerts = useAlerts();
   const center: [number, number] = [zones[0].lat, zones[0].lng];
 
@@ -167,8 +172,8 @@ export function MapCanvas({
 
         {communityPins.map((pin) => {
           const label = `${t(PIN_STATUS_LABEL[pin.statusTag], lang)} — ${t(UNVERIFIED_REPORT, lang)}`;
-          const alreadyVoted = hasVotedOnPin(pin.id);
-          const own = isOwnPin(pin);
+          const alreadyVoted = hasVotedOnPin(pin);
+          const own = isOwnPin(pin, userId);
           return (
             <Marker
               key={pin.id}

@@ -1,5 +1,74 @@
 import { writeFileSync } from "node:fs";
 import { MOCK_ZONES, MOCK_POIS, MOCK_HAZARD_SUSCEPTIBILITY } from "../src/lib/mock-data";
+import type { PinStatusTag } from "../src/lib/community-pin";
+
+/**
+ * The account every seeded community pin is attributed to.
+ *
+ * `community_pins.author_id` is a real foreign key to `auth.users` now, so a
+ * demo pin needs a real account — there is no "seed device" to hide behind any
+ * more. The uuid is fixed and deliberately unmistakable (`...dead`) so that
+ * teardown is a literal id list rather than a guess about which rows were
+ * fake, and so nobody reads it as a person.
+ *
+ * THIS ACCOUNT MUST NOT SURVIVE INTO A PILOT. Demo barangays with invented
+ * flood reports in a database real residents are using is the liability the
+ * spec names explicitly; supabase/seed/teardown.sql removes it and the rows
+ * that depend on it.
+ */
+const SEED_ACCOUNT_ID = "00000000-0000-4000-8000-00000000dead";
+
+interface SeedPin {
+  id: string;
+  zoneId: string;
+  statusTag: PinStatusTag;
+  caption: string;
+  lat: number;
+  lng: number;
+  /** How long before seed time the pin was dropped, so the demo reads as recent activity. */
+  minutesAgo: number;
+}
+
+/**
+ * The two demo pins that used to ship inside community-pins.ts as
+ * SEED_COMMUNITY_PINS, so a fresh install still shows realistic community
+ * activity (Phase 1 exit criteria) rather than an empty layer. They live here
+ * rather than in src/lib/mock-data because nothing in the app may read them
+ * any more: the store's only source of pins is now the database.
+ *
+ * NO VOTES ARE SEEDED, and the pins therefore read 0/0 rather than the 6/1 and
+ * 3/0 the local versions carried. Tallies are derived from pin_votes, so
+ * reproducing those numbers would mean inventing nine more auth.users rows to
+ * cast them. The count of neighbours who corroborated a pin is the anti-abuse
+ * signal residents are asked to trust; manufacturing it to make a demo look
+ * busy teaches an audience to read a number that was fabricated, and leaves
+ * nine more accounts a pilot must remember to delete. The pins alone
+ * demonstrate the layer.
+ *
+ * Neither carries a photo either: photo_path has no upload path behind it in
+ * this phase and the mapper does not read it, so a seeded value would be
+ * invisible.
+ */
+const SEED_PINS: SeedPin[] = [
+  {
+    id: "00000000-0000-4000-8000-0000dead0001",
+    zoneId: "zone-2",
+    statusTag: "flooded",
+    caption: "Alagang-tuhod na ang baha sa may palengke, iwasan muna.",
+    lat: 16.0698,
+    lng: 120.4045,
+    minutesAgo: 40,
+  },
+  {
+    id: "00000000-0000-4000-8000-0000dead0002",
+    zoneId: "zone-3",
+    statusTag: "impassable",
+    caption: "Road near the bridge is impassable, water above the tires.",
+    lat: 16.0441,
+    lng: 120.4869,
+    minutesAgo: 90,
+  },
+];
 
 /** Postgres string literal. Doubling the apostrophe is the whole escape. */
 export function quote(value: string): string {
@@ -65,10 +134,68 @@ export function buildSeedSql(): string {
     }
   }
 
+  lines.push("");
+  lines.push("-- SEED ACCOUNT — obviously fake, and not to survive into a pilot.");
+  lines.push("-- Removed, with everything attributed to it, by supabase/seed/teardown.sql.");
+  lines.push(
+    `insert into auth.users (id, instance_id, aud, role, is_anonymous, created_at, updated_at,` +
+      ` raw_app_meta_data, raw_user_meta_data) values (` +
+      `${quote(SEED_ACCOUNT_ID)}, '00000000-0000-0000-0000-000000000000',` +
+      ` 'authenticated', 'authenticated', true, now(), now(), '{}'::jsonb, '{}'::jsonb)` +
+      ` on conflict (id) do nothing;`
+  );
+  // private.handle_new_user() already inserts the profile from a trigger on
+  // auth.users. Stated explicitly anyway, and a no-op on conflict, so the seed
+  // does not depend on a trigger it does not own staying in place.
+  lines.push(
+    `insert into public.profiles (id, role) values (${quote(SEED_ACCOUNT_ID)}, 'resident')` +
+      ` on conflict (id) do nothing;`
+  );
+
+  for (const pin of SEED_PINS) {
+    lines.push(
+      `insert into public.community_pins (id, zone_id, status_tag, caption, lat, lng, author_id,` +
+        ` created_at) values (${quote(pin.id)}, ${quote(pin.zoneId)}, ${quote(pin.statusTag)},` +
+        ` ${quote(pin.caption)}, ${pin.lat}, ${pin.lng}, ${quote(SEED_ACCOUNT_ID)},` +
+        ` now() - interval '${pin.minutesAgo} minutes')` +
+        ` on conflict (id) do update set caption = excluded.caption,` +
+        ` status_tag = excluded.status_tag;`
+    );
+  }
+
   return lines.join("\n") + "\n";
+}
+
+/**
+ * Undoes exactly what the seed account block above created, and nothing else.
+ *
+ * A separate file rather than a commented-out block at the end of seed.sql: a
+ * teardown that has to be un-commented by hand is a teardown that gets half
+ * un-commented, and one left live inside the seed would undo the seed.
+ *
+ * Order matters — pins and votes both reference the account. pin_votes is
+ * covered even though no votes are seeded today, so that adding one later
+ * cannot leave an orphan behind.
+ */
+export function buildTeardownSql(): string {
+  const ids = SEED_PINS.map((pin) => quote(pin.id)).join(", ");
+  return [
+    "-- SEED TEARDOWN — generated by scripts/generate-seed.ts",
+    "-- Deletes the seed account and every row attributed to it. Run this before",
+    "-- a pilot: demo barangays carrying invented flood reports in a database real",
+    "-- residents are using is not a cosmetic problem.",
+    "",
+    `delete from public.pin_votes where pin_id in (${ids});`,
+    `delete from public.pin_votes where voter_id = ${quote(SEED_ACCOUNT_ID)};`,
+    `delete from public.community_pins where id in (${ids});`,
+    `delete from public.profiles where id = ${quote(SEED_ACCOUNT_ID)};`,
+    `delete from auth.users where id = ${quote(SEED_ACCOUNT_ID)};`,
+    "",
+  ].join("\n");
 }
 
 // Only write the file when run directly, so importing this in a test is side-effect free.
 if (process.argv[1]?.endsWith("generate-seed.ts")) {
   writeFileSync("supabase/seed/seed.sql", buildSeedSql());
+  writeFileSync("supabase/seed/teardown.sql", buildTeardownSql());
 }

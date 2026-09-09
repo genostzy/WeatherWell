@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { buildSeedSql, quote } from "./generate-seed";
+import { buildSeedSql, buildTeardownSql, quote } from "./generate-seed";
 import { MOCK_ZONES } from "@/lib/mock-data";
+
+/** The fixed, obviously-fake account the seed attributes its demo pins to. */
+const SEED_ACCOUNT_ID = "00000000-0000-4000-8000-00000000dead";
 
 describe("buildSeedSql", () => {
   it("emits one zone row per mock zone", () => {
@@ -26,4 +29,46 @@ describe("buildSeedSql", () => {
   it("emits a -- weatherwell-seed comment marking the generated SQL as seed output", () => {
     expect(buildSeedSql()).toContain("-- weatherwell-seed");
   });
+
+  it("attributes every seeded pin to the seed account, which it also creates", () => {
+    // community_pins.author_id is a real foreign key to auth.users now, so a
+    // pin row without its account is a seed that fails halfway and leaves the
+    // community layer empty.
+    const sql = buildSeedSql();
+    const pinRows = sql
+      .split("\n")
+      .filter((line) => line.includes("into public.community_pins"));
+
+    expect(pinRows.length).toBeGreaterThan(0);
+    expect(sql).toContain("insert into auth.users");
+    for (const row of pinRows) {
+      expect(row).toContain(SEED_ACCOUNT_ID);
+    }
+  });
+
+  it("seeds no votes, so no pin claims corroboration nobody gave", () => {
+    // Tallies are derived from pin_votes. Seeding votes would mean inventing
+    // voters, and the number of neighbours who corroborated a pin is exactly
+    // the signal residents are asked to trust.
+    expect(buildSeedSql()).not.toContain("pin_votes");
+  });
 });
+
+describe("buildTeardownSql", () => {
+  it("deletes every id the seed created, and the account behind them", () => {
+    // A seed row left in a pilot database is a fake flood report shown to real
+    // residents. The teardown is the only thing standing between those.
+    const teardown = buildTeardownSql();
+    const seededPinIds = [...buildSeedSql().matchAll(/'(00000000-0000-4000-8000-0000dead[0-9a-f]{4})'/g)].map(
+      (match) => match[1]
+    );
+
+    expect(new Set(seededPinIds).size).toBeGreaterThan(0);
+    for (const id of new Set(seededPinIds)) {
+      expect(teardown).toContain(id);
+    }
+    expect(teardown).toContain(`delete from auth.users where id = '${SEED_ACCOUNT_ID}'`);
+    expect(teardown).toContain("delete from public.profiles");
+  });
+});
+

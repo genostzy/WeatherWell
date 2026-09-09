@@ -33,3 +33,20 @@ if (!Element.prototype.releasePointerCapture) {
 if (!Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = () => {};
 }
+
+/**
+ * Supabase env for the browser client.
+ *
+ * `readSupabaseEnv` throws when either variable is missing, by design — a
+ * build that silently ships without a backend is worse than one that fails.
+ * Vitest does not load `.env.local`, so every component that reaches
+ * `getBrowserClient()` (any map, via `useSessionUserId`) would throw on mount
+ * for want of configuration rather than for any reason a test is about.
+ *
+ * Obviously-fake values: nothing here may reach a real project. Tests that
+ * exercise the write path still mock `@/lib/auth/anonymous-session` — this
+ * only makes constructing the client possible, it does not make signing in
+ * something a test should do.
+ */
+process.env.NEXT_PUBLIC_SUPABASE_URL ??= "https://vitest.supabase.invalid";
+process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??= "sb_publishable_vitest_not_a_real_key";
