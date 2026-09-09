@@ -245,11 +245,24 @@ select tests.expect_row_count(
 -- plan. Ordering this assertion first is what keeps that regression caught.
 -- The condition now lives in the trigger's WHEN clause, which is stored
 -- OID-resolved like a policy expression, so nothing re-resolves it at runtime.
+--
+-- tests.expect_allowed only proves the UPDATE didn't raise -- an UPDATE
+-- matching zero rows (e.g. RLS silently filtering the row away) also
+-- doesn't raise, so it would pass this assertion vacuously while the delete
+-- path stayed dead. Pair it with tests.expect_row_count so the assertion
+-- also proves the row was actually written.
 select tests.as_user('11111111-1111-1111-1111-111111111111');
 select tests.expect_allowed(
   'the pin''s own author CAN soft-delete their own pin (removed = true)',
   $$update public.community_pins set removed = true
     where author_id = '11111111-1111-1111-1111-111111111111'$$);
+
+select tests.as_user('11111111-1111-1111-1111-111111111111');
+select tests.expect_row_count(
+  'the soft-delete above actually landed (removed = true on the author''s pin)',
+  $$select * from public.community_pins
+    where author_id = '11111111-1111-1111-1111-111111111111' and removed = true$$,
+  1);
 
 update public.community_pins set removed = true, removed_reason = 'admin'
   where author_id = '11111111-1111-1111-1111-111111111111';

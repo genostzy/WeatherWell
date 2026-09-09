@@ -119,13 +119,17 @@ create policy centers_update_operator on public.evacuation_centers
 -- of WHY a pin was taken down ('net_score' or 'admin'), and neither value is
 -- a resident's to claim.
 --
--- row_security_active() is how the privileged-role exemption is expressed:
--- it is false exactly for the roles RLS itself does not gate (the table
--- owner and BYPASSRLS roles -- postgres, service_role), so fixture setup and
--- admin tooling are unaffected, as they already were. It is a plain function
--- call, which matters because a trigger WHEN clause may not contain a
--- subquery -- the old `(select rolbypassrls from pg_roles ...)` form could
--- not have moved here.
+-- row_security_active() is how the privileged-role exemption is expressed.
+-- It is NOT simply "false for exactly the roles RLS does not gate": it is
+-- also false whenever RLS is disabled on the table at all (regardless of
+-- role), and it is true for the table owner under FORCE ROW LEVEL SECURITY.
+-- What it means here, for this table, today: community_pins has RLS enabled
+-- and is not FORCE'd, so the function reduces to exactly the BYPASSRLS
+-- check it replaces -- false for postgres and service_role, true for
+-- authenticated -- and fixture setup and admin tooling are unaffected, as
+-- they already were. It is a plain function call, which matters because a
+-- trigger WHEN clause may not contain a subquery -- the old
+-- `(select rolbypassrls from pg_roles ...)` form could not have moved here.
 drop trigger if exists pins_protect_moderation_columns on public.community_pins;
 drop function if exists private.enforce_pin_moderation_columns();
 
