@@ -24,7 +24,17 @@ begin
   perform set_config('request.jwt.claims',
     json_build_object('sub', fixture_id::text, 'role', 'authenticated')::text, true);
 
-  update public.profiles set role = 'operator' where id = fixture_id;
+  -- Two independent layers refuse this now: profiles has no UPDATE policy (a
+  -- silent zero-row filter) AND `authenticated` no longer holds the UPDATE
+  -- grant (a raised 42501). Which layer bites first is not the property under
+  -- test -- "a resident cannot become an operator" is -- so the raise is
+  -- caught and the assertion remains the unchanged-value check below. Without
+  -- the catch, the grant denial would abort the whole suite.
+  begin
+    update public.profiles set role = 'operator' where id = fixture_id;
+  exception when insufficient_privilege then
+    raise notice 'ok: profiles UPDATE refused outright (no grant), not merely filtered';
+  end;
 
   reset role;
 
@@ -210,10 +220,37 @@ select tests.expect_row_count(
   1);
 
 -- Important 2: pins_update_own_or_operator grants the author UPDATE on every
--- column, including removed/removed_reason — so an author can undo an
--- operator's moderation by simply reissuing their own pin. An operator
--- removes the fixture pin first (as postgres, bypassing RLS, purely to set
--- up the fixture state — this is not the assertion).
+-- column, including removed/removed_reason — so on its own it lets an author
+-- undo an operator's moderation by simply reissuing their own pin. Column
+-- GRANTs cannot fix that either: residents and operators are the same
+-- `authenticated` Postgres role. A BEFORE UPDATE trigger is what draws the
+-- line, because it is the only mechanism that sees OLD and NEW at once (a
+-- policy's USING sees only the old row, WITH CHECK only the new one).
+--
+-- The rule is one-directional, and this is the half that must NOT be denied:
+-- deleting your own pin is a soft delete, so it SETS removed = true. Only
+-- CLEARING removed is an operator's privilege (otherwise the author of a pin
+-- taken down by net-score voting simply puts it back).
+--
+-- This assertion is deliberately placed before any privileged UPDATE touches
+-- community_pins in this session. The moderation trigger used to be a plpgsql
+-- body calling private.is_operator(); plpgsql resolves the names in a body
+-- lazily, at first execution, as the *invoking* role, and `authenticated` has
+-- no USAGE on schema `private`. Every pin UPDATE issued by `authenticated` on
+-- a fresh connection therefore failed with "permission denied for schema
+-- private" (SQLSTATE 42501) -- residents and operators alike, including plain
+-- caption edits. This suite passed anyway, because the postgres UPDATE just
+-- below compiled the trigger body under a role that COULD resolve the name,
+-- and every later authenticated UPDATE in the same session reused the cached
+-- plan. Ordering this assertion first is what keeps that regression caught.
+-- The condition now lives in the trigger's WHEN clause, which is stored
+-- OID-resolved like a policy expression, so nothing re-resolves it at runtime.
+select tests.as_user('11111111-1111-1111-1111-111111111111');
+select tests.expect_allowed(
+  'the pin''s own author CAN soft-delete their own pin (removed = true)',
+  $$update public.community_pins set removed = true
+    where author_id = '11111111-1111-1111-1111-111111111111'$$);
+
 update public.community_pins set removed = true, removed_reason = 'admin'
   where author_id = '11111111-1111-1111-1111-111111111111';
 
@@ -277,8 +314,15 @@ begin
   perform set_config('request.jwt.claims',
     json_build_object('sub', '11111111-1111-1111-1111-111111111111', 'role', 'authenticated')::text, true);
 
-  update public.zones set evacuation_route_text = '{"en":"go the wrong way","fil":"x"}'::jsonb
-    where id = 'tests-fixture-zone';
+  -- Same two-layer situation as the profiles block above: no UPDATE policy
+  -- (zero rows) AND no UPDATE grant (42501). Caught so the unchanged-value
+  -- assertion below stays the thing being proven.
+  begin
+    update public.zones set evacuation_route_text = '{"en":"go the wrong way","fil":"x"}'::jsonb
+      where id = 'tests-fixture-zone';
+  exception when insufficient_privilege then
+    raise notice 'ok: zones UPDATE refused outright (no grant), not merely filtered';
+  end;
 
   reset role;
 
@@ -362,8 +406,16 @@ begin
   perform set_config('request.jwt.claims',
     json_build_object('sub', '11111111-1111-1111-1111-111111111111', 'role', 'authenticated')::text, true);
 
-  update public.pin_votes set direction = -1
-    where voter_id = '22222222-2222-2222-2222-222222222222';
+  -- `direction` is still an updatable column for authenticated (it is the
+  -- vote), so this is a pure RLS zero-row filter today. Caught anyway, so a
+  -- future narrowing of the grant strengthens this test instead of aborting
+  -- the suite.
+  begin
+    update public.pin_votes set direction = -1
+      where voter_id = '22222222-2222-2222-2222-222222222222';
+  exception when insufficient_privilege then
+    raise notice 'ok: pin_votes UPDATE refused outright (no grant), not merely filtered';
+  end;
 
   reset role;
 
@@ -394,8 +446,17 @@ begin
   perform set_config('request.jwt.claims',
     json_build_object('sub', '11111111-1111-1111-1111-111111111111', 'role', 'authenticated')::text, true);
 
-  update public.alerts set severity = 'yellow'
-    where zone_id = 'tests-fixture-zone' and is_active;
+  -- `severity` is no longer an updatable column for authenticated at all (an
+  -- issued alert's severity is not editable in place; a downgrade supersedes
+  -- the row instead), so this is now a raised 42501 rather than the zero-row
+  -- filter it used to be. Caught, because the property under test is still
+  -- "the live alert did not change".
+  begin
+    update public.alerts set severity = 'yellow'
+      where zone_id = 'tests-fixture-zone' and is_active;
+  exception when insufficient_privilege then
+    raise notice 'ok: alerts UPDATE refused outright (severity not granted), not merely filtered';
+  end;
 
   reset role;
 
