@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { enqueue, readOutbox } from "./outbox";
 import { drainOutbox, flushOutbox, onDelivered, PermanentFailure } from "./drain";
+import type { DrainResult } from "./drain";
 import type { OutboxEntry } from "./types";
 
 beforeEach(() => {
@@ -220,4 +221,36 @@ describe("flushOutbox", () => {
     const result = await flushed;
     expect(result.skipped).toBe(false);
   });
+  it("declines a dispatcher that re-enters before yielding", async () => {
+    // An async function body runs synchronously up to its first `await`, and
+    // runDrain's first await is `dispatch(entry)`. A dispatcher that calls
+    // back into drainOutbox before yielding would, with a gate raised only
+    // after runDrain was invoked, find nothing set and start a second
+    // concurrent drain over the same queue — dispatching the same entry
+    // twice. Today's dispatcher awaits a dynamic import and cannot do this;
+    // Plan 4 adds four more dispatchers to this module.
+    enqueue("submitWaterLevelReport", { zoneId: "zone-1", depthLevel: "knee" });
+
+    let reentrantResult: DrainResult | undefined;
+    const dispatched: string[] = [];
+
+    // Deliberately not async: this body runs entirely inside runDrain's
+    // synchronous stretch, before any await has yielded.
+    const reentrant = (entry: OutboxEntry): Promise<void> => {
+      dispatched.push(entry.id);
+      if (dispatched.length === 1) {
+        void drainOutbox(reentrant).then((r) => {
+          reentrantResult = r;
+        });
+      }
+      return Promise.resolve();
+    };
+
+    await drainOutbox(reentrant);
+    await vi.waitFor(() => expect(reentrantResult).toBeDefined());
+
+    expect(reentrantResult?.skipped).toBe(true);
+    expect(dispatched).toHaveLength(1);
+  });
+
 });

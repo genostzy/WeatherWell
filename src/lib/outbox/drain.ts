@@ -53,11 +53,16 @@ export function onDelivered(listener: DeliveryListener): () => void {
 }
 
 /**
- * The drain currently running, or null. One drain at a time: concurrent
- * drains would dispatch the same entry twice. Held as the promise rather than
- * a bare boolean so a caller that gets `skipped` can wait for the drain that
- * declined it and then take its own turn — see `flushOutbox`.
+ * One drain at a time: concurrent drains would dispatch the same entry twice.
+ *
+ * Two variables rather than one, because they answer different questions at
+ * different moments. `draining` is the gate, raised synchronously so no caller
+ * can slip past it. `inFlight` is the handle, so a caller that WAS declined
+ * can wait for the drain that declined it and then take its own turn — see
+ * `flushOutbox`. `inFlight` is briefly null while `draining` is already true;
+ * that window is exactly the synchronous stretch the gate exists to cover.
  */
+let draining = false;
 let inFlight: Promise<DrainResult> | null = null;
 
 async function runDrain(
@@ -111,14 +116,23 @@ async function runDrain(
 export function drainOutbox(
   dispatch: (entry: OutboxEntry) => Promise<void>
 ): Promise<DrainResult> {
-  if (inFlight) return Promise.resolve({ delivered: 0, failed: 0, skipped: true });
+  if (draining) return Promise.resolve({ delivered: 0, failed: 0, skipped: true });
+
+  // Raised BEFORE runDrain is invoked, which is the whole point. An async
+  // function body runs synchronously up to its first `await`, and runDrain's
+  // first await is `dispatch(entry)` — so a dispatcher that re-enters this
+  // function before yielding would find `inFlight` still null and start a
+  // second concurrent drain over the same queue. Today's dispatcher awaits a
+  // dynamic import and cannot do that, but Plan 4 adds four more dispatchers
+  // to this module, and a guard that only holds for the current caller is not
+  // a guard. `inFlight` still exists, for flushOutbox to wait on; it is just
+  // no longer what decides.
+  draining = true;
 
   const delivered: OutboxEntry[] = [];
 
-  // `inFlight` is assigned synchronously, before any caller can run again:
-  // runDrain executes up to its first `await` immediately and nothing on that
-  // path re-enters drainOutbox.
   const run = runDrain(dispatch, delivered).finally(() => {
+    draining = false;
     inFlight = null;
   });
   inFlight = run;

@@ -36,9 +36,33 @@ const NO_DELIVERED: OutboxEntry[] = [];
  * report from the screen — exactly what this refetch exists to prevent. The
  * parameter keeps the pathname (so sw.js's public-API allowlist still matches)
  * but misses the cache entry, so this one request reaches the network.
+ *
+ * That leaves one thing undone, which `refreshCachedReports` below finishes.
  */
 function reportsUrl(afterDeliveries: number): string {
   return afterDeliveries === 0 ? "/api/reports" : `/api/reports?delivered=${afterDeliveries}`;
+}
+
+/**
+ * Warms the cache entry the NEXT mount will read.
+ *
+ * The busted URL above answers this load correctly and stores its fresh copy
+ * under `?delivered=1` — a key nothing ever reads again. The plain
+ * `/api/reports` entry, which is the one the next mount hits, is left holding
+ * the pre-delivery body. So without this the resident closes the app, opens it
+ * again, and their own delivered report is missing from the list until a
+ * later load — the busting parameter having *guaranteed* the staleness it was
+ * introduced to route around.
+ *
+ * One plain request fixes it: staleWhileRevalidate answers it from the stale
+ * copy and refreshes that copy behind the answer. The response is deliberately
+ * discarded — this call is for its side effect on the cache, and the fresh
+ * rows are already on screen from the busted fetch. It fails silently for the
+ * same reason that one does: a resident with no network has lost nothing they
+ * had.
+ */
+function refreshCachedReports(): void {
+  void fetch("/api/reports").catch(() => undefined);
 }
 
 /**
@@ -91,6 +115,9 @@ function useServerReports(): { rows: LiveWaterLevelReport[]; delivered: OutboxEn
       )
       .then((data) => {
         if (!cancelled) setRows(data);
+        // Only after a delivery: the mount fetch IS the plain request, so
+        // doing this there would be a second copy of the same call.
+        if (delivered.length > 0) refreshCachedReports();
       })
       .catch(() => {
         // Offline, timed out, or a 5xx — degrade, don't fail. Whatever rows
@@ -121,6 +148,16 @@ export function mergeReports(
 ): LiveWaterLevelReport[] {
   const serverIds = new Set(serverRows.map((row) => row.id));
 
+  // One row per id, whatever the caller passed. `useWaterLevelReports` feeds
+  // this the queue AND the delivered-but-not-yet-confirmed entries, and an id
+  // can legitimately sit in both for a moment: `markDelivered`'s write to
+  // local storage can fail silently (the store swallows storage errors), which
+  // leaves the entry queued after it was already announced as delivered.
+  // Without this the same report renders twice — and two rows for one report
+  // is not a cosmetic duplicate, it is a second vote toward the agreeing-report
+  // threshold that gates a zone's flood signal.
+  const seen = new Set(serverIds);
+
   const optimistic: LiveWaterLevelReport[] = queued
     .filter(
       (entry) =>
@@ -133,6 +170,13 @@ export function mergeReports(
         // consensus count that gates a zone's flood signal.
         !entry.permanentlyFailed
     )
+    .filter((entry) => {
+      // Second pass rather than part of the predicate above: `seen` must only
+      // grow for entries that actually produce a row.
+      if (seen.has(entry.id)) return false;
+      seen.add(entry.id);
+      return true;
+    })
     .map((entry) => {
       const payload = entry.payload as OutboxPayloads["submitWaterLevelReport"];
       return {

@@ -300,14 +300,17 @@ describe("water-level-reports", () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce({ ok: true, json: async () => [] })
-      .mockResolvedValueOnce({ ok: true, json: async () => [serverRowFor(entry.id)] });
+      .mockResolvedValueOnce({ ok: true, json: async () => [serverRowFor(entry.id)] })
+      // The third call is refreshCachedReports' warm-up, asserted on by its
+      // own test below; this one only cares about the first two.
+      .mockResolvedValue({ ok: true, json: async () => [serverRowFor(entry.id)] });
     vi.stubGlobal("fetch", fetchMock);
 
     renderHook(() => useWaterLevelReports());
     await act(async () => {
       await drainOutbox(async () => {});
     });
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(2));
 
     const mountUrl = String(fetchMock.mock.calls[0][0]);
     const refetchUrl = String(fetchMock.mock.calls[1][0]);
@@ -315,5 +318,41 @@ describe("water-level-reports", () => {
     expect(mountUrl).toBe("/api/reports");
     expect(refetchUrl).not.toBe(mountUrl);
     expect(new URL(refetchUrl, "https://weatherwell.test").pathname).toBe("/api/reports");
+  });
+
+  it("warms the plain cache entry the next load will read", async () => {
+    // The busted refetch stores its fresh copy under ?delivered=1, a key
+    // nothing reads again, leaving the plain /api/reports entry holding the
+    // pre-delivery body. Without a follow-up plain request the resident
+    // reopens the app and their own delivered report is missing — the busting
+    // parameter guaranteeing the staleness it was added to route around.
+    const entry = enqueue("submitWaterLevelReport", { zoneId: "zone-1", depthLevel: "knee" });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => [] });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderHook(() => useWaterLevelReports());
+    await act(async () => {
+      await drainOutbox(async () => {});
+    });
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+
+    const urls = fetchMock.mock.calls.map((call) => String(call[0]));
+    expect(urls[0]).toBe("/api/reports");
+    expect(urls[1]).not.toBe("/api/reports");
+    // The third is the warm-up: plain, so staleWhileRevalidate refreshes the
+    // entry the next mount reads.
+    expect(urls[2]).toBe("/api/reports");
+    void entry;
+  });
+
+  it("renders one row when an id is both queued and delivered", async () => {
+    // markDelivered writes to local storage and the store swallows storage
+    // errors, so an entry can stay queued after it was announced as
+    // delivered. useWaterLevelReports feeds mergeReports both lists, and two
+    // rows for one report is not a cosmetic duplicate — it is a second vote
+    // toward the agreeing-report threshold that gates a zone's flood signal.
+    const entry = enqueue("submitWaterLevelReport", { zoneId: "zone-1", depthLevel: "knee" });
+
+    expect(mergeReports([], [entry, entry])).toHaveLength(1);
   });
 });
