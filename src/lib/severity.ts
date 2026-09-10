@@ -24,7 +24,7 @@ export const SEVERITY_LABEL: Record<Severity, LocalizedText> = {
  * these lets alert copy connect to the escalation language residents already
  * hear on TV/radio (PRD Climate Resilience plan, Gap E).
  */
-export const PAGASA_RAINFALL_WARNING_LABEL: Partial<Record<Severity, LocalizedText>> = {
+const PAGASA_RAINFALL_WARNING_LABEL: Partial<Record<Severity, LocalizedText>> = {
   yellow: { en: "Yellow Rainfall Warning level", fil: "antas ng Yellow Rainfall Warning" },
   orange: { en: "Orange Rainfall Warning level", fil: "antas ng Orange Rainfall Warning" },
   red: { en: "Red Rainfall Warning level", fil: "antas ng Red Rainfall Warning" },
