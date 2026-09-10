@@ -66,9 +66,10 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
   // function's own scope, even though `zone` is a const that cannot change.
   const zone = foundZone;
 
-  // No live headcount is wired through /api/zones yet, so this page's
-  // capacity status is always the zone's own centerStatus.
-  const centerStatus = resolveEffectiveCenterStatus(zone.centerStatus, zone.evacuationCenterCapacity, undefined);
+  // Reflects the live headcount carried through /api/zones as
+  // zone.currentOccupancy, same as every other read-only surface; falls back
+  // to the zone's own centerStatus if no headcount has ever been recorded.
+  const centerStatus = resolveEffectiveCenterStatus(zone.centerStatus, zone.evacuationCenterCapacity, zone.currentOccupancy);
   const rainfall = getRainfallForZone(zone.id);
   const rainfallHistory = getRainfallHistoryForZone(zone.id);
 

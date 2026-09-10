@@ -53,11 +53,10 @@ const CENTER_STATUS_COLOR: Record<CenterStatus, string> = {
 export function EvacuationManagementPanel({ zones }: { zones: Zone[] }) {
   const { lang } = useLanguage();
 
-  // No live headcount is wired through /api/zones yet (see
-  // EvacuationCenterRow), so the summary above the list reflects each zone's
-  // own centerStatus rather than a per-row occupancy it cannot see.
+  // Reflects each zone's live headcount, carried through /api/zones as
+  // zone.currentOccupancy, same as every other read-only surface.
   const effectiveStatuses = zones.map((zone) =>
-    resolveEffectiveCenterStatus(zone.centerStatus, zone.evacuationCenterCapacity, undefined)
+    resolveEffectiveCenterStatus(zone.centerStatus, zone.evacuationCenterCapacity, zone.currentOccupancy)
   );
   const countByStatus = (status: CenterStatus) =>
     effectiveStatuses.filter((value) => value === status).length;
@@ -102,15 +101,15 @@ export function EvacuationManagementPanel({ zones }: { zones: Zone[] }) {
  * below are real useState calls at the top of a component body, not hooks
  * called from inside a loop.
  *
- * The typed headcount lives only in this component's own state: no live
- * occupancy is wired through /api/zones yet (evacuation_centers has the
- * column, the route doesn't select it), so there is nothing to read a
- * current value back from across a reload. Typing here still derives the
- * status shown immediately and writes it to the database via
- * setCenterOccupancy.
+ * The typed headcount is seeded from zone.currentOccupancy (the last value
+ * carried through /api/zones) and then tracked in this component's own
+ * state as the admin edits it — a write doesn't itself refetch reference
+ * data, so this state only reflects the server again after the next
+ * fetch/reload. Typing here still derives the status shown immediately and
+ * writes it to the database via setCenterOccupancy.
  */
 function EvacuationCenterRow({ zone, lang }: { zone: Zone; lang: LanguageCode }) {
-  const [occupancy, setOccupancy] = useState<number | undefined>(undefined);
+  const [occupancy, setOccupancy] = useState<number | undefined>(zone.currentOccupancy);
   const [statusError, setStatusError] = useState(false);
   const [occupancyError, setOccupancyError] = useState(false);
   const isTrackingHeadcount = occupancy !== undefined;

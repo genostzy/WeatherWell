@@ -16,7 +16,7 @@ export async function GET() {
     supabase
       .from("zones")
       .select(
-        "id, psgc_barangay_code, name, evacuation_route_text, lat, lng, evacuation_route_path, hotline_number, downstream_zone_id, evacuation_centers(name, lat, lng, capacity, status)"
+        "id, psgc_barangay_code, name, evacuation_route_text, lat, lng, evacuation_route_path, hotline_number, downstream_zone_id, evacuation_centers(name, lat, lng, capacity, status, current_occupancy)"
       )
       .order("id"),
     supabase.from("points_of_interest").select("id, zone_id, category, name, lat, lng").order("id"),

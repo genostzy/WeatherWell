@@ -101,9 +101,12 @@ export default function ReportPage() {
   // Capacity and occupancy are not optional in practice: without them a
   // tracked headcount is skipped and this page shows the zone's default while
   // every other surface shows the derived status, so the same centre reads
-  // "Full" on the evacuation page and "Space available" here. No live
-  // headcount is wired through /api/zones yet, so occupancy stays undefined.
-  const centerStatus = resolveEffectiveCenterStatus(zone.centerStatus, zone.evacuationCenterCapacity, undefined);
+  // "Full" on the evacuation page and "Space available" here.
+  const centerStatus = resolveEffectiveCenterStatus(
+    zone.centerStatus,
+    zone.evacuationCenterCapacity,
+    zone.currentOccupancy
+  );
 
   return (
     <main className="flex flex-1 flex-col items-center gap-6 p-4 sm:p-6 lg:p-8">

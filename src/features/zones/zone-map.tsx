@@ -167,7 +167,7 @@ function ZoneCard({
   const centerStatus = resolveEffectiveCenterStatus(
     zone.centerStatus,
     zone.evacuationCenterCapacity,
-    undefined
+    zone.currentOccupancy
   );
   const rainfall = getRainfallForZone(zone.id);
   const zonePins = pins.filter((pin) => pin.zoneId === zone.id).length;

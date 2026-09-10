@@ -28,6 +28,7 @@ interface ZoneRow {
     lng: number;
     capacity: number;
     status: Zone["centerStatus"];
+    current_occupancy: number | null;
   } | null;
 }
 
@@ -83,6 +84,11 @@ export function toReferenceData(
       // The type says optional; null would sneak past `if (zone.downstreamZoneId)`
       // less obviously than undefined in code that spreads or serialises it.
       ...(row.downstream_zone_id ? { downstreamZoneId: row.downstream_zone_id } : {}),
+      // Same reasoning as downstreamZoneId above: a centre with no live headcount
+      // yet is `current_occupancy IS NULL`, and undefined (not null, not 0) is
+      // what resolveEffectiveCenterStatus's `occupancy` parameter expects to mean
+      // "nothing tracked, fall back to centerStatus".
+      ...(centre.current_occupancy !== null ? { currentOccupancy: centre.current_occupancy } : {}),
     };
   });
 

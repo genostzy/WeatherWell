@@ -45,8 +45,16 @@ export interface Zone {
   evacuationRoutePath: [number, number][];
   hotlineNumber: string;
   centerStatus: CenterStatus;
-  /** Total headcount the evacuation center can hold. Paired with ZoneOverride.currentOccupancy to derive a real "X of Y spots" reading instead of just the manual centerStatus enum (PRD Gap B / Climate Resilience plan). */
+  /** Total headcount the evacuation center can hold. Paired with currentOccupancy below to derive a real "X of Y spots" reading instead of just the manual centerStatus enum (PRD Gap B / Climate Resilience plan). */
   evacuationCenterCapacity: number;
+  /**
+   * The most recent live headcount an operator entered (evacuation_centers.current_occupancy),
+   * or undefined if none has ever been recorded for this centre. Undefined, not a
+   * sentinel like 0 or null, because "no live headcount tracked" and "headcount is
+   * zero" are different facts — resolveEffectiveCenterStatus falls back to the
+   * manual centerStatus only in the former case.
+   */
+  currentOccupancy?: number;
   downstreamZoneId?: string;
 }
 

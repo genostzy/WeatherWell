@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { toReferenceData } from "./types";
+import { resolveEffectiveCenterStatus } from "@/lib/center-status";
 
 /**
  * The whole point of this route is that the database's normalised rows come
@@ -22,6 +23,7 @@ const ZONE_ROW = {
     lng: 120.436,
     capacity: 300,
     status: "space_available" as const,
+    current_occupancy: null,
   },
 };
 
@@ -77,6 +79,33 @@ describe("toReferenceData", () => {
       lat: 16.02,
       lng: 120.43,
     });
+  });
+
+  it("carries current_occupancy through as currentOccupancy, and a value crossing the full threshold changes the derived status", () => {
+    // PRD Gap B: an operator's headcount write is worthless if /api/zones
+    // never selects it back out. Pin the field actually reaching the Zone,
+    // and that it changes the derived status even though the manual
+    // centerStatus column still says "space_available" (300 * 0.95 = 285).
+    const { zones } = toReferenceData(
+      [{ ...ZONE_ROW, evacuation_centers: { ...ZONE_ROW.evacuation_centers, current_occupancy: 285 } }],
+      [],
+      []
+    );
+    expect(zones[0].currentOccupancy).toBe(285);
+    expect(zones[0].centerStatus).toBe("space_available");
+    expect(
+      resolveEffectiveCenterStatus(zones[0].centerStatus, zones[0].evacuationCenterCapacity, zones[0].currentOccupancy)
+    ).toBe("full");
+  });
+
+  it("maps a null current_occupancy to undefined, so the effective status falls back to the manual centerStatus", () => {
+    // ZONE_ROW's fixture already has current_occupancy: null — this is the
+    // "no live headcount recorded yet" case, which must NOT be read as 0.
+    const { zones } = toReferenceData([ZONE_ROW], [], []);
+    expect(zones[0].currentOccupancy).toBeUndefined();
+    expect(
+      resolveEffectiveCenterStatus(zones[0].centerStatus, zones[0].evacuationCenterCapacity, zones[0].currentOccupancy)
+    ).toBe(zones[0].centerStatus);
   });
 
   it("throws when a zone has no evacuation centre rather than shipping a broken zone", () => {

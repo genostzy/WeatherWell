@@ -319,14 +319,15 @@ function ZoneAlertSelect({
  * component for the same reason ZoneAlertSelect is: a per-marker useState
  * call must not live inside AdminMapCanvas's zones.map().
  *
- * The typed headcount lives only in this component's own state: no live
- * occupancy is wired through /api/zones yet (evacuation_centers has the
- * column, the route doesn't select it), so there is nothing to read a
- * current value back from. Typing here still derives the status shown below
+ * The typed headcount is seeded from zone.currentOccupancy (the last value
+ * carried through /api/zones) and then tracked in this component's own
+ * state as the admin edits it — a write doesn't itself refetch reference
+ * data, so this state only reflects the server again after the next
+ * fetch/reload. Typing here still derives the status shown below
  * immediately and writes it to the database via setCenterOccupancy.
  */
 function CenterOccupancyControl({ zone, lang }: { zone: Zone; lang: LanguageCode }) {
-  const [occupancy, setOccupancy] = useState<number | undefined>(undefined);
+  const [occupancy, setOccupancy] = useState<number | undefined>(zone.currentOccupancy);
   const [error, setError] = useState(false);
   const centerStatus = resolveEffectiveCenterStatus(zone.centerStatus, zone.evacuationCenterCapacity, occupancy);
 

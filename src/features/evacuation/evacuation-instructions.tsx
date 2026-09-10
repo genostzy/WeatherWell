@@ -16,10 +16,11 @@ const SPOTS_LEFT: LocalizedText = { en: "spots left", fil: "espasyong natitira" 
 
 export function EvacuationInstructions({ zone }: { zone: Zone }) {
   const { lang } = useLanguage();
-  // No live headcount is wired through /api/zones yet, so this stays
-  // undefined — resolveEffectiveCenterStatus falls back to the zone's own
-  // centerStatus, same as every other read-only surface.
-  const occupancy: number | undefined = undefined;
+  // The live headcount an operator most recently entered, carried through
+  // /api/zones as zone.currentOccupancy — undefined if none was ever
+  // recorded, in which case resolveEffectiveCenterStatus falls back to the
+  // zone's own centerStatus.
+  const occupancy = zone.currentOccupancy;
   const centerStatus = resolveEffectiveCenterStatus(zone.centerStatus, zone.evacuationCenterCapacity, occupancy);
 
   return (

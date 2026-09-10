@@ -72,7 +72,7 @@ export async function setCenterStatus(input: { zoneId: string; status: CenterSta
  * An operator entering a zone's evacuation center headcount — PRD Gap B.
  * `null` clears the tracked headcount, which falls the displayed status back
  * to the manual `status` column (see `resolveEffectiveCenterStatus` in
- * zone-overrides.ts); this action only ever writes `current_occupancy`
+ * center-status.ts); this action only ever writes `current_occupancy`
  * itself, never derives or writes `status` as a side effect.
  */
 export async function setCenterOccupancy(input: { zoneId: string; occupancy: number | null }): Promise<ActionResult> {

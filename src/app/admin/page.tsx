@@ -91,7 +91,7 @@ export default function AdminPage() {
   const reportsToday = zones.reduce((sum, zone) => sum + getReportsTodayForZone(zone.id), 0);
   const heaviestRain = Math.max(...zones.map((zone) => getRainfallForZone(zone.id)));
   const constrainedCenters = zones.filter((zone) => {
-    const status = resolveEffectiveCenterStatus(zone.centerStatus, zone.evacuationCenterCapacity, undefined);
+    const status = resolveEffectiveCenterStatus(zone.centerStatus, zone.evacuationCenterCapacity, zone.currentOccupancy);
     return status !== "space_available";
   }).length;
   const hasEffectiveAlert = (zoneId: string) => baseAlertFor(zoneId) !== undefined;
