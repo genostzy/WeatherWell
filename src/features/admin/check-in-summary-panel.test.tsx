@@ -2,6 +2,17 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { CheckInSummaryPanel } from "./check-in-summary-panel";
 
+// useEvacuationCheckIns now reads useSessionUserId (to reconcile a queued
+// check-in by (zone, uid) rather than by zone alone) — stub it so this panel
+// never reaches the real Supabase browser client, which throws outside a
+// browser env with .env.local loaded. This panel never writes; an operator
+// reading their own uid here is display-only, same reasoning check-in-panel's
+// test uses for the same mock.
+vi.mock("@/lib/auth/anonymous-session", () => ({
+  ensureAnonymousSession: vi.fn().mockResolvedValue(null),
+  useSessionUserId: () => "operator-uid",
+}));
+
 /** What /api/check-ins would return, RLS already having scoped the rows. */
 function seededServerCheckIns(
   rows: { id: string; zoneId: string; userId: string; status: "safe" | "needs_help" }[]

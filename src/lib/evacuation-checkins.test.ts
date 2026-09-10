@@ -28,16 +28,15 @@ describe("mergeCheckIns", () => {
   it("shows a queued check-in immediately", () => {
     const entry = enqueue("recordCheckIn", { zoneId: "zone-1", status: "safe" });
 
-    const merged = mergeCheckIns([], [entry]);
+    const merged = mergeCheckIns([], [entry], "user-1");
 
     expect(merged).toHaveLength(1);
     expect(merged[0].status).toBe("safe");
   });
 
-  it("replaces an earlier check-in for the same zone rather than adding one", () => {
+  it("replaces the caller's own earlier check-in for the same zone rather than adding one", () => {
     // The table is unique on (zone_id, user_id) and a resident is allowed to
-    // change their answer. Two rows here would mean two people in a headcount
-    // that an operator uses to decide who to go looking for.
+    // change their own answer — this is the caller superseding their own row.
     const existing = {
       id: "checkin-1",
       zoneId: "zone-1",
@@ -47,10 +46,65 @@ describe("mergeCheckIns", () => {
     };
     const entry = enqueue("recordCheckIn", { zoneId: "zone-1", status: "needs_help" });
 
-    const merged = mergeCheckIns([existing], [entry]);
+    const merged = mergeCheckIns([existing], [entry], "user-1");
 
     expect(merged).toHaveLength(1);
     expect(merged[0].status).toBe("needs_help");
+  });
+
+  it("keeps every resident's row when only one of them has a check-in queued — an operator's headcount, not a display detail", () => {
+    // This is the bug: reconciling by zone alone would drop every resident's
+    // row for the zone the instant ANY one of them (e.g. an operator who is
+    // also a resident, checking in on their own device) has a queued write,
+    // collapsing CheckInSummaryPanel's headcount down to that one pending
+    // entry. Reconciling by (zone, uid) must only ever touch the queued
+    // entry's own author's row.
+    const own = {
+      id: "checkin-1",
+      zoneId: "zone-1",
+      userId: "user-1",
+      status: "safe" as const,
+      checkedInAt: new Date(Date.now() - 60_000).toISOString(),
+    };
+    const neighbour = {
+      id: "checkin-2",
+      zoneId: "zone-1",
+      userId: "user-2",
+      status: "needs_help" as const,
+      checkedInAt: new Date(Date.now() - 30_000).toISOString(),
+    };
+    const entry = enqueue("recordCheckIn", { zoneId: "zone-1", status: "needs_help" });
+
+    const merged = mergeCheckIns([own, neighbour], [entry], "user-1");
+
+    expect(merged).toHaveLength(2);
+    // The neighbour's row survives untouched — an operator reading this
+    // zone's headcount must still see them.
+    expect(merged).toContainEqual(neighbour);
+    // The caller's own stale row was replaced by their queued answer, not
+    // left as a duplicate.
+    expect(merged.find((c) => c.id === entry.id)?.status).toBe("needs_help");
+    expect(merged.some((c) => c.id === "checkin-1")).toBe(false);
+  });
+
+  it("appends a queued check-in without displacing anyone when this device has no session yet", () => {
+    // A resident with no session has no server row of their own — there is
+    // nothing to replace, so the queued entry must be appended, not swap out
+    // someone else's row for this zone.
+    const someoneElse = {
+      id: "checkin-1",
+      zoneId: "zone-1",
+      userId: "user-1",
+      status: "safe" as const,
+      checkedInAt: new Date().toISOString(),
+    };
+    const entry = enqueue("recordCheckIn", { zoneId: "zone-1", status: "needs_help" });
+
+    const merged = mergeCheckIns([someoneElse], [entry], null);
+
+    expect(merged).toHaveLength(2);
+    expect(merged).toContainEqual(someoneElse);
+    expect(merged.find((c) => c.id === entry.id)?.status).toBe("needs_help");
   });
 
   it("ignores an entry belonging to another store", () => {
@@ -62,7 +116,7 @@ describe("mergeCheckIns", () => {
       lng: 120.4,
     });
 
-    expect(mergeCheckIns([], [entry])).toHaveLength(0);
+    expect(mergeCheckIns([], [entry], "user-1")).toHaveLength(0);
   });
 
   it("keeps a server row for a different zone untouched by a queued check-in", () => {
@@ -75,7 +129,7 @@ describe("mergeCheckIns", () => {
     };
     const entry = enqueue("recordCheckIn", { zoneId: "zone-1", status: "needs_help" });
 
-    const merged = mergeCheckIns([zone2], [entry]);
+    const merged = mergeCheckIns([zone2], [entry], "user-1");
 
     expect(merged).toHaveLength(2);
     expect(merged.find((c) => c.zoneId === "zone-2")).toEqual(zone2);
@@ -85,7 +139,7 @@ describe("mergeCheckIns", () => {
     const entry = enqueue("recordCheckIn", { zoneId: "zone-1", status: "needs_help" });
     const failed = { ...entry, permanentlyFailed: true };
 
-    expect(mergeCheckIns([], [failed])).toHaveLength(0);
+    expect(mergeCheckIns([], [failed], "user-1")).toHaveLength(0);
   });
 
   it("lets the later of two queued check-ins for the same zone win", () => {
@@ -96,7 +150,7 @@ describe("mergeCheckIns", () => {
     const second = enqueue("recordCheckIn", { zoneId: "zone-1", status: "needs_help" });
     void second;
 
-    const merged = mergeCheckIns([], readOutbox());
+    const merged = mergeCheckIns([], readOutbox(), "user-1");
 
     expect(merged).toHaveLength(1);
     expect(merged[0].status).toBe("needs_help");
@@ -144,7 +198,7 @@ describe("getOwnCheckInForZone", () => {
     // Attribution happens at replay, so a queued check-in carries no uid —
     // but the outbox only ever holds writes made on this device.
     const entry = enqueue("recordCheckIn", { zoneId: "zone-1", status: "safe" });
-    const merged = mergeCheckIns([], [entry]);
+    const merged = mergeCheckIns([], [entry], null);
 
     expect(getOwnCheckInForZone(merged, "zone-1", null)?.status).toBe("safe");
   });
@@ -171,7 +225,7 @@ describe("recordCheckIn", () => {
     recordCheckIn("zone-1", "needs_help");
 
     expect(readOutbox()).toHaveLength(2);
-    const merged = mergeCheckIns([], readOutbox());
+    const merged = mergeCheckIns([], readOutbox(), "user-1");
     expect(merged).toHaveLength(1);
     expect(merged[0].status).toBe("needs_help");
   });

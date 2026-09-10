@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { flushOutbox, onDelivered, PermanentFailure } from "./outbox/drain";
 import { enqueue, useOutbox } from "./outbox/outbox";
 import { dispatchQueued, payloadOf } from "./outbox/dispatchers";
-import { ensureAnonymousSession } from "./auth/anonymous-session";
+import { ensureAnonymousSession, useSessionUserId } from "./auth/anonymous-session";
 import type { CheckInStatus } from "./types";
 import type { OutboxEntry, OutboxPayloads } from "./outbox/types";
 
@@ -111,17 +111,26 @@ function useServerCheckIns(): { rows: EvacuationCheckIn[]; delivered: OutboxEntr
 /**
  * Server rows with this device's queued check-in laid over them.
  *
- * Reconciled by zone, not by id — unlike every other merge in this app.
- * `mergePins` and `mergeReports` can match a queued entry to its eventual
- * server row because both carry the same id: the outbox generates it and the
- * Server Action inserts it as the primary key. A check-in's conflict target
- * is `(zone_id, user_id)`, not `id` (see `recordCheckIn`'s upsert), and a
- * queued entry has no `userId` yet — attribution happens at replay. So the
- * only key available here is the zone, and the only caller it is safe to key
- * that way against is one whose `serverRows` are already scoped to their own
- * check-ins by RLS — which is exactly what `/api/check-ins` gives a resident.
- * (An operator's wider, multi-resident view is read-only here; nothing
- * queues a check-in from that panel.)
+ * Reconciled by (zone, caller uid), not by id — unlike every other merge in
+ * this app. `mergePins` and `mergeReports` can match a queued entry to its
+ * eventual server row because both carry the same id: the outbox generates
+ * it and the Server Action inserts it as the primary key. A check-in's
+ * conflict target is `(zone_id, user_id)`, not `id` (see `recordCheckIn`'s
+ * upsert), and a queued entry has no `userId` yet — attribution happens at
+ * replay. So `id` is not available either; the zone plus the caller's own
+ * uid (passed in, not read from a hook — see the constraint on `mergeCheckIns`
+ * staying pure) is what a queued entry is matched against instead.
+ *
+ * `callerUserId` is this device's own uid, from `useSessionUserId` — never
+ * a hook call inside this function itself, so it stays a plain function
+ * usable in a loop. A queued entry only ever supersedes a server row that
+ * belongs to *this* caller for that zone; a neighbour's row (visible to an
+ * operator, whose `serverRows` span every resident in the zone) is never a
+ * candidate, because the id check above binds the drop to `row.userId`, not
+ * just `row.zoneId`. This is what makes `useEvacuationCheckIns` safe for
+ * `CheckInSummaryPanel` too, not only the resident's own `CheckInPanel`: an
+ * operator's own pending check-in can no longer wipe out every other
+ * resident's row in the zone's headcount.
  *
  * A resident who tapped "safe" and then "needs help" before either reached
  * the server has two entries queued for the same zone; the later one wins,
@@ -130,7 +139,8 @@ function useServerCheckIns(): { rows: EvacuationCheckIn[]; delivered: OutboxEntr
  */
 export function mergeCheckIns(
   serverRows: EvacuationCheckIn[],
-  queued: OutboxEntry[]
+  queued: OutboxEntry[],
+  callerUserId: string | null
 ): EvacuationCheckIn[] {
   const latestByZone = new Map<
     string,
@@ -148,10 +158,17 @@ export function mergeCheckIns(
     latestByZone.set(payload.zoneId, { entry, payload });
   }
 
-  // Every server row this device is about to supersede with a queued answer
-  // is dropped, not just the one it happens to match by id — there is no id
-  // to match on yet.
-  const rows = serverRows.filter((row) => !latestByZone.has(row.zoneId));
+  // Only the caller's own row for a zone that has a queued answer is
+  // dropped — never a neighbour's, and (explicit, not incidental — see the
+  // callerUserId === null branch) never anyone's when this device has no
+  // session yet: a resident who has not signed in has no server row of
+  // their own to replace, so the queued entry below is appended instead of
+  // displacing a row it cannot possibly own.
+  const rows = serverRows.filter((row) => {
+    if (!latestByZone.has(row.zoneId)) return true;
+    if (callerUserId === null) return true;
+    return row.userId !== callerUserId;
+  });
 
   const optimistic: EvacuationCheckIn[] = [...latestByZone.entries()].map(
     ([zoneId, { entry, payload }]) => ({
@@ -166,11 +183,22 @@ export function mergeCheckIns(
   return [...rows, ...optimistic];
 }
 
-/** Every check-in this caller can see, live — a resident's own, an operator's zone. Call once per component and filter the returned array — never call this hook inside a loop. */
+/**
+ * Every check-in this caller can see, live — a resident's own, an operator's
+ * zone. Call once per component and filter the returned array — never call
+ * this hook inside a loop.
+ *
+ * `useSessionUserId` here is the same read-only, sign-nobody-in hook
+ * `CheckInPanel` already calls for `getOwnCheckInForZone` — it reads an
+ * existing session only, so mounting this hook (including from
+ * `CheckInSummaryPanel`, which never writes) still never reaches
+ * `ensureAnonymousSession`.
+ */
 export function useEvacuationCheckIns(): EvacuationCheckIn[] {
   const { rows, delivered } = useServerCheckIns();
   const queued = useOutbox();
-  return mergeCheckIns(rows, [...queued, ...delivered]);
+  const callerUserId = useSessionUserId();
+  return mergeCheckIns(rows, [...queued, ...delivered], callerUserId);
 }
 
 export function getCheckInsForZone(checkIns: EvacuationCheckIn[], zoneId: string): EvacuationCheckIn[] {
