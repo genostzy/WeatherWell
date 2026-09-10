@@ -4,7 +4,6 @@ import { Marker, Polyline, Popup, useMapEvents } from "react-leaflet";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { getZoneStatus, getZoneStatusColor, ZONE_STATUS_LABEL } from "@/lib/zone-status";
-import { useZoneOverrides, resolveEffectiveAlert } from "@/lib/zone-overrides";
 import { useAlerts } from "@/lib/alerts-store";
 import { useCommunityPins, voteOnPin, hasVotedOnPin, isOwnPin, type CommunityPin } from "@/lib/community-pins";
 import { useSessionUserId } from "@/lib/auth/anonymous-session";
@@ -88,7 +87,6 @@ export function MapCanvas({
   onViewPhoto?: (pin: CommunityPin) => void;
 }) {
   const { lang } = useLanguage();
-  const overrides = useZoneOverrides();
   const communityPins = useCommunityPins();
   // Read once for the whole layer, not per marker: isOwnPin runs inside the
   // loop below and must not do a session lookup per pin. Null until this
@@ -123,8 +121,7 @@ export function MapCanvas({
       <HazardBackdropLayer zones={zones} hazardType={hazardType} />
 
         {zones.map((zone) => {
-          const base = alerts.find((a) => a.zoneId === zone.id && a.isActive);
-          const alert = resolveEffectiveAlert(zone.id, overrides[zone.id]?.alertSeverity, base);
+          const alert = alerts.find((a) => a.zoneId === zone.id && a.isActive);
           const status = getZoneStatus(alert);
           const color = getZoneStatusColor(alert);
           const label = `${zone.name} — ${t(ZONE_STATUS_LABEL[status], lang)}`;

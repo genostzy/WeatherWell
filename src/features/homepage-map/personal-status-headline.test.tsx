@@ -1,38 +1,31 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import { PersonalStatusHeadline } from "./personal-status-headline";
-import { setZoneAlertOverride } from "@/lib/zone-overrides";
-import { AlertsContext } from "@/lib/alerts-store";
-import { LanguageProvider } from "@/features/i18n/language-provider";
+import { renderWithData, FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
 import { getActiveAlertForZone, getFriendlyWeatherRead, MOCK_ALERTS } from "@/lib/mock-data";
-import { FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
 import { zoneWithSeverity } from "@/test-utils/mock-fixtures";
 import { t } from "@/lib/i18n";
-import type { LanguageCode, Zone } from "@/lib/types";
+import type { AlertRecord, LanguageCode, Zone } from "@/lib/types";
 
 /** Every mock zone carries an active alert, so a Safe zone has to be synthesised — this id matches none of them. */
 const SAFE_ZONE: Zone = { ...FIXTURE_REFERENCE_DATA.zones[0], id: "zone-with-no-alert" };
 
+/** MOCK_ALERTS with one zone's alert replaced — the operator-action equivalent of the old setZoneAlertOverride. */
+function withZoneAlert(zoneId: string, changes: Partial<AlertRecord>): AlertRecord[] {
+  return MOCK_ALERTS.map((a) => (a.zoneId === zoneId ? { ...a, ...changes } : a));
+}
+
 /**
  * PersonalStatusHeadline takes its zone as a prop rather than from
- * ReferenceDataContext, so it only needs a LanguageProvider (which defaults
- * to English without one) and an AlertsContext ancestor for
- * useActiveAlertForZone — MOCK_ALERTS mirrors the same fixtures
- * zoneWithSeverity/getActiveAlertForZone read below.
+ * ReferenceDataContext, so renderWithData's extra context (reference data,
+ * tooltip provider) is unused but harmless here — it's still the shared path
+ * for supplying AlertsContext via the `alerts` option.
  */
-function renderHeadline(zone: Zone, lang?: LanguageCode) {
-  return render(
-    <LanguageProvider initialLang={lang}>
-      <AlertsContext.Provider value={MOCK_ALERTS}>
-        <PersonalStatusHeadline zone={zone} />
-      </AlertsContext.Provider>
-    </LanguageProvider>
-  );
+function renderHeadline(zone: Zone, lang?: LanguageCode, alerts: AlertRecord[] = MOCK_ALERTS) {
+  return renderWithData(<PersonalStatusHeadline zone={zone} />, { lang, alerts });
 }
 
 describe("PersonalStatusHeadline", () => {
-  // Overrides persist to localStorage, so one test's downgrade would otherwise
-  // leak into the next test's idea of that zone's severity.
   beforeEach(() => {
     localStorage.clear();
   });
@@ -76,13 +69,12 @@ describe("PersonalStatusHeadline", () => {
   });
 
   it("does not let a cleared evacuation order disappear without saying so", () => {
-    // The defect this guards: clearing an override drops the alert, the
-    // headline flips to "Safe" with a weather blurb, and a resident who was
-    // told to evacuate sees no trace that anything was ever wrong — the same
-    // screen they would see if the order had been a bug (PRD layer 9).
+    // The defect this guards: an operator clears the alert, the headline
+    // flips to "Safe" with a weather blurb, and a resident who was told to
+    // evacuate sees no trace that anything was ever wrong — the same screen
+    // they would see if the order had been a bug (PRD layer 9).
     const zone = zoneWithSeverity("evacuate");
-    setZoneAlertOverride(zone.id, "none");
-    renderHeadline(zone);
+    renderHeadline(zone, undefined, withZoneAlert(zone.id, { isActive: false }));
 
     expect(screen.getByRole("heading", { name: "Safe" })).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent(/Alert lifted/i);
@@ -91,16 +83,14 @@ describe("PersonalStatusHeadline", () => {
 
   it("says so when an order is lowered rather than lifted", () => {
     const zone = zoneWithSeverity("evacuate");
-    setZoneAlertOverride(zone.id, "yellow");
-    renderHeadline(zone);
+    renderHeadline(zone, undefined, withZoneAlert(zone.id, { severity: "yellow", supersededSeverity: "evacuate" }));
 
     expect(screen.getByRole("status")).toHaveTextContent(/downgraded/i);
   });
 
   it("stays quiet when an operator escalates, which announces itself", () => {
     const zone = zoneWithSeverity("yellow");
-    setZoneAlertOverride(zone.id, "evacuate");
-    renderHeadline(zone);
+    renderHeadline(zone, undefined, withZoneAlert(zone.id, { severity: "evacuate", supersededSeverity: "yellow" }));
 
     expect(screen.getByRole("heading", { name: "Hazardous" })).toBeInTheDocument();
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
@@ -109,5 +99,19 @@ describe("PersonalStatusHeadline", () => {
   it("shows the Filipino headline when that language is active", () => {
     renderHeadline(SAFE_ZONE, "fil");
     expect(screen.getByRole("heading", { name: "Ligtas" })).toBeInTheDocument();
+  });
+
+  it("shows a new server alert even on a device that once stored a cleared override", () => {
+    // The finding this task closes. A device that recorded {"zone-1":
+    // {"alertSeverity":"none"}} last week used to suppress every later alert
+    // for that zone, including a new evacuate order. Nothing reads that key
+    // any more, and this test is what keeps it that way.
+    const zone = zoneWithSeverity("evacuate");
+    localStorage.setItem("weatherwell.zoneOverrides", JSON.stringify({ [zone.id]: { alertSeverity: "none" } }));
+
+    renderHeadline(zone);
+
+    expect(screen.getByRole("heading", { name: "Hazardous" })).toBeInTheDocument();
+    expect(screen.getByText(/evacuate/i)).toBeInTheDocument();
   });
 });

@@ -1,11 +1,26 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { screen, fireEvent } from "@testing-library/react";
+import { screen, fireEvent, waitFor } from "@testing-library/react";
 
 // The store drains the outbox after every moderation write, which reaches the
 // real Supabase browser client. Nothing here should sign anyone in.
 vi.mock("@/lib/auth/anonymous-session", () => ({
   ensureAnonymousSession: async () => null,
   useSessionUserId: () => null,
+}));
+
+const setZoneAlertMock = vi.fn().mockResolvedValue({ ok: true });
+const setCenterOccupancyMock = vi.fn().mockResolvedValue({ ok: true });
+
+// Both are "use server" modules that pull in user-server.ts, which does
+// `import "server-only"` — that throws unconditionally outside a real server
+// bundler. AdminMapCanvas only ever reaches them through a dynamic import
+// inside a popup control's change handler (see ZoneAlertSelect and
+// CenterOccupancyControl), so this mock exists for the tests that fire one.
+vi.mock("@/app/actions/set-zone-alert", () => ({
+  setZoneAlert: (...args: unknown[]) => setZoneAlertMock(...args),
+}));
+vi.mock("@/app/actions/set-center", () => ({
+  setCenterOccupancy: (...args: unknown[]) => setCenterOccupancyMock(...args),
 }));
 
 import { AdminMapCanvas } from "./admin-map-canvas";
@@ -17,16 +32,12 @@ import type { OutboxPayloads } from "@/lib/outbox/types";
 /**
  * Same shallow approach as MapCanvas's own test: jsdom has no layout engine,
  * so this checks that the admin controls render and that using one actually
- * writes to the store behind it — not that Leaflet's pixel math is right.
+ * calls the write behind it — not that Leaflet's pixel math is right.
  *
  * Marker popups only render once opened, so each test clicks the marker
  * (exposed as role="img" carrying the icon's aria-label) before querying the
  * control inside it.
  */
-function storedOverrides(): Record<string, { alertSeverity?: string; currentOccupancy?: number }> {
-  const raw = localStorage.getItem("weatherwell.zoneOverrides");
-  return raw ? JSON.parse(raw) : {};
-}
 
 /**
  * Pins come from /api/pins now, so a test that wants one on the map serves
@@ -70,6 +81,8 @@ describe("AdminMapCanvas", () => {
   beforeEach(() => {
     localStorage.clear();
     servePins([]);
+    setZoneAlertMock.mockClear();
+    setCenterOccupancyMock.mockClear();
   });
 
   afterEach(() => {
@@ -84,7 +97,7 @@ describe("AdminMapCanvas", () => {
     expect(screen.getByRole("checkbox", { name: /cascade chain/i })).toBeChecked();
   });
 
-  it("writes a severity override when an admin picks one from a zone popup", () => {
+  it("writes a severity when an admin picks one from a zone popup", async () => {
     renderWithData(<AdminMapCanvas zones={FIXTURE_REFERENCE_DATA.zones} />);
     fireEvent.click(screen.getByRole("img", { name: new RegExp(zone.name, "i") }));
 
@@ -92,19 +105,34 @@ describe("AdminMapCanvas", () => {
       target: { value: "evacuate" },
     });
 
-    expect(storedOverrides()[zone.id]?.alertSeverity).toBe("evacuate");
+    await waitFor(() => expect(setZoneAlertMock).toHaveBeenCalledWith({ zoneId: zone.id, severity: "evacuate" }));
   });
 
-  it("clears the override back to automatic", () => {
+  it("clears a zone's alert — there is no longer an 'automatic' fallback to clear it to", async () => {
     renderWithData(<AdminMapCanvas zones={FIXTURE_REFERENCE_DATA.zones} />);
     fireEvent.click(screen.getByRole("img", { name: new RegExp(zone.name, "i") }));
     const select = screen.getByRole("combobox", { name: new RegExp(zone.name, "i") });
 
-    fireEvent.change(select, { target: { value: "evacuate" } });
-    fireEvent.change(select, { target: { value: "auto" } });
+    // The old "Automatic (from reports)" option is gone: since alerts now
+    // live in Postgres there is no local mock to fall back to, only the
+    // alert that exists or a deliberate clear.
+    expect(screen.queryByRole("option", { name: /automatic/i })).not.toBeInTheDocument();
 
-    // "auto" means no override at all, not an override whose value is "auto".
-    expect(storedOverrides()[zone.id]?.alertSeverity).toBeUndefined();
+    fireEvent.change(select, { target: { value: "none" } });
+
+    await waitFor(() => expect(setZoneAlertMock).toHaveBeenCalledWith({ zoneId: zone.id, severity: "none" }));
+  });
+
+  it("tells the admin when a severity write fails", async () => {
+    setZoneAlertMock.mockResolvedValueOnce({ ok: false, permanent: true, error: "boom" });
+    renderWithData(<AdminMapCanvas zones={FIXTURE_REFERENCE_DATA.zones} />);
+    fireEvent.click(screen.getByRole("img", { name: new RegExp(zone.name, "i") }));
+
+    fireEvent.change(screen.getByRole("combobox", { name: new RegExp(zone.name, "i") }), {
+      target: { value: "evacuate" },
+    });
+
+    expect(await screen.findByText(/could not save/i)).toBeInTheDocument();
   });
 
   it("shows the zone's computed risk score alongside the override control", () => {
@@ -115,7 +143,7 @@ describe("AdminMapCanvas", () => {
     expect(screen.getByText(/advisory only/i)).toBeInTheDocument();
   });
 
-  it("writes an evacuation center headcount from its marker popup", () => {
+  it("writes an evacuation center headcount from its marker popup", async () => {
     renderWithData(<AdminMapCanvas zones={FIXTURE_REFERENCE_DATA.zones} />);
     fireEvent.click(screen.getByRole("img", { name: new RegExp(zone.evacuationCenterName, "i") }));
 
@@ -124,7 +152,22 @@ describe("AdminMapCanvas", () => {
       { target: { value: "120" } }
     );
 
-    expect(storedOverrides()[zone.id]?.currentOccupancy).toBe(120);
+    await waitFor(() =>
+      expect(setCenterOccupancyMock).toHaveBeenCalledWith({ zoneId: zone.id, occupancy: 120 })
+    );
+  });
+
+  it("tells the admin when a headcount write fails", async () => {
+    setCenterOccupancyMock.mockResolvedValueOnce({ ok: false, permanent: true, error: "boom" });
+    renderWithData(<AdminMapCanvas zones={FIXTURE_REFERENCE_DATA.zones} />);
+    fireEvent.click(screen.getByRole("img", { name: new RegExp(zone.evacuationCenterName, "i") }));
+
+    fireEvent.change(
+      screen.getByRole("spinbutton", { name: new RegExp(zone.evacuationCenterName, "i") }),
+      { target: { value: "120" } }
+    );
+
+    expect(await screen.findByText(/could not save/i)).toBeInTheDocument();
   });
 
   it("queues a removal from a community pin's popup", async () => {

@@ -26,10 +26,9 @@ import { t } from "@/lib/i18n";
 import { DEPTH_LABEL, DEPTH_CM, DEPTH_SEVERITY, type DepthLevel } from "@/lib/depth";
 import { getRainfallForZone, isHeavyRainfall } from "@/lib/mock-data";
 import { addWaterLevelReport } from "@/lib/water-level-reports";
-import { useZoneOverrides, resolveEffectiveAlert, resolveEffectiveCenterStatus } from "@/lib/zone-overrides";
 import { useActiveAlertForZone } from "@/lib/alerts-store";
 import { getZoneStatus, getZoneStatusColor, ZONE_STATUS_LABEL } from "@/lib/zone-status";
-import { CENTER_STATUS_LABEL, CENTER_STATUS_CLASS } from "@/lib/center-status";
+import { CENTER_STATUS_LABEL, CENTER_STATUS_CLASS, resolveEffectiveCenterStatus } from "@/lib/center-status";
 import type { LocalizedText } from "@/lib/types";
 
 const PAGE_TITLE: LocalizedText = { en: "Report water level", fil: "Iulat ang lalim ng tubig" };
@@ -72,7 +71,6 @@ export default function ReportPage() {
   const [saveFailed, setSaveFailed] = useState(false);
   const zone = useSelectedZone();
   const { lang } = useLanguage();
-  const overrides = useZoneOverrides();
 
   function handleSubmit(depthLevel: DepthLevel): boolean {
     try {
@@ -96,21 +94,16 @@ export default function ReportPage() {
     return true;
   }
 
-  const base = useActiveAlertForZone(zone.id);
-  const alert = resolveEffectiveAlert(zone.id, overrides[zone.id]?.alertSeverity, base);
+  const alert = useActiveAlertForZone(zone.id);
   const status = getZoneStatus(alert);
   const statusColor = getZoneStatusColor(alert);
   const rainfall = getRainfallForZone(zone.id);
   // Capacity and occupancy are not optional in practice: without them a
   // tracked headcount is skipped and this page shows the zone's default while
   // every other surface shows the derived status, so the same centre reads
-  // "Full" on the evacuation page and "Space available" here.
-  const centerStatus = resolveEffectiveCenterStatus(
-    zone.centerStatus,
-    overrides[zone.id]?.centerStatus,
-    zone.evacuationCenterCapacity,
-    overrides[zone.id]?.currentOccupancy
-  );
+  // "Full" on the evacuation page and "Space available" here. No live
+  // headcount is wired through /api/zones yet, so occupancy stays undefined.
+  const centerStatus = resolveEffectiveCenterStatus(zone.centerStatus, zone.evacuationCenterCapacity, undefined);
 
   return (
     <main className="flex flex-1 flex-col items-center gap-6 p-4 sm:p-6 lg:p-8">

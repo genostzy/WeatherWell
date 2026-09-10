@@ -6,6 +6,7 @@ import { LanguageToggle } from "@/features/i18n/language-toggle";
 import { SelectedZoneHotlineButton } from "@/components/selected-zone-hotline-button";
 import { ServiceWorkerRegistration } from "@/components/service-worker-registration";
 import { OutboxDrain } from "@/components/outbox-drain";
+import { RetiredStorageSweep } from "@/components/retired-storage-sweep";
 import { ReferenceDataProvider } from "@/lib/reference-data/provider";
 
 export const viewport: Viewport = {
@@ -35,6 +36,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <LanguageProvider>
             <ServiceWorkerRegistration />
             <OutboxDrain />
+            <RetiredStorageSweep />
             <header className="flex items-center justify-center gap-4 p-3">
               <span className="font-semibold">WeatherWell</span>
               <LanguageToggle />

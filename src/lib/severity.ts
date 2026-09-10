@@ -31,7 +31,7 @@ const PAGASA_RAINFALL_WARNING_LABEL: Partial<Record<Severity, LocalizedText>> = 
 };
 
 /** A concrete action step for every severity, so generated alert copy always says what to do, not just what's happening (PRD Climate Resilience plan, Gap E). */
-export const SEVERITY_ACTION_STEP: Record<Severity, LocalizedText> = {
+const SEVERITY_ACTION_STEP: Record<Severity, LocalizedText> = {
   yellow: { en: "Stay alert for updates.", fil: "Manatiling alerto sa mga update." },
   orange: {
     en: "Monitor conditions and prepare to evacuate.",

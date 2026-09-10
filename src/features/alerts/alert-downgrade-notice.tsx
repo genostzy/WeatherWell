@@ -4,7 +4,7 @@ import { ArrowDownCircle } from "lucide-react";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { SEVERITY_LABEL } from "@/lib/severity";
-import type { AlertDowngradeNotice as Notice } from "@/lib/zone-overrides";
+import type { AlertDowngradeNotice as Notice } from "@/lib/alert-downgrade";
 
 /**
  * PRD Anti-Abuse layer 9, "Transparent downgrade": when an operator lowers or

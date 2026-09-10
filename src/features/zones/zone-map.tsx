@@ -34,8 +34,7 @@ import {
 import { useCommunityPins, type CommunityPin } from "@/lib/community-pins";
 import { useHazardsForZone } from "@/lib/reference-data/use-reference-data";
 import { getZoneStatus, getZoneStatusColor, ZONE_STATUS_LABEL, type ZoneStatus } from "@/lib/zone-status";
-import { CENTER_STATUS_LABEL, CENTER_STATUS_CLASS } from "@/lib/center-status";
-import { useZoneOverrides, resolveEffectiveAlert, resolveEffectiveCenterStatus } from "@/lib/zone-overrides";
+import { CENTER_STATUS_LABEL, CENTER_STATUS_CLASS, resolveEffectiveCenterStatus } from "@/lib/center-status";
 import { useAlerts, useActiveAlertForZone } from "@/lib/alerts-store";
 import type { HazardRiskLevel, HazardType, LanguageCode, LocalizedText, Zone } from "@/lib/types";
 
@@ -88,20 +87,13 @@ const STATUS_FILTERS: ZoneStatus[] = ["safe", "cautionary", "dangerous", "hazard
  */
 export function ZoneMap({ zones }: { zones: Zone[] }) {
   const { lang } = useLanguage();
-  const overrides = useZoneOverrides();
   const pins = useCommunityPins();
   const selectedZone = useSelectedZone();
   const alerts = useAlerts();
   const [statusFilter, setStatusFilter] = useState<ZoneStatus | "all">("all");
 
   const statusOf = (zone: Zone) =>
-    getZoneStatus(
-      resolveEffectiveAlert(
-        zone.id,
-        overrides[zone.id]?.alertSeverity,
-        alerts.find((a) => a.zoneId === zone.id && a.isActive)
-      )
-    );
+    getZoneStatus(alerts.find((a) => a.zoneId === zone.id && a.isActive));
 
   const countByStatus = (status: ZoneStatus) => zones.filter((zone) => statusOf(zone) === status).length;
   const visibleZones = statusFilter === "all" ? zones : zones.filter((zone) => statusOf(zone) === statusFilter);
@@ -142,7 +134,6 @@ export function ZoneMap({ zones }: { zones: Zone[] }) {
             key={zone.id}
             zone={zone}
             lang={lang}
-            overrides={overrides}
             pins={pins}
             isOwnZone={zone.id === selectedZone.id}
           />
@@ -161,26 +152,22 @@ export function ZoneMap({ zones }: { zones: Zone[] }) {
 function ZoneCard({
   zone,
   lang,
-  overrides,
   pins,
   isOwnZone,
 }: {
   zone: Zone;
   lang: LanguageCode;
-  overrides: ReturnType<typeof useZoneOverrides>;
   pins: CommunityPin[];
   isOwnZone: boolean;
 }) {
   const susceptibility = useHazardsForZone(zone.id);
-  const base = useActiveAlertForZone(zone.id);
-  const alert = resolveEffectiveAlert(zone.id, overrides[zone.id]?.alertSeverity, base);
+  const alert = useActiveAlertForZone(zone.id);
   const status = getZoneStatus(alert);
   const color = getZoneStatusColor(alert);
   const centerStatus = resolveEffectiveCenterStatus(
     zone.centerStatus,
-    overrides[zone.id]?.centerStatus,
     zone.evacuationCenterCapacity,
-    overrides[zone.id]?.currentOccupancy
+    undefined
   );
   const rainfall = getRainfallForZone(zone.id);
   const zonePins = pins.filter((pin) => pin.zoneId === zone.id).length;

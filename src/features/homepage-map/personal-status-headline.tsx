@@ -4,8 +4,8 @@ import { ShieldCheck, TriangleAlert } from "lucide-react";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { getZoneStatus, getZoneStatusColor, ZONE_STATUS_LABEL } from "@/lib/zone-status";
-import { useZoneOverrides, resolveEffectiveAlert, resolveAlertDowngrade } from "@/lib/zone-overrides";
-import { useActiveAlertForZone } from "@/lib/alerts-store";
+import { resolveAlertDowngrade } from "@/lib/alert-downgrade";
+import { useActiveAlertForZone, useAlerts } from "@/lib/alerts-store";
 import { AlertDowngradeNotice } from "@/features/alerts/alert-downgrade-notice";
 import { getFriendlyWeatherRead } from "@/lib/mock-data";
 import type { Zone } from "@/lib/types";
@@ -14,16 +14,15 @@ import type { Zone } from "@/lib/types";
  * The resident's own zone status, shown at the top of the homepage. Reuses
  * the same safe/cautionary/dangerous/hazardous scale (and exact severity
  * color) already driving the map markers and legend — this is a presentation
- * of that existing data, not a new status model. Also reflects any admin/zone
- * override (see zone-overrides.ts) so a barangay official's own edit — or an
- * admin's — is visible here immediately, not just on the dashboards.
+ * of that existing data, not a new status model. Also reflects an operator's
+ * own edit to the zone's alert (see set-zone-alert.ts) immediately, not just
+ * on the dashboards, since both read the same Postgres row.
  */
 export function PersonalStatusHeadline({ zone }: { zone: Zone }) {
   const { lang } = useLanguage();
-  const overrides = useZoneOverrides();
-  const base = useActiveAlertForZone(zone.id);
-  const alert = resolveEffectiveAlert(zone.id, overrides[zone.id]?.alertSeverity, base);
-  const downgrade = resolveAlertDowngrade(zone.id, overrides[zone.id]?.alertSeverity, base);
+  const alert = useActiveAlertForZone(zone.id);
+  const alerts = useAlerts();
+  const downgrade = resolveAlertDowngrade(alerts.filter((a) => a.zoneId === zone.id));
   const status = getZoneStatus(alert);
   const color = getZoneStatusColor(alert);
   const Icon = status === "safe" ? ShieldCheck : TriangleAlert;

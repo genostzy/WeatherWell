@@ -8,8 +8,8 @@ import { AlertDowngradeNotice } from "@/features/alerts/alert-downgrade-notice";
 import { useSelectedZone } from "@/features/zones/use-selected-zone";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
-import { useZoneOverrides, resolveEffectiveAlert, resolveAlertDowngrade } from "@/lib/zone-overrides";
-import { useActiveAlertForZone } from "@/lib/alerts-store";
+import { resolveAlertDowngrade } from "@/lib/alert-downgrade";
+import { useActiveAlertForZone, useAlerts } from "@/lib/alerts-store";
 import { getZoneStatus } from "@/lib/zone-status";
 import type { LocalizedText } from "@/lib/types";
 
@@ -18,10 +18,9 @@ const HEADING: LocalizedText = { en: "Evacuation", fil: "Paglikas" };
 export default function EvacuationPage() {
   const { lang } = useLanguage();
   const zone = useSelectedZone();
-  const overrides = useZoneOverrides();
-  const base = useActiveAlertForZone(zone.id);
-  const alert = resolveEffectiveAlert(zone.id, overrides[zone.id]?.alertSeverity, base);
-  const downgrade = resolveAlertDowngrade(zone.id, overrides[zone.id]?.alertSeverity, base);
+  const alert = useActiveAlertForZone(zone.id);
+  const alerts = useAlerts();
+  const downgrade = resolveAlertDowngrade(alerts.filter((a) => a.zoneId === zone.id));
   const status = getZoneStatus(alert);
   const showCheckIn = status === "dangerous" || status === "hazardous";
 

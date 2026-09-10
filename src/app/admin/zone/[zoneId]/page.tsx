@@ -1,6 +1,6 @@
 "use client";
 
-import { use } from "react";
+import { use, useState } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Building2, Phone } from "lucide-react";
@@ -23,15 +23,7 @@ import {
 import { useHazardsForZone, useZones } from "@/lib/reference-data/use-reference-data";
 import { useActiveAlertForZone } from "@/lib/alerts-store";
 import { SEVERITY_ORDER, SEVERITY_LABEL, SEVERITY_HEX, type Severity } from "@/lib/severity";
-import { CENTER_STATUS_LABEL, CENTER_STATUS_ORDER } from "@/lib/center-status";
-import {
-  useZoneOverrides,
-  resolveEffectiveAlert,
-  resolveEffectiveCenterStatus,
-  setZoneAlertOverride,
-  setZoneCenterStatusOverride,
-  type AlertOverrideValue,
-} from "@/lib/zone-overrides";
+import { CENTER_STATUS_LABEL, CENTER_STATUS_ORDER, resolveEffectiveCenterStatus } from "@/lib/center-status";
 import { SeverityBadge } from "@/features/alerts/severity-badge";
 import { TrendChart } from "@/features/admin/charts/trend-chart";
 import { RecentReportsPanel } from "@/features/water-level-report/recent-reports-panel";
@@ -42,7 +34,6 @@ import type { CenterStatus, LocalizedText } from "@/lib/types";
 const BACK_TO_DASHBOARD: LocalizedText = { en: "Back to admin dashboard", fil: "Balik sa admin dashboard" };
 const MANAGE_ZONE: LocalizedText = { en: "Manage zone", fil: "Pamahalaan ang zone" };
 const ALERT_STATUS: LocalizedText = { en: "Alert status", fil: "Katayuan ng Alerto" };
-const AUTOMATIC: LocalizedText = { en: "Automatic (from reports)", fil: "Awtomatiko (mula sa mga ulat)" };
 const CLEAR_NO_ALERT: LocalizedText = { en: "Clear — no alert", fil: "Ligtas — walang alerto" };
 const CURRENT_STATUS: LocalizedText = { en: "Current status", fil: "Kasalukuyang katayuan" };
 const CLEAR: LocalizedText = { en: "Clear", fil: "Ligtas" };
@@ -55,30 +46,50 @@ const NOTE: LocalizedText = {
   en: "Changes here are visible everywhere in the app immediately — the homepage map, the zone list, and the admin dashboard.",
   fil: "Ang mga pagbabago dito ay makikita agad sa buong app — sa homepage map, listahan ng mga zone, at admin dashboard.",
 };
+const SAVE_FAILED: LocalizedText = { en: "Could not save — try again.", fil: "Hindi na-save — subukan ulit." };
 
-const ALERT_OVERRIDE_VALUES: (AlertOverrideValue | "auto")[] = ["auto", "none", ...SEVERITY_ORDER];
+const ALERT_SEVERITY_VALUES: (Severity | "none")[] = ["none", ...SEVERITY_ORDER];
 
 export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zoneId]">) {
   const { zoneId } = use(params);
   const { lang } = useLanguage();
-  const overrides = useZoneOverrides();
   const zones = useZones();
   const susceptibility = useHazardsForZone(zoneId);
-  const base = useActiveAlertForZone(zoneId);
+  const alert = useActiveAlertForZone(zoneId);
+  const [alertError, setAlertError] = useState(false);
+  const [statusError, setStatusError] = useState(false);
 
-  const zone = zones.find((z) => z.id === zoneId);
-  if (!zone) notFound();
+  const foundZone = zones.find((z) => z.id === zoneId);
+  if (!foundZone) notFound();
+  // Reassigned to a variable TypeScript can narrow inside the closures below:
+  // it does not carry the `if (!foundZone)` narrowing across a nested
+  // function's own scope, even though `zone` is a const that cannot change.
+  const zone = foundZone;
 
-  const alertOverride = overrides[zone.id]?.alertSeverity;
-  const effectiveAlert = resolveEffectiveAlert(zone.id, alertOverride, base);
-  const centerStatus = resolveEffectiveCenterStatus(
-    zone.centerStatus,
-    overrides[zone.id]?.centerStatus,
-    zone.evacuationCenterCapacity,
-    overrides[zone.id]?.currentOccupancy
-  );
+  // No live headcount is wired through /api/zones yet, so this page's
+  // capacity status is always the zone's own centerStatus.
+  const centerStatus = resolveEffectiveCenterStatus(zone.centerStatus, zone.evacuationCenterCapacity, undefined);
   const rainfall = getRainfallForZone(zone.id);
   const rainfallHistory = getRainfallHistoryForZone(zone.id);
+
+  // Dynamic imports, not static ones: set-zone-alert.ts and set-center.ts are
+  // "use server" modules that transitively import "server-only", which
+  // throws if evaluated outside a server bundle. A static import here would
+  // pull them into every test that merely renders this page; the dynamic
+  // import defers that to the moment an admin actually changes a value.
+  async function handleAlertChange(value: Severity | "none") {
+    setAlertError(false);
+    const { setZoneAlert } = await import("@/app/actions/set-zone-alert");
+    const result = await setZoneAlert({ zoneId: zone.id, severity: value });
+    if (!result.ok) setAlertError(true);
+  }
+
+  async function handleStatusChange(value: CenterStatus) {
+    setStatusError(false);
+    const { setCenterStatus } = await import("@/app/actions/set-center");
+    const result = await setCenterStatus({ zoneId: zone.id, status: value });
+    if (!result.ok) setStatusError(true);
+  }
 
   return (
     <main className="flex flex-1 flex-col items-center gap-6 p-4 sm:p-6 lg:p-8">
@@ -102,8 +113,8 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between gap-3">
               <span className="text-sm text-muted-foreground">{t(CURRENT_STATUS, lang)}</span>
-              {effectiveAlert ? (
-                <SeverityBadge severity={effectiveAlert.severity} />
+              {alert ? (
+                <SeverityBadge severity={alert.severity} />
               ) : (
                 <span className="text-sm font-medium text-green-500">{t(CLEAR, lang)}</span>
               )}
@@ -114,29 +125,21 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
                 {t(ALERT_STATUS, lang)}
               </label>
               <Select
-                value={alertOverride ?? "auto"}
-                onValueChange={(value) =>
-                  setZoneAlertOverride(
-                    zone.id,
-                    value === "auto" ? undefined : (value as AlertOverrideValue)
-                  )
-                }
+                value={alert?.severity ?? "none"}
+                onValueChange={(value) => void handleAlertChange(value as Severity | "none")}
               >
                 <SelectTrigger id="alert-override-select">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {ALERT_OVERRIDE_VALUES.map((value) => (
+                  {ALERT_SEVERITY_VALUES.map((value) => (
                     <SelectItem key={value} value={value}>
-                      {value === "auto"
-                        ? t(AUTOMATIC, lang)
-                        : value === "none"
-                        ? t(CLEAR_NO_ALERT, lang)
-                        : t(SEVERITY_LABEL[value as Severity], lang)}
+                      {value === "none" ? t(CLEAR_NO_ALERT, lang) : t(SEVERITY_LABEL[value], lang)}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {alertError && <p className="text-xs text-severity-red">{t(SAVE_FAILED, lang)}</p>}
             </div>
           </CardContent>
         </Card>
@@ -161,10 +164,7 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
               <label htmlFor="capacity-select" className="text-sm font-medium">
                 {t(CAPACITY, lang)}
               </label>
-              <Select
-                value={centerStatus}
-                onValueChange={(value) => setZoneCenterStatusOverride(zone.id, value as CenterStatus)}
-              >
+              <Select value={centerStatus} onValueChange={(value) => void handleStatusChange(value as CenterStatus)}>
                 <SelectTrigger id="capacity-select">
                   <SelectValue />
                 </SelectTrigger>
@@ -176,6 +176,7 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
                   ))}
                 </SelectContent>
               </Select>
+              {statusError && <p className="text-xs text-severity-red">{t(SAVE_FAILED, lang)}</p>}
             </div>
           </CardContent>
         </Card>

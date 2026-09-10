@@ -7,15 +7,7 @@ import { t } from "@/lib/i18n";
 import { MOCK_CASCADES } from "@/lib/mock-data";
 import { getZoneStatus, getZoneStatusColor, ZONE_STATUS_LABEL } from "@/lib/zone-status";
 import { SEVERITY_ORDER, SEVERITY_LABEL, type Severity } from "@/lib/severity";
-import { CENTER_STATUS_LABEL } from "@/lib/center-status";
-import {
-  useZoneOverrides,
-  resolveEffectiveAlert,
-  resolveEffectiveCenterStatus,
-  setZoneAlertOverride,
-  setZoneOccupancyOverride,
-  type AlertOverrideValue,
-} from "@/lib/zone-overrides";
+import { CENTER_STATUS_LABEL, resolveEffectiveCenterStatus } from "@/lib/center-status";
 import { useAlerts } from "@/lib/alerts-store";
 import {
   useAllCommunityPins,
@@ -35,14 +27,13 @@ import {
   createEvacuationMarkerIcon,
   createCommunityPinMarkerIcon,
 } from "@/features/map/marker-icons";
-import type { HazardType, LocalizedText, Zone } from "@/lib/types";
+import type { AlertRecord, HazardType, LanguageCode, LocalizedText, Zone } from "@/lib/types";
 
 const MAP_ARIA_LABEL: LocalizedText = {
   en: "Admin operations map",
   fil: "Mapa ng operasyon ng admin",
 };
 const ALERT_SEVERITY: LocalizedText = { en: "Alert severity", fil: "Severity ng alerto" };
-const AUTOMATIC: LocalizedText = { en: "Automatic (from reports)", fil: "Awtomatiko (mula sa ulat)" };
 const CLEAR_NO_ALERT: LocalizedText = { en: "Clear — no alert", fil: "Ligtas — walang alerto" };
 const RISK_SCORE: LocalizedText = { en: "Risk score", fil: "Risk score" };
 const ADVISORY_ONLY: LocalizedText = { en: "advisory only", fil: "payo lamang" };
@@ -62,9 +53,7 @@ const LAYER_PINS: LocalizedText = { en: "Community pins", fil: "Community pins" 
 const LAYER_POIS: LocalizedText = { en: "Essential services", fil: "Mahahalagang serbisyo" };
 const LAYER_CASCADE: LocalizedText = { en: "Cascade chain", fil: "Cascade chain" };
 const CASCADE_LINE_COLOR = "#8b5cf6";
-
-/** "auto" means no override at all — distinct from "none", which actively clears a zone's alert. */
-type SeveritySelectValue = AlertOverrideValue | "auto";
+const SAVE_FAILED: LocalizedText = { en: "Could not save — try again.", fil: "Hindi na-save — subukan ulit." };
 
 interface LayerVisibility {
   hazard: boolean;
@@ -87,7 +76,6 @@ interface LayerVisibility {
  */
 export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
   const { lang } = useLanguage();
-  const overrides = useZoneOverrides();
   const allPins = useAllCommunityPins();
   const hazards = useHazards();
   const alerts = useAlerts();
@@ -103,9 +91,8 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
   const center: [number, number] = [zones[0].lat, zones[0].lng];
   const zoneById = new Map(zones.map((zone) => [zone.id, zone]));
 
-  /** The risk score's cascade factor must follow the operator's own overrides, not the mock data underneath them. */
-  const hasEffectiveAlert = (zoneId: string) =>
-    resolveEffectiveAlert(zoneId, overrides[zoneId]?.alertSeverity, baseAlertFor(zoneId)) !== undefined;
+  /** The risk score's cascade factor must follow the zone's actual alert. */
+  const hasEffectiveAlert = (zoneId: string) => baseAlertFor(zoneId) !== undefined;
 
   function toggleLayer(key: keyof LayerVisibility) {
     setLayers((current) => ({ ...current, [key]: !current[key] }));
@@ -171,8 +158,7 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
         })}
 
       {zones.map((zone) => {
-        const override = overrides[zone.id]?.alertSeverity;
-        const alert = resolveEffectiveAlert(zone.id, override, baseAlertFor(zone.id));
+        const alert = baseAlertFor(zone.id);
         const status = getZoneStatus(alert);
         const label = `${zone.name} — ${t(ZONE_STATUS_LABEL[status], lang)}`;
         const riskScore = computeZoneState(
@@ -192,80 +178,27 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
                   {t(ADVISORY_ONLY, lang)}
                 </p>
 
-                {/* A native select rather than the shadcn one: Radix renders its
-                    listbox in a portal, which fights a Leaflet popup's own
-                    positioning and stacking. Admin-only surface, so the plain
-                    control is the safer trade. */}
-                <label className="block space-y-1">
-                  <span className="text-xs font-medium">{t(ALERT_SEVERITY, lang)}</span>
-                  <select
-                    value={override ?? "auto"}
-                    onChange={(event) => {
-                      const value = event.target.value as SeveritySelectValue;
-                      setZoneAlertOverride(zone.id, value === "auto" ? undefined : value);
-                    }}
-                    aria-label={`${t(ALERT_SEVERITY, lang)} — ${zone.name}`}
-                    className="w-full rounded-md border-2 border-border bg-background px-2 py-1 text-sm"
-                  >
-                    <option value="auto">{t(AUTOMATIC, lang)}</option>
-                    <option value="none">{t(CLEAR_NO_ALERT, lang)}</option>
-                    {SEVERITY_ORDER.map((severity: Severity) => (
-                      <option key={severity} value={severity}>
-                        {t(SEVERITY_LABEL[severity], lang)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <ZoneAlertSelect zone={zone} alert={alert} lang={lang} />
               </div>
             </Popup>
           </Marker>
         );
       })}
 
-      {zones.map((zone) => {
-        const occupancy = overrides[zone.id]?.currentOccupancy;
-        const centerStatus = resolveEffectiveCenterStatus(
-          zone.centerStatus,
-          overrides[zone.id]?.centerStatus,
-          zone.evacuationCenterCapacity,
-          occupancy
-        );
-        return (
-          <Marker
-            key={`evac-${zone.id}`}
-            position={[zone.evacuationCenterLat, zone.evacuationCenterLng]}
-            icon={createEvacuationMarkerIcon(zone.evacuationCenterName)}
-          >
-            <Popup>
-              <div className="space-y-2 text-sm">
-                <p className="font-medium">{zone.evacuationCenterName}</p>
-                <p className="text-xs text-muted-foreground">
-                  {t(CENTER_STATUS_LABEL[centerStatus], lang)}
-                  {occupancy !== undefined &&
-                    ` · ${Math.max(0, zone.evacuationCenterCapacity - occupancy)} ${t(SPOTS_LEFT, lang)}`}
-                </p>
-                <label className="block space-y-1">
-                  <span className="text-xs font-medium">
-                    {t(HEADCOUNT, lang)} ({t(OF, lang)} {zone.evacuationCenterCapacity})
-                  </span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={zone.evacuationCenterCapacity}
-                    value={occupancy ?? ""}
-                    onChange={(event) => {
-                      const raw = event.target.value;
-                      setZoneOccupancyOverride(zone.id, raw === "" ? undefined : Number(raw));
-                    }}
-                    aria-label={`${t(HEADCOUNT, lang)} — ${zone.evacuationCenterName}`}
-                    className="w-full rounded-md border-2 border-border bg-background px-2 py-1 text-sm"
-                  />
-                </label>
-              </div>
-            </Popup>
-          </Marker>
-        );
-      })}
+      {zones.map((zone) => (
+        <Marker
+          key={`evac-${zone.id}`}
+          position={[zone.evacuationCenterLat, zone.evacuationCenterLng]}
+          icon={createEvacuationMarkerIcon(zone.evacuationCenterName)}
+        >
+          <Popup>
+            <div className="space-y-2 text-sm">
+              <p className="font-medium">{zone.evacuationCenterName}</p>
+              <CenterOccupancyControl zone={zone} lang={lang} />
+            </div>
+          </Popup>
+        </Marker>
+      ))}
 
       {/* Reads useAllCommunityPins, not useCommunityPins: a removed pin has to
           stay visible here or there'd be no way to restore one that voting took
@@ -324,5 +257,113 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
           );
         })}
     </MapShell>
+  );
+}
+
+/**
+ * The alert-severity control for one zone's marker popup. Its own component
+ * (not inline in AdminMapCanvas's zones.map()) so its pending-error state is
+ * a real useState call at the top of a component body, not a hook called
+ * from inside a loop.
+ *
+ * A native select rather than the shadcn one: Radix renders its listbox in a
+ * portal, which fights a Leaflet popup's own positioning and stacking.
+ * Admin-only surface, so the plain control is the safer trade.
+ */
+function ZoneAlertSelect({
+  zone,
+  alert,
+  lang,
+}: {
+  zone: Zone;
+  alert: AlertRecord | undefined;
+  lang: LanguageCode;
+}) {
+  const [error, setError] = useState(false);
+
+  // Dynamic import, not a static one: set-zone-alert.ts is a "use server"
+  // module that transitively imports "server-only", which throws if it is
+  // ever evaluated outside a server bundle. A static import here would pull
+  // it into every test that merely renders this component; the dynamic
+  // import defers that to the moment an admin actually changes the select.
+  async function handleChange(value: Severity | "none") {
+    setError(false);
+    const { setZoneAlert } = await import("@/app/actions/set-zone-alert");
+    const result = await setZoneAlert({ zoneId: zone.id, severity: value });
+    if (!result.ok) setError(true);
+  }
+
+  return (
+    <label className="block space-y-1">
+      <span className="text-xs font-medium">{t(ALERT_SEVERITY, lang)}</span>
+      <select
+        value={alert?.severity ?? "none"}
+        onChange={(event) => void handleChange(event.target.value as Severity | "none")}
+        aria-label={`${t(ALERT_SEVERITY, lang)} — ${zone.name}`}
+        className="w-full rounded-md border-2 border-border bg-background px-2 py-1 text-sm"
+      >
+        <option value="none">{t(CLEAR_NO_ALERT, lang)}</option>
+        {SEVERITY_ORDER.map((severity: Severity) => (
+          <option key={severity} value={severity}>
+            {t(SEVERITY_LABEL[severity], lang)}
+          </option>
+        ))}
+      </select>
+      {error && <p className="text-xs text-severity-red">{t(SAVE_FAILED, lang)}</p>}
+    </label>
+  );
+}
+
+/**
+ * The headcount control for one zone's evacuation-center popup — its own
+ * component for the same reason ZoneAlertSelect is: a per-marker useState
+ * call must not live inside AdminMapCanvas's zones.map().
+ *
+ * The typed headcount lives only in this component's own state: no live
+ * occupancy is wired through /api/zones yet (evacuation_centers has the
+ * column, the route doesn't select it), so there is nothing to read a
+ * current value back from. Typing here still derives the status shown below
+ * immediately and writes it to the database via setCenterOccupancy.
+ */
+function CenterOccupancyControl({ zone, lang }: { zone: Zone; lang: LanguageCode }) {
+  const [occupancy, setOccupancy] = useState<number | undefined>(undefined);
+  const [error, setError] = useState(false);
+  const centerStatus = resolveEffectiveCenterStatus(zone.centerStatus, zone.evacuationCenterCapacity, occupancy);
+
+  // Dynamic import for the same reason ZoneAlertSelect's does: set-center.ts
+  // is a "use server" module and must not be pulled statically into a
+  // client-component test's module graph.
+  async function handleChange(raw: string) {
+    const value = raw === "" ? undefined : Number(raw);
+    setOccupancy(value);
+    setError(false);
+    const { setCenterOccupancy } = await import("@/app/actions/set-center");
+    const result = await setCenterOccupancy({ zoneId: zone.id, occupancy: value ?? null });
+    if (!result.ok) setError(true);
+  }
+
+  return (
+    <>
+      <p className="text-xs text-muted-foreground">
+        {t(CENTER_STATUS_LABEL[centerStatus], lang)}
+        {occupancy !== undefined &&
+          ` · ${Math.max(0, zone.evacuationCenterCapacity - occupancy)} ${t(SPOTS_LEFT, lang)}`}
+      </p>
+      <label className="block space-y-1">
+        <span className="text-xs font-medium">
+          {t(HEADCOUNT, lang)} ({t(OF, lang)} {zone.evacuationCenterCapacity})
+        </span>
+        <input
+          type="number"
+          min={0}
+          max={zone.evacuationCenterCapacity}
+          value={occupancy ?? ""}
+          onChange={(event) => void handleChange(event.target.value)}
+          aria-label={`${t(HEADCOUNT, lang)} — ${zone.evacuationCenterName}`}
+          className="w-full rounded-md border-2 border-border bg-background px-2 py-1 text-sm"
+        />
+      </label>
+      {error && <p className="text-xs text-severity-red">{t(SAVE_FAILED, lang)}</p>}
+    </>
   );
 }

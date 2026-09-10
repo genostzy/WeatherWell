@@ -32,7 +32,7 @@ import {
   getReportsTodayForZone,
   isHeavyRainfall,
 } from "@/lib/mock-data";
-import { useZoneOverrides, resolveEffectiveAlert, resolveEffectiveCenterStatus } from "@/lib/zone-overrides";
+import { resolveEffectiveCenterStatus } from "@/lib/center-status";
 import { useAlerts } from "@/lib/alerts-store";
 import { useCommunityPins } from "@/lib/community-pins";
 import { useZones, useHazards } from "@/lib/reference-data/use-reference-data";
@@ -81,32 +81,20 @@ const RISK_SCORE_HINT: LocalizedText = {
 
 export default function AdminPage() {
   const { lang } = useLanguage();
-  const overrides = useZoneOverrides();
   const pins = useCommunityPins();
   const zones = useZones();
   const hazards = useHazards();
   const alerts = useAlerts();
   const baseAlertFor = (zoneId: string) => alerts.find((a) => a.zoneId === zoneId && a.isActive);
 
-  const zonesUnderAlert = zones.filter(
-    (zone) =>
-      getZoneStatus(
-        resolveEffectiveAlert(zone.id, overrides[zone.id]?.alertSeverity, baseAlertFor(zone.id))
-      ) !== "safe"
-  ).length;
+  const zonesUnderAlert = zones.filter((zone) => getZoneStatus(baseAlertFor(zone.id)) !== "safe").length;
   const reportsToday = zones.reduce((sum, zone) => sum + getReportsTodayForZone(zone.id), 0);
   const heaviestRain = Math.max(...zones.map((zone) => getRainfallForZone(zone.id)));
   const constrainedCenters = zones.filter((zone) => {
-    const status = resolveEffectiveCenterStatus(
-      zone.centerStatus,
-      overrides[zone.id]?.centerStatus,
-      zone.evacuationCenterCapacity,
-      overrides[zone.id]?.currentOccupancy
-    );
+    const status = resolveEffectiveCenterStatus(zone.centerStatus, zone.evacuationCenterCapacity, undefined);
     return status !== "space_available";
   }).length;
-  const hasEffectiveAlert = (zoneId: string) =>
-    resolveEffectiveAlert(zoneId, overrides[zoneId]?.alertSeverity, baseAlertFor(zoneId)) !== undefined;
+  const hasEffectiveAlert = (zoneId: string) => baseAlertFor(zoneId) !== undefined;
   const zoneStates = zones.map((zone) =>
     computeZoneState(buildZoneInputForZone(zone, zones, hasEffectiveAlert, hazards))
   );

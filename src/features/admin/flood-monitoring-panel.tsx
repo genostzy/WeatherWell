@@ -17,7 +17,6 @@ import {
 import { useHazardsForZone } from "@/lib/reference-data/use-reference-data";
 import { TimeAgo } from "@/components/time-ago";
 import { getZoneStatus, getZoneStatusColor, ZONE_STATUS_LABEL } from "@/lib/zone-status";
-import { useZoneOverrides, resolveEffectiveAlert } from "@/lib/zone-overrides";
 import { useActiveAlertForZone } from "@/lib/alerts-store";
 import { DEPTH_LABEL } from "@/lib/depth";
 import type { HazardRiskLevel, LanguageCode, LocalizedText, Zone } from "@/lib/types";
@@ -43,7 +42,6 @@ const SUSCEPTIBILITY_LABEL: Record<HazardRiskLevel, LocalizedText> = {
 
 export function FloodMonitoringPanel({ zones }: { zones: Zone[] }) {
   const { lang } = useLanguage();
-  const overrides = useZoneOverrides();
   const allReports = useWaterLevelReports();
 
   return (
@@ -57,7 +55,7 @@ export function FloodMonitoringPanel({ zones }: { zones: Zone[] }) {
       </CardHeader>
       <CardContent className="space-y-3">
         {zones.map((zone) => (
-          <FloodMonitoringRow key={zone.id} zone={zone} lang={lang} overrides={overrides} allReports={allReports} />
+          <FloodMonitoringRow key={zone.id} zone={zone} lang={lang} allReports={allReports} />
         ))}
       </CardContent>
     </Card>
@@ -67,16 +65,13 @@ export function FloodMonitoringPanel({ zones }: { zones: Zone[] }) {
 function FloodMonitoringRow({
   zone,
   lang,
-  overrides,
   allReports,
 }: {
   zone: Zone;
   lang: LanguageCode;
-  overrides: ReturnType<typeof useZoneOverrides>;
   allReports: LiveWaterLevelReport[];
 }) {
-  const base = useActiveAlertForZone(zone.id);
-  const alert = resolveEffectiveAlert(zone.id, overrides[zone.id]?.alertSeverity, base);
+  const alert = useActiveAlertForZone(zone.id);
   const status = getZoneStatus(alert);
   const statusColor = getZoneStatusColor(alert);
   const susceptibility = useHazardsForZone(zone.id).flood;

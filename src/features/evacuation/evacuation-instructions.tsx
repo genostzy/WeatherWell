@@ -5,8 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
-import { CENTER_STATUS_CLASS, CENTER_STATUS_LABEL } from "@/lib/center-status";
-import { useZoneOverrides, resolveEffectiveCenterStatus } from "@/lib/zone-overrides";
+import { CENTER_STATUS_CLASS, CENTER_STATUS_LABEL, resolveEffectiveCenterStatus } from "@/lib/center-status";
 import type { LocalizedText, Zone } from "@/lib/types";
 
 const GO_HERE: LocalizedText = { en: "Go here", fil: "Pumunta rito" };
@@ -17,14 +16,11 @@ const SPOTS_LEFT: LocalizedText = { en: "spots left", fil: "espasyong natitira" 
 
 export function EvacuationInstructions({ zone }: { zone: Zone }) {
   const { lang } = useLanguage();
-  const overrides = useZoneOverrides();
-  const occupancy = overrides[zone.id]?.currentOccupancy;
-  const centerStatus = resolveEffectiveCenterStatus(
-    zone.centerStatus,
-    overrides[zone.id]?.centerStatus,
-    zone.evacuationCenterCapacity,
-    occupancy
-  );
+  // No live headcount is wired through /api/zones yet, so this stays
+  // undefined — resolveEffectiveCenterStatus falls back to the zone's own
+  // centerStatus, same as every other read-only surface.
+  const occupancy: number | undefined = undefined;
+  const centerStatus = resolveEffectiveCenterStatus(zone.centerStatus, zone.evacuationCenterCapacity, occupancy);
 
   return (
     <Card className="w-full max-w-md">

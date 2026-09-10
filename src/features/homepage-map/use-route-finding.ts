@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { getZoneStatus, type ZoneStatus } from "@/lib/zone-status";
-import { useZoneOverrides, resolveEffectiveAlert } from "@/lib/zone-overrides";
 import { useAlerts } from "@/lib/alerts-store";
 import { routeCrossesHazard } from "./route-hazard";
 import type { LocalizedText, Zone } from "@/lib/types";
@@ -32,23 +31,16 @@ const HAZARDOUS_DESTINATION_STATUSES = new Set<ZoneStatus>(["dangerous", "hazard
 export function useRouteFinding(zones: Zone[]) {
   const [routeZoneId, setRouteZoneId] = useState<string | null>(zones[0]?.id ?? null);
   const [notice, setNotice] = useState<LocalizedText | null>(null);
-  const overrides = useZoneOverrides();
   const alerts = useAlerts();
 
   /**
-   * One override-aware definition of a zone's status, shared by every check
-   * below. Previously "find safe area" resolved overrides while the hazard
-   * check read raw mock data, so this hook could answer "is that zone
-   * hazardous?" two different ways in the same render.
+   * One shared definition of a zone's status, used by every check below.
+   * Previously "find safe area" resolved overrides while the hazard check
+   * read raw mock data, so this hook could answer "is that zone hazardous?"
+   * two different ways in the same render.
    */
   const zoneStatusOf = (zoneId: string) =>
-    getZoneStatus(
-      resolveEffectiveAlert(
-        zoneId,
-        overrides[zoneId]?.alertSeverity,
-        alerts.find((a) => a.zoneId === zoneId && a.isActive)
-      )
-    );
+    getZoneStatus(alerts.find((a) => a.zoneId === zoneId && a.isActive));
 
   const routeZone = zones.find((z) => z.id === routeZoneId) ?? null;
   const routeHazard = routeZone ? routeCrossesHazard(routeZone, zones, zoneStatusOf) : false;
