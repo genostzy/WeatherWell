@@ -38,5 +38,6 @@ export function toAlertRecords(rows: AlertRow[]): AlertRecord[] {
     predictedTiming: row.predicted_timing ?? undefined,
     issuedAt: row.issued_at,
     isActive: row.is_active,
+    supersededSeverity: row.superseded_severity ?? undefined,
   }));
 }

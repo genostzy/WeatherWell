@@ -42,10 +42,11 @@ export async function GET() {
     confidence: row.confidence as AlertRecord["confidence"],
     message: row.message as AlertRecord["message"],
     predicted_timing: row.predicted_timing as AlertRecord["predictedTiming"] | null,
-    // Fetched and narrowed for a consumer that does not exist yet: the layer 9
-    // "Alert downgraded" / "Alert lifted" notice described in the data-layer
-    // design doc. toAlertRecords (alerts-mapper.ts) intentionally does not map
-    // this onto AlertRecord — that notice is a later slice, not this one.
+    // Narrowed here for the same reason severity/source/confidence/message
+    // are: a CHECK-constrained text column the generated types render as
+    // `string`. toAlertRecords (alerts-mapper.ts) maps this onto
+    // AlertRecord.supersededSeverity, which layer 9 reads to explain a
+    // downgrade without a join or a history walk.
     superseded_severity: row.superseded_severity as AlertRecord["severity"] | null,
   }));
 

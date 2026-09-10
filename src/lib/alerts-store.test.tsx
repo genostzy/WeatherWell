@@ -44,6 +44,16 @@ describe("toAlertRecords", () => {
     const records = toAlertRecords([{ ...ROW, is_active: false }]);
     expect(records[0].isActive).toBe(false);
   });
+
+  it("carries supersededSeverity through when set — layer 9 reads it to explain a downgrade with no join", () => {
+    const records = toAlertRecords([{ ...ROW, superseded_severity: "red" }]);
+    expect(records[0].supersededSeverity).toBe("red");
+  });
+
+  it("maps a null superseded_severity to undefined, not null", () => {
+    const records = toAlertRecords([{ ...ROW, superseded_severity: null }]);
+    expect(records[0].supersededSeverity).toBeUndefined();
+  });
 });
 
 const ACTIVE_ALERT: AlertRecord = {

@@ -408,7 +408,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      set_zone_alert: {
+        Args: { p_message: Json; p_severity: string; p_zone_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never

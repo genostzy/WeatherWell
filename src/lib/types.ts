@@ -60,6 +60,12 @@ export interface AlertRecord {
   predictedTiming?: LocalizedText;
   issuedAt: string;
   isActive: boolean;
+  /**
+   * The severity this alert replaced, or undefined if it replaced nothing.
+   * Set by the database when an operator changes a zone's alert; layer 9
+   * reads it to explain a downgrade without a join or a history walk.
+   */
+  supersededSeverity?: Severity;
 }
 
 export interface PredictionStep {

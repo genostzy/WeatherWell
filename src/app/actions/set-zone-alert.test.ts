@@ -1,0 +1,109 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+const getClaims = vi.fn();
+const rpc = vi.fn();
+const from = vi.fn();
+
+vi.mock("@/lib/supabase/user-server", () => ({
+  createSupabaseUserClient: async () => ({ auth: { getClaims }, rpc, from }),
+}));
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
+describe("setZoneAlert", () => {
+  it("records what the new alert replaced, so the downgrade can be explained", async () => {
+    // superseded_severity is what makes layer 9 need no join and no history
+    // walk. Without it, a resident who was told to evacuate and then sees an
+    // Advisory badge has no way to learn that a person made that decision.
+    getClaims.mockResolvedValue({ data: { claims: { sub: "operator-1" } } });
+    rpc.mockResolvedValue({ error: null });
+    const { setZoneAlert } = await import("./set-zone-alert");
+
+    await setZoneAlert({ zoneId: "zone-1", severity: "yellow" });
+
+    expect(rpc).toHaveBeenCalledWith("set_zone_alert", expect.objectContaining({
+      p_zone_id: "zone-1",
+      p_severity: "yellow",
+    }));
+  });
+
+  it("refuses a severity that is not one of the four", async () => {
+    getClaims.mockResolvedValue({ data: { claims: { sub: "operator-1" } } });
+    const { setZoneAlert } = await import("./set-zone-alert");
+
+    const result = await setZoneAlert({ zoneId: "zone-1", severity: "purple" as "yellow" });
+
+    expect(result).toEqual({ ok: false, permanent: true, error: expect.any(String) });
+  });
+
+  it("passes a null p_severity for the 'none' case, so the function deactivates without inserting", async () => {
+    getClaims.mockResolvedValue({ data: { claims: { sub: "operator-1" } } });
+    rpc.mockResolvedValue({ error: null });
+    const { setZoneAlert } = await import("./set-zone-alert");
+
+    await setZoneAlert({ zoneId: "zone-1", severity: "none" });
+
+    expect(rpc).toHaveBeenCalledWith("set_zone_alert", expect.objectContaining({
+      p_zone_id: "zone-1",
+      p_severity: null,
+    }));
+  });
+
+  it("generates copy for the new severity, not whatever the zone's previous alert said", async () => {
+    // Copy written for one severity must never survive onto another — the
+    // database enforces this structurally (a new severity is a new row), but
+    // the message this action builds has to match the severity it is sending,
+    // not the caller's-eye view of "the zone's current wording".
+    getClaims.mockResolvedValue({ data: { claims: { sub: "operator-1" } } });
+    rpc.mockResolvedValue({ error: null });
+    const { setZoneAlert } = await import("./set-zone-alert");
+
+    await setZoneAlert({ zoneId: "zone-1", severity: "evacuate" });
+
+    const call = rpc.mock.calls[0][1] as { p_message: { en: string } };
+    expect(call.p_message.en).toContain("Evacuate immediately");
+  });
+
+  it("does not call rpc with a null p_message for a real severity", async () => {
+    getClaims.mockResolvedValue({ data: { claims: { sub: "operator-1" } } });
+    rpc.mockResolvedValue({ error: null });
+    const { setZoneAlert } = await import("./set-zone-alert");
+
+    await setZoneAlert({ zoneId: "zone-1", severity: "red" });
+
+    const call = rpc.mock.calls[0][1] as { p_message: unknown };
+    expect(call.p_message).not.toBeNull();
+  });
+
+  it("treats a missing session as a reportable failure — there is no queue to retry into", async () => {
+    getClaims.mockResolvedValue({ data: { claims: undefined } });
+    const { setZoneAlert } = await import("./set-zone-alert");
+
+    const result = await setZoneAlert({ zoneId: "zone-1", severity: "yellow" });
+
+    expect(result).toMatchObject({ ok: false, permanent: true });
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("reports an RLS denial from a resident calling this as a permanent failure", async () => {
+    getClaims.mockResolvedValue({ data: { claims: { sub: "resident-1" } } });
+    rpc.mockResolvedValue({ error: { code: "42501", message: "denied" } });
+    const { setZoneAlert } = await import("./set-zone-alert");
+
+    const result = await setZoneAlert({ zoneId: "zone-1", severity: "yellow" });
+
+    expect(result).toMatchObject({ ok: false, permanent: true });
+  });
+
+  it("reports any other database error as permanent too, since there is nothing to retry into", async () => {
+    getClaims.mockResolvedValue({ data: { claims: { sub: "operator-1" } } });
+    rpc.mockResolvedValue({ error: { code: "08006", message: "connection reset" } });
+    const { setZoneAlert } = await import("./set-zone-alert");
+
+    const result = await setZoneAlert({ zoneId: "zone-1", severity: "yellow" });
+
+    expect(result).toMatchObject({ ok: false, permanent: true });
+  });
+});
