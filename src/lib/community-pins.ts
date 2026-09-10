@@ -417,9 +417,9 @@ export function hasVotedOnPin(pin: CommunityPin): boolean {
  * Net-score auto-removal moved to the database with the tallies. It cannot be
  * computed here any more and should not be: a threshold evaluated on one
  * device against that device's view of the counts is a different answer per
- * device. It is decided server-side, by a database trigger — see
- * NET_SCORE_REMOVAL_THRESHOLD in community-pin.ts and the
- * pin_votes_apply_net_score_removal migration.
+ * device. It is decided server-side, by a database trigger — see the
+ * pointer comment in community-pin.ts and the
+ * pin_votes_apply_net_score_removal migration it names.
  */
 export function voteOnPin(pinId: string, direction: 1 | -1): void {
   // The buttons are disabled once a vote is queued (see hasVotedOnPin), so

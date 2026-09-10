@@ -11,7 +11,6 @@ vi.mock("@/lib/auth/anonymous-session", () => ({
 }));
 
 import { enqueue, markFailed, readOutbox } from "@/lib/outbox/outbox";
-import { exceedsRemovalThreshold } from "@/lib/community-pin";
 import {
   mergePins,
   isOwnPin,
@@ -299,15 +298,12 @@ describe("queued writes", () => {
   });
 });
 
-describe("net-score removal", () => {
-  it("removes a pin once downvotes exceed upvotes by the threshold", () => {
-    // PRD Anti-Abuse layer 10. A well-corroborated pin is not killed by a
-    // handful of bad-faith downvotes, so the test is on the MARGIN, not on
-    // the downvote count.
-    expect(exceedsRemovalThreshold({ upvotes: 0, downvotes: 5 })).toBe(true);
-    expect(exceedsRemovalThreshold({ upvotes: 4, downvotes: 8 })).toBe(false);
-  });
-});
+// Net-score removal (PRD Anti-Abuse layer 10) used to have a unit test here
+// against exceedsRemovalThreshold. That predicate is gone along with the
+// TypeScript copy of the threshold it tested — the rule is enforced solely
+// by the `private.apply_net_score_removal` trigger now, and its coverage
+// moved to supabase/tests/rls.sql, the project's own home for database
+// assertions. See src/lib/community-pin.ts for the pointer.
 
 describe("hasVotedOnPin", () => {
   it("reads the caller's own vote off the pin", () => {

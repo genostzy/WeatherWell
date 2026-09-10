@@ -1,6 +1,5 @@
 "use server";
 
-import { exceedsRemovalThreshold } from "@/lib/community-pin";
 import { createSupabaseUserClient } from "@/lib/supabase/user-server";
 import type { ActionResult } from "./action-result";
 
@@ -101,40 +100,17 @@ export async function voteOnPin(input: VoteOnPinInput): Promise<ActionResult> {
 
   if (error) return classify(error);
 
-  // Layer 10's automatic removal, now decided by the server's real tally
-  // instead of one device's partial view of it (see NET_SCORE_REMOVAL_THRESHOLD).
-  //
-  // This block is best-effort and its own failure — thrown or returned — must
-  // never turn a landed vote into a reported failure, which is why it is
-  // wrapped rather than left to propagate. It has to be: the UPDATE below
-  // runs as the voter, not as the pin's author, and RLS's
-  // pins_update_own_or_operator refuses it for anyone else's pin — silently,
-  // zero rows, no error — which is confirmed live against this database (see
-  // the migration `pin_votes_apply_net_score_removal` for the evidence and
-  // for why a `private`-schema RPC call cannot stand in for it either:
-  // PostgREST does not resolve a schema-qualified RPC name outside `public`
-  // at all, proven with a real round trip, independent of any grant). The
-  // trigger that migration adds is what actually performs this removal, as a
-  // side effect of the upsert above, already inside this same request. The
-  // attempt here only ever lands on its own in the one case RLS already
-  // allows directly — a resident whose own downvote is the one that crosses
-  // the margin on their own pin — and is a harmless, idempotent no-op
-  // everywhere else.
-  try {
-    const { data: tally } = await supabase.from("pin_votes").select("direction").eq("pin_id", input.pinId);
-    if (tally) {
-      const upvotes = tally.filter((vote) => vote.direction === 1).length;
-      const downvotes = tally.filter((vote) => vote.direction === -1).length;
-      if (exceedsRemovalThreshold({ upvotes, downvotes })) {
-        await supabase
-          .from("community_pins")
-          .update({ removed: true, removed_reason: "net_score" })
-          .eq("id", input.pinId);
-      }
-    }
-  } catch {
-    // See the comment above — this step is not what makes removal happen.
-  }
+  // Layer 10's automatic removal happens here too, but not as anything this
+  // action computes or writes: `pin_votes_apply_net_score_removal`, a
+  // trigger on `pin_votes` (see the migration of the same name), recomputes
+  // the tally and removes the pin as a side effect of the upsert above,
+  // already inside this same request, running as the table's owner rather
+  // than as this voter — which is the only way it can work at all, since
+  // RLS's pins_update_own_or_operator refuses a direct UPDATE from anyone
+  // but the pin's own author (silently, zero rows, no error) and PostgREST
+  // will not even resolve an RPC into schema `private` for this voter to
+  // call instead. See `src/lib/community-pin.ts` for where the threshold
+  // itself is defined.
 
   return { ok: true };
 }

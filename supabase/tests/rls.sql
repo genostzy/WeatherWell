@@ -442,6 +442,100 @@ begin
   raise notice 'ok: resident cannot change another resident''s vote (unchanged, update matched zero rows)';
 end $$;
 
+-- Task 4 fix round 1: the net-score removal margin (PRD Anti-Abuse layer 10)
+-- used to have a TypeScript unit test directly against
+-- exceedsRemovalThreshold in src/lib/community-pin.ts. That predicate (and
+-- its hand-kept threshold copy) is gone now — private.apply_net_score_removal
+-- (the trigger created by supabase/migrations/
+-- 20260910071158_pin_votes_apply_net_score_removal.sql) is the sole
+-- mechanism that decides and performs removal, so its margin is what these
+-- two assertions prove. This is the trigger's own business logic, not the
+-- RLS boundary around voting (Important 4, bullet 2, above already covers
+-- that), so fixture votes are inserted directly as postgres, the same way
+-- the one-active-alert and one-vote-per-person invariants above are: an
+-- AFTER INSERT trigger fires regardless of which role performs the insert,
+-- so switching roles here would prove nothing extra about this property.
+-- Each vote is its own INSERT, cast one at a time, matching how the
+-- migration's own comment says this was proven live.
+insert into auth.users (id)
+values
+  ('66666666-6666-6666-6666-666666666666'), -- author of both fixture pins below
+  ('77777777-0000-0000-0000-000000000001'),
+  ('77777777-0000-0000-0000-000000000002'),
+  ('77777777-0000-0000-0000-000000000003'),
+  ('77777777-0000-0000-0000-000000000004'),
+  ('77777777-0000-0000-0000-000000000005'),
+  ('77777777-0000-0000-0000-000000000006'),
+  ('77777777-0000-0000-0000-000000000007'),
+  ('77777777-0000-0000-0000-000000000008'),
+  ('77777777-0000-0000-0000-000000000009'),
+  ('77777777-0000-0000-0000-000000000010'),
+  ('77777777-0000-0000-0000-000000000011'),
+  ('77777777-0000-0000-0000-000000000012');
+
+insert into public.community_pins (id, zone_id, status_tag, caption, lat, lng, author_id)
+values
+  ('88888888-8888-8888-8888-000000000001', 'tests-fixture-zone', 'flooded',
+   'net-score fixture: 0 up / 5 down, margin 5, at the threshold', 14.2, 121.2,
+   '66666666-6666-6666-6666-666666666666'),
+  ('88888888-8888-8888-8888-000000000002', 'tests-fixture-zone', 'flooded',
+   'net-score fixture: 4 up / 8 down, margin 4, below the threshold', 14.3, 121.3,
+   '66666666-6666-6666-6666-666666666666');
+
+-- 5 downvotes, 0 upvotes: margin 5, exactly at the threshold -> removed.
+insert into public.pin_votes (pin_id, voter_id, direction) values ('88888888-8888-8888-8888-000000000001', '77777777-0000-0000-0000-000000000001', -1);
+insert into public.pin_votes (pin_id, voter_id, direction) values ('88888888-8888-8888-8888-000000000001', '77777777-0000-0000-0000-000000000002', -1);
+insert into public.pin_votes (pin_id, voter_id, direction) values ('88888888-8888-8888-8888-000000000001', '77777777-0000-0000-0000-000000000003', -1);
+insert into public.pin_votes (pin_id, voter_id, direction) values ('88888888-8888-8888-8888-000000000001', '77777777-0000-0000-0000-000000000004', -1);
+insert into public.pin_votes (pin_id, voter_id, direction) values ('88888888-8888-8888-8888-000000000001', '77777777-0000-0000-0000-000000000005', -1);
+
+select tests.as_user('66666666-6666-6666-6666-666666666666');
+select tests.expect_row_count(
+  'net-score trigger removes a pin at 5 down / 0 up (margin 5, at the threshold)',
+  $$select * from public.community_pins
+    where id = '88888888-8888-8888-8888-000000000001'
+      and removed = true and removed_reason = 'net_score'$$,
+  1);
+
+-- 8 downvotes, 4 upvotes: margin 4, one short of the threshold -> survives.
+-- This is the whole point of a margin rather than a raw downvote count
+-- (PRD Anti-Abuse layer 10): this pin's raw downvote count (8) is HIGHER
+-- than the pin removed above (5), yet it is not removed, because enough
+-- corroborating upvotes hold the margin below the threshold.
+--
+-- Order matters here and is deliberate, not incidental: the trigger's `and
+-- not removed` guard (see the migration) is one-directional — once a pin is
+-- marked removed, no later vote un-removes it, even if the tally the guard
+-- would recompute has since fallen back under the threshold. Casting all 8
+-- downvotes before any upvote would trip the threshold at the 5th downvote
+-- (0 up / 5 down, margin 5) and lock the pin removed regardless of the 4
+-- upvotes that arrive after — proving nothing about the margin this
+-- assertion exists to check. Interleaving the votes so the running margin
+-- (downs so far minus ups so far) never reaches 5 at any prefix is what
+-- makes "8 down / 4 up, final margin 4" the state actually reached: down,
+-- up, down, up, down, up, down, up (margin oscillates 1,0,1,0,1,0,1,0),
+-- then four more downs straight (margin climbs 1,2,3,4, never 5).
+insert into public.pin_votes (pin_id, voter_id, direction) values ('88888888-8888-8888-8888-000000000002', '77777777-0000-0000-0000-000000000001', -1);
+insert into public.pin_votes (pin_id, voter_id, direction) values ('88888888-8888-8888-8888-000000000002', '77777777-0000-0000-0000-000000000009', 1);
+insert into public.pin_votes (pin_id, voter_id, direction) values ('88888888-8888-8888-8888-000000000002', '77777777-0000-0000-0000-000000000002', -1);
+insert into public.pin_votes (pin_id, voter_id, direction) values ('88888888-8888-8888-8888-000000000002', '77777777-0000-0000-0000-000000000010', 1);
+insert into public.pin_votes (pin_id, voter_id, direction) values ('88888888-8888-8888-8888-000000000002', '77777777-0000-0000-0000-000000000003', -1);
+insert into public.pin_votes (pin_id, voter_id, direction) values ('88888888-8888-8888-8888-000000000002', '77777777-0000-0000-0000-000000000011', 1);
+insert into public.pin_votes (pin_id, voter_id, direction) values ('88888888-8888-8888-8888-000000000002', '77777777-0000-0000-0000-000000000004', -1);
+insert into public.pin_votes (pin_id, voter_id, direction) values ('88888888-8888-8888-8888-000000000002', '77777777-0000-0000-0000-000000000012', 1);
+insert into public.pin_votes (pin_id, voter_id, direction) values ('88888888-8888-8888-8888-000000000002', '77777777-0000-0000-0000-000000000005', -1);
+insert into public.pin_votes (pin_id, voter_id, direction) values ('88888888-8888-8888-8888-000000000002', '77777777-0000-0000-0000-000000000006', -1);
+insert into public.pin_votes (pin_id, voter_id, direction) values ('88888888-8888-8888-8888-000000000002', '77777777-0000-0000-0000-000000000007', -1);
+insert into public.pin_votes (pin_id, voter_id, direction) values ('88888888-8888-8888-8888-000000000002', '77777777-0000-0000-0000-000000000008', -1);
+
+select tests.as_user('66666666-6666-6666-6666-666666666666');
+select tests.expect_row_count(
+  'net-score trigger leaves a pin alone at 8 down / 4 up (margin 4, below the threshold)',
+  $$select * from public.community_pins
+    where id = '88888888-8888-8888-8888-000000000002'
+      and removed = false$$,
+  1);
+
 -- Important 4, bullet 3: insert was tested, update was not. Reuses the
 -- active 'red' alert on tests-fixture-zone from the uniqueness block above.
 -- alerts_update_operator's USING clause is is_operator(), which is false
