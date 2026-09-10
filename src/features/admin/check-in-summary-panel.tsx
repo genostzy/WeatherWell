@@ -60,7 +60,7 @@ export function CheckInSummaryPanel({ zoneId }: { zoneId: string }) {
                 key={checkIn.id}
                 className="flex items-center justify-between rounded bg-severity-red/10 px-2 py-1 text-sm text-severity-red"
               >
-                <span>{checkIn.deviceId.slice(0, 8)}</span>
+                <span>{checkIn.userId.slice(0, 8)}</span>
                 <span>
                   {minutesSinceReport(checkIn.checkedInAt)} {t(MIN_AGO, lang)}
                 </span>

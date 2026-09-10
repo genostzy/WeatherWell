@@ -20,7 +20,7 @@
  * CURRENT_CACHES, so a bump is what evicts a bad build from installed devices.
  * Leaving it unchanged is what pins users to a stale app forever.
  */
-const VERSION = "v6";
+const VERSION = "v7";
 
 const SHELL_CACHE = `weatherwell-shell-${VERSION}`;
 const ASSET_CACHE = `weatherwell-assets-${VERSION}`;
@@ -256,6 +256,17 @@ self.addEventListener("fetch", (event) => {
   // Zone and evacuation data: instant from cache, refreshed behind the scenes.
   if (url.pathname === "/api/zones" || url.pathname.startsWith("/api/zones/")) {
     event.respondWith(staleWhileRevalidate(request, ZONE_CACHE));
+    return;
+  }
+
+  // Check-ins name a person and say whether they need help. Straight to the
+  // network, never stored, never answered from a store. This is deliberately
+  // its own branch above the public-API allowlist rather than an omission
+  // from that list: an omission would send it to the uncached default, which
+  // is the same behaviour today but would silently change the day somebody
+  // makes the default cache again.
+  if (url.pathname === "/api/check-ins" || url.pathname.startsWith("/api/check-ins/")) {
+    event.respondWith(fetch(request));
     return;
   }
 

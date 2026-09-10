@@ -366,6 +366,37 @@ describe("service worker request routing", () => {
     expect(store.get(API_CACHE)?.has(`${ORIGIN}/api/reports`)).toBe(true);
   });
 
+  it("never writes a check-in response to any cache", async () => {
+    // A check-in names a person and says whether they need help. RLS scopes
+    // the rows; it cannot stop a shared cache handing one device's response
+    // to another. This is the one route in the app that must not be stored.
+    const { listeners, store } = loadServiceWorker({
+      fetch: async () => response("CHECK-IN DATA"),
+    });
+
+    await handleFetch(listeners, { url: `${ORIGIN}/api/check-ins` });
+
+    expect(store.size).toBe(0);
+  });
+
+  it("does not answer a check-in request from cache even when one is present", async () => {
+    // The dangerous direction is the read, not the write: a response sitting
+    // in API_CACHE — the cache the generic /api/ allowlist branch reads from
+    // — must not be served for this path. Seeding that specific cache, not
+    // some cache this route could never touch, is what makes this test able
+    // to fail: see the report for the break/restore proof that the dedicated
+    // branch above is what stops it, not an accident of routing.
+    const { listeners } = loadServiceWorker({
+      caches: { [API_CACHE]: { [`${ORIGIN}/api/check-ins`]: "STALE" } },
+      fetch: async () => response("FRESH CHECK-IN DATA"),
+    });
+
+    const result = await handleFetch(listeners, { url: `${ORIGIN}/api/check-ins` });
+
+    expect(result?.body).not.toBe("STALE");
+    expect(result?.body).toBe("FRESH CHECK-IN DATA");
+  });
+
   it("keeps serving zones from the unversioned zone cache", async () => {
     // The one cache deliberately exempt from version bumps, so a device that
     // updates and then loses signal keeps its evacuation instructions. This

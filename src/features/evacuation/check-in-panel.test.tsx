@@ -1,11 +1,31 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { CheckInPanel } from "./check-in-panel";
 
+// recordCheckIn triggers a drain, which calls ensureAnonymousSession — stub
+// it to resolve null (offline-like) so the real Supabase browser client is
+// never touched and, since drainOutbox then never runs, the dynamically
+// -imported Server Action (record-check-in.ts, which transitively pulls in
+// user-server.ts's `import "server-only"`) never loads either.
+// useSessionUserId is stubbed alongside it for the same reason — this panel
+// is a pure read of "am I already signed in", not a write.
+vi.mock("@/lib/auth/anonymous-session", () => ({
+  ensureAnonymousSession: vi.fn().mockResolvedValue(null),
+  useSessionUserId: () => null,
+}));
+
 describe("CheckInPanel", () => {
   beforeEach(() => {
     localStorage.clear();
+    // useEvacuationCheckIns fetches /api/check-ins on mount; stub it to an
+    // empty list so every test starts from "no server rows" and the assertions
+    // below are entirely about the queued, optimistic check-in.
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => [] }));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("shows no confirmation before a resident checks in", () => {

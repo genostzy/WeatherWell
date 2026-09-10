@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { useEvacuationCheckIns, getOwnCheckInForZone, recordCheckIn } from "@/lib/evacuation-checkins";
+import { useSessionUserId } from "@/lib/auth/anonymous-session";
 import type { LocalizedText } from "@/lib/types";
 
 const TITLE: LocalizedText = { en: "Let others know you're okay", fil: "Ipaalam na ikaw ay ligtas" };
@@ -31,7 +32,8 @@ const CHECKED_IN_NEEDS_HELP: LocalizedText = {
 export function CheckInPanel({ zoneId }: { zoneId: string }) {
   const { lang } = useLanguage();
   const checkIns = useEvacuationCheckIns();
-  const ownCheckIn = getOwnCheckInForZone(checkIns, zoneId);
+  const userId = useSessionUserId();
+  const ownCheckIn = getOwnCheckInForZone(checkIns, zoneId, userId);
 
   return (
     <Card>
