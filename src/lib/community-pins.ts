@@ -252,10 +252,18 @@ export function mergePins(serverRows: CommunityPin[], queued: OutboxEntry[]): Co
     if (vote) {
       const pin = pins.get(vote.pinId);
       if (pin) {
+        // The server row can already carry this caller's own vote in this
+        // exact direction — the tally endpoint derives ownVote from
+        // pin_votes, and a resident's queued vote lands on the server well
+        // before its next refetch clears the entry from the outbox (see
+        // useServerPins). Incrementing again on top of a server count that
+        // already includes this vote would double it for the one resident
+        // who cast it, on every load until the entry is cleared.
+        const serverAlreadyCountsThisVote = pin.ownVote === vote.direction;
         pins.set(vote.pinId, {
           ...pin,
-          upvotes: pin.upvotes + (vote.direction === 1 ? 1 : 0),
-          downvotes: pin.downvotes + (vote.direction === -1 ? 1 : 0),
+          upvotes: pin.upvotes + (!serverAlreadyCountsThisVote && vote.direction === 1 ? 1 : 0),
+          downvotes: pin.downvotes + (!serverAlreadyCountsThisVote && vote.direction === -1 ? 1 : 0),
           ownVote: vote.direction,
         });
       }
@@ -402,23 +410,32 @@ export function hasVotedOnPin(pin: CommunityPin): boolean {
 /**
  * Casts a vote — PRD Anti-Abuse layer 10, one vote per resident per pin.
  *
- * Queued like every other write. The dispatcher for `voteOnPin` is still the
- * throwing placeholder Task 4 replaces, which means a vote cast today stays in
- * the outbox and retries rather than being lost: that is exactly what the
- * placeholder was written to guarantee, and mergePins draws it in the meantime
- * so the resident sees their vote land.
+ * Queued like every other write; mergePins draws the queued direction onto
+ * the pin at once (see mergePins), so the resident sees their vote land
+ * before dispatchQueuedVote ever reaches the server.
  *
  * Net-score auto-removal moved to the database with the tallies. It cannot be
  * computed here any more and should not be: a threshold evaluated on one
  * device against that device's view of the counts is a different answer per
- * device.
+ * device. It is decided server-side, by a database trigger — see
+ * NET_SCORE_REMOVAL_THRESHOLD in community-pin.ts and the
+ * pin_votes_apply_net_score_removal migration.
  */
 export function voteOnPin(pinId: string, direction: 1 | -1): void {
   // The buttons are disabled once a vote is queued (see hasVotedOnPin), so
   // this is the belt to that braces: a second queued vote for one pin is a
   // duplicate the server refuses and the outbox then carries forever.
+  //
+  // Excludes permanently-failed entries, deliberately. dispatchQueuedVote can
+  // now raise PermanentFailure (the placeholder it replaced never could), and
+  // without this exclusion a resident whose vote was permanently refused —
+  // say, a rejected direction from a stale client build — would have that
+  // dead entry sit in the outbox forever satisfying this guard, locking them
+  // out of ever voting on the pin again. A permanently-failed entry cannot be
+  // "already queued" in any sense that should block a fresh attempt: it is
+  // never going to be delivered.
   const alreadyQueued = readOutbox().some(
-    (entry) => payloadOf(entry, "voteOnPin")?.pinId === pinId
+    (entry) => !entry.permanentlyFailed && payloadOf(entry, "voteOnPin")?.pinId === pinId
   );
   if (alreadyQueued) return;
 
@@ -463,12 +480,23 @@ function settle(result: { ok: true } | { ok: false; permanent: boolean; error: s
 }
 
 /**
- * Placeholder until Task 4 replaces it. Throwing rather than no-op'ing: a
- * silent success would make the drain call markDelivered and destroy the
- * queued vote. Throwing leaves the entry queued for the real dispatcher, and
- * because the failure is not a PermanentFailure, mergePins keeps drawing the
- * vote in the meantime.
+ * Replays one queued vote. Thrown errors are what tell drainOutbox whether to
+ * retry, exactly like dispatchQueuedPinWrite.
+ *
+ * Imported dynamically, for the same reason dispatchQueuedPinWrite is: the
+ * Server Action pulls in user-server.ts's `import "server-only"`
+ * transitively, and this file is imported by every component that only READS
+ * pins. A static import here would fail server-only's guard for all of them.
  */
 export async function dispatchQueuedVote(entry: OutboxEntry): Promise<void> {
-  throw new Error(`Pin votes are not wired up yet (${entry.id})`);
+  const vote = payloadOf(entry, "voteOnPin");
+  if (!vote) {
+    // dispatchers.ts routes exactly one operation here. An entry that is not
+    // a vote reaching this function is a routing bug, and it must fail loudly
+    // rather than silently drop the write.
+    throw new Error(`Vote dispatcher received an entry it does not handle (${entry.operation})`);
+  }
+
+  const { voteOnPin: voteOnPinAction } = await import("@/app/actions/vote-on-pin");
+  settle(await voteOnPinAction(vote));
 }

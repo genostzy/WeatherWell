@@ -11,6 +11,7 @@ vi.mock("@/lib/auth/anonymous-session", () => ({
 }));
 
 import { enqueue, markFailed, readOutbox } from "@/lib/outbox/outbox";
+import { exceedsRemovalThreshold } from "@/lib/community-pin";
 import {
   mergePins,
   isOwnPin,
@@ -279,5 +280,61 @@ describe("queued writes", () => {
 
     expect(hasVotedOnPin(merged)).toBe(true);
     expect(hasVotedOnPin(serverPin("pin-2"))).toBe(false);
+  });
+
+  it("does not queue a second vote once the first permanently failed", () => {
+    // Ruling 3: dispatchQueuedVote can now raise PermanentFailure (the
+    // placeholder it replaced never could), and a permanently-failed entry
+    // will never be delivered — drainOutbox skips it forever. Without this
+    // exclusion, that dead entry would satisfy the "already queued" guard
+    // above forever, locking the resident out of ever voting on this pin
+    // again.
+    voteOnPin("pin-1", 1);
+    markFailed(readOutbox()[0].id, "rejected", true);
+
+    voteOnPin("pin-1", -1);
+
+    const ops = readOutbox().map((entry) => entry.operation);
+    expect(ops).toEqual(["voteOnPin", "voteOnPin"]);
+  });
+});
+
+describe("net-score removal", () => {
+  it("removes a pin once downvotes exceed upvotes by the threshold", () => {
+    // PRD Anti-Abuse layer 10. A well-corroborated pin is not killed by a
+    // handful of bad-faith downvotes, so the test is on the MARGIN, not on
+    // the downvote count.
+    expect(exceedsRemovalThreshold({ upvotes: 0, downvotes: 5 })).toBe(true);
+    expect(exceedsRemovalThreshold({ upvotes: 4, downvotes: 8 })).toBe(false);
+  });
+});
+
+describe("hasVotedOnPin", () => {
+  it("reads the caller's own vote off the pin", () => {
+    expect(hasVotedOnPin(serverPin("pin-1", { ownVote: 1 }))).toBe(true);
+    expect(hasVotedOnPin(serverPin("pin-1"))).toBe(false);
+  });
+});
+
+describe("mergePins with a queued vote", () => {
+  it("shows the resident their own queued vote immediately", () => {
+    // Without this the button springs back to un-voted the instant they tap
+    // it, and they tap again.
+    const pin = serverPin("pin-1", { upvotes: 2 });
+    const entry = enqueue("voteOnPin", { pinId: "pin-1", direction: 1 });
+
+    const [merged] = mergePins([pin], [entry]);
+
+    expect(merged.ownVote).toBe(1);
+    expect(merged.upvotes).toBe(3);
+  });
+
+  it("does not double-count a queued vote the server already recorded", () => {
+    const pin = serverPin("pin-1", { upvotes: 3, ownVote: 1 });
+    const entry = enqueue("voteOnPin", { pinId: "pin-1", direction: 1 });
+
+    const [merged] = mergePins([pin], [entry]);
+
+    expect(merged.upvotes).toBe(3);
   });
 });

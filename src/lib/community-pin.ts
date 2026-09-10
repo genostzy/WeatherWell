@@ -31,3 +31,42 @@ export const PIN_STATUS_COLOR: Record<PinStatusTag, string> = {
  * absence of a reason. See deleteOwnPin in src/app/actions/pins.ts.
  */
 export type PinRemovalReason = "net_score" | "admin";
+
+/**
+ * PRD Anti-Abuse layer 10's automatic-removal margin: downvotes must beat
+ * upvotes by this much before a pin is pulled. A margin, not a raw downvote
+ * count, so a well-corroborated pin (say 4 up / 8 down — net 4) survives a
+ * handful of bad-faith downvotes the way a lopsided one (0 up / 5 down — net
+ * 5) does not.
+ *
+ * Not exported on its own: `exceedsRemovalThreshold` below is the interface
+ * its one consumer, `voteOnPin` (src/app/actions/vote-on-pin.ts), actually
+ * needs — nothing outside this file needs the bare number, and knip flags an
+ * export nothing imports as dead code.
+ *
+ * The Postgres trigger that actually performs the removal,
+ * `private.apply_net_score_removal` (see the migration of the same name),
+ * cannot import a TypeScript constant either way, so its literal `5` is a
+ * second copy, called out there as such — this is still the one place the
+ * *value* is decided; the trigger's copy must be kept in step with it by
+ * hand.
+ *
+ * Not read by any client component. The previous task deleted the
+ * client-side threshold this replaced: a verdict computed on one device
+ * against that device's own partial view of the votes gave a different
+ * answer per device, and the tally belongs to the server now. See
+ * `voteOnPin` in src/lib/community-pins.ts for why the client still queues
+ * its vote optimistically without ever computing this threshold itself.
+ */
+const NET_SCORE_REMOVAL_THRESHOLD = 5;
+
+/**
+ * Pure predicate over a pin's tally — no store, no network, so it is cheap to
+ * unit-test on the exact margin (PRD Anti-Abuse layer 10) rather than on a
+ * raw downvote count. Exported for `voteOnPin` (its production consumer) and
+ * for this file's own tests; see `NET_SCORE_REMOVAL_THRESHOLD` above for why
+ * the client is not a third.
+ */
+export function exceedsRemovalThreshold(tally: { upvotes: number; downvotes: number }): boolean {
+  return tally.downvotes - tally.upvotes >= NET_SCORE_REMOVAL_THRESHOLD;
+}
