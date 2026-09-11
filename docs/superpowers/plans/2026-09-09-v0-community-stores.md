@@ -2158,3 +2158,16 @@ Recorded here so they are not rediscovered:
 - **An admin row mixes the real agreeing count with mock `getReportsTodayForZone`.**
 - **Anonymous auth rows accumulate** with no automatic reaping. A scheduled cleanup of anonymous users with no rows attached is needed before pilot scale.
 - **Error and uptime monitoring**, which the spec scoped out of this slice.
+
+### Found during execution
+
+Surfaced while this plan ran, recorded here because the execution ledger is scratch that gets deleted:
+
+- **Net-score removal can bury a true pin before anyone corroborates it.** Removal is correctly one-directional — a reversible version would let a coordinated group toggle a pin's visibility at will, and it is what stops a net-score verdict overwriting an operator's own removal. But a truthful "road impassable" pin downvoted five times in its first minute is hidden until an operator happens to look. Fix without making removal reversible: make a fresh pin ineligible for net-score removal until a minimum time has passed or a minimum number of votes exists, and give the operator a queue of `net_score` removals to review.
+- **Operator edits do not refresh their own screen.** A capacity or occupancy edit, and the admin zone page's severity badge, show the old value until a reload, because the local store that made this instant is gone and the reference-data provider exposes no refresh. No wrong data is shown; it is stale until reload.
+- **Delivered writes are held for a component's lifetime.** Delivered edits, votes, moderation writes and check-ins are kept as optimistic rows and never released, because they never share an id with a server row. Nothing wrong is displayed. Release them once the post-delivery refetch lands — sound now that that refetch is guaranteed fresh.
+- **`refreshCachedPins` is redundant.** The service worker now stores the post-write refetch under the plain `/api/pins` key, so this extra request duplicates it. Remove it, as was already done for reports.
+- **`/api/pins` is fetched once per mounting component.** `/admin` makes two identical requests. One shared provider across the stores would fix it.
+- **The offline pin path is not proven end to end through the real form.** The drain was proven end to end, and `addCommunityPin`'s enqueue is covered by unit tests, but filing a pin through `CommunityPinForm` while `fetch` is genuinely failing has not been exercised. (Check-ins were driven through the real UI.)
+- **Pin photo display code is now unreachable.** The form no longer collects a photo, so `PhotoLightbox`, the popup thumbnails, `CommunityPin.photoDataUrl` and `public/mock/community-pin-example.jpg` are dead weight. Remove them, or build the upload path once the consent and retention rules allow it.
+- **Small tidy-ups:** `CheckInPanel` mounts `useSessionUserId` twice; the net-score migration's comment still names a deleted TypeScript constant; one `rls.sql` comment miscounts the inserts that follow it.
