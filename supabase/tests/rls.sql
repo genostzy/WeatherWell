@@ -165,6 +165,19 @@ select tests.expect_denied(
   $$insert into public.water_level_reports (zone_id, depth_level, reporter_id)
     values ('tests-fixture-zone', 'knee', '22222222-2222-2222-2222-222222222222')$$);
 
+-- Task 8 defect fix: the denial above, and the trust_weight/is_outlier
+-- column-grant denials further down (Important 3), had no ALLOW pairing
+-- anywhere in this file -- every water_level_reports assertion was a
+-- denial. Per the project rule that a grant-refusal assertion proves
+-- nothing without a same-shape success case, this is that pairing: the
+-- same insert shape, as the report's own reporter, with no trust_weight/
+-- is_outlier override, must succeed.
+select tests.as_user('11111111-1111-1111-1111-111111111111');
+select tests.expect_allowed(
+  'a resident CAN file a water-level report as themselves',
+  $$insert into public.water_level_reports (zone_id, depth_level, reporter_id)
+    values ('tests-fixture-zone', 'ankle', '11111111-1111-1111-1111-111111111111')$$);
+
 -- The WITH CHECK trap: passing USING on the way in, then reassigning on the
 -- way out. Against an empty table this UPDATE would match zero rows and
 -- succeed trivially (RLS filters rows, it does not raise) — so a real pin
@@ -179,6 +192,55 @@ select tests.expect_denied(
   $$update public.community_pins
       set author_id = '22222222-2222-2222-2222-222222222222'
     where author_id = '11111111-1111-1111-1111-111111111111'$$);
+
+-- Task 8 gap: since 20260909080337_harden_community_grants.sql, author_id
+-- is no longer in the authenticated UPDATE column grant on community_pins
+-- (`grant update (status_tag, caption, removed, removed_reason)` — author_id
+-- is absent). So the denial just above is now refused by the *column grant*
+-- before pins_update_own_or_operator's WITH CHECK is ever reached — a
+-- stronger refusal, but one that leaves the WITH CHECK clause completely
+-- unexercised by anything in this suite. Two assertions close that:
+--
+-- 1. Prove the denial above really is the grant and not some blanket
+--    refusal of this row: the same caller, same row, updating a column the
+--    grant DOES allow must still succeed. Per the project rule that a
+--    grant-refusal assertion is worthless without this pairing (both
+--    42501s look identical from outside).
+select tests.as_user('11111111-1111-1111-1111-111111111111');
+select tests.expect_allowed(
+  'the same resident CAN still update their own pin''s caption (proves the reassignment denial above is the author_id column grant, not a blanket refusal of the row)',
+  $$update public.community_pins set caption = 'fixture pin, edited'
+    where author_id = '11111111-1111-1111-1111-111111111111'$$);
+
+-- Task 8 defect fix: expect_allowed only proves the UPDATE didn't raise --
+-- an UPDATE matching zero rows also doesn't raise, so without this the
+-- assertion above would pass vacuously and prove nothing about which
+-- column the grant refuses.
+select tests.as_user('11111111-1111-1111-1111-111111111111');
+select tests.expect_row_count(
+  'the caption edit above actually landed',
+  $$select * from public.community_pins
+    where author_id = '11111111-1111-1111-1111-111111111111' and caption = 'fixture pin, edited'$$,
+  1);
+
+-- 2. Restore coverage of the WITH CHECK clause itself: grant UPDATE
+--    (author_id) locally, for this one assertion only, so the reassignment
+--    attempt clears the grant gate and actually reaches RLS. This grant
+--    lives inside the outer `begin` this whole file opens with — the
+--    trailing `rollback` undoes it, so production's grant (no author_id)
+--    is never touched by running this suite. Revoked explicitly right
+--    after anyway, so a failure partway through this block cannot leave it
+--    live for any assertion that runs after it.
+grant update (author_id) on public.community_pins to authenticated;
+
+select tests.as_user('11111111-1111-1111-1111-111111111111');
+select tests.expect_denied(
+  'pins_update_own_or_operator WITH CHECK refuses author_id reassignment even when the column grant allows it through',
+  $$update public.community_pins
+      set author_id = '22222222-2222-2222-2222-222222222222'
+    where author_id = '11111111-1111-1111-1111-111111111111'$$);
+
+revoke update (author_id) on public.community_pins from authenticated;
 
 -- Check-ins name a person and say whether they need help.
 select tests.as_user('11111111-1111-1111-1111-111111111111');
@@ -284,6 +346,16 @@ select tests.expect_allowed(
   'an operator CAN restore a removed pin',
   $$update public.community_pins set removed = false, removed_reason = null
     where author_id = '11111111-1111-1111-1111-111111111111'$$);
+
+-- Task 8 defect fix: same reasoning as the caption-edit row-count above --
+-- expect_allowed alone does not prove the UPDATE matched any rows.
+select tests.as_user('33333333-3333-3333-3333-333333333333');
+select tests.expect_row_count(
+  'the operator''s restore above actually landed (removed = false, removed_reason = null)',
+  $$select * from public.community_pins
+    where author_id = '11111111-1111-1111-1111-111111111111'
+      and removed = false and removed_reason is null$$,
+  1);
 
 -- Important 3: trust_weight/is_outlier feed the weighted-consensus engine
 -- and must not be client-settable. reports_insert_own only ever checked
@@ -395,6 +467,26 @@ begin
 
   reset role;
 end $$;
+
+-- Task 8 defect fix: assertion 3 ("a resident cannot change another
+-- person's vote", below) had no ALLOW pairing anywhere in this file --
+-- every pin_votes UPDATE assertion was a denial, so a votes_update_own
+-- policy that denied everyone would still pass every test here. 1111...'s
+-- fixture vote cast just above (direction 1, on their own fixture pin) is
+-- their own row, so votes_update_own's `(select auth.uid()) = voter_id`
+-- should let them flip it.
+select tests.as_user('11111111-1111-1111-1111-111111111111');
+select tests.expect_allowed(
+  'a resident CAN change their own vote''s direction',
+  $$update public.pin_votes set direction = -1
+    where voter_id = '11111111-1111-1111-1111-111111111111'$$);
+
+select tests.as_user('11111111-1111-1111-1111-111111111111');
+select tests.expect_row_count(
+  'the vote-direction change above actually landed',
+  $$select * from public.pin_votes
+    where voter_id = '11111111-1111-1111-1111-111111111111' and direction = -1$$,
+  1);
 
 -- Important 4, bullet 2, continued: nor can a resident change someone
 -- else's vote. 2222... votes on the fixture pin (as postgres); 1111... then
@@ -606,5 +698,183 @@ select tests.expect_denied(
   'anon cannot record a check-in',
   $$insert into public.evacuation_check_ins (zone_id, user_id, status)
     values ('tests-fixture-zone', '11111111-1111-1111-1111-111111111111', 'safe')$$);
+
+-- ---------------------------------------------------------------------------
+-- Task 8, assertion 11: community_pins.removed is not in the authenticated
+-- INSERT column grant (`grant insert (id, zone_id, status_tag, caption, lat,
+-- lng, author_id)` — see 20260909080337_harden_community_grants.sql,
+-- unchanged by the later widening in 20260909120345_task2_review_fixes.sql)
+-- — so a resident cannot create a pin that is born already removed. This is
+-- a genuinely different gate from the removed/removed_reason UPDATE trigger
+-- exercised above (Important 2): that trigger only ever compares OLD vs NEW,
+-- so it has nothing to say about INSERT, where there is no OLD row.
+-- ---------------------------------------------------------------------------
+select tests.as_user('11111111-1111-1111-1111-111111111111');
+select tests.expect_denied(
+  'a resident cannot insert a pin that is already removed',
+  $$insert into public.community_pins (zone_id, status_tag, caption, lat, lng, author_id, removed)
+    values ('tests-fixture-zone', 'passable', 'born-removed pin', 14.4, 121.4,
+            '11111111-1111-1111-1111-111111111111', true)$$);
+
+-- The pairing half, and also the "a resident CAN insert their own pin" case
+-- that nothing else in this suite exercised directly (every earlier
+-- community_pins fixture was inserted as postgres, bypassing RLS, to set up
+-- state for other assertions): the very same insert, minus the offending
+-- column, must succeed — otherwise the denial above would prove nothing
+-- about which column the grant is refusing.
+select tests.as_user('11111111-1111-1111-1111-111111111111');
+select tests.expect_allowed(
+  'a resident CAN insert their own pin when removed is left to its default',
+  $$insert into public.community_pins (zone_id, status_tag, caption, lat, lng, author_id)
+    values ('tests-fixture-zone', 'passable', 'ordinary resident pin', 14.5, 121.5,
+            '11111111-1111-1111-1111-111111111111')$$);
+
+-- ---------------------------------------------------------------------------
+-- Task 8, assertion 12: created_at/voted_at/checked_in_at are server clocks,
+-- not client input. None of the three appears in its table's INSERT column
+-- grant, so a client cannot backdate the record of when something happened
+-- — the same column-grant shape that closed trust_weight/is_outlier
+-- (Important 3, above) and community_pins.removed (assertion 11, above).
+-- ---------------------------------------------------------------------------
+select tests.as_user('11111111-1111-1111-1111-111111111111');
+select tests.expect_denied(
+  'a resident cannot backdate a pin''s created_at',
+  $$insert into public.community_pins (zone_id, status_tag, caption, lat, lng, author_id, created_at)
+    values ('tests-fixture-zone', 'passable', 'backdated pin', 14.6, 121.6,
+            '11111111-1111-1111-1111-111111111111', now() - interval '30 days')$$);
+
+select tests.as_user('11111111-1111-1111-1111-111111111111');
+select tests.expect_denied(
+  'a resident cannot backdate a vote''s voted_at',
+  $$insert into public.pin_votes (pin_id, voter_id, direction, voted_at)
+    select id, '11111111-1111-1111-1111-111111111111', 1, now() - interval '30 days'
+    from public.community_pins
+    where author_id = '11111111-1111-1111-1111-111111111111' and caption = 'ordinary resident pin'$$);
+
+select tests.as_user('11111111-1111-1111-1111-111111111111');
+select tests.expect_denied(
+  'a resident cannot backdate a check-in''s checked_in_at',
+  $$insert into public.evacuation_check_ins (zone_id, user_id, status, checked_in_at)
+    values ('tests-fixture-zone', '11111111-1111-1111-1111-111111111111', 'safe',
+            now() - interval '30 days')$$);
+
+-- The pairing half for assertion 12: the same three inserts, minus the
+-- backdated column, must succeed — otherwise none of the three denials
+-- above would prove anything about which column the grant is refusing.
+select tests.as_user('11111111-1111-1111-1111-111111111111');
+select tests.expect_allowed(
+  'a resident CAN vote on a pin when voted_at is left to its default',
+  $$insert into public.pin_votes (pin_id, voter_id, direction)
+    select id, '11111111-1111-1111-1111-111111111111', 1
+    from public.community_pins
+    where author_id = '11111111-1111-1111-1111-111111111111' and caption = 'ordinary resident pin'$$);
+
+select tests.as_user('11111111-1111-1111-1111-111111111111');
+select tests.expect_allowed(
+  'a resident CAN check in when checked_in_at is left to its default',
+  $$insert into public.evacuation_check_ins (zone_id, user_id, status)
+    values ('tests-fixture-zone', '11111111-1111-1111-1111-111111111111', 'safe')$$);
+
+-- ---------------------------------------------------------------------------
+-- Task 8, assertion 13: public.set_zone_alert is `security invoker` (see
+-- supabase/migrations/20260910121053_set_zone_alert.sql) — deliberately, so
+-- the UPDATE and INSERT inside its body run as the CALLING role and stay
+-- subject to RLS rather than running as the function's owner. EXECUTE on the
+-- function is granted to `authenticated` outright (residents included — the
+-- operator gate lives in the alerts policies the function's body writes
+-- through, not in who may call the function), so this is the one place in
+-- the suite that proves invoker-vs-definer actually matters: if the
+-- function were ever changed to `security definer`, the body would run as
+-- its owner (postgres, which bypasses RLS), and a resident would be able to
+-- issue alerts through the function even though assertion 1 (top of this
+-- file) already proved they cannot issue one directly.
+-- ---------------------------------------------------------------------------
+select tests.as_user('11111111-1111-1111-1111-111111111111');
+select tests.expect_denied(
+  'a resident cannot use set_zone_alert to issue an alert (security invoker: RLS still applies inside it)',
+  $$select public.set_zone_alert('tests-fixture-zone', 'orange', '{"en":"x","fil":"x"}'::jsonb)$$);
+
+-- The pairing half: an operator calling the very same function supersedes
+-- the zone's active alert and inserts the replacement, in one call.
+-- tests-fixture-zone-2 already carries an active 'red' alert from the
+-- operator-insert assertion (Critical 1) earlier in this file.
+select tests.as_user('33333333-3333-3333-3333-333333333333');
+select tests.expect_allowed(
+  'an operator CAN use set_zone_alert to supersede the active alert and issue the new one',
+  $$select public.set_zone_alert('tests-fixture-zone-2', 'orange', '{"en":"y","fil":"y"}'::jsonb)$$);
+
+select tests.as_user('33333333-3333-3333-3333-333333333333');
+select tests.expect_row_count(
+  'set_zone_alert left exactly one active alert on the zone, at the new severity',
+  $$select * from public.alerts
+    where zone_id = 'tests-fixture-zone-2' and is_active and severity = 'orange'$$,
+  1);
+
+select tests.as_user('33333333-3333-3333-3333-333333333333');
+select tests.expect_row_count(
+  'set_zone_alert superseded the previous alert rather than leaving it active',
+  $$select * from public.alerts
+    where zone_id = 'tests-fixture-zone-2' and severity = 'red' and not is_active
+      and superseded_at is not null$$,
+  1);
+
+-- ---------------------------------------------------------------------------
+-- Task 8, assertion 14: evacuation_centers.current_occupancy is operator-
+-- written through centers_update_operator, whose USING/WITH CHECK is bare
+-- is_operator() — same shape as the zones/alerts unchanged-value assertions
+-- above, so a resident's UPDATE matches zero rows silently rather than
+-- raising. current_occupancy IS in the authenticated UPDATE column grant
+-- (`grant update (status, current_occupancy)` — see
+-- 20260909120345_task2_review_fixes.sql), so this is purely an RLS
+-- assertion, not a grant one: the column-grant gate would let this through,
+-- the policy is what actually stops it.
+-- ---------------------------------------------------------------------------
+insert into public.evacuation_centers (id, zone_id, name, lat, lng, capacity, status, current_occupancy)
+values ('tests-fixture-center', 'tests-fixture-zone', 'Test Center', 14.0, 121.0, 100, 'space_available', 10);
+
+do $$
+declare
+  original int;
+  observed int;
+begin
+  select current_occupancy into original from public.evacuation_centers where id = 'tests-fixture-center';
+
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', '11111111-1111-1111-1111-111111111111', 'role', 'authenticated')::text, true);
+
+  begin
+    update public.evacuation_centers set current_occupancy = 999
+      where id = 'tests-fixture-center';
+  exception when insufficient_privilege then
+    -- Not expected today (the grant does allow this column) -- caught
+    -- anyway so a future narrowing of the grant strengthens this test
+    -- instead of aborting the suite, matching the pattern used throughout
+    -- this file (e.g. the zones/alerts unchanged-value blocks above).
+    raise notice 'ok: evacuation_centers UPDATE refused outright (grant narrowed), not merely filtered';
+  end;
+
+  reset role;
+
+  select current_occupancy into observed from public.evacuation_centers where id = 'tests-fixture-center';
+
+  if observed is distinct from original then
+    raise exception using errcode = 'TSTFL',
+      message = 'SECURITY TEST FAILED — resident updated evacuation_centers.current_occupancy';
+  end if;
+  raise notice 'ok: resident cannot update evacuation_centers.current_occupancy (unchanged, update matched zero rows)';
+end $$;
+
+select tests.as_user('33333333-3333-3333-3333-333333333333');
+select tests.expect_allowed(
+  'an operator CAN update evacuation_centers.current_occupancy',
+  $$update public.evacuation_centers set current_occupancy = 55
+    where id = 'tests-fixture-center'$$);
+
+select tests.as_user('33333333-3333-3333-3333-333333333333');
+select tests.expect_row_count(
+  'the operator''s occupancy update above actually landed',
+  $$select * from public.evacuation_centers where id = 'tests-fixture-center' and current_occupancy = 55$$,
+  1);
 
 rollback;
