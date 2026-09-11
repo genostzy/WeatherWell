@@ -144,7 +144,7 @@ Crowdsourced reporting's biggest risk is fake data. Ten layers, defence in depth
 | 2 | Rate limiting | One report per device per short window |
 | 3 | Multi-report threshold | No single report triggers an alert; several independent, agreeing ones must arrive |
 | 4 | Outlier downweighting | A report disagreeing sharply with nearby ones is discounted, not deleted |
-| 5 | Device fingerprint | Random device ID raises the cost of abuse |
+| 5 | Anonymous identity | A server-issued, verified anonymous auth identity (Supabase Auth) — not a client-generated random ID a resident could clear at will. This is the identity every Row Level Security policy in the database actually keys off, raising the cost of abuse for real rather than by convention |
 | 6 | Reputation scoring | Devices whose past reports matched verified outcomes count for more. Self-correcting |
 | 7 | **Human override** | Operator can confirm, downgrade, or cancel any auto-triggered alert |
 | 8 | Audit trail | Every report retained with timestamp, location, device ID for later review |
@@ -181,7 +181,7 @@ The visual restraint above is not only a legibility choice — it is a performan
 
 - **No web fonts.** The system font stack only, so nothing blocks first paint waiting on a download.
 - **No charting library.** The admin trend views are hand-drawn SVG and CSS. A charting dependency is weight these phones cannot spare, for output that is a few polylines.
-- **No hero imagery, video, or decorative media.** The only images in the interface are icons and a resident's own locally-attached photo.
+- **No hero imagery, video, or decorative media.** The only images in the interface are icons.
 - **Motion is limited to small interface transitions** — a dialog opening, a tooltip appearing. Nothing animates the content itself, and nothing is doing continuous work while a resident is reading an alert.
 - **The map is the one heavy dependency**, and it is loaded lazily rather than in the initial bundle, with a plain zone-alert list as the fallback when tiles cannot load at all.
 
@@ -243,7 +243,8 @@ Location is personal data under the **Data Privacy Act of 2012 (RA 10173)**.
 - Location is used for geofence validation and zone auto-detection only, never retained beyond that purpose.
 - **The map's location dot is continuous, and consent says so.** While the map is open, position is tracked at low frequency to drive the direction-to-safety indicator, and stops when the map closes. It is never stored — it exists in memory only. The consent notice covers this separately from the one-time fetch used for zone detection.
 - Guest mode collects nothing beyond location. If an account is created, the email is for authentication only — never shared, never marketing.
-- **Community pin photos may incidentally capture identifiable people or property.** Consent and retention rules must be extended before any real photo upload ships.
+- **Filing a report, a pin, a vote, or a check-in creates a persistent, server-issued anonymous identity for that device.** This replaced a random ID the device itself generated and could clear at will — the improvement anti-abuse layer 5 describes — but the trade is real and worth stating plainly: that identity is no longer something a resident can walk away from by clearing local storage. It is created only at the first *write*, never merely by reading the app, and a reaping job for anonymous identities with nothing attributed to them is scoped for before pilot scale (see Risks & Open Questions below).
+- **Community pin photos are not supported.** The pin form collects a status, a caption, and a location only. Consent and retention rules for photos would need to be designed before any photo upload ships, and until then the form does not offer one — a resident cannot attach evidence the system would then discard.
 
 **Retention**
 
@@ -252,12 +253,13 @@ Location is personal data under the **Data Privacy Act of 2012 (RA 10173)**.
 | Location (from reports) | Short-term | Geofence validation only |
 | Crowd reports | Medium-term | Calibration loop |
 | Predictions / alerts | Long-term | Model improvement |
-| Device fingerprints | Until user clears | Rate limiting |
+| Anonymous auth identity | Until reaped (no automatic expiry yet) | Attributes writes across a session; a scheduled cleanup of identities with nothing attributed to them is not yet built |
 | Alerts issued | Indefinite | Historical record |
 | Community pins | Short-term, auto-expiring | Reflects current conditions, not a permanent record |
 | Pin votes | Tied to parent pin | Tally only meaningful while the pin is live |
+| Resident check-ins | Short-term | Self-report of current safety status, not a permanent record; never cached by the service worker even on the reporting device — see Risks & Open Questions below |
 
-**RA 10173 Article 16** — data export and deletion, keyed to device ID. No phone numbers stored.
+**RA 10173 Article 16** — data export and deletion, keyed to the resident's anonymous identity. No phone numbers stored.
 
 ---
 
@@ -265,7 +267,7 @@ Location is personal data under the **Data Privacy Act of 2012 (RA 10173)**.
 
 **Frontend** — Next.js App Router, TypeScript strict, feature-based structure. shadcn/ui with Tailwind.
 
-**Backend** — Supabase: Postgres with Row Level Security, Server Actions, and Auth for optional accounts. Core tables: `zones`, `alerts`, `water_level_reports`, `push_subscriptions`, `audit_log`, `evacuation_centers`, `points_of_interest`, `community_pins`, `pin_votes`, `hazard_susceptibility`, `evacuation_check_ins`, `users`.
+**Backend** — Supabase: Postgres with Row Level Security, Server Actions, and Auth for optional accounts. A resident gets a server-issued anonymous identity on their first write, never on a read alone — RLS reads that identity directly, not anything a client claims. `profiles` holds the role model: exactly the two roles in [Who It Serves](#who-it-serves), `resident` (the default, on first sign-in) and `operator`, and every write an operator makes is checked against it server-side. Pin vote tallies are derived at read time from `pin_votes` rather than stored on `community_pins`; a database trigger removes a pin once net-negative votes cross the layer-10 threshold in the same transaction as the vote that caused it, rather than each device computing that threshold from its own copy of the counts. Core tables: `zones`, `alerts`, `water_level_reports`, `push_subscriptions`, `audit_log`, `evacuation_centers`, `points_of_interest`, `community_pins`, `pin_votes`, `hazard_susceptibility`, `evacuation_check_ins`, `profiles`.
 
 **Map** — Leaflet with OpenStreetMap raster tiles: free and key-less, subject to OSM's fair-use policy. Self-hosted or paid tiles are the answer if traffic outgrows pilot scale.
 
@@ -312,7 +314,7 @@ All free and public: PAGASA bulletins (rainfall, wind, typhoon track, thundersto
 
 ## Build Status
 
-**As of 5 September 2026 · Stage 1 (`hi-fi`) complete.**
+**As of 11 September 2026 · Stage 1 (`hi-fi`) complete, Stage 2 (`v0`) in progress.**
 
 This table is the single source of truth for implementation state. Everything above describes the design; this describes what exists today.
 
@@ -322,26 +324,29 @@ This table is the single source of truth for implementation state. Everything ab
 | Bilingual UI (English / Filipino) | **Built** | Every user-facing string, including screen-reader labels, goes through the localisation layer |
 | Onboarding, consent, zone selection | **Built** | GPS auto-detect is a stub — proposes a zone to confirm; real matching needs boundary polygons |
 | Install prompt at the end of onboarding | **Built** | Uses the browser's real install dialog where one exists; explains the Share-sheet route on iOS, which has none. Skippable, and not shown to an already-installed device |
-| Homepage map, live position, markers, legend | **Built** | Leaflet with hazard backdrop and POI markers |
-| Community pins — create, edit, delete, vote, moderate | **Built** | Photos are a local preview, never uploaded |
-| Water-level reporting, recent reports, anti-abuse explainer | **Built** | Reports persist locally |
-| Evacuation guidance, capacity from headcount, resident check-in | **Built** | Check-in is a self-report — no verification, no responder delivery |
+| Homepage map, live position, markers, legend | **Built** | Leaflet with hazard backdrop and POI markers; zones, POIs and hazard ratings read from Postgres |
+| Community pins — create, edit, delete, moderate | **Built** | Shared via Postgres + Row Level Security — a pin dropped on one phone reaches every other one, not just the device that made it. No photo support: the form does not collect one, pending consent and retention rules |
+| Pin votes — one per resident, net-score removal | **Built** | One vote per resident enforced by a unique constraint on `(pin_id, voter_id)`; net-score removal runs as a database trigger on the same write, not computed separately per device |
+| Water-level reporting, recent reports, anti-abuse explainer | **Built** | Shared via Postgres + Row Level Security, not per-device storage |
+| Evacuation guidance, capacity from headcount | **Built** | Headcount and centre-status overrides are shared — set once by the operator, visible on every resident's device |
+| Resident check-in | **Built** | Self-report, shared via Postgres — a resident sees only their own row, an operator their zone's. Never cached by the service worker, anywhere, on any device — a privacy decision, not a technical one. No verification, no responder delivery |
 | Safest route + live bearing/distance | **Built** | Routes pre-authored; bearing is client-side maths |
 | Operator dashboard, analytics, per-zone view, operations map | **Built** | Includes advisory risk score |
 | Drill/simulation mode | **Built** | 6 scenarios; notifies nobody |
 | Printed emergency card | **Built** | |
 | PWA manifest + service worker cache | **Built** | |
-| Human override (layer 7) | **Built** | Real today — severity, centre-status and occupancy overrides persist |
+| Backend (Postgres, Row Level Security, anonymous Auth) | **Built** | Zones, POIs, hazards, pins, votes, check-ins, alerts and reports all live in Postgres. A resident gets a server-issued anonymous identity on their first *write*; a read alone never signs anyone in |
+| Operator alerts (severity, centre status, occupancy) | **Built** | Shared via Postgres — an operator's decision reaches every resident's device, not only the one that made it |
+| Human override (layer 7) | **Built** | Real today — severity, centre-status and occupancy overrides persist to Postgres, visible to every resident |
 | Transparent downgrade (layer 9) | **Built** | A lowered or withdrawn alert states itself on the homepage and the evacuation page, naming what was withdrawn. States no reason, because the operator is not asked for one |
-| Device fingerprint (layer 5) | **Built** | Random per-device ID, real today — it already gates one-vote-per-device and own-pin editing. Hardening against deliberate clearing comes later |
-| Pin vote protection (layer 10) | **UI only** | Net-score rule and one-vote-per-device work; the geofence and rate limit it also depends on (layers 1, 2) do not |
-| All data | **Mock** | Four demo barangays; no backend |
-| Backend, auth, operator PIN | **Not started** | Stage 2 |
+| Anonymous identity (layer 5) | **Built** | Server-issued, verified anonymous auth identity (Supabase Auth) — not a client-generated ID a resident could clear at will. Gates one-vote-per-resident and own-pin editing; enforced by Row Level Security itself, not just the client |
+| Pin vote protection (layer 10) | **Built** | One vote per resident and net-score removal are both enforced server-side now (a unique constraint and a database trigger); the geofence and rate limit it also depends on (layers 1, 2) still do not exist |
+| Operator PIN gate | **Not started** | `/admin` is unauthenticated. Now urgent rather than theoretical: with a shared backend, an unauthorised visitor can change what a whole barangay is told, not only what they themselves see |
 | Real push delivery, SMS provider | **Not started** | Stage 3. The service worker's receive-and-display handler exists, but there is no subscription, no VAPID keys and nothing that sends |
 | Geofence, rate limit, audit trail (layers 1–3, 8) | **Not started** | Stage 3 |
 | Outlier downweighting (layer 4) | **UI only** | Downweighting behaviour is real — flagged reports are excluded from the agreeing count and badged — but the flag itself is set in fixture data, not detected |
 | Reputation scoring (layer 6) | **Not started** | Stage 4 — a trust weight exists on the data model but nothing reads it |
-| Real PAGASA and hazard data | **Not started** | Stage 2 |
+| Real PAGASA and hazard data | **Not started** | Zones, POIs and hazard ratings are real Postgres rows now, but the values themselves are still the seeded demo dataset, not live PAGASA/DENR-MGB feeds |
 | Offline map tile caching | **Not started** | Stage 2 |
 | Offline fallback when the map cannot draw | **Built** | Degrades to a plain zone-alert list. Uses connectivity as a Stage 1 proxy for "are tiles available" |
 
@@ -365,7 +370,7 @@ Real data and real offline capability. Supabase schema with Row Level Security, 
 
 **Done when:** the app works fully offline on real seeded data, optional login works, the operator PIN gate is live, and error/uptime monitoring is active.
 
-> The PIN gate ships **in this stage, alongside the database — not after it.** Today `/admin` is unauthenticated and that is genuinely harmless: every override writes to the visitor's own device, so a stranger who opens it can only change what they themselves see. The moment a shared backend exists, that same unauthenticated screen can change what a whole barangay is told during a flood. The protection has to arrive with the thing that creates the risk, which is why it is an exit criterion rather than a task on a list.
+> The PIN gate ships **in this stage, alongside the database — not after it.** `/admin` is unauthenticated today, and with the shared backend now live, that is no longer harmless: before it existed, a stranger who opened `/admin` could only mislead themselves, since every override wrote to their own device alone. Now the same unauthenticated screen can change what a whole barangay is told during a flood. The gate must ship before any real deployment, which is why it is an exit criterion rather than a task on a list.
 
 > Start the PAGASA data request at the *beginning* of this stage. It gates the highest-quality data option and moves on an institutional timeline, not ours.
 
@@ -438,7 +443,8 @@ A capability meeting all four can be added to the design without contradicting a
 - **The sensor network has a participation floor, and it is not yet known.** Crowdsourced sensing only fires when several independent, agreeing reports arrive in one zone inside the time window. In a single barangay, at the 30% enrolment target, with residents evacuating rather than reporting, that number may not be reached — and the mechanism answering the challenge's third clause is the one most exposed to it. The threshold is tunable per zone precisely because the right value is an empirical question, but the pilot needs to measure reports-per-zone-per-event before any claim about coverage is safe to make. Below the floor the system degrades to operator-issued and prediction-driven alerts, which is a working system, but not the one this clause promises.
 - **Cached content is only as fresh as the resident's last visit.** Someone who opens the app on Monday and loses signal on Thursday is reading Monday's picture. It is labelled with its own age, but there is nothing that nudges a refresh while a storm is still forecast and the network still works — the cheapest available mitigation and not yet designed. The freshness policy (how stale is too stale to show without a warning) is an open question, not a settled one.
 - **Web Push delivery is not guaranteed** — it varies by device and browser. Retry, cache fallback, and Share Alert exist specifically because this channel cannot be trusted alone. Share Alert also needs the *sender* to have a working channel: Messenger and Viber need data, so in a total data outage SMS is the relay's last working leg.
-- **RA 10173 compliance is stated by design but not legally reviewed.** A legal review is recommended before any real deployment.
+- **RA 10173 compliance is stated by design but not legally reviewed.** A legal review is recommended before any real deployment. One design decision that review should specifically examine: resident check-ins are the one server response this app never lets a device cache, anywhere — not the general offline-resilience cache, not the browser's own Cache Storage. A check-in names a person and says whether they need help, and Row Level Security already decides which *rows* a caller may read; a shared cache has no equivalent opinion about who it hands a finished response to. That is a privacy position, not a technical limitation — nothing about check-in data makes it harder to cache than a pin or a report, and it is deliberately excluded on that basis alone.
+- **Anonymous identities accumulate with no automatic reaping.** A resident's first write creates one, permanently, against a free-tier allowance — and unlike the random local ID it replaced, a resident cannot clear it from their own device. A scheduled cleanup of anonymous identities with no rows attached to them is needed before pilot scale, not merely before a hard limit is hit.
 - **Non-smartphone residents have no direct app access.** They depend entirely on the community relay and printed cards — an operational system requiring barangay coordination, and therefore the part of the design most likely to fail for reasons outside the software.
 - **Success-metric targets are unvalidated hypotheses.** No comparable Philippine deployment provides a baseline.
 - **No programmatic heat-index source has been found.** The reading should be dropped rather than faked if one cannot be secured.
