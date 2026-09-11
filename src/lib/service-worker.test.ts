@@ -397,6 +397,79 @@ describe("service worker request routing", () => {
     expect(result?.body).toBe("FRESH CHECK-IN DATA");
   });
 
+  it("always reaches the network for a post-write refetch, never an earlier session's cached copy under the same busted key (F2)", async () => {
+    // The bug: the busting counter (`?delivered=N`) restarts at 1 every time
+    // the app opens, but API_CACHE survives across sessions until a VERSION
+    // bump. Under the old staleWhileRevalidate routing, a later session's own
+    // `?delivered=1` refetch could be answered by an EARLIER session's
+    // response stored under that exact key. This is what that collision
+    // looks like set up directly: seed the key a prior session would have
+    // left behind, and confirm this session's refetch does not read it.
+    const { listeners } = loadServiceWorker({
+      caches: { [API_CACHE]: { [`${ORIGIN}/api/pins?delivered=1`]: "STALE — AN EARLIER SESSION'S SNAPSHOT" } },
+      fetch: async () => response("FRESH — THIS SESSION'S OWN WRITE"),
+    });
+
+    const result = await handleFetch(listeners, { url: `${ORIGIN}/api/pins?delivered=1` });
+
+    expect(result?.body).toBe("FRESH — THIS SESSION'S OWN WRITE");
+  });
+
+  it("stores a post-write refetch's fresh response under the PLAIN url, not the busted one (F2)", async () => {
+    // The plain url is the key the NEXT app launch reads (the mount fetch
+    // carries no query string). Storing under the busted key only, the way
+    // staleWhileRevalidate naturally would, leaves the plain entry holding
+    // the pre-delivery body until something else refreshes it.
+    const { listeners, store } = loadServiceWorker({
+      fetch: async () => response("FRESH REPORTS"),
+    });
+
+    await handleFetch(listeners, { url: `${ORIGIN}/api/reports?delivered=1` });
+
+    expect(store.get(API_CACHE)?.get(`${ORIGIN}/api/reports`)).toBe("FRESH REPORTS");
+  });
+
+  it("does not grow the API cache with every write (F2)", async () => {
+    // A random or ever-incrementing busting value would fix the staleness
+    // bug above only by leaving a new, never-read cache entry behind for
+    // every single write. Two refetches (different N, as two real writes in
+    // one session would produce) must still leave exactly one pins entry.
+    let call = 0;
+    const { listeners, store } = loadServiceWorker({
+      fetch: async () => response(`ROW ${++call}`),
+    });
+
+    await handleFetch(listeners, { url: `${ORIGIN}/api/pins?delivered=1` });
+    const sizeAfterFirstWrite = store.get(API_CACHE)?.size ?? 0;
+
+    await handleFetch(listeners, { url: `${ORIGIN}/api/pins?delivered=2` });
+    const sizeAfterSecondWrite = store.get(API_CACHE)?.size ?? 0;
+
+    expect(sizeAfterSecondWrite).toBe(sizeAfterFirstWrite);
+    // And it is the latest write's row under the plain key, not the first's.
+    expect(store.get(API_CACHE)?.get(`${ORIGIN}/api/pins`)).toBe("ROW 2");
+  });
+
+  it("falls back to the last known rows on both a normal read and a post-write refetch while offline (F2)", async () => {
+    // A resident with no signal must still see their neighbours' reports —
+    // on an ordinary mount AND on the refetch that follows their own queued
+    // write finally being delivered over a connection that then drops again.
+    const { listeners } = loadServiceWorker({
+      caches: { [API_CACHE]: { [`${ORIGIN}/api/reports`]: "LAST KNOWN REPORTS" } },
+      fetch: async () => {
+        throw new Error("offline");
+      },
+    });
+
+    const normalRead = await handleFetch(listeners, { url: `${ORIGIN}/api/reports` });
+    expect(normalRead?.body).toBe("LAST KNOWN REPORTS");
+
+    const postWriteRefetch = await handleFetch(listeners, {
+      url: `${ORIGIN}/api/reports?delivered=1`,
+    });
+    expect(postWriteRefetch?.body).toBe("LAST KNOWN REPORTS");
+  });
+
   it("keeps serving zones from the unversioned zone cache", async () => {
     // The one cache deliberately exempt from version bumps, so a device that
     // updates and then loses signal keeps its evacuation instructions. This

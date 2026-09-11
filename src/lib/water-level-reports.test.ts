@@ -300,9 +300,6 @@ describe("water-level-reports", () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce({ ok: true, json: async () => [] })
-      .mockResolvedValueOnce({ ok: true, json: async () => [serverRowFor(entry.id)] })
-      // The third call is refreshCachedReports' warm-up, asserted on by its
-      // own test below; this one only cares about the first two.
       .mockResolvedValue({ ok: true, json: async () => [serverRowFor(entry.id)] });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -320,30 +317,16 @@ describe("water-level-reports", () => {
     expect(new URL(refetchUrl, "https://weatherwell.test").pathname).toBe("/api/reports");
   });
 
-  it("warms the plain cache entry the next load will read", async () => {
-    // The busted refetch stores its fresh copy under ?delivered=1, a key
-    // nothing reads again, leaving the plain /api/reports entry holding the
-    // pre-delivery body. Without a follow-up plain request the resident
-    // reopens the app and their own delivered report is missing — the busting
-    // parameter guaranteeing the staleness it was added to route around.
-    const entry = enqueue("submitWaterLevelReport", { zoneId: "zone-1", depthLevel: "knee" });
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => [] });
-    vi.stubGlobal("fetch", fetchMock);
-
-    renderHook(() => useWaterLevelReports());
-    await act(async () => {
-      await drainOutbox(async () => {});
-    });
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
-
-    const urls = fetchMock.mock.calls.map((call) => String(call[0]));
-    expect(urls[0]).toBe("/api/reports");
-    expect(urls[1]).not.toBe("/api/reports");
-    // The third is the warm-up: plain, so staleWhileRevalidate refreshes the
-    // entry the next mount reads.
-    expect(urls[2]).toBe("/api/reports");
-    void entry;
-  });
+  // "warms the plain cache entry the next load will read" used to live here,
+  // covering water-level-reports.ts's own refreshCachedReports warm-up
+  // request. final-review.md F2's fix moved that job into the service worker
+  // itself: sw.js's revalidatePlainEntry now stores the busted refetch's
+  // fresh response under the PLAIN `/api/reports` key as a side effect of
+  // that ONE request, which made the second, separate warm-up request
+  // redundant — so it was removed from this store. The same guarantee is
+  // covered against the real worker now: see
+  // src/lib/service-worker.test.ts's "stores a post-write refetch's fresh
+  // response under the PLAIN url, not the busted one (F2)".
 
   it("renders one row when an id is both queued and delivered", async () => {
     // markDelivered writes to local storage and the store swallows storage

@@ -25,45 +25,27 @@ const NO_SERVER_ROWS: LiveWaterLevelReport[] = [];
 const NO_DELIVERED: OutboxEntry[] = [];
 
 /**
- * The delivery refetch below deliberately carries a unique query parameter;
- * the mount fetch deliberately does not.
+ * The delivery refetch below deliberately carries a query parameter that
+ * changes on every call; the mount fetch deliberately does not.
  *
- * `sw.js` serves `/api/reports` with staleWhileRevalidate — it answers from
- * the copy cached on a previous load and refreshes behind that. Right for the
- * mount fetch: a resident with no network still gets the neighbours' last
- * known reports. Wrong for the refetch that follows a delivery, because the
- * row it is fetching FOR is the one row the cached copy is guaranteed not to
- * contain, so a cached answer would withdraw the resident's own just-delivered
- * report from the screen — exactly what this refetch exists to prevent. The
- * parameter keeps the pathname (so sw.js's public-API allowlist still matches)
- * but misses the cache entry, so this one request reaches the network.
+ * `sw.js` serves a busted request on this path (any `/api/reports` request
+ * carrying a query string) by going straight to the network and then storing
+ * the fresh response under the PLAIN `/api/reports` key — the same key the
+ * mount fetch reads. That is what makes the parameter's exact value
+ * unimportant here: it only has to be present, to route this request to the
+ * worker's network-only branch instead of staleWhileRevalidate, which would
+ * otherwise answer from whichever copy — this session's or an earlier one's —
+ * happens to be stored under that literal query string. See sw.js's
+ * `revalidatePlainEntry` for the full reasoning, including why a growing or
+ * random value would be the wrong fix.
  *
- * That leaves one thing undone, which `refreshCachedReports` below finishes.
+ * Because the worker itself now refreshes the plain cache entry as a side
+ * effect of this one request, no separate warm-up request is needed
+ * afterwards — the plain `/api/reports` entry the next mount reads is already
+ * fresh the moment this call resolves.
  */
 function reportsUrl(afterDeliveries: number): string {
   return afterDeliveries === 0 ? "/api/reports" : `/api/reports?delivered=${afterDeliveries}`;
-}
-
-/**
- * Warms the cache entry the NEXT mount will read.
- *
- * The busted URL above answers this load correctly and stores its fresh copy
- * under `?delivered=1` — a key nothing ever reads again. The plain
- * `/api/reports` entry, which is the one the next mount hits, is left holding
- * the pre-delivery body. So without this the resident closes the app, opens it
- * again, and their own delivered report is missing from the list until a
- * later load — the busting parameter having *guaranteed* the staleness it was
- * introduced to route around.
- *
- * One plain request fixes it: staleWhileRevalidate answers it from the stale
- * copy and refreshes that copy behind the answer. The response is deliberately
- * discarded — this call is for its side effect on the cache, and the fresh
- * rows are already on screen from the busted fetch. It fails silently for the
- * same reason that one does: a resident with no network has lost nothing they
- * had.
- */
-function refreshCachedReports(): void {
-  void fetch("/api/reports").catch(() => undefined);
 }
 
 /**
@@ -116,9 +98,6 @@ function useServerReports(): { rows: LiveWaterLevelReport[]; delivered: OutboxEn
       )
       .then((data) => {
         if (!cancelled) setRows(data);
-        // Only after a delivery: the mount fetch IS the plain request, so
-        // doing this there would be a second copy of the same call.
-        if (delivered.length > 0) refreshCachedReports();
       })
       .catch(() => {
         // Offline, timed out, or a 5xx — degrade, don't fail. Whatever rows

@@ -20,7 +20,7 @@
  * CURRENT_CACHES, so a bump is what evicts a bad build from installed devices.
  * Leaving it unchanged is what pins users to a stale app forever.
  */
-const VERSION = "v7";
+const VERSION = "v8";
 
 const SHELL_CACHE = `weatherwell-shell-${VERSION}`;
 const ASSET_CACHE = `weatherwell-assets-${VERSION}`;
@@ -237,6 +237,52 @@ function cacheFirst(request, cacheName) {
   });
 }
 
+/**
+ * Serves a cache-busting refetch on a public API path — a request that
+ * carries a query string on an otherwise plain, cacheable pathname (see
+ * PUBLIC_API_PATHS). A resident's store issues exactly one of these right
+ * after a write is delivered, to collect the row the write just created —
+ * the one row a cached copy is guaranteed not to contain.
+ *
+ * This is deliberately NOT staleWhileRevalidate. That strategy answers from
+ * whatever is stored under the REQUEST'S OWN key, and the busting parameter
+ * used to BE that key — `?delivered=N`, a counter that restarts at 1 every
+ * time the app opens, while this cache survives across sessions. A later
+ * session's own `?delivered=1` refetch could land on an EARLIER session's
+ * response stored under that exact same key, replacing fresher rows with an
+ * old snapshot. Growing the parameter instead (a random value, a timestamp)
+ * would dodge that collision only by making the cache grow without bound —
+ * a fresh entry, never read again, for every single write.
+ *
+ * So the busting parameter is treated purely as an instruction — skip the
+ * cache, go to the network — and never as part of a cache key. `fetch` is
+ * called unconditionally, before any cache read, which is what guarantees
+ * requirement 1: when a network exists, this always reaches it. A
+ * successful response is stored under `plainUrl`, the SAME key the plain
+ * (non-busted) request reads and writes — so the cache gains no new entry
+ * per write (requirement 3) and the very next read, whether later in this
+ * session or the next session's first mount, sees the fresh rows too
+ * (requirement 2). On failure — offline, a timeout, a dead connection — this
+ * falls back to whatever is stored under that same plain key: the last known
+ * rows, which is what a resident with no signal must still see, on a
+ * post-write refetch exactly as on an ordinary read (requirement 4).
+ */
+function revalidatePlainEntry(request, plainUrl, cacheName) {
+  return fetch(request)
+    .then((response) => {
+      if (response && response.status === 200) {
+        putInCache(cacheName, plainUrl, response);
+        return response;
+      }
+      // A client error is the server's real answer; a server error mid-write
+      // says nothing about whether the rows are gone, so fall back to the
+      // last known copy the same way networkFirst does for everything else.
+      if (response && response.status < 500) return response;
+      return caches.match(plainUrl).then((cached) => cached || response);
+    })
+    .catch(() => caches.match(plainUrl).then((cached) => cached || Response.error()));
+}
+
 self.addEventListener("fetch", (event) => {
   const { request } = event;
 
@@ -279,7 +325,21 @@ self.addEventListener("fetch", (event) => {
     const isPublic = PUBLIC_API_PATHS.some(
       (path) => url.pathname === path || url.pathname.startsWith(`${path}/`)
     );
-    event.respondWith(isPublic ? staleWhileRevalidate(request, API_CACHE) : fetch(request));
+    if (!isPublic) {
+      event.respondWith(fetch(request));
+      return;
+    }
+
+    // A query string on a public API path is a post-write cache-busting
+    // refetch, not a distinct resource — see revalidatePlainEntry for why it
+    // must never be answered from, or stored under, its own key.
+    if (url.search) {
+      const plainUrl = `${url.origin}${url.pathname}`;
+      event.respondWith(revalidatePlainEntry(request, plainUrl, API_CACHE));
+      return;
+    }
+
+    event.respondWith(staleWhileRevalidate(request, API_CACHE));
     return;
   }
 
