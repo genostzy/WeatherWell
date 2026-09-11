@@ -443,6 +443,55 @@ export function voteOnPin(pinId: string, direction: 1 | -1): void {
 }
 
 /**
+ * Finds this device's still-queued createPin entry for a pin id, if any.
+ *
+ * A createPin entry's own outbox id IS the pin's row id (see
+ * `dispatchQueuedPinWrite`'s create branch and `CreatePinInput.id`), so this
+ * is an exact lookup, not a heuristic: an edit/delete/moderation/vote naming
+ * `pinId` matches the createPin entry whose `id` equals it, never itself.
+ */
+function findQueuedCreateForPin(pinId: string): OutboxEntry | undefined {
+  return readOutbox().find((candidate) => candidate.operation === "createPin" && candidate.id === pinId);
+}
+
+/**
+ * Fix for F1/F5: a write that references a pin (edit, delete, moderation, or
+ * vote) must not race that pin's own still-queued createPin.
+ *
+ * drainOutbox deliberately does not stop on a failure — one bad entry must
+ * not strand the ones behind it (see drain.ts) — so without this guard a
+ * transient createPin failure lets the SAME drain carry on to a queued
+ * edit/delete for that pin. The UPDATE then affects zero rows (the pin does
+ * not exist yet), which the pins actions correctly — and unavoidably, from
+ * their side — treat as a permanent refusal, binning a perfectly good edit or
+ * delete. A deleted pin then reappears once its create finally lands (F1). A
+ * vote has the mirror problem: a permanently-failed create makes every
+ * queued vote 23503 forever, which vote-on-pin.ts classifies transient, so it
+ * retries against a pin that will never exist (F5).
+ *
+ * So: while the create is live (queued, not yet confirmed, not yet
+ * permanently failed), the dependent write is deferred — thrown as transient
+ * without ever reaching the server — and retried on the next drain, by which
+ * time the create has either landed (this lookup then finds nothing, since
+ * markDelivered removed the create entry) or failed for good. Once the
+ * create HAS permanently failed, the pin will never exist, so the dependent
+ * write is made permanent too, rather than retried forever or sent to the
+ * server as a doomed call. With no queued create for the pin at all — the
+ * common case, and every case once the create has landed — this is a no-op
+ * and the write proceeds exactly as before.
+ */
+function assertPinIsNotAwaitingCreate(pinId: string): void {
+  const create = findQueuedCreateForPin(pinId);
+  if (!create) return;
+  if (create.permanentlyFailed) {
+    throw new PermanentFailure(
+      `Pin ${pinId} will never exist — its create permanently failed.`
+    );
+  }
+  throw new Error(`Pin ${pinId}'s create is still queued; waiting for it before this write.`);
+}
+
+/**
  * Replays one queued pin write. Thrown errors are what tell drainOutbox
  * whether to retry.
  *
@@ -459,13 +508,22 @@ export async function dispatchQueuedPinWrite(entry: OutboxEntry): Promise<void> 
   if (create) return settle(await actions.createPin({ id: entry.id, ...create }));
 
   const edit = payloadOf(entry, "editPin");
-  if (edit) return settle(await actions.editPin(edit));
+  if (edit) {
+    assertPinIsNotAwaitingCreate(edit.pinId);
+    return settle(await actions.editPin(edit));
+  }
 
   const deletion = payloadOf(entry, "deleteOwnPin");
-  if (deletion) return settle(await actions.deleteOwnPin(deletion));
+  if (deletion) {
+    assertPinIsNotAwaitingCreate(deletion.pinId);
+    return settle(await actions.deleteOwnPin(deletion));
+  }
 
   const moderation = payloadOf(entry, "setPinRemoved");
-  if (moderation) return settle(await actions.setPinRemoved(moderation));
+  if (moderation) {
+    assertPinIsNotAwaitingCreate(moderation.pinId);
+    return settle(await actions.setPinRemoved(moderation));
+  }
 
   // dispatchers.ts routes four operations here. A fifth added there without a
   // branch here must fail loudly rather than succeed silently and drop the
@@ -495,6 +553,8 @@ export async function dispatchQueuedVote(entry: OutboxEntry): Promise<void> {
     // rather than silently drop the write.
     throw new Error(`Vote dispatcher received an entry it does not handle (${entry.operation})`);
   }
+
+  assertPinIsNotAwaitingCreate(vote.pinId);
 
   const { voteOnPin: voteOnPinAction } = await import("@/app/actions/vote-on-pin");
   settle(await voteOnPinAction(vote));

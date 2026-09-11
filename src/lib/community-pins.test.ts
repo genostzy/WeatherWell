@@ -10,7 +10,27 @@ vi.mock("@/lib/auth/anonymous-session", () => ({
   useSessionUserId: () => null,
 }));
 
+// Regression coverage for final-review.md F1/F5: dispatchQueuedPinWrite and
+// dispatchQueuedVote dynamically import the pins/vote Server Actions, which
+// transitively import "@/lib/supabase/user-server" (server-only). Faking
+// that module, and only that module, lets the tests below exercise the REAL
+// drainOutbox, dispatchQueued and dispatchQueuedPinWrite/dispatchQueuedVote —
+// the actual reproduction the reviewer used — rather than a synthetic
+// approximation of the bug.
+const getClaims = vi.fn();
+const insert = vi.fn();
+const update = vi.fn();
+const upsert = vi.fn();
+vi.mock("@/lib/supabase/user-server", () => ({
+  createSupabaseUserClient: async () => ({
+    auth: { getClaims },
+    from: () => ({ insert, update, upsert }),
+  }),
+}));
+
 import { enqueue, markFailed, readOutbox } from "@/lib/outbox/outbox";
+import { drainOutbox } from "@/lib/outbox/drain";
+import { dispatchQueued } from "@/lib/outbox/dispatchers";
 import {
   mergePins,
   isOwnPin,
@@ -332,5 +352,85 @@ describe("mergePins with a queued vote", () => {
     const [merged] = mergePins([pin], [entry]);
 
     expect(merged.upvotes).toBe(3);
+  });
+});
+
+// final-review.md F1/F5: a write that references a pin must not race that
+// pin's own still-queued createPin. Both tests drive the REAL drainOutbox,
+// dispatchQueued and dispatchQueuedPinWrite/dispatchQueuedVote — only the
+// Supabase client is faked — which is what makes them a reproduction of the
+// bug rather than a test of a synthetic stand-in for it.
+describe("a pin-referencing write waits for its own pin's create (F1, F5)", () => {
+  beforeEach(() => {
+    getClaims.mockReset();
+    insert.mockReset();
+    update.mockReset();
+    upsert.mockReset();
+    getClaims.mockResolvedValue({ data: { claims: { sub: "user-1" } } });
+  });
+
+  it("F1: a delete queued behind a transiently-failing create for the SAME pin stays queued, not binned, and never reaches the server", async () => {
+    // The create fails with a transient error (a statement timeout, not an
+    // RLS/CHECK/FK rejection) — classify() in pins.ts correctly calls this
+    // TRANSIENT. drainOutbox does not stop on that failure (by design — one
+    // bad entry must not strand the ones behind it), so the delete for the
+    // SAME pin is dispatched in this same drain, before the pin has ever
+    // existed on the server.
+    insert.mockResolvedValueOnce({ error: { code: "57014", message: "statement timeout" } });
+    // If the delete reaches the server anyway (the bug), the UPDATE affects
+    // zero rows — this is what that looks like over the wire.
+    update.mockReturnValue({ eq: () => ({ select: () => Promise.resolve({ data: [], error: null }) }) });
+
+    const create = enqueue("createPin", {
+      zoneId: "zone-1",
+      statusTag: "flooded",
+      caption: "Knee-deep",
+      lat: 16.06,
+      lng: 120.4,
+    });
+    // The pin id a delete targets is the SAME id its own createPin entry
+    // carries — see CreatePinInput.id / dispatchQueuedPinWrite's create branch.
+    enqueue("deleteOwnPin", { pinId: create.id });
+
+    await drainOutbox(dispatchQueued);
+
+    // The delete's own server call — the zero-row UPDATE above — must never
+    // have happened at all.
+    expect(update).not.toHaveBeenCalled();
+
+    const after = readOutbox();
+    const deleteEntry = after.find((entry) => entry.operation === "deleteOwnPin");
+    expect(deleteEntry).toBeDefined();
+    expect(deleteEntry?.permanentlyFailed).toBe(false);
+
+    // The create itself is still queued too (transient failure), for the
+    // next drain to retry.
+    const createEntry = after.find((entry) => entry.operation === "createPin");
+    expect(createEntry?.permanentlyFailed).toBe(false);
+  });
+
+  it("F5: a vote on a pin whose create has PERMANENTLY failed is itself permanently failed, not retried forever", async () => {
+    upsert.mockResolvedValue({ error: { code: "23503", message: "fk violation" } });
+
+    const create = enqueue("createPin", {
+      zoneId: "zone-1",
+      statusTag: "flooded",
+      caption: "Knee-deep",
+      lat: 16.06,
+      lng: 120.4,
+    });
+    // Simulates an earlier drain having already permanently failed this
+    // create (e.g. an RLS denial) — the pin will never exist.
+    markFailed(create.id, "denied", true);
+    enqueue("voteOnPin", { pinId: create.id, direction: 1 });
+
+    await drainOutbox(dispatchQueued);
+
+    // The vote's own server call must never have happened.
+    expect(upsert).not.toHaveBeenCalled();
+
+    const voteEntry = readOutbox().find((entry) => entry.operation === "voteOnPin");
+    expect(voteEntry).toBeDefined();
+    expect(voteEntry?.permanentlyFailed).toBe(true);
   });
 });
