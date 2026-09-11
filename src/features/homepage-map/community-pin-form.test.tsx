@@ -16,7 +16,6 @@ describe("CommunityPinForm", () => {
     expect(onSubmit).toHaveBeenCalledWith({
       statusTag: "rising",
       caption: "Water at the gate",
-      photoDataUrl: undefined,
     });
   });
 
@@ -35,27 +34,16 @@ describe("CommunityPinForm", () => {
     expect(screen.getByRole("button", { name: /save changes/i })).toBeInTheDocument();
   });
 
-  it("reports a cleared photo as an empty string, so an edit can remove one", async () => {
-    const onSubmit = vi.fn();
-    const user = userEvent.setup();
-    render(
-      <CommunityPinForm
-        mode="edit"
-        initialValues={{ statusTag: "flooded", caption: "Deep", photoDataUrl: "data:image/png;base64,x" }}
-        onSubmit={onSubmit}
-        onCancel={() => {}}
-      />
-    );
+  it("has no way to attach a photo, and says so", () => {
+    render(<CommunityPinForm onSubmit={() => {}} onCancel={() => {}} />);
 
-    await user.click(screen.getByRole("button", { name: /remove photo/i }));
-    await user.click(screen.getByRole("button", { name: /save changes/i }));
-
-    // "" clears; undefined would mean "leave the existing photo alone".
-    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ photoDataUrl: "" }));
+    expect(screen.queryByRole("textbox", { name: /photo/i })).not.toBeInTheDocument();
+    expect(document.querySelector('input[type="file"]')).not.toBeInTheDocument();
+    expect(screen.getByText(/photos can't be attached yet/i)).toBeInTheDocument();
   });
 
-  it("says plainly that an attached photo never leaves the device", () => {
+  it("tells the resident the pin itself — status, description, location — is shared with the barangay", () => {
     render(<CommunityPinForm onSubmit={() => {}} onCancel={() => {}} />);
-    expect(screen.getByText(/never uploaded/i)).toBeInTheDocument();
+    expect(screen.getByText(/is shared with the barangay/i)).toBeInTheDocument();
   });
 });

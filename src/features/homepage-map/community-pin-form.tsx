@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ChangeEvent } from "react";
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -18,12 +18,10 @@ const CAPTION_PLACEHOLDER: LocalizedText = {
   en: "e.g. Water already knee-deep near the market",
   fil: "hal. Tuhod na ang tubig malapit sa palengke",
 };
-const PHOTO_LABEL: LocalizedText = { en: "Photo (optional)", fil: "Larawan (opsyonal)" };
-const PHOTO_NOTE: LocalizedText = {
-  en: "Stays on this device only — never uploaded.",
-  fil: "Dito lang sa device na ito mananatili — hindi ini-upload.",
+const SHARING_NOTE: LocalizedText = {
+  en: "This pin — its status, description, and location — is shared with the barangay. Photos can't be attached yet.",
+  fil: "Ang pin na ito — status, paglalarawan, at lokasyon — ay ibinabahagi sa barangay. Hindi pa maaaring maglagay ng larawan dito.",
 };
-const REMOVE_PHOTO: LocalizedText = { en: "Remove photo", fil: "Alisin ang larawan" };
 const UNVERIFIED_NOTE: LocalizedText = {
   en: "Unverified community report, separate from official alerts.",
   fil: "Hindi pa na-verify na ulat ng komunidad, hiwalay sa opisyal na alerto.",
@@ -35,16 +33,18 @@ const SAVE_CHANGES: LocalizedText = { en: "Save changes", fil: "I-save ang pagba
 export interface CommunityPinFormValues {
   statusTag: PinStatusTag;
   caption: string;
-  /** "" explicitly clears an existing photo; undefined leaves it unchanged. */
-  photoDataUrl?: string;
 }
 
 /**
  * Used both for the confirmation step after a resident taps a spot on the map
  * and for editing a pin they already dropped (see HomepageMap, which renders
- * this inside an OverlayDialog so it never sits below the fold). Photo
- * attachment is client-side only — read into a data URL and never sent
- * anywhere — per PRD Core Feature #5.
+ * this inside an OverlayDialog so it never sits below the fold).
+ *
+ * No photo field: pins going live moved status, caption, and location to
+ * Postgres, but pin photos are still out of scope pending consent and
+ * retention rules, and there is no bucket or grant behind an upload. A form
+ * that collected a photo here would mislead the resident into thinking it
+ * was part of their report.
  */
 export function CommunityPinForm({
   onSubmit,
@@ -54,23 +54,12 @@ export function CommunityPinForm({
 }: {
   onSubmit: (values: CommunityPinFormValues) => void;
   onCancel: () => void;
-  initialValues?: { statusTag: PinStatusTag; caption: string; photoDataUrl?: string };
+  initialValues?: { statusTag: PinStatusTag; caption: string };
   mode?: "create" | "edit";
 }) {
   const { lang } = useLanguage();
   const [statusTag, setStatusTag] = useState<PinStatusTag>(initialValues?.statusTag ?? "flooded");
   const [caption, setCaption] = useState(initialValues?.caption ?? "");
-  const [photoDataUrl, setPhotoDataUrl] = useState<string | undefined>(initialValues?.photoDataUrl);
-
-  function handlePhotoChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      setPhotoDataUrl(typeof reader.result === "string" ? reader.result : undefined);
-    };
-    reader.readAsDataURL(file);
-  }
 
   return (
     <Card className="w-full">
@@ -84,12 +73,7 @@ export function CommunityPinForm({
           className="flex flex-col gap-4"
           onSubmit={(event) => {
             event.preventDefault();
-            onSubmit({
-              statusTag,
-              caption: caption.trim(),
-              // Distinguish "cleared" from "unchanged" for the edit path.
-              photoDataUrl: photoDataUrl ?? (initialValues?.photoDataUrl ? "" : undefined),
-            });
+            onSubmit({ statusTag, caption: caption.trim() });
           }}
         >
           <div className="space-y-2">
@@ -126,39 +110,9 @@ export function CommunityPinForm({
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="pin-photo" lang={lang}>
-              {t(PHOTO_LABEL, lang)}
-            </Label>
-            <input
-              id="pin-photo"
-              type="file"
-              accept="image/*"
-              onChange={handlePhotoChange}
-              className="block w-full text-sm text-muted-foreground file:mr-3 file:rounded-md file:border-2 file:border-border file:bg-background file:px-3 file:py-1 file:text-sm file:font-medium"
-            />
-            <p lang={lang} className="text-xs text-muted-foreground">
-              {t(PHOTO_NOTE, lang)}
-            </p>
-            {photoDataUrl && (
-              <div className="flex items-center gap-2">
-                {/* eslint-disable-next-line @next/next/no-img-element -- a local data: URL, not a remote image next/image would optimize */}
-                <img
-                  src={photoDataUrl}
-                  alt=""
-                  className="h-24 w-auto rounded-md border-2 border-border object-cover"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPhotoDataUrl(undefined)}
-                >
-                  {t(REMOVE_PHOTO, lang)}
-                </Button>
-              </div>
-            )}
-          </div>
+          <p lang={lang} className="text-xs text-muted-foreground">
+            {t(SHARING_NOTE, lang)}
+          </p>
 
           <p lang={lang} className="text-xs text-muted-foreground">
             {t(UNVERIFIED_NOTE, lang)}

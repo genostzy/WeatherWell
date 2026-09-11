@@ -351,11 +351,10 @@ export function isOwnPin(pin: CommunityPin, userId: string | null): boolean {
 }
 
 /**
- * A resident correcting their own pin.
- *
- * The photo is not carried: `CommunityPinFormValues` still has a
- * `photoDataUrl` field, and it is dropped here along with the rest of Phase
- * 1's local-only photo handling. See CommunityPin.photoDataUrl.
+ * A resident correcting their own pin. `CommunityPinFormValues` carries no
+ * photo field — pin photos remain out of scope pending consent and
+ * retention rules — so there is nothing photo-related to drop here. See
+ * CommunityPin.photoDataUrl.
  */
 export function updateCommunityPin(
   pinId: string,

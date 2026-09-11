@@ -180,7 +180,6 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
             initialValues={{
               statusTag: editingPin.statusTag,
               caption: editingPin.caption,
-              photoDataUrl: editingPin.photoDataUrl,
             }}
             onSubmit={handleEditPinSubmit}
             onCancel={handlePinFormCancel}
