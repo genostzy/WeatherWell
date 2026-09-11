@@ -24,6 +24,10 @@ export interface LiveWaterLevelReport {
 const NO_SERVER_ROWS: LiveWaterLevelReport[] = [];
 const NO_DELIVERED: OutboxEntry[] = [];
 
+function isReportEntry(entry: OutboxEntry): boolean {
+  return entry.operation === "submitWaterLevelReport";
+}
+
 /**
  * The delivery refetch below deliberately carries a query parameter that
  * changes on every call; the mount fetch deliberately does not.
@@ -72,6 +76,12 @@ function reportsUrl(afterDeliveries: number): string {
  * network still sees their own queued reports (via mergeReports below),
  * which is the entire point of the outbox. So a failure here just leaves
  * `rows` at whatever it already held (empty, on a first failed load).
+ *
+ * Filtered by operation, like community-pins.ts's own onDelivered listener.
+ * Seven operations share one outbox, so an unfiltered subscription would
+ * refetch /api/reports after delivering a pin, a vote or a check-in — a
+ * refetch this store has no reason to make, since none of those deliveries
+ * can have changed a water-level report (final-review.md F4).
  */
 function useServerReports(): { rows: LiveWaterLevelReport[]; delivered: OutboxEntry[] } {
   const [rows, setRows] = useState<LiveWaterLevelReport[]>(NO_SERVER_ROWS);
@@ -81,7 +91,11 @@ function useServerReports(): { rows: LiveWaterLevelReport[]; delivered: OutboxEn
   // behind "something is queued", so a visitor who only reads never reaches
   // it. This cannot become a back door to an anonymous sign-in.
   useEffect(
-    () => onDelivered((entries) => setDelivered((held) => [...held, ...entries])),
+    () =>
+      onDelivered((entries) => {
+        const mine = entries.filter(isReportEntry);
+        if (mine.length > 0) setDelivered((held) => [...held, ...mine]);
+      }),
     []
   );
 

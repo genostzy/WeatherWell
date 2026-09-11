@@ -289,6 +289,36 @@ describe("water-level-reports", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("does not refetch /api/reports when a delivery contains no water-level report (F4)", async () => {
+    // Seven operations share one outbox. Before this fix, useServerReports'
+    // onDelivered listener was not filtered by operation, so delivering a
+    // pin, a vote, or a check-in also refetched /api/reports — a request
+    // this store has no reason to make, since none of those writes can have
+    // changed a water-level report.
+    enqueue("createPin", {
+      zoneId: "zone-1",
+      statusTag: "flooded",
+      caption: "Knee-deep",
+      lat: 16.06,
+      lng: 120.4,
+    });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => [] });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderHook(() => useWaterLevelReports());
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    await act(async () => {
+      // Resolves for every entry, so the queued pin write is "delivered".
+      await drainOutbox(async () => {});
+    });
+
+    // Give any microtask this delivery might have queued a turn to run.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("does not let the service worker's cached copy answer the post-delivery refetch", async () => {
     // sw.js serves /api/reports with staleWhileRevalidate — `cached || network`
     // — so a plain refetch would be answered from the copy captured on the
