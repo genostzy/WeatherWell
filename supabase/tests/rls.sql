@@ -31,7 +31,9 @@ begin
   -- caught and the assertion remains the unchanged-value check below. Without
   -- the catch, the grant denial would abort the whole suite.
   begin
-    update public.profiles set role = 'operator' where id = fixture_id;
+    update public.profiles
+       set role = 'operator', area_code = '0000000', display_name = 'Test Operator'
+     where id = fixture_id;
   exception when insufficient_privilege then
     raise notice 'ok: profiles UPDATE refused outright (no grant), not merely filtered';
   end;
@@ -130,7 +132,9 @@ declare
   operator_id uuid := '33333333-3333-3333-3333-333333333333';
 begin
   insert into auth.users (id) values (operator_id);
-  update public.profiles set role = 'operator' where id = operator_id;
+  update public.profiles
+     set role = 'operator', area_code = '0000000', display_name = 'Test Operator'
+   where id = operator_id;
 end $$;
 
 -- A second fixture zone, isolated from tests-fixture-zone (which already
@@ -876,5 +880,275 @@ select tests.expect_row_count(
   'the operator''s occupancy update above actually landed',
   $$select * from public.evacuation_centers where id = 'tests-fixture-center' and current_occupancy = 55$$,
   1);
+
+-- ===========================================================================
+-- Task 1 (officials-and-roles): area limits. Every official is limited, by
+-- the database, to their own area, expressed as a prefix of the national
+-- PSGC barangay code. Town 0199901 has barangays a1 and a2; town 0199902 has
+-- b1. Fixtures use real-shaped 10-digit codes so private.manages_zone's
+-- prefix match exercises the actual rule, not a coincidence of short codes.
+-- ===========================================================================
+
+insert into public.zones
+  (id, psgc_barangay_code, name, evacuation_route_text, lat, lng, evacuation_route_path, hotline_number)
+values
+  ('tests-area-a1', '0199901001', 'Barangay Uno, Testtown',  '{"en":"x","fil":"x"}'::jsonb, 14.0, 121.0, '[]'::jsonb, '000'),
+  ('tests-area-a2', '0199901002', 'Barangay Dos, Testtown',  '{"en":"x","fil":"x"}'::jsonb, 14.0, 121.0, '[]'::jsonb, '000'),
+  ('tests-area-b1', '0199902001', 'Barangay Tres, Othertown','{"en":"x","fil":"x"}'::jsonb, 14.0, 121.0, '[]'::jsonb, '000');
+
+insert into public.evacuation_centers (id, zone_id, name, lat, lng, capacity)
+values ('tests-centre-a1', 'tests-area-a1', 'C a1', 14.0, 121.0, 100),
+       ('tests-centre-a2', 'tests-area-a2', 'C a2', 14.0, 121.0, 100);
+
+-- Users:
+--   '44444444-4444-4444-4444-444444444444'  barangay official for a1  (area '0199901001')
+--   '55555555-5555-5555-5555-555555555555'  municipal official for Testtown (area '0199901')
+--   '66666666-6666-6666-6666-666666666666'  resident -- reuses the net-score-fixture
+--                                             author already inserted into auth.users
+--                                             earlier in this file (still role
+--                                             'resident', never promoted), so it is not
+--                                             re-inserted here.
+insert into auth.users (id) values
+  ('44444444-4444-4444-4444-444444444444'),
+  ('55555555-5555-5555-5555-555555555555');
+
+update public.profiles set role='operator', area_code='0199901001', display_name='Official A1'
+ where id = '44444444-4444-4444-4444-444444444444';
+update public.profiles set role='operator', area_code='0199901', display_name='Official Testtown'
+ where id = '55555555-5555-5555-5555-555555555555';
+
+-- A1: a1 official raises an alert in their own barangay.
+select tests.as_user('44444444-4444-4444-4444-444444444444');
+select tests.expect_allowed(
+  'A1: a1 official CAN set an alert in their own barangay',
+  $$select public.set_zone_alert('tests-area-a1', 'red', '{"en":"x","fil":"x"}'::jsonb)$$);
+
+select tests.as_user('44444444-4444-4444-4444-444444444444');
+select tests.expect_row_count(
+  'A1: exactly one active alert now on a1',
+  $$select * from public.alerts where zone_id = 'tests-area-a1' and is_active$$,
+  1);
+
+-- A2: the same official cannot touch a2, a different barangay in the same town.
+select tests.as_user('44444444-4444-4444-4444-444444444444');
+select tests.expect_denied(
+  'A2: a1 official CANNOT set an alert in a2 (same town, different barangay)',
+  $$select public.set_zone_alert('tests-area-a2', 'red', '{"en":"x","fil":"x"}'::jsonb)$$);
+
+-- A3: the municipal official covers every barangay in their town, including a2.
+select tests.as_user('55555555-5555-5555-5555-555555555555');
+select tests.expect_allowed(
+  'A3: Testtown official CAN set an alert in a2 (covers the whole town)',
+  $$select public.set_zone_alert('tests-area-a2', 'red', '{"en":"x","fil":"x"}'::jsonb)$$);
+
+select tests.as_user('55555555-5555-5555-5555-555555555555');
+select tests.expect_row_count(
+  'A3: exactly one active alert now on a2',
+  $$select * from public.alerts where zone_id = 'tests-area-a2' and is_active$$,
+  1);
+
+-- A4: the municipal official's coverage stops at the town boundary.
+select tests.as_user('55555555-5555-5555-5555-555555555555');
+select tests.expect_denied(
+  'A4: Testtown official CANNOT set an alert in b1 (a different town)',
+  $$select public.set_zone_alert('tests-area-b1', 'red', '{"en":"x","fil":"x"}'::jsonb)$$);
+
+-- A5: an official in their own area still cannot forge an automatic-source alert.
+select tests.as_user('44444444-4444-4444-4444-444444444444');
+select tests.expect_denied(
+  'A5: a1 official CANNOT insert an alert with source auto_crowdsourced, even in their own barangay',
+  $$insert into public.alerts (zone_id, severity, message, source)
+    values ('tests-area-a1', 'red', '{"en":"x","fil":"x"}'::jsonb, 'auto_crowdsourced')$$);
+
+-- A6 setup: clear a1's alert first -- only one active alert per zone is
+-- allowed, and this clear is itself a legitimate in-area action (the a1
+-- official managing their own zone).
+select tests.as_user('44444444-4444-4444-4444-444444444444');
+select tests.expect_allowed(
+  'A6 setup: a1 official clears a1''s alert so the manual insert below does not collide with the one-active-alert constraint',
+  $$select public.set_zone_alert('tests-area-a1', null, null)$$);
+
+-- A6: with source = 'manual' and no collision, the same insert shape succeeds.
+select tests.as_user('44444444-4444-4444-4444-444444444444');
+select tests.expect_allowed(
+  'A6: a1 official CAN insert an alert with source manual in their own barangay',
+  $$insert into public.alerts (zone_id, severity, message, source)
+    values ('tests-area-a1', 'red', '{"en":"x","fil":"x"}'::jsonb, 'manual')$$);
+
+-- A7: a1 official cannot clear a2's active alert (set by the Testtown official
+-- in A3) -- and this must be a genuine 42501 raised by set_zone_alert's own
+-- check, not a silent no-op the caller would read as success.
+select tests.as_user('44444444-4444-4444-4444-444444444444');
+select tests.expect_denied(
+  'A7: a1 official CANNOT clear a2''s active alert (42501, not a silent no-op)',
+  $$select public.set_zone_alert('tests-area-a2', null, null)$$);
+
+-- A8: a1 official clears a1's own alert (the one inserted in A6).
+select tests.as_user('44444444-4444-4444-4444-444444444444');
+select tests.expect_allowed(
+  'A8: a1 official CAN clear a1''s own alert',
+  $$select public.set_zone_alert('tests-area-a1', null, null)$$);
+
+select tests.as_user('44444444-4444-4444-4444-444444444444');
+select tests.expect_row_count(
+  'A8: no active alert remains on a1',
+  $$select * from public.alerts where zone_id = 'tests-area-a1' and is_active$$,
+  0);
+
+-- A9: a1 official can update their own barangay's evacuation centre.
+select tests.as_user('44444444-4444-4444-4444-444444444444');
+select tests.expect_allowed(
+  'A9: a1 official CAN update evacuation_centers.current_occupancy for centre-a1',
+  $$update public.evacuation_centers set current_occupancy = 10 where id = 'tests-centre-a1'$$);
+
+select tests.as_user('44444444-4444-4444-4444-444444444444');
+select tests.expect_row_count(
+  'A9: the occupancy update on centre-a1 actually landed',
+  $$select * from public.evacuation_centers where id = 'tests-centre-a1' and current_occupancy = 10$$,
+  1);
+
+-- A10: the same official cannot touch centre-a2's occupancy. RLS filters this
+-- to zero rows silently (no exception) -- same shape as the zones/alerts
+-- unchanged-value blocks earlier in this file, so it is proven the same way:
+-- a manual role switch, a raw UPDATE, and an unchanged-value check.
+do $$
+declare
+  original int;
+  observed int;
+begin
+  select current_occupancy into original from public.evacuation_centers where id = 'tests-centre-a2';
+
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', '44444444-4444-4444-4444-444444444444', 'role', 'authenticated')::text, true);
+
+  update public.evacuation_centers set current_occupancy = 10 where id = 'tests-centre-a2';
+
+  reset role;
+
+  select current_occupancy into observed from public.evacuation_centers where id = 'tests-centre-a2';
+
+  if observed is distinct from original then
+    raise exception using errcode = 'TSTFL',
+      message = 'SECURITY TEST FAILED — A10: a1 official updated centre-a2''s occupancy (outside their area)';
+  end if;
+  raise notice 'ok, row count 0: A10 a1 official cannot update centre-a2''s occupancy (unchanged, update matched zero rows)';
+end $$;
+
+-- A11: a resident can still check in anywhere -- the area rule is for
+-- officials, not for a resident's own check-in.
+select tests.as_user('66666666-6666-6666-6666-666666666666');
+select tests.expect_allowed(
+  'A11: a resident CAN check in at a2',
+  $$insert into public.evacuation_check_ins (zone_id, user_id, status)
+    values ('tests-area-a2', '66666666-6666-6666-6666-666666666666', 'safe')$$);
+
+-- A12: a1 official cannot read a2's check-ins -- a2 is outside their
+-- barangay-level area.
+select tests.as_user('44444444-4444-4444-4444-444444444444');
+select tests.expect_row_count(
+  'A12: a1 official cannot see check-ins in a2',
+  $$select * from public.evacuation_check_ins where zone_id = 'tests-area-a2'$$,
+  0);
+
+-- A13: the Testtown official covers a2, so they can.
+select tests.as_user('55555555-5555-5555-5555-555555555555');
+select tests.expect_row_count(
+  'A13: Testtown official CAN see check-ins in a2',
+  $$select * from public.evacuation_check_ins where zone_id = 'tests-area-a2'$$,
+  1);
+
+-- A14/A15: restoring a removed pin. Fixture: a pin in a2, owned by the
+-- resident, already removed by an admin decision -- inserted as postgres
+-- (bypassing RLS) because `removed` is not in the authenticated INSERT
+-- column grant on community_pins (see Task 8's assertion 11, above in this
+-- file).
+insert into public.community_pins (id, zone_id, status_tag, caption, lat, lng, author_id, removed, removed_reason)
+values ('99999999-0000-0000-0000-000000000001', 'tests-area-a2', 'flooded', 'area test fixture pin', 14.0, 121.0,
+        '66666666-6666-6666-6666-666666666666', true, 'admin');
+
+-- A14: a1 official cannot restore it -- neither the pin's author nor a
+-- manager of a2's zone, so pins_update_own_or_in_area's USING clause filters
+-- the row out of the UPDATE entirely. The moderation trigger never even
+-- fires (it only sees rows RLS lets through the UPDATE's target set), so
+-- this is a silent zero-row filter, not a raised exception -- proven the
+-- same way as A10.
+do $$
+declare
+  original_removed boolean;
+  observed_removed boolean;
+begin
+  select removed into original_removed from public.community_pins where id = '99999999-0000-0000-0000-000000000001';
+
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', '44444444-4444-4444-4444-444444444444', 'role', 'authenticated')::text, true);
+
+  update public.community_pins set removed = false, removed_reason = null
+    where id = '99999999-0000-0000-0000-000000000001';
+
+  reset role;
+
+  select removed into observed_removed from public.community_pins where id = '99999999-0000-0000-0000-000000000001';
+
+  if observed_removed is distinct from original_removed then
+    raise exception using errcode = 'TSTFL',
+      message = 'SECURITY TEST FAILED — A14: a1 official restored a2''s pin (outside their area)';
+  end if;
+  raise notice 'ok, row count 0: A14 a1 official cannot restore a2''s pin (unchanged, update matched zero rows)';
+end $$;
+
+-- A15: the Testtown official manages a2, so they can restore it. Reaching
+-- pins_update_own_or_in_area's USING clause this time means the moderation
+-- trigger DOES fire, and its WHEN clause (not private.manages_zone(new.zone_id))
+-- is false for this caller, so it does not raise.
+select tests.as_user('55555555-5555-5555-5555-555555555555');
+select tests.expect_allowed(
+  'A15: Testtown official CAN restore a2''s pin',
+  $$update public.community_pins set removed = false, removed_reason = null
+    where id = '99999999-0000-0000-0000-000000000001'$$);
+
+select tests.as_user('55555555-5555-5555-5555-555555555555');
+select tests.expect_row_count(
+  'A15: the restore above actually landed',
+  $$select * from public.community_pins where id = '99999999-0000-0000-0000-000000000001' and removed = false and removed_reason is null$$,
+  1);
+
+-- A16: no client, official or resident, has an UPDATE grant on profiles at
+-- all. A resident cannot grant themselves an area, a role or a name.
+select tests.as_user('66666666-6666-6666-6666-666666666666');
+select tests.expect_denied(
+  'A16: a resident cannot set their own area_code',
+  $$update public.profiles set area_code = '0199901' where id = '66666666-6666-6666-6666-666666666666'$$);
+
+select tests.as_user('66666666-6666-6666-6666-666666666666');
+select tests.expect_denied(
+  'A16: a resident cannot set their own role to operator',
+  $$update public.profiles set role = 'operator' where id = '66666666-6666-6666-6666-666666666666'$$);
+
+select tests.as_user('66666666-6666-6666-6666-666666666666');
+select tests.expect_denied(
+  'A16: a resident cannot set their own display_name',
+  $$update public.profiles set display_name = 'x' where id = '66666666-6666-6666-6666-666666666666'$$);
+
+-- A17: profiles_read_own drops the old "or operator" clause -- an official
+-- can no longer read another user's profile, including another official's.
+select tests.as_user('44444444-4444-4444-4444-444444444444');
+select tests.expect_row_count(
+  'A17: a1 official cannot read the Testtown official''s profile (own row only)',
+  $$select * from public.profiles where id = '55555555-5555-5555-5555-555555555555'$$,
+  0);
+
+-- A18: municipalities is reference data, world-readable including anon.
+select tests.as_anon();
+select tests.expect_allowed(
+  'A18: anon CAN read municipalities',
+  $$select * from public.municipalities$$);
+
+-- A19: municipalities is never client-writable, not even by an official.
+select tests.as_user('44444444-4444-4444-4444-444444444444');
+select tests.expect_denied(
+  'A19: an official cannot insert a municipality',
+  $$insert into public.municipalities (code, name) values ('0199903', 'X')$$);
 
 rollback;

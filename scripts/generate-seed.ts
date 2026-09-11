@@ -75,6 +75,25 @@ export function quote(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;
 }
 
+/**
+ * One row per distinct town among the given zones, for `public.municipalities`
+ * (Task 1: officials-and-roles). The 7-digit town code is the first seven
+ * digits of the barangay's PSGC code; the town name is the text after the
+ * last ", " in the zone's own name (e.g. "Barangay Nilombot, Mapandan" ->
+ * "Mapandan"), matching how MOCK_ZONES already spells every zone name.
+ */
+export function municipalitiesFrom(
+  zones: { psgcBarangayCode: string; name: string }[]
+): { code: string; name: string }[] {
+  const byCode = new Map<string, string>();
+  for (const zone of zones) {
+    const code = zone.psgcBarangayCode.slice(0, 7);
+    const town = zone.name.slice(zone.name.lastIndexOf(", ") + 2).trim();
+    if (!byCode.has(code)) byCode.set(code, town);
+  }
+  return [...byCode].map(([code, name]) => ({ code, name })).sort((a, b) => a.code.localeCompare(b.code));
+}
+
 function json(value: unknown): string {
   return `${quote(JSON.stringify(value))}::jsonb`;
 }
@@ -121,6 +140,13 @@ export function buildSeedSql(): string {
       `insert into public.points_of_interest (id, zone_id, category, name, lat, lng) values (` +
         `${quote(p.id)}, ${quote(p.zoneId)}, ${quote(p.category)}, ${quote(p.name)},` +
         ` ${p.lat}, ${p.lng}) on conflict (id) do update set name = excluded.name;`
+    );
+  }
+
+  for (const m of municipalitiesFrom(MOCK_ZONES)) {
+    lines.push(
+      `insert into public.municipalities (code, name) values (${quote(m.code)}, ${quote(m.name)})` +
+        ` on conflict (code) do nothing;`
     );
   }
 

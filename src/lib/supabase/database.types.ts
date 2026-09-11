@@ -228,6 +228,21 @@ export type Database = {
           },
         ]
       }
+      municipalities: {
+        Row: {
+          code: string
+          name: string
+        }
+        Insert: {
+          code: string
+          name: string
+        }
+        Update: {
+          code?: string
+          name?: string
+        }
+        Relationships: []
+      }
       pin_votes: {
         Row: {
           direction: number
@@ -294,19 +309,25 @@ export type Database = {
       }
       profiles: {
         Row: {
+          area_code: string | null
           created_at: string
+          display_name: string | null
           id: string
           role: string
           zone_id: string | null
         }
         Insert: {
+          area_code?: string | null
           created_at?: string
+          display_name?: string | null
           id: string
           role?: string
           zone_id?: string | null
         }
         Update: {
+          area_code?: string | null
           created_at?: string
+          display_name?: string | null
           id?: string
           role?: string
           zone_id?: string | null
@@ -409,7 +430,12 @@ export type Database = {
     }
     Functions: {
       set_zone_alert: {
-        Args: { p_message: Json; p_severity: string; p_zone_id: string }
+        Args: {
+          p_message: Json
+          p_severity: string
+          p_source?: string
+          p_zone_id: string
+        }
         Returns: undefined
       }
     }

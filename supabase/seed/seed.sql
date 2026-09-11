@@ -17,6 +17,10 @@ insert into public.points_of_interest (id, zone_id, category, name, lat, lng) va
 insert into public.points_of_interest (id, zone_id, category, name, lat, lng) values ('poi-4', 'zone-2', 'water_station', 'Mangaldan Water Refilling Station', 16.07, 120.4043) on conflict (id) do update set name = excluded.name;
 insert into public.points_of_interest (id, zone_id, category, name, lat, lng) values ('poi-5', 'zone-3', 'barangay_office', 'Poblacion, Manaoag Barangay Hall', 16.0435, 120.4877) on conflict (id) do update set name = excluded.name;
 insert into public.points_of_interest (id, zone_id, category, name, lat, lng) values ('poi-6', 'zone-4', 'market', 'Santa Barbara Public Market', 16.0029, 120.4006) on conflict (id) do update set name = excluded.name;
+insert into public.municipalities (code, name) values ('0105525', 'Manaoag') on conflict (code) do nothing;
+insert into public.municipalities (code, name) values ('0105526', 'Mangaldan') on conflict (code) do nothing;
+insert into public.municipalities (code, name) values ('0105528', 'Mapandan') on conflict (code) do nothing;
+insert into public.municipalities (code, name) values ('0105538', 'Santa Barbara') on conflict (code) do nothing;
 insert into public.hazard_susceptibility (id, zone_id, hazard_type, risk_level) values ('zone-1-flood', 'zone-1', 'flood', 'high') on conflict (id) do update set risk_level = excluded.risk_level;
 insert into public.hazard_susceptibility (id, zone_id, hazard_type, risk_level) values ('zone-1-landslide', 'zone-1', 'landslide', 'low') on conflict (id) do update set risk_level = excluded.risk_level;
 insert into public.hazard_susceptibility (id, zone_id, hazard_type, risk_level) values ('zone-1-storm_surge', 'zone-1', 'storm_surge', 'low') on conflict (id) do update set risk_level = excluded.risk_level;

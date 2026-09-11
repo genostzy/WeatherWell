@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildSeedSql, buildTeardownSql, quote } from "./generate-seed";
+import { buildSeedSql, buildTeardownSql, quote, municipalitiesFrom } from "./generate-seed";
 import { MOCK_ZONES } from "@/lib/mock-data";
 
 /** The fixed, obviously-fake account the seed attributes its demo pins to. */
@@ -51,6 +51,51 @@ describe("buildSeedSql", () => {
     // voters, and the number of neighbours who corroborated a pin is exactly
     // the signal residents are asked to trust.
     expect(buildSeedSql()).not.toContain("pin_votes");
+  });
+
+  it("emits an idempotent municipalities insert for every distinct town in MOCK_ZONES", () => {
+    // Task 1 (officials-and-roles): the appointment command resolves a town
+    // by name, so every town a mock zone belongs to needs a row here.
+    const sql = buildSeedSql();
+    expect(sql).toContain("insert into public.municipalities");
+    expect(sql).toContain("on conflict (code) do nothing");
+  });
+});
+
+describe("municipalitiesFrom", () => {
+  it("emits one row per distinct town, with the 7-digit town code and the name after the last ', '", () => {
+    // Four mock zones in four different towns -> four rows, one per town,
+    // each code the first seven digits of that barangay's PSGC code.
+    const zones = [
+      { psgcBarangayCode: "0105528012", name: "Barangay Nilombot, Mapandan" },
+      { psgcBarangayCode: "0105526000", name: "Barangay Poblacion, Mangaldan" },
+      { psgcBarangayCode: "0105525000", name: "Barangay Poblacion, Manaoag" },
+      { psgcBarangayCode: "0105538000", name: "Barangay Poblacion, Santa Barbara" },
+    ];
+
+    const result = municipalitiesFrom(zones);
+
+    expect(result).toEqual([
+      { code: "0105525", name: "Manaoag" },
+      { code: "0105526", name: "Mangaldan" },
+      { code: "0105528", name: "Mapandan" },
+      { code: "0105538", name: "Santa Barbara" },
+    ]);
+  });
+
+  it("collapses two barangays in the same town into one municipality row", () => {
+    const zones = [
+      { psgcBarangayCode: "0105528012", name: "Barangay Nilombot, Mapandan" },
+      { psgcBarangayCode: "0105528013", name: "Barangay Dos, Mapandan" },
+    ];
+
+    expect(municipalitiesFrom(zones)).toEqual([{ code: "0105528", name: "Mapandan" }]);
+  });
+
+  it("MOCK_ZONES itself produces four rows, one per town", () => {
+    // The four real mock zones live in four different towns today; this
+    // pins that shape so a future zone addition is a deliberate choice.
+    expect(municipalitiesFrom(MOCK_ZONES)).toHaveLength(4);
   });
 });
 
