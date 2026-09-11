@@ -47,6 +47,10 @@ const NOTE: LocalizedText = {
   fil: "Ang mga pagbabago dito ay makikita agad sa buong app — sa homepage map, listahan ng mga zone, at admin dashboard.",
 };
 const SAVE_FAILED: LocalizedText = { en: "Could not save — try again.", fil: "Hindi na-save — subukan ulit." };
+const HEADCOUNT_HINT: LocalizedText = {
+  en: "Entering a headcount derives the status automatically instead of picking it manually",
+  fil: "Ang paglagay ng bilang ay awtomatikong magtatakda ng status sa halip na piliin nang manu-mano",
+};
 
 const ALERT_SEVERITY_VALUES: (Severity | "none")[] = ["none", ...SEVERITY_ORDER];
 
@@ -70,6 +74,7 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
   // zone.currentOccupancy, same as every other read-only surface; falls back
   // to the zone's own centerStatus if no headcount has ever been recorded.
   const centerStatus = resolveEffectiveCenterStatus(zone.centerStatus, zone.evacuationCenterCapacity, zone.currentOccupancy);
+  const isTrackingHeadcount = zone.currentOccupancy !== undefined;
   const rainfall = getRainfallForZone(zone.id);
   const rainfallHistory = getRainfallHistoryForZone(zone.id);
 
@@ -165,7 +170,11 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
               <label htmlFor="capacity-select" className="text-sm font-medium">
                 {t(CAPACITY, lang)}
               </label>
-              <Select value={centerStatus} onValueChange={(value) => void handleStatusChange(value as CenterStatus)}>
+              <Select
+                value={centerStatus}
+                disabled={isTrackingHeadcount}
+                onValueChange={(value) => void handleStatusChange(value as CenterStatus)}
+              >
                 <SelectTrigger id="capacity-select">
                   <SelectValue />
                 </SelectTrigger>
@@ -178,6 +187,7 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
                 </SelectContent>
               </Select>
               {statusError && <p className="text-xs text-severity-red">{t(SAVE_FAILED, lang)}</p>}
+              {isTrackingHeadcount && <p className="text-xs text-muted-foreground">{t(HEADCOUNT_HINT, lang)}</p>}
             </div>
           </CardContent>
         </Card>
