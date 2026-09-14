@@ -1392,4 +1392,268 @@ select tests.expect_row_count(
   $$select 1 from public.official_actions where zone_id = 'tests-area-a1' limit 1$$,
   1);
 
+-- ===========================================================================
+-- Task 3 (officials-and-roles): appointment commands. The system owner
+-- appoints and removes officials by running private.appoint_official and
+-- private.remove_official directly in the SQL editor, signed in as no one --
+-- private.record_official_action then credits every action to 'System
+-- owner'. Reuses Task 1's fixture zones (tests-area-a1 '0199901001' and
+-- tests-area-a2 '0199901002', both "Barangay ..., Testtown"; tests-area-b1
+-- '0199902001', "Barangay Tres, Othertown").
+--
+-- R1 ruling: neither Task 1 nor Task 2 ever inserts a municipalities row for
+-- the fixture towns, so a by-town-name lookup here would otherwise raise
+-- "No town named" immediately (P1/P2 would fail before ever exercising the
+-- functions under test). This block inserts Testtown's and Othertown's
+-- municipality rows before P1. P4 below then inserts a SECOND row also
+-- named 'Testtown' with a different code, deliberately creating the
+-- ambiguity it tests -- 'Testtown' stays ambiguous for every statement
+-- after P4, and no assertion after P4 relies on resolving that bare name.
+-- ===========================================================================
+
+insert into public.municipalities (code, name) values
+  ('0199901', 'Testtown'),
+  ('0199902', 'Othertown');
+
+-- Fixture users:
+--   88888888-... has an email and is_anonymous = false -- the account
+--   P1/P2/P5/P6/P7/P9 appoint, re-appoint, remove and re-check.
+--   99999999-... is anonymous (is_anonymous = true, no email) -- an
+--   ordinary signed-in resident, standing in for "any authenticated
+--   caller" in P8.
+insert into auth.users (id, email) values
+  ('88888888-8888-8888-8888-888888888888', 'official.test@example.com');
+insert into auth.users (id, is_anonymous) values
+  ('99999999-9999-9999-9999-999999999999', true);
+
+-- P1: appoint by "<Barangay>, <Town>" -- matches zone tests-area-a1
+-- ("Barangay Uno, Testtown") only, so coverage is exactly a1's barangay.
+do $$
+declare
+  v_result text;
+begin
+  select private.appoint_official('official.test@example.com', 'Uno, Testtown', 'Test Official')
+    into v_result;
+  if v_result !~ 'covers 1 barangay' then
+    raise exception using errcode = 'TSTFL', message = format(
+      'TEST FAILED — P1: expected result to contain ''covers 1 barangay'', got: %s', v_result);
+  end if;
+  raise notice 'ok, P1: appoint_official(''Uno, Testtown'') returned: %', v_result;
+end $$;
+
+do $$
+declare
+  v_role text;
+  v_area text;
+begin
+  select role, area_code into v_role, v_area
+    from public.profiles where id = '88888888-8888-8888-8888-888888888888';
+  if v_role is distinct from 'operator' or v_area is distinct from '0199901001' then
+    raise exception using errcode = 'TSTFL', message = format(
+      'TEST FAILED — P1: expected role=operator area_code=0199901001, got role=%s area_code=%s',
+      v_role, v_area);
+  end if;
+  raise notice 'ok, P1: profile is operator with area_code 0199901001';
+end $$;
+
+-- P2: appoint by bare town name -- matches municipalities row Testtown
+-- (0199901) only (P4 has not yet introduced the second one), covering both
+-- of Testtown's barangays (a1 and a2).
+do $$
+declare
+  v_result text;
+begin
+  select private.appoint_official('official.test@example.com', 'Testtown', 'Test Official')
+    into v_result;
+  if v_result !~ 'covers 2 barangay' then
+    raise exception using errcode = 'TSTFL', message = format(
+      'TEST FAILED — P2: expected result to contain ''covers 2 barangay'', got: %s', v_result);
+  end if;
+  raise notice 'ok, P2: appoint_official(''Testtown'') returned: %', v_result;
+end $$;
+
+do $$
+declare
+  v_area text;
+begin
+  select area_code into v_area
+    from public.profiles where id = '88888888-8888-8888-8888-888888888888';
+  if v_area is distinct from '0199901' then
+    raise exception using errcode = 'TSTFL', message = format(
+      'TEST FAILED — P2: expected area_code=0199901, got %s', v_area);
+  end if;
+  raise notice 'ok, P2: profile area_code is 0199901';
+end $$;
+
+-- P3: an email with no account at all.
+do $$
+declare
+  v_result text;
+  v_raised boolean := false;
+begin
+  begin
+    select private.appoint_official('no.such.user@example.com', 'Testtown', 'X') into v_result;
+  exception
+    when others then
+      v_raised := true;
+      if sqlerrm !~ 'sign in once first' then
+        raise exception using errcode = 'TSTFL', message = format(
+          'TEST FAILED — P3: wrong exception message, got: %s', sqlerrm);
+      end if;
+  end;
+  if not v_raised then
+    raise exception using errcode = 'TSTFL',
+      message = 'TEST FAILED — P3: expected an exception for an email with no account, succeeded instead';
+  end if;
+  raise notice 'ok, P3: appoint_official raised for an unknown email';
+end $$;
+
+-- P4: a second municipalities row named 'Testtown', creating a genuine name
+-- collision. From here on, 'Testtown' resolves to two different codes -- no
+-- assertion after this point relies on resolving that bare name.
+insert into public.municipalities (code, name) values ('0199903', 'Testtown');
+
+do $$
+declare
+  v_result text;
+  v_raised boolean := false;
+begin
+  begin
+    select private.appoint_official('official.test@example.com', 'Testtown', 'X') into v_result;
+  exception
+    when others then
+      v_raised := true;
+      if sqlerrm !~ '0199901' or sqlerrm !~ '0199903' then
+        raise exception using errcode = 'TSTFL', message = format(
+          'TEST FAILED — P4: expected message to list both codes 0199901 and 0199903, got: %s', sqlerrm);
+      end if;
+  end;
+  if not v_raised then
+    raise exception using errcode = 'TSTFL',
+      message = 'TEST FAILED — P4: expected an exception for an ambiguous town name, succeeded instead';
+  end if;
+  raise notice 'ok, P4: appoint_official raised for ambiguous ''Testtown'', listing both codes';
+end $$;
+
+-- P5: a 7-digit code is the documented escape hatch for a name that is
+-- ambiguous -- unaffected by P4's ambiguity, since it never looks the name
+-- up at all.
+do $$
+declare
+  v_result text;
+begin
+  select private.appoint_official('official.test@example.com', '0199902', 'Test Official') into v_result;
+  raise notice 'ok, P5: appoint_official(''0199902'') returned: %', v_result;
+end $$;
+
+do $$
+declare
+  v_area text;
+begin
+  select area_code into v_area
+    from public.profiles where id = '88888888-8888-8888-8888-888888888888';
+  if v_area is distinct from '0199902' then
+    raise exception using errcode = 'TSTFL', message = format(
+      'TEST FAILED — P5: expected area_code=0199902, got %s', v_area);
+  end if;
+  raise notice 'ok, P5: profile area_code is 0199902';
+end $$;
+
+-- P6: remove the official -- role, area and name all clear together, or
+-- operator_has_area_and_name would reject the write.
+do $$
+declare
+  v_result text;
+begin
+  select private.remove_official('official.test@example.com') into v_result;
+  raise notice 'ok, P6: remove_official returned: %', v_result;
+end $$;
+
+do $$
+declare
+  v_role text;
+  v_area text;
+  v_name text;
+begin
+  select role, area_code, display_name into v_role, v_area, v_name
+    from public.profiles where id = '88888888-8888-8888-8888-888888888888';
+  if v_role is distinct from 'resident' or v_area is not null or v_name is not null then
+    raise exception using errcode = 'TSTFL', message = format(
+      'TEST FAILED — P6: expected role=resident area_code=null display_name=null, got role=%s area_code=%s display_name=%s',
+      v_role, v_area, v_name);
+  end if;
+  raise notice 'ok, P6: profile is resident with null area and name';
+end $$;
+
+-- P7: P1, P2 and P6 each wrote exactly one official_actions row, credited
+-- to 'System owner' (no signed-in user issued any of these). P5 is a
+-- successful appoint_official call too (the escape-hatch code), so it
+-- necessarily adds a third official.appointed row of its own -- the count
+-- below is 3 (P1 + P2 + P5), not 2, to match what actually happened rather
+-- than silently dropping P5's own write from the check.
+do $$
+declare
+  v_appointed int;
+  v_removed int;
+begin
+  select count(*) into v_appointed from public.official_actions
+    where action = 'official.appointed' and actor_name = 'System owner'
+      and target_id = '88888888-8888-8888-8888-888888888888';
+  if v_appointed <> 3 then
+    raise exception using errcode = 'TSTFL', message = format(
+      'TEST FAILED — P7: expected 3 official.appointed rows (P1 + P2 + P5) credited to System owner, got %s', v_appointed);
+  end if;
+
+  select count(*) into v_removed from public.official_actions
+    where action = 'official.removed' and actor_name = 'System owner'
+      and target_id = '88888888-8888-8888-8888-888888888888';
+  if v_removed <> 1 then
+    raise exception using errcode = 'TSTFL', message = format(
+      'TEST FAILED — P7: expected 1 official.removed row (P6) credited to System owner, got %s', v_removed);
+  end if;
+  raise notice 'ok, P7: P1, P2, P5 and P6 each wrote an official_actions row credited to System owner';
+end $$;
+
+-- P8: both functions are owner-only. Calling private.appoint_official as
+-- authenticated is denied here too -- but authenticated also has no USAGE
+-- on schema private at all (unrelated to this task, never granted), so
+-- that denial alone would fire identically whether or not EXECUTE is
+-- revoked, and would not actually prove this task's own revoke. Checked
+-- directly against the catalog as well, which is what actually flips if
+-- the revoke is missing.
+select tests.as_user('99999999-9999-9999-9999-999999999999');
+select tests.expect_denied(
+  'P8: an authenticated caller cannot call appoint_official',
+  $$select private.appoint_official('x@example.com', 'Testtown', 'X')$$);
+
+do $$
+begin
+  if has_function_privilege('authenticated', 'private.appoint_official(text,text,text)', 'EXECUTE') then
+    raise exception using errcode = 'TSTFL',
+      message = 'TEST FAILED — P8: authenticated has EXECUTE on private.appoint_official';
+  end if;
+  if has_function_privilege('anon', 'private.appoint_official(text,text,text)', 'EXECUTE') then
+    raise exception using errcode = 'TSTFL',
+      message = 'TEST FAILED — P8: anon has EXECUTE on private.appoint_official';
+  end if;
+  if has_function_privilege('authenticated', 'private.remove_official(text)', 'EXECUTE') then
+    raise exception using errcode = 'TSTFL',
+      message = 'TEST FAILED — P8: authenticated has EXECUTE on private.remove_official';
+  end if;
+  if has_function_privilege('anon', 'private.remove_official(text)', 'EXECUTE') then
+    raise exception using errcode = 'TSTFL',
+      message = 'TEST FAILED — P8: anon has EXECUTE on private.remove_official';
+  end if;
+  raise notice 'ok, P8: EXECUTE on appoint_official and remove_official is revoked from anon and authenticated';
+end $$;
+
+-- P9: removal takes effect on the very next statement -- no cache, no
+-- delay. The removed user (same auth.users row, still is_anonymous = false)
+-- is a resident again, so is_operator() is false and set_zone_alert's own
+-- RLS-backed check refuses them.
+select tests.as_user('88888888-8888-8888-8888-888888888888');
+select tests.expect_denied(
+  'P9: the removed official cannot set an alert on the very next statement',
+  $$select public.set_zone_alert('tests-area-a1', 'red', '{"en":"x","fil":"x"}'::jsonb)$$);
+
 rollback;
