@@ -20,7 +20,7 @@
  * CURRENT_CACHES, so a bump is what evicts a bad build from installed devices.
  * Leaving it unchanged is what pins users to a stale app forever.
  */
-const VERSION = "v8";
+const VERSION = "v9";
 
 const SHELL_CACHE = `weatherwell-shell-${VERSION}`;
 const ASSET_CACHE = `weatherwell-assets-${VERSION}`;
@@ -82,15 +82,12 @@ const ALERTS_TIMEOUT_MS = 8000;
  */
 const PUBLIC_API_PATHS = ["/api/reports", "/api/pins"];
 
-const PRECACHED_ROUTES = [
-  "/",
-  "/evacuation",
-  "/report",
-  "/map",
-  "/admin",
-  "/admin/map",
-  "/admin/simulation",
-];
+// /admin, /admin/map and /admin/simulation are deliberately NOT precached
+// here. Once /admin needs a sign-in, pre-downloading it would save the
+// sign-in page on every device and serve it back in place of the dashboard —
+// an official's own visits are still cached by the network-first navigation
+// branch below, same as any other page.
+const PRECACHED_ROUTES = ["/", "/evacuation", "/report", "/map"];
 
 self.addEventListener("install", (event) => {
   // Deliberately not cache.addAll: that is all-or-nothing, so a single route
@@ -292,6 +289,13 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
+
+  // Sign-in and its callbacks carry one-time codes and set the session.
+  // Never stored, and never answered from a store.
+  if (url.pathname === "/sign-in" || url.pathname.startsWith("/auth/")) {
+    event.respondWith(fetch(request));
+    return;
+  }
 
   // Alerts are the one thing that must never be stale when a network exists.
   if (url.pathname === "/api/alerts" || url.pathname.startsWith("/api/alerts/")) {

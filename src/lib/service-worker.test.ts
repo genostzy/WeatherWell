@@ -486,6 +486,70 @@ describe("service worker request routing", () => {
     expect(result?.body).toBe("CACHED ZONES");
     expect(store.has(API_CACHE)).toBe(false);
   });
+
+  it("never writes a callback navigation to any cache", async () => {
+    // /auth/callback carries a one-time code and sets the session cookie.
+    // Storing its response would mean a second visitor to that exact URL (or
+    // this same device navigating back) could be served someone else's
+    // callback page from a shared cache.
+    const { listeners, store } = loadServiceWorker({
+      fetch: async () => response("CALLBACK PAGE"),
+    });
+
+    await handleFetch(listeners, {
+      url: `${ORIGIN}/auth/callback?code=x`,
+      mode: "navigate",
+    });
+
+    expect(store.size).toBe(0);
+  });
+
+  it("does not fall back to a cached callback response when the network fails (proves the bypass, not just a fast network)", async () => {
+    // A fast, successful network answer would look the same whether this
+    // route bypasses the cache entirely or goes through the ordinary
+    // networkFirst(SHELL_CACHE) path — both return the fresh response. The
+    // two only diverge when the network FAILS: networkFirst falls back to
+    // whatever is cached, while the dedicated bypass (plain `fetch(request)`,
+    // no fallback) has nothing to fall back to. Seeding SHELL_CACHE — the
+    // cache the navigation branch would otherwise read from — and then
+    // failing the network is what makes this test able to catch the branch
+    // going missing; see the report for the break/restore proof.
+    const { listeners } = loadServiceWorker({
+      caches: { [SHELL_CACHE]: { [`${ORIGIN}/auth/callback?code=x`]: "STALE CALLBACK" } },
+      fetch: async () => {
+        throw new Error("offline");
+      },
+    });
+
+    await expect(
+      handleFetch(listeners, { url: `${ORIGIN}/auth/callback?code=x`, mode: "navigate" })
+    ).rejects.toThrow();
+  });
+
+  it("never writes a /sign-in navigation to any cache", async () => {
+    const { listeners, store } = loadServiceWorker({
+      fetch: async () => response("SIGN-IN PAGE"),
+    });
+
+    await handleFetch(listeners, { url: `${ORIGIN}/sign-in`, mode: "navigate" });
+
+    expect(store.size).toBe(0);
+  });
+
+  it("does not fall back to a cached /sign-in response when the network fails (proves the bypass, not just a fast network)", async () => {
+    // Same reasoning as the callback case above: only a failed network tells
+    // networkFirst's cache fallback apart from this route's dedicated bypass.
+    const { listeners } = loadServiceWorker({
+      caches: { [SHELL_CACHE]: { [`${ORIGIN}/sign-in`]: "STALE SIGN-IN" } },
+      fetch: async () => {
+        throw new Error("offline");
+      },
+    });
+
+    await expect(
+      handleFetch(listeners, { url: `${ORIGIN}/sign-in`, mode: "navigate" })
+    ).rejects.toThrow();
+  });
 });
 
 describe("service worker install", () => {
@@ -494,8 +558,14 @@ describe("service worker install", () => {
     // deploy would reject, fail the install, and leave the worker inactive —
     // no cache, no fetch handler, no offline support, and nothing surfacing
     // the failure. A bad route must cost only itself.
+    //
+    // /map is the route made to fail (rather than a removed /admin* entry,
+    // which the fetch fake would never even see once those are gone from
+    // PRECACHED_ROUTES — see the R7 ruling in the task brief). The floor is
+    // 4: PRECACHED_ROUTES now has 4 entries plus /api/alerts is precached
+    // alongside them, one of those 5 attempts (/map) fails, leaving 4.
     const { listeners, store } = loadServiceWorker({
-      fetch: async (url) => (url === "/admin/map" ? response("boom", 500) : response("ok")),
+      fetch: async (url) => (url === "/map" ? response("boom", 500) : response("ok")),
     });
 
     const waits: Promise<unknown>[] = [];
@@ -503,10 +573,30 @@ describe("service worker install", () => {
     await Promise.all(waits);
 
     const shell = store.get(SHELL_CACHE)!;
-    expect(shell.has("/admin/map")).toBe(false);
+    expect(shell.has("/map")).toBe(false);
     expect(shell.has("/")).toBe(true);
     expect(shell.has("/evacuation")).toBe(true);
-    expect(shell.size).toBeGreaterThanOrEqual(6);
+    expect(shell.size).toBeGreaterThanOrEqual(4);
+  });
+
+  it("no longer precaches /admin, /admin/map or /admin/simulation", async () => {
+    // Once /admin needs a sign-in, pre-downloading it would save the sign-in
+    // page on every device and serve it back in place of the dashboard. An
+    // official's own visits are still cached by the network-first navigation
+    // branch — this is only about what INSTALL fetches unconditionally for
+    // every visitor, official or not.
+    const { listeners, store } = loadServiceWorker({
+      fetch: async () => response("ok"),
+    });
+
+    const waits: Promise<unknown>[] = [];
+    listeners.install({ waitUntil: (p: Promise<unknown>) => waits.push(p) });
+    await Promise.all(waits);
+
+    const shell = store.get(SHELL_CACHE)!;
+    expect(shell.has("/admin")).toBe(false);
+    expect(shell.has("/admin/map")).toBe(false);
+    expect(shell.has("/admin/simulation")).toBe(false);
   });
 
   it("resolves rather than rejecting when a route fails", async () => {
