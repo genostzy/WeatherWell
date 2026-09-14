@@ -7,6 +7,8 @@ import type { ReferenceData } from "@/lib/reference-data/types";
 import { AlertsContext } from "@/lib/alerts-store";
 import { MOCK_ZONES, MOCK_POIS, MOCK_HAZARD_SUSCEPTIBILITY, MOCK_ALERTS } from "@/lib/mock-data";
 import type { AlertRecord, LanguageCode } from "@/lib/types";
+import { OfficialContext } from "@/lib/auth/official-context";
+import type { Official } from "@/lib/auth/official";
 
 /**
  * The seeded fixtures, as reference data. `mock-data` remains the single
@@ -22,17 +24,39 @@ export const FIXTURE_REFERENCE_DATA: ReferenceData = {
   hazards: MOCK_HAZARD_SUSCEPTIBILITY,
 };
 
+/**
+ * Test-only: an empty areaCode is a prefix of every fixture code, so existing
+ * admin tests keep every control. Production can never produce this — the
+ * database's area_code check requires 7 or 10 digits. New tests pass a real
+ * area to exercise the limits.
+ */
+const TEST_OFFICIAL: Official = {
+  userId: "test-official",
+  displayName: "Test Official",
+  areaCode: "",
+  areaName: "All test zones",
+  level: "municipality",
+};
+
 export function renderWithData(
   ui: ReactElement,
-  options: { data?: Partial<ReferenceData>; lang?: LanguageCode; alerts?: AlertRecord[] } = {}
+  options: {
+    data?: Partial<ReferenceData>;
+    lang?: LanguageCode;
+    alerts?: AlertRecord[];
+    official?: Official | null;
+  } = {}
 ): RenderResult {
   const data: ReferenceData = { ...FIXTURE_REFERENCE_DATA, ...options.data };
   const alerts = options.alerts ?? MOCK_ALERTS;
+  const official = options.official === undefined ? TEST_OFFICIAL : options.official;
   return render(
     <TooltipProvider>
       <LanguageProvider initialLang={options.lang}>
         <ReferenceDataContext.Provider value={data}>
-          <AlertsContext.Provider value={alerts}>{ui}</AlertsContext.Provider>
+          <AlertsContext.Provider value={alerts}>
+            <OfficialContext.Provider value={official}>{ui}</OfficialContext.Provider>
+          </AlertsContext.Provider>
         </ReferenceDataContext.Provider>
       </LanguageProvider>
     </TooltipProvider>
