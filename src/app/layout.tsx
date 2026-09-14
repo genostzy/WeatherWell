@@ -3,6 +3,7 @@ import "./globals.css";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { LanguageProvider } from "@/features/i18n/language-provider";
 import { LanguageToggle } from "@/features/i18n/language-toggle";
+import { AccountLink } from "@/features/auth/account-link";
 import { SelectedZoneHotlineButton } from "@/components/selected-zone-hotline-button";
 import { ServiceWorkerRegistration } from "@/components/service-worker-registration";
 import { OutboxDrain } from "@/components/outbox-drain";
@@ -40,6 +41,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             <header className="flex items-center justify-center gap-4 p-3">
               <span className="font-semibold">WeatherWell</span>
               <LanguageToggle />
+              <AccountLink />
             </header>
             <ReferenceDataProvider>
               {children}

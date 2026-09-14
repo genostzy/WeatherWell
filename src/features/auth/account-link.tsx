@@ -1,0 +1,87 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { useLanguage } from "@/features/i18n/language-provider";
+import { t } from "@/lib/i18n";
+import { getBrowserClient } from "@/lib/supabase/browser";
+import type { LocalizedText } from "@/lib/types";
+
+const KEEP_REPORTS: LocalizedText = {
+  en: "Keep my reports on a new phone",
+  fil: "Panatilihin ang aking mga ulat sa bagong telepono",
+};
+const SIGN_OUT: LocalizedText = { en: "Sign out", fil: "Mag-sign out" };
+
+type SessionKind = "none" | "anonymous" | "permanent";
+
+function kindOf(session: { user: { is_anonymous?: boolean } } | null | undefined): SessionKind {
+  if (!session) return "none";
+  return session.user.is_anonymous ? "anonymous" : "permanent";
+}
+
+/**
+ * Mounted once, in the root layout's header, beside <LanguageToggle /> — so
+ * it renders on every page for every visitor, signed in or not. That makes
+ * it display-only by construction: it reads getSession() purely to decide
+ * what to show, the same exception useSessionUserId documents, and it must
+ * NEVER call ensureAnonymousSession or signInAnonymously. A visitor who has
+ * never written has no session and nothing to keep, and mounting this
+ * component must not be what signs them in — only their own first write
+ * does that.
+ *
+ * Renders nothing on /admin routes: admin-header.tsx already has its own
+ * sign-out, and an official would otherwise see two.
+ */
+export function AccountLink() {
+  const pathname = usePathname();
+  const { lang } = useLanguage();
+  const [kind, setKind] = useState<SessionKind>("none");
+  const isAdmin = pathname.startsWith("/admin");
+
+  useEffect(() => {
+    if (isAdmin) return;
+
+    let active = true;
+    const supabase = getBrowserClient();
+
+    void supabase.auth.getSession().then(({ data }) => {
+      if (active) setKind(kindOf(data.session));
+    });
+
+    // Sign-in happens on the first WRITE, which is after this mount — so
+    // without subscribing, a resident who signs in on another tab (or whose
+    // anonymous session is upgraded via /sign-in) would keep the stale
+    // "none"/"anonymous" kind here until they reload. Subscribing signs
+    // nobody in; it only listens.
+    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (active) setKind(kindOf(session));
+    });
+
+    return () => {
+      active = false;
+      subscription.subscription.unsubscribe();
+    };
+  }, [isAdmin]);
+
+  if (isAdmin || kind === "none") return null;
+
+  if (kind === "anonymous") {
+    return (
+      <Button asChild variant="ghost" size="sm">
+        <Link href={`/sign-in?next=${encodeURIComponent(pathname)}`}>{t(KEEP_REPORTS, lang)}</Link>
+      </Button>
+    );
+  }
+
+  return (
+    <form method="post" action="/auth/signout">
+      <input type="hidden" name="next" value={pathname} />
+      <Button type="submit" variant="ghost" size="sm">
+        {t(SIGN_OUT, lang)}
+      </Button>
+    </form>
+  );
+}
