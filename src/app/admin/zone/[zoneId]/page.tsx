@@ -30,6 +30,7 @@ import { TrendChart } from "@/features/admin/charts/trend-chart";
 import { RecentReportsPanel } from "@/features/water-level-report/recent-reports-panel";
 import { CommunityPinModerationPanel } from "@/features/admin/community-pin-moderation-panel";
 import { CheckInSummaryPanel } from "@/features/admin/check-in-summary-panel";
+import { LastChangeLine } from "@/features/admin/last-change-line";
 import type { CenterStatus, LocalizedText } from "@/lib/types";
 
 const BACK_TO_DASHBOARD: LocalizedText = { en: "Back to admin dashboard", fil: "Balik sa admin dashboard" };
@@ -135,6 +136,8 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
                 <span className="text-sm font-medium text-green-500">{t(CLEAR, lang)}</span>
               )}
             </div>
+
+            <LastChangeLine zoneId={zone.id} />
 
             {canManage && (
               <div className="space-y-2">

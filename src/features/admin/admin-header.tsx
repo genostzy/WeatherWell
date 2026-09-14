@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useOfficial } from "@/lib/auth/official-context";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
@@ -7,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import type { LocalizedText } from "@/lib/types";
 
 const SIGN_OUT: LocalizedText = { en: "Sign out", fil: "Mag-sign out" };
+const HISTORY: LocalizedText = { en: "History", fil: "Kasaysayan" };
 
 /**
  * Sits atop every /admin page, mounted once by the layout's OfficialProvider.
@@ -22,12 +24,17 @@ export function AdminHeader() {
       <span className="min-w-0 truncate font-medium">
         {official.displayName} — {official.areaName}
       </span>
-      <form method="post" action="/auth/signout">
-        <input type="hidden" name="next" value="/" />
-        <Button type="submit" variant="outline" size="sm">
-          {t(SIGN_OUT, lang)}
+      <div className="flex items-center gap-2">
+        <Button asChild variant="ghost" size="sm">
+          <Link href="/admin/history">{t(HISTORY, lang)}</Link>
         </Button>
-      </form>
+        <form method="post" action="/auth/signout">
+          <input type="hidden" name="next" value="/" />
+          <Button type="submit" variant="outline" size="sm">
+            {t(SIGN_OUT, lang)}
+          </Button>
+        </form>
+      </div>
     </header>
   );
 }

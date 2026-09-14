@@ -19,6 +19,11 @@ describe("AdminHeader", () => {
     expect(screen.getByText(/Barangay Uno/)).toBeInTheDocument();
   });
 
+  it("links to the history page", () => {
+    renderWithData(<AdminHeader />, { official: OFFICIAL });
+    expect(screen.getByRole("link", { name: /history/i })).toHaveAttribute("href", "/admin/history");
+  });
+
   it("posts sign-out to /auth/signout with a hidden next of /", () => {
     renderWithData(<AdminHeader />, { official: OFFICIAL });
     const button = screen.getByRole("button", { name: /sign out/i });
