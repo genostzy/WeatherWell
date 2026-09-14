@@ -374,20 +374,33 @@ export function deleteOwnPin(pinId: string): void {
   triggerDrain();
 }
 
-/** Admin's own manual removal — PRD Anti-Abuse layer 7/10's human override. Reversible via restoreCommunityPin. */
-export function removePinByAdmin(pinId: string): void {
-  enqueue("setPinRemoved", { pinId, removed: true, reason: "admin" });
+/**
+ * Admin's own manual removal — PRD Anti-Abuse layer 7/10's human override.
+ * Reversible via restoreCommunityPin.
+ *
+ * Returns the queued entry (not void) so a caller can watch it for
+ * `permanentlyFailed` — an out-of-area official's write is refused by RLS,
+ * and `mergePins` silently drops a permanently-failed entry from the
+ * optimistic view once that happens, reverting the pin back to "active"
+ * with no explanation unless something is watching this entry's id.
+ */
+export function removePinByAdmin(pinId: string): OutboxEntry {
+  const entry = enqueue("setPinRemoved", { pinId, removed: true, reason: "admin" });
   triggerDrain();
+  return entry;
 }
 
 /**
  * Clears a removal (net-score or admin) — the other half of "admin can remove
  * or restore any pin". The reason travels but is ignored on a restore, which
  * clears the column; see the setPinRemoved payload type.
+ *
+ * Returns the queued entry for the same reason removePinByAdmin does.
  */
-export function restoreCommunityPin(pinId: string): void {
-  enqueue("setPinRemoved", { pinId, removed: false, reason: "admin" });
+export function restoreCommunityPin(pinId: string): OutboxEntry {
+  const entry = enqueue("setPinRemoved", { pinId, removed: false, reason: "admin" });
   triggerDrain();
+  return entry;
 }
 
 /**

@@ -26,6 +26,7 @@ import { EvacuationManagementPanel } from "@/features/admin/evacuation-managemen
 import { ReportTrendPanel } from "@/features/admin/report-trend-panel";
 import { AlertAnalyticsPanel } from "@/features/admin/alert-analytics-panel";
 import { CommunityPinModerationPanel } from "@/features/admin/community-pin-moderation-panel";
+import { NoZonesNotice } from "@/features/admin/no-zones-notice";
 import {
   MOCK_TYPHOON,
   getRainfallForZone,
@@ -93,6 +94,18 @@ export function AdminOverview() {
   const alerts = useAlerts();
   const baseAlertFor = (zoneId: string) => alerts.find((a) => a.zoneId === zoneId && a.isActive);
 
+  // Reachable in production (see NoZonesNotice's doc comment), not just a
+  // test fixture: every computation below assumes at least one zone.
+  if (zones.length === 0) {
+    return <NoZonesNotice lang={lang} />;
+  }
+
+  // Only pins in a zone the official manages — the KPI tile is otherwise the
+  // one number on this screen that would silently mean something different
+  // from the six tiles beside it.
+  const inAreaZoneIds = new Set(zones.map((zone) => zone.id));
+  const scopedPins = pins.filter((pin) => inAreaZoneIds.has(pin.zoneId));
+
   const zonesUnderAlert = zones.filter((zone) => getZoneStatus(baseAlertFor(zone.id)) !== "safe").length;
   const reportsToday = zones.reduce((sum, zone) => sum + getReportsTodayForZone(zone.id), 0);
   const heaviestRain = Math.max(...zones.map((zone) => getRainfallForZone(zone.id)));
@@ -150,7 +163,7 @@ export function AdminOverview() {
             />
             <StatCard
               label={t(COMMUNITY_PINS, lang)}
-              value={pins.length}
+              value={scopedPins.length}
               hint={t(UNVERIFIED, lang)}
               icon={MapPin}
             />

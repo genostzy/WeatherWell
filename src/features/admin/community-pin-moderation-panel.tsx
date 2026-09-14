@@ -1,16 +1,22 @@
 "use client";
 
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MapPin, Trash2, RotateCcw } from "lucide-react";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
-import { useAllCommunityPins, removePinByAdmin, restoreCommunityPin } from "@/lib/community-pins";
+import {
+  useAllCommunityPins,
+  removePinByAdmin,
+  restoreCommunityPin,
+  type CommunityPin,
+} from "@/lib/community-pins";
+import { useOutbox } from "@/lib/outbox/outbox";
 import { PIN_STATUS_LABEL, PIN_STATUS_COLOR, type PinRemovalReason } from "@/lib/community-pin";
-import { useOfficial } from "@/lib/auth/official-context";
-import { isInArea } from "@/lib/auth/official";
-import type { LocalizedText, Zone } from "@/lib/types";
+import { useManagesZone } from "@/lib/auth/official-context";
+import type { LanguageCode, LocalizedText, Zone } from "@/lib/types";
 
 const TITLE: LocalizedText = { en: "Community Pin Moderation", fil: "Pagmo-moderate ng Community Pins" };
 const SUBTITLE: LocalizedText = {
@@ -27,6 +33,8 @@ const REMOVED_SECTION: LocalizedText = { en: "Removed (restorable)", fil: "Inali
 const REMOVED_BY_VOTES: LocalizedText = { en: "Removed by votes", fil: "Inalis ng boto" };
 const REMOVED_BY_ADMIN: LocalizedText = { en: "Removed by admin", fil: "Inalis ng admin" };
 const REMOVED_BY_AUTHOR: LocalizedText = { en: "Withdrawn by author", fil: "Inalis ng may-akda" };
+const VIEW_ONLY: LocalizedText = { en: "View only", fil: "Tingnan lang" };
+const SAVE_FAILED: LocalizedText = { en: "Could not save — try again.", fil: "Hindi na-save — subukan ulit." };
 
 const REMOVAL_REASON_LABEL: Record<PinRemovalReason, LocalizedText> = {
   net_score: REMOVED_BY_VOTES,
@@ -51,20 +59,46 @@ function removalLabel(reason: PinRemovalReason | undefined): LocalizedText {
  */
 export function CommunityPinModerationPanel({ zones, zoneId }: { zones: Zone[]; zoneId?: string }) {
   const { lang } = useLanguage();
-  const official = useOfficial();
-  // A single zoneId (the per-zone dashboard) is its own scope regardless of
-  // area — the zone page decides separately whether to show action controls.
-  // Otherwise (the global dashboard), only pins in a zone the official
-  // manages are shown; the database enforces the real limit.
-  const inAreaZoneIds = new Set(
-    zones.filter((zone) => isInArea(zone.psgcBarangayCode, official.areaCode)).map((zone) => zone.id)
-  );
-  const allPins = useAllCommunityPins().filter((pin) =>
-    zoneId ? pin.zoneId === zoneId : inAreaZoneIds.has(pin.zoneId)
-  );
+  const managesZone = useManagesZone();
+  // A single zoneId (the per-zone dashboard) scopes the LIST to that one
+  // zone regardless of area — the zone page can be reached for a zone
+  // outside the official's area (it shows its own "View only" note and
+  // hides its alert/capacity controls), so the actions below are gated
+  // per-pin via managesZone rather than assuming the list itself is safe.
+  // Otherwise (the global dashboard) only pins in a zone the official
+  // manages are listed at all; the database enforces the real limit either
+  // way. A pin whose zone cannot be resolved is hidden here — same as the
+  // Operations map (see admin-map-canvas.tsx) — since it cannot be proven
+  // to be in area.
+  const allPins = useAllCommunityPins().filter((pin) => {
+    if (zoneId) return pin.zoneId === zoneId;
+    const zone = zones.find((z) => z.id === pin.zoneId);
+    return zone ? managesZone(zone) : false;
+  });
   const activePins = allPins.filter((pin) => !pin.removed);
   const removedPins = allPins.filter((pin) => pin.removed);
   const scopedZoneName = zoneId ? zones.find((z) => z.id === zoneId)?.name : undefined;
+
+  // Tracked here, not inside each row: a pin optimistically flips between
+  // the active and removed sections below — different DOM subtrees, so a
+  // per-row useState would be unmounted and lose track of its own write the
+  // moment that happens. Keyed by pin id so each pin's last attempted write
+  // is tracked independently.
+  const [pendingByPin, setPendingByPin] = useState<Record<string, string>>({});
+  const outbox = useOutbox();
+
+  function trackWrite(pinId: string, entryId: string) {
+    setPendingByPin((prev) => ({ ...prev, [pinId]: entryId }));
+  }
+
+  // Reactive: once the outbox marks a write permanently failed (an
+  // out-of-area write RLS refuses), `mergePins` drops it from the
+  // optimistic view and the pin quietly reverts — this is what makes that
+  // reversal legible instead of a silent undo.
+  function failedFor(pinId: string): boolean {
+    const entryId = pendingByPin[pinId];
+    return entryId !== undefined && outbox.some((entry) => entry.id === entryId && entry.permanentlyFailed);
+  }
 
   return (
     <Card>
@@ -81,43 +115,17 @@ export function CommunityPinModerationPanel({ zones, zoneId }: { zones: Zone[]; 
 
         {activePins.map((pin) => {
           const zone = zones.find((z) => z.id === pin.zoneId);
-          const netScore = pin.upvotes - pin.downvotes;
           return (
-            <div
+            <ActivePinRow
               key={pin.id}
-              className="flex flex-wrap items-start justify-between gap-3 border-b pb-3 last:border-b-0 last:pb-0"
-            >
-              <div className="min-w-0 flex-1 space-y-1">
-                <div className="flex items-center gap-2">
-                  <span
-                    aria-hidden="true"
-                    className="h-2.5 w-2.5 shrink-0 rounded-full"
-                    style={{ backgroundColor: PIN_STATUS_COLOR[pin.statusTag] }}
-                  />
-                  <span className="font-medium">{t(PIN_STATUS_LABEL[pin.statusTag], lang)}</span>
-                  {!scopedZoneName && (
-                    <span className="truncate text-xs text-muted-foreground">
-                      {zone ? zone.name : t(UNKNOWN_ZONE, lang)}
-                    </span>
-                  )}
-                </div>
-                {pin.caption && <p className="text-sm break-words">{pin.caption}</p>}
-                <p className="text-xs text-muted-foreground tabular-nums">
-                  ▲ {pin.upvotes} · ▼ {pin.downvotes} · {netScore >= 0 ? "+" : ""}
-                  {netScore} {t(NET_SCORE, lang)}
-                </p>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => removePinByAdmin(pin.id)}
-                aria-label={`${t(REMOVE, lang)} — ${t(PIN_STATUS_LABEL[pin.statusTag], lang)}`}
-                className="border-severity-red text-severity-red"
-              >
-                <Trash2 aria-hidden="true" className="h-4 w-4" />
-                {t(REMOVE, lang)}
-              </Button>
-            </div>
+              pin={pin}
+              zone={zone}
+              scopedZoneName={scopedZoneName}
+              canModerate={zone ? managesZone(zone) : false}
+              failed={failedFor(pin.id)}
+              onRemove={() => trackWrite(pin.id, removePinByAdmin(pin.id).id)}
+              lang={lang}
+            />
           );
         })}
 
@@ -127,39 +135,144 @@ export function CommunityPinModerationPanel({ zones, zoneId }: { zones: Zone[]; 
             {removedPins.map((pin) => {
               const zone = zones.find((z) => z.id === pin.zoneId);
               return (
-                <div
+                <RemovedPinRow
                   key={pin.id}
-                  className="flex flex-wrap items-start justify-between gap-3 opacity-70"
-                >
-                  <div className="min-w-0 flex-1 space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium line-through">{t(PIN_STATUS_LABEL[pin.statusTag], lang)}</span>
-                      {!scopedZoneName && (
-                        <span className="truncate text-xs text-muted-foreground">
-                          {zone ? zone.name : t(UNKNOWN_ZONE, lang)}
-                        </span>
-                      )}
-                      <Badge variant="outline" className="text-xs">
-                        {t(removalLabel(pin.removedReason), lang)}
-                      </Badge>
-                    </div>
-                    {pin.caption && <p className="text-sm break-words">{pin.caption}</p>}
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => restoreCommunityPin(pin.id)}
-                    aria-label={`${t(RESTORE, lang)} — ${t(PIN_STATUS_LABEL[pin.statusTag], lang)}`}
-                  >
-                    <RotateCcw aria-hidden="true" className="h-4 w-4" />
-                    {t(RESTORE, lang)}
-                  </Button>
-                </div>
+                  pin={pin}
+                  zone={zone}
+                  scopedZoneName={scopedZoneName}
+                  canModerate={zone ? managesZone(zone) : false}
+                  failed={failedFor(pin.id)}
+                  onRestore={() => trackWrite(pin.id, restoreCommunityPin(pin.id).id)}
+                  lang={lang}
+                />
               );
             })}
           </div>
         )}
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * One active pin's row. Presentational only — its pending-write/error state
+ * lives in the parent (see `pendingByPin`), because a pin optimistically
+ * moves to a RemovedPinRow in a different DOM subtree the moment this same
+ * write lands, which would unmount a row-local useState before the write
+ * could ever resolve to a failure.
+ */
+function ActivePinRow({
+  pin,
+  zone,
+  scopedZoneName,
+  canModerate,
+  failed,
+  onRemove,
+  lang,
+}: {
+  pin: CommunityPin;
+  zone: Zone | undefined;
+  scopedZoneName: string | undefined;
+  canModerate: boolean;
+  failed: boolean;
+  onRemove: () => void;
+  lang: LanguageCode;
+}) {
+  const netScore = pin.upvotes - pin.downvotes;
+
+  return (
+    <div className="flex flex-wrap items-start justify-between gap-3 border-b pb-3 last:border-b-0 last:pb-0">
+      <div className="min-w-0 flex-1 space-y-1">
+        <div className="flex items-center gap-2">
+          <span
+            aria-hidden="true"
+            className="h-2.5 w-2.5 shrink-0 rounded-full"
+            style={{ backgroundColor: PIN_STATUS_COLOR[pin.statusTag] }}
+          />
+          <span className="font-medium">{t(PIN_STATUS_LABEL[pin.statusTag], lang)}</span>
+          {!scopedZoneName && (
+            <span className="truncate text-xs text-muted-foreground">
+              {zone ? zone.name : t(UNKNOWN_ZONE, lang)}
+            </span>
+          )}
+        </div>
+        {pin.caption && <p className="text-sm break-words">{pin.caption}</p>}
+        <p className="text-xs text-muted-foreground tabular-nums">
+          ▲ {pin.upvotes} · ▼ {pin.downvotes} · {netScore >= 0 ? "+" : ""}
+          {netScore} {t(NET_SCORE, lang)}
+        </p>
+      </div>
+      <div className="flex shrink-0 flex-col items-end gap-1">
+        {canModerate ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onRemove}
+            aria-label={`${t(REMOVE, lang)} — ${t(PIN_STATUS_LABEL[pin.statusTag], lang)}`}
+            className="border-severity-red text-severity-red"
+          >
+            <Trash2 aria-hidden="true" className="h-4 w-4" />
+            {t(REMOVE, lang)}
+          </Button>
+        ) : (
+          <span className="text-xs text-muted-foreground">{t(VIEW_ONLY, lang)}</span>
+        )}
+        {failed && <p className="text-xs text-severity-red">{t(SAVE_FAILED, lang)}</p>}
+      </div>
+    </div>
+  );
+}
+
+/** One removed pin's row — the restorable counterpart to ActivePinRow, same reasoning. */
+function RemovedPinRow({
+  pin,
+  zone,
+  scopedZoneName,
+  canModerate,
+  failed,
+  onRestore,
+  lang,
+}: {
+  pin: CommunityPin;
+  zone: Zone | undefined;
+  scopedZoneName: string | undefined;
+  canModerate: boolean;
+  failed: boolean;
+  onRestore: () => void;
+  lang: LanguageCode;
+}) {
+  return (
+    <div className="flex flex-wrap items-start justify-between gap-3 opacity-70">
+      <div className="min-w-0 flex-1 space-y-1">
+        <div className="flex items-center gap-2">
+          <span className="font-medium line-through">{t(PIN_STATUS_LABEL[pin.statusTag], lang)}</span>
+          {!scopedZoneName && (
+            <span className="truncate text-xs text-muted-foreground">
+              {zone ? zone.name : t(UNKNOWN_ZONE, lang)}
+            </span>
+          )}
+          <Badge variant="outline" className="text-xs">
+            {t(removalLabel(pin.removedReason), lang)}
+          </Badge>
+        </div>
+        {pin.caption && <p className="text-sm break-words">{pin.caption}</p>}
+      </div>
+      <div className="flex shrink-0 flex-col items-end gap-1">
+        {canModerate ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onRestore}
+            aria-label={`${t(RESTORE, lang)} — ${t(PIN_STATUS_LABEL[pin.statusTag], lang)}`}
+          >
+            <RotateCcw aria-hidden="true" className="h-4 w-4" />
+            {t(RESTORE, lang)}
+          </Button>
+        ) : (
+          <span className="text-xs text-muted-foreground">{t(VIEW_ONLY, lang)}</span>
+        )}
+        {failed && <p className="text-xs text-severity-red">{t(SAVE_FAILED, lang)}</p>}
+      </div>
+    </div>
   );
 }

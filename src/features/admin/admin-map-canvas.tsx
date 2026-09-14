@@ -13,7 +13,9 @@ import {
   useAllCommunityPins,
   removePinByAdmin,
   restoreCommunityPin,
+  type CommunityPin,
 } from "@/lib/community-pins";
+import { useOutbox } from "@/lib/outbox/outbox";
 import { PIN_STATUS_LABEL } from "@/lib/community-pin";
 import { buildZoneInputForZone, computeZoneState } from "@/lib/risk-engine/score";
 import { useHazards } from "@/lib/reference-data/use-reference-data";
@@ -205,9 +207,14 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
 
       {/* Reads useAllCommunityPins, not useCommunityPins: a removed pin has to
           stay visible here or there'd be no way to restore one that voting took
-          down wrongly (PRD Core Feature #5's "remove or restore any pin"). */}
+          down wrongly (PRD Core Feature #5's "remove or restore any pin"). A
+          pin whose zone cannot be resolved is skipped — same as the
+          moderation panel (see community-pin-moderation-panel.tsx) — since
+          it cannot be proven in or out of the official's area. */}
       {layers.pins &&
         allPins.map((pin) => {
+          const zone = zoneById.get(pin.zoneId);
+          if (!zone) return null;
           const statusLabel = t(PIN_STATUS_LABEL[pin.statusTag], lang);
           const label = pin.removed ? `${statusLabel} — ${t(REMOVED, lang)}` : statusLabel;
           return (
@@ -245,21 +252,63 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
                   <p className="text-xs text-muted-foreground">
                     ▲ {pin.upvotes} · ▼ {pin.downvotes}
                   </p>
-                  <button
-                    type="button"
-                    onClick={() => (pin.removed ? restoreCommunityPin(pin.id) : removePinByAdmin(pin.id))}
-                    className={`rounded border-2 px-2 py-0.5 text-xs font-medium ${
-                      pin.removed ? "border-border" : "border-severity-red text-severity-red"
-                    }`}
-                  >
-                    {t(pin.removed ? RESTORE_PIN : REMOVE_PIN, lang)}
-                  </button>
+                  <CommunityPinActions pin={pin} canManage={managesZone(zone)} lang={lang} />
                 </div>
               </Popup>
             </Marker>
           );
         })}
     </MapShell>
+  );
+}
+
+/**
+ * The Remove/Restore control for one community-pin marker's popup. Its own
+ * component (not inline in AdminMapCanvas's pins.map()) for the same reason
+ * ZoneAlertSelect and CenterOccupancyControl are: a per-marker useState call
+ * must not live inside a loop.
+ *
+ * Gated by canManage exactly like its neighbours in this file. When it IS
+ * shown, the write is watched for a permanent failure — an out-of-area
+ * write is refused by RLS, and `mergePins` then quietly drops the queued
+ * entry, reverting the marker to its prior state with no explanation unless
+ * something is watching for that.
+ */
+function CommunityPinActions({
+  pin,
+  canManage,
+  lang,
+}: {
+  pin: CommunityPin;
+  canManage: boolean;
+  lang: LanguageCode;
+}) {
+  const [pendingEntryId, setPendingEntryId] = useState<string | null>(null);
+  const outbox = useOutbox();
+  const failed = pendingEntryId !== null && outbox.some((entry) => entry.id === pendingEntryId && entry.permanentlyFailed);
+
+  function handleClick() {
+    const entry = pin.removed ? restoreCommunityPin(pin.id) : removePinByAdmin(pin.id);
+    setPendingEntryId(entry.id);
+  }
+
+  if (!canManage) {
+    return <p className="text-xs text-muted-foreground">{t(VIEW_ONLY, lang)}</p>;
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={handleClick}
+        className={`rounded border-2 px-2 py-0.5 text-xs font-medium ${
+          pin.removed ? "border-border" : "border-severity-red text-severity-red"
+        }`}
+      >
+        {t(pin.removed ? RESTORE_PIN : REMOVE_PIN, lang)}
+      </button>
+      {failed && <p className="text-xs text-severity-red">{t(SAVE_FAILED, lang)}</p>}
+    </>
   );
 }
 

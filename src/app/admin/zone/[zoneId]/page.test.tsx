@@ -1,5 +1,12 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { screen } from "@testing-library/react";
+
+// The community-pin panel's outbox drain reaches the real Supabase browser
+// client. Nothing here should sign anyone in.
+vi.mock("@/lib/auth/anonymous-session", () => ({
+  ensureAnonymousSession: async () => null,
+  useSessionUserId: () => null,
+}));
 
 // Both actions are "use server" modules reached only through a dynamic
 // import inside the page's change handlers (see the comment above those
@@ -16,6 +23,7 @@ vi.mock("@/app/actions/set-center", () => ({
 
 import ZoneDashboardPage from "./page";
 import { renderWithData, FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
+import { addCommunityPin } from "@/lib/community-pins";
 import type { Official } from "@/lib/auth/official";
 
 /**
@@ -92,5 +100,56 @@ describe("ZoneDashboardPage area scoping", () => {
 
     expect(screen.queryByText(/view only — this barangay is outside your area/i)).not.toBeInTheDocument();
     expect(screen.getByLabelText(/evacuation center capacity/i)).toBeInTheDocument();
+  });
+});
+
+describe("ZoneDashboardPage community pin moderation gating (F6-1)", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => [] }));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("hides Remove on the zone page's own pin panel when the zone is outside the official's area", async () => {
+    const zone = FIXTURE_REFERENCE_DATA.zones[1];
+    addCommunityPin({ zoneId: zone.id, statusTag: "flooded", caption: "Outside-area pin", lat: 0, lng: 0 });
+    const official: Official = {
+      userId: "u1",
+      displayName: "Test",
+      areaCode: FIXTURE_REFERENCE_DATA.zones[0].psgcBarangayCode,
+      areaName: "Own barangay",
+      level: "barangay",
+    };
+
+    renderWithData(<ZoneDashboardPage params={resolvedParams({ zoneId: zone.id })} searchParams={emptySearchParams} />, {
+      official,
+    });
+
+    expect(await screen.findByText("Outside-area pin")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /remove — flooded/i })).not.toBeInTheDocument();
+    // Two "View only" notices now: the page-level banner and the pin row's own.
+    expect(screen.getAllByText(/view only/i).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("shows Remove on the zone page's own pin panel when the zone is inside the official's area", async () => {
+    const zone = FIXTURE_REFERENCE_DATA.zones[0];
+    addCommunityPin({ zoneId: zone.id, statusTag: "flooded", caption: "In-area pin", lat: 0, lng: 0 });
+    const official: Official = {
+      userId: "u1",
+      displayName: "Test",
+      areaCode: zone.psgcBarangayCode,
+      areaName: "Own barangay",
+      level: "barangay",
+    };
+
+    renderWithData(<ZoneDashboardPage params={resolvedParams({ zoneId: zone.id })} searchParams={emptySearchParams} />, {
+      official,
+    });
+
+    expect(await screen.findByText("In-area pin")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /remove — flooded/i })).toBeInTheDocument();
   });
 });

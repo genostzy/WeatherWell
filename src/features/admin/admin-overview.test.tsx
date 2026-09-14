@@ -1,7 +1,16 @@
-import { describe, it, expect } from "vitest";
-import { screen } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { screen, within } from "@testing-library/react";
+
+// The community-pin KPI test below queues a write, whose drain reaches the
+// real Supabase browser client. Nothing here should sign anyone in.
+vi.mock("@/lib/auth/anonymous-session", () => ({
+  ensureAnonymousSession: async () => null,
+  useSessionUserId: () => null,
+}));
+
 import { AdminOverview } from "./admin-overview";
 import { renderWithData, FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
+import { addCommunityPin } from "@/lib/community-pins";
 import type { Official } from "@/lib/auth/official";
 
 describe("AdminOverview dashboard", () => {
@@ -55,5 +64,53 @@ describe("AdminOverview dashboard", () => {
 
     expect(screen.getAllByText(FIXTURE_REFERENCE_DATA.zones[0].name).length).toBeGreaterThan(0);
     expect(screen.queryAllByText(FIXTURE_REFERENCE_DATA.zones[1].name)).toHaveLength(0);
+  });
+
+  it("shows an empty-area notice instead of crashing when the official's area matches zero zones", () => {
+    // appoint_official's raw-digit escape hatch can appoint an official to an
+    // area code that covers zero barangays — genuinely reachable in
+    // production, not just a test fixture.
+    const official: Official = {
+      userId: "u1",
+      displayName: "Test",
+      areaCode: "9999999999",
+      areaName: "Nowhere",
+      level: "barangay",
+    };
+    renderWithData(<AdminOverview />, { official });
+
+    expect(screen.getByText(/no barangays in your area/i)).toBeInTheDocument();
+    expect(screen.queryByText(/zones under alert/i)).not.toBeInTheDocument();
+  });
+
+  it("scopes the 'Community pins' KPI tile to the official's area, like its neighbouring tiles (F6-7)", () => {
+    addCommunityPin({
+      zoneId: FIXTURE_REFERENCE_DATA.zones[0].id,
+      statusTag: "flooded",
+      caption: "In area",
+      lat: 0,
+      lng: 0,
+    });
+    addCommunityPin({
+      zoneId: FIXTURE_REFERENCE_DATA.zones[1].id,
+      statusTag: "rising",
+      caption: "Out of area",
+      lat: 0,
+      lng: 0,
+    });
+    const official: Official = {
+      userId: "u1",
+      displayName: "Test",
+      areaCode: FIXTURE_REFERENCE_DATA.zones[0].psgcBarangayCode,
+      areaName: "Own barangay",
+      level: "barangay",
+    };
+    renderWithData(<AdminOverview />, { official });
+
+    const label = screen.getByText(/^community pins$/i);
+    const card = label.closest('[data-slot="card"]');
+    expect(card).not.toBeNull();
+    // Only the in-area pin counts, even though two pins were queued.
+    expect(within(card as HTMLElement).getByText("1")).toBeInTheDocument();
   });
 });

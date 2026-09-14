@@ -12,6 +12,7 @@ vi.mock("@/lib/auth/anonymous-session", () => ({
 import { CommunityPinModerationPanel } from "./community-pin-moderation-panel";
 import { renderWithData, FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
 import { addCommunityPin, type CommunityPin } from "@/lib/community-pins";
+import { readOutbox, markFailed } from "@/lib/outbox/outbox";
 import type { Official } from "@/lib/auth/official";
 
 /**
@@ -120,6 +121,58 @@ describe("CommunityPinModerationPanel", () => {
 
     expect(screen.getByText("In my area")).toBeInTheDocument();
     expect(screen.queryByText("Outside my area")).not.toBeInTheDocument();
+  });
+
+  it("hides Remove and shows View only when zoneId itself is outside the official's area (F6-1)", () => {
+    // zoneId scopes the LIST to one zone regardless of area (the zone page
+    // decides separately whether to show its own alert/capacity controls),
+    // but the action buttons must still be gated per pin.
+    addCommunityPin({ zoneId: "zone-2", statusTag: "flooded", caption: "Out-of-area zone's pin", lat: 0, lng: 0 });
+    const official: Official = {
+      userId: "u1",
+      displayName: "Test",
+      areaCode: FIXTURE_REFERENCE_DATA.zones[0].psgcBarangayCode, // zone-1, not zone-2
+      areaName: "Own barangay",
+      level: "barangay",
+    };
+
+    renderWithData(<CommunityPinModerationPanel zones={FIXTURE_REFERENCE_DATA.zones} zoneId="zone-2" />, {
+      official,
+    });
+
+    expect(screen.getByText("Out-of-area zone's pin")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /remove/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/view only/i)).toBeInTheDocument();
+  });
+
+  it("hides an orphaned pin (unresolvable zone) from the global view, matching the Operations map (F6-6)", () => {
+    servePins([removedServerPin({ id: "pin-orphan", zoneId: "zone-does-not-exist", removed: false, caption: "Orphaned" })]);
+    addCommunityPin({ zoneId: "zone-1", statusTag: "impassable", caption: "Real pin", lat: 0, lng: 0 });
+
+    renderWithData(<CommunityPinModerationPanel zones={FIXTURE_REFERENCE_DATA.zones} />);
+
+    // The queued real pin proves the panel actually rendered its pin list —
+    // at that point the orphaned pin's absence is meaningful.
+    expect(screen.getByText("Real pin")).toBeInTheDocument();
+    expect(screen.queryByText("Orphaned")).not.toBeInTheDocument();
+  });
+
+  it("tells the admin when a moderation write is permanently refused, instead of silently reverting (F6-3)", async () => {
+    const user = userEvent.setup();
+    addCommunityPin({ zoneId: "zone-1", statusTag: "flooded", caption: "Test pin", lat: 0, lng: 0 });
+    renderWithData(<CommunityPinModerationPanel zones={FIXTURE_REFERENCE_DATA.zones} />);
+
+    await user.click(screen.getByRole("button", { name: /remove — flooded/i }));
+
+    // readOutbox()[0] is the seeding createPin entry; the moderation write
+    // is queued after it.
+    const entry = readOutbox().find((e) => e.operation === "setPinRemoved")!;
+    expect(entry).toBeDefined();
+    // Simulates what a real RLS-refused write looks like once the drain
+    // classifies it (see setPinRemoved in app/actions/pins.ts).
+    markFailed(entry.id, "That pin is not yours to remove, or no longer exists.", true);
+
+    expect(await screen.findByText(/could not save/i)).toBeInTheDocument();
   });
 });
 

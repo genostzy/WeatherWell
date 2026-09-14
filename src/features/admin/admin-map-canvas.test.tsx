@@ -25,7 +25,7 @@ vi.mock("@/app/actions/set-center", () => ({
 
 import { AdminMapCanvas } from "./admin-map-canvas";
 import { renderWithData, FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
-import { readOutbox } from "@/lib/outbox/outbox";
+import { readOutbox, markFailed } from "@/lib/outbox/outbox";
 import type { CommunityPin } from "@/lib/community-pins";
 import type { OutboxPayloads } from "@/lib/outbox/types";
 import type { Official } from "@/lib/auth/official";
@@ -231,5 +231,94 @@ describe("AdminMapCanvas", () => {
       screen.queryByRole("spinbutton", { name: new RegExp(otherZone.evacuationCenterName, "i") })
     ).not.toBeInTheDocument();
     expect(screen.getAllByText(/view only/i).length).toBeGreaterThan(0);
+  });
+
+  it("hides Remove/Restore on a community pin marker outside the official's area, and shows View only (F6-2)", async () => {
+    const otherZone = FIXTURE_REFERENCE_DATA.zones[1];
+    seedPin({ zoneId: otherZone.id, lat: otherZone.lat, lng: otherZone.lng });
+    const official: Official = {
+      userId: "u1",
+      displayName: "Test",
+      areaCode: zone.psgcBarangayCode,
+      areaName: "Own barangay",
+      level: "barangay",
+    };
+    renderWithData(<AdminMapCanvas zones={FIXTURE_REFERENCE_DATA.zones} />, { official });
+
+    fireEvent.click(await screen.findByRole("img", { name: /flooded/i }));
+
+    expect(screen.queryByRole("button", { name: /remove pin/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/view only/i)).toBeInTheDocument();
+  });
+
+  it("still shows Remove/Restore on a community pin marker inside the official's area", async () => {
+    seedPin({ zoneId: zone.id, lat: zone.lat, lng: zone.lng });
+    const official: Official = {
+      userId: "u1",
+      displayName: "Test",
+      areaCode: zone.psgcBarangayCode,
+      areaName: "Own barangay",
+      level: "barangay",
+    };
+    renderWithData(<AdminMapCanvas zones={FIXTURE_REFERENCE_DATA.zones} />, { official });
+
+    fireEvent.click(await screen.findByRole("img", { name: /flooded/i }));
+
+    expect(screen.getByRole("button", { name: /remove pin/i })).toBeInTheDocument();
+  });
+
+  it("hides an orphaned pin (unresolvable zone) from the map, matching the moderation panel (F6-6)", async () => {
+    servePins([
+      {
+        id: "pin-orphan",
+        zoneId: "zone-does-not-exist",
+        statusTag: "flooded",
+        caption: "Orphaned",
+        lat: 0,
+        lng: 0,
+        upvotes: 0,
+        downvotes: 0,
+        createdAt: new Date().toISOString(),
+        authorId: "user-1",
+        removed: false,
+      },
+      {
+        id: "pin-real",
+        zoneId: zone.id,
+        statusTag: "impassable",
+        caption: "Real",
+        lat: zone.lat,
+        lng: zone.lng,
+        upvotes: 0,
+        downvotes: 0,
+        createdAt: new Date().toISOString(),
+        authorId: "user-1",
+        removed: false,
+      },
+    ]);
+    renderWithData(<AdminMapCanvas zones={FIXTURE_REFERENCE_DATA.zones} />);
+
+    // Waiting for the real pin's marker proves the fetch resolved and the
+    // merge ran — at that point the orphaned pin's absence is meaningful,
+    // not just "nothing has loaded yet".
+    expect(await screen.findByRole("img", { name: /impassable/i })).toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: /flooded/i })).not.toBeInTheDocument();
+  });
+
+  it("tells the admin when a moderation write is permanently refused, instead of silently reverting (F6-3)", async () => {
+    seedPin();
+    renderWithData(<AdminMapCanvas zones={FIXTURE_REFERENCE_DATA.zones} />);
+
+    fireEvent.click(await screen.findByRole("img", { name: /flooded/i }));
+    fireEvent.click(screen.getByRole("button", { name: /remove pin/i }));
+
+    const [entry] = readOutbox();
+    expect(entry.operation).toBe("setPinRemoved");
+    // Simulates what a real RLS-refused write looks like once the drain
+    // classifies it (see setPinRemoved in app/actions/pins.ts) — the entry
+    // this row is tracking becomes permanently failed.
+    markFailed(entry.id, "That pin is not yours to remove, or no longer exists.", true);
+
+    expect(await screen.findByText(/could not save/i)).toBeInTheDocument();
   });
 });

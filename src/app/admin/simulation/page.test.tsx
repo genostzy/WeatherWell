@@ -70,4 +70,18 @@ describe("AdminSimulationPage", () => {
     expect(await screen.findByRole("option", { name: ownZone.name })).toBeInTheDocument();
     expect(screen.queryByRole("option", { name: otherZone.name })).not.toBeInTheDocument();
   });
+
+  it("shows an empty-area notice instead of crashing when the official's area matches zero zones", () => {
+    const official: Official = {
+      userId: "u1",
+      displayName: "Test",
+      areaCode: "9999999999",
+      areaName: "Nowhere",
+      level: "barangay",
+    };
+    renderWithData(<AdminSimulationPage />, { official });
+
+    expect(screen.getByText(/no barangays in your area/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /start simulation/i })).not.toBeInTheDocument();
+  });
 });

@@ -33,6 +33,7 @@ import { MOCK_SCENARIOS, getPredictionsForZone, MOCK_CASCADES } from "@/lib/mock
 import { useZones } from "@/lib/reference-data/use-reference-data";
 import { useOfficial } from "@/lib/auth/official-context";
 import { isInArea } from "@/lib/auth/official";
+import { NoZonesNotice } from "@/features/admin/no-zones-notice";
 import type { LocalizedText, Zone } from "@/lib/types";
 
 type SimulationStep =
@@ -184,14 +185,14 @@ export default function AdminSimulationPage() {
   // Only zones the signed-in official can act on; the database enforces the
   // real limit. The picker's initial selection follows suit.
   const zones = useZones().filter((zone) => isInArea(zone.psgcBarangayCode, official.areaCode));
-  const [selectedZone, setSelectedZone] = useState<Zone>(zones[0]);
+  // Typed as possibly undefined: `zones` can genuinely be empty (see
+  // NoZonesNotice's doc comment), and every hook below must still be called
+  // unconditionally — the empty-zones guard comes after all of them.
+  const [selectedZone, setSelectedZone] = useState<Zone | undefined>(zones[0]);
   const [selectedScenario, setSelectedScenario] = useState(MOCK_SCENARIOS[0].id);
   const [currentStep, setCurrentStep] = useState<SimulationStep>("idle");
   const [stepHistory, setStepHistory] = useState<SimulationStep[]>([]);
   const timeoutRefs = useRef<ReturnType<typeof setTimeout>[]>([]);
-
-  const predictions = getPredictionsForZone(selectedZone.id);
-  const cascade = MOCK_CASCADES.find((c) => c.fromZoneId === selectedZone.id);
 
   // Clean up all pending timeouts on unmount.
   useEffect(() => {
@@ -200,6 +201,13 @@ export default function AdminSimulationPage() {
       timeoutRefs.current = [];
     };
   }, []);
+
+  if (!selectedZone) {
+    return <NoZonesNotice lang={lang} />;
+  }
+
+  const predictions = getPredictionsForZone(selectedZone.id);
+  const cascade = MOCK_CASCADES.find((c) => c.fromZoneId === selectedZone.id);
 
   function clearPendingTimeouts() {
     timeoutRefs.current.forEach(clearTimeout);
