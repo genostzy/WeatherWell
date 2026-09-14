@@ -243,6 +243,50 @@ export type Database = {
         }
         Relationships: []
       }
+      official_actions: {
+        Row: {
+          action: string
+          actor_area: string | null
+          actor_id: string | null
+          actor_name: string
+          detail: Json
+          id: number
+          occurred_at: string
+          target_id: string | null
+          zone_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_area?: string | null
+          actor_id?: string | null
+          actor_name: string
+          detail?: Json
+          id?: never
+          occurred_at?: string
+          target_id?: string | null
+          zone_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_area?: string | null
+          actor_id?: string | null
+          actor_name?: string
+          detail?: Json
+          id?: never
+          occurred_at?: string
+          target_id?: string | null
+          zone_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "official_actions_zone_id_fkey"
+            columns: ["zone_id"]
+            isOneToOne: false
+            referencedRelation: "zones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pin_votes: {
         Row: {
           direction: number
@@ -564,9 +608,3 @@ export type CompositeTypes<
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
-
-export const Constants = {
-  public: {
-    Enums: {},
-  },
-} as const

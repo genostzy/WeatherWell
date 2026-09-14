@@ -1151,4 +1151,245 @@ select tests.expect_denied(
   'A19: an official cannot insert a municipality',
   $$insert into public.municipalities (code, name) values ('0199903', 'X')$$);
 
+-- ===========================================================================
+-- Task 2 (officials-and-roles): the action record. Every official action is
+-- written by database triggers into an append-only public.official_actions
+-- log, so the app can always say who issued an alert. Reuses Task 1's
+-- fixture zones (tests-area-a1 '0199901001', tests-area-a2 '0199901002'),
+-- centre tests-centre-a1, and officials 44444444... (Official A1, area
+-- '0199901001') / 55555555... (Official Testtown, area '0199901').
+--
+-- R6 ruling: by this point Task 1's block above has already performed
+-- several alert.set inserts on tests-area-a1 (recorded immediately by the
+-- plain AFTER INSERT trigger) and TWO
+-- set_zone_alert('tests-area-a1', null, null) clears (A6 setup and A8),
+-- whose DEFERRED alerts_record_cleared triggers are still pending -- they
+-- have not fired yet because this suite never commits. Materialise them now
+-- and wipe the slate (as the owner -- only the owner can delete, which is
+-- correct and does not weaken R10-R12 below: append-only is a grant-level
+-- property against clients, not against the table owner), so R1 onward
+-- starts from a clean, known state instead of R2's own
+-- `set constraints all immediate` also firing these two leftover events and
+-- corrupting R2/R3's counts.
+-- ===========================================================================
+
+reset role;
+select set_config('request.jwt.claims', '', true);
+set constraints all immediate;
+set constraints all deferred;
+delete from public.official_actions;
+
+-- R1: a1 official sets a1 to red (a1 currently has no active alert -- A8
+-- cleared it). Exactly one alert.set row, from null, to red, credited to
+-- Official A1 / area 0199901001.
+select tests.as_user('44444444-4444-4444-4444-444444444444');
+select tests.expect_allowed(
+  'R1 setup: a1 official sets a1 to red',
+  $$select public.set_zone_alert('tests-area-a1', 'red', '{"en":"x","fil":"x"}'::jsonb)$$);
+
+select tests.as_user('44444444-4444-4444-4444-444444444444');
+select tests.expect_row_count(
+  'R1: exactly one alert.set row for a1 (red, from null, Official A1 / 0199901001)',
+  $$select * from public.official_actions
+    where action = 'alert.set' and zone_id = 'tests-area-a1'
+      and detail->>'from' is null and detail->>'to' = 'red'
+      and actor_name = 'Official A1' and actor_area = '0199901001'$$,
+  1);
+
+-- R2: lowering severity (not clearing) must record exactly one new alert.set
+-- row and NO alert.cleared row. `set constraints all immediate` forces the
+-- deferred trigger queued by the UPDATE inside set_zone_alert to run now, so
+-- its guard (an active alert already exists -- the just-inserted yellow one)
+-- can be observed within this transaction instead of vacuously passing at
+-- commit (which never happens -- the suite rolls back).
+select tests.as_user('44444444-4444-4444-4444-444444444444');
+select tests.expect_allowed(
+  'R2 setup: a1 official lowers a1 to yellow',
+  $$select public.set_zone_alert('tests-area-a1', 'yellow', '{"en":"x","fil":"x"}'::jsonb)$$);
+set constraints all immediate;
+set constraints all deferred;
+
+select tests.as_user('44444444-4444-4444-4444-444444444444');
+select tests.expect_row_count(
+  'R2: exactly one new alert.set row (red to yellow)',
+  $$select * from public.official_actions
+    where action = 'alert.set' and zone_id = 'tests-area-a1'
+      and detail->>'from' = 'red' and detail->>'to' = 'yellow'$$,
+  1);
+
+select tests.as_user('44444444-4444-4444-4444-444444444444');
+select tests.expect_row_count(
+  'R2: no alert.cleared row when a1''s severity is only lowered, not cleared',
+  $$select * from public.official_actions
+    where action = 'alert.cleared' and zone_id = 'tests-area-a1'$$,
+  0);
+
+-- R3: actually clearing a1 (severity down to null) DOES record an
+-- alert.cleared row, once the deferred trigger is forced to run.
+select tests.as_user('44444444-4444-4444-4444-444444444444');
+select tests.expect_allowed(
+  'R3 setup: a1 official clears a1',
+  $$select public.set_zone_alert('tests-area-a1', null, null)$$);
+set constraints all immediate;
+set constraints all deferred;
+
+select tests.as_user('44444444-4444-4444-4444-444444444444');
+select tests.expect_row_count(
+  'R3: exactly one alert.cleared row (from yellow)',
+  $$select * from public.official_actions
+    where action = 'alert.cleared' and zone_id = 'tests-area-a1'
+      and detail->>'from' = 'yellow'$$,
+  1);
+
+-- R4: a change to the centre's status alone records one centre.status row.
+select tests.as_user('44444444-4444-4444-4444-444444444444');
+select tests.expect_allowed(
+  'R4 setup: a1 official changes tests-centre-a1''s status',
+  $$update public.evacuation_centers set status = 'full' where id = 'tests-centre-a1'$$);
+
+select tests.as_user('44444444-4444-4444-4444-444444444444');
+select tests.expect_row_count(
+  'R4: one centre.status row (space_available to full)',
+  $$select * from public.official_actions
+    where action = 'centre.status' and target_id = 'tests-centre-a1'
+      and detail->>'from' = 'space_available' and detail->>'to' = 'full'$$,
+  1);
+
+-- R5: a change to the centre's occupancy alone records one centre.occupancy
+-- row. tests-centre-a1's occupancy is 10 going in (Task 1's A9).
+select tests.as_user('44444444-4444-4444-4444-444444444444');
+select tests.expect_allowed(
+  'R5 setup: a1 official changes tests-centre-a1''s occupancy',
+  $$update public.evacuation_centers set current_occupancy = 42 where id = 'tests-centre-a1'$$);
+
+select tests.as_user('44444444-4444-4444-4444-444444444444');
+select tests.expect_row_count(
+  'R5: one centre.occupancy row (10 to 42)',
+  $$select * from public.official_actions
+    where action = 'centre.occupancy' and target_id = 'tests-centre-a1'
+      and detail->>'from' = '10' and detail->>'to' = '42'$$,
+  1);
+
+-- R6: an admin removal of a pin in a1 by the a1 official.
+insert into public.community_pins (id, zone_id, status_tag, caption, lat, lng, author_id)
+values ('99999999-0000-0000-0000-000000000002', 'tests-area-a1', 'flooded',
+        'R6 fixture pin (admin removal)', 14.0, 121.0, '66666666-6666-6666-6666-666666666666');
+
+select tests.as_user('44444444-4444-4444-4444-444444444444');
+select tests.expect_allowed(
+  'R6 setup: a1 official removes a pin in a1 for admin reasons',
+  $$update public.community_pins set removed = true, removed_reason = 'admin'
+    where id = '99999999-0000-0000-0000-000000000002'$$);
+
+select tests.as_user('44444444-4444-4444-4444-444444444444');
+select tests.expect_row_count(
+  'R6: one pin.removed row, reason admin, credited to Official A1',
+  $$select * from public.official_actions
+    where action = 'pin.removed' and target_id = '99999999-0000-0000-0000-000000000002'
+      and detail->>'reason' = 'admin' and actor_name = 'Official A1'$$,
+  1);
+
+-- R7: the pin's own author withdrawing it (removed_reason left null) is not
+-- an official action -- no row at all. Checked by an official (who can read
+-- every area's rows, per R14) rather than the withdrawing resident, since
+-- R13 shows a resident can never read official_actions regardless of what
+-- exists.
+insert into public.community_pins (id, zone_id, status_tag, caption, lat, lng, author_id)
+values ('99999999-0000-0000-0000-000000000003', 'tests-area-a1', 'flooded',
+        'R7 fixture pin (self-withdrawal)', 14.0, 121.0, '66666666-6666-6666-6666-666666666666');
+
+select tests.as_user('66666666-6666-6666-6666-666666666666');
+select tests.expect_allowed(
+  'R7 setup: the pin''s author withdraws their own pin',
+  $$update public.community_pins set removed = true where id = '99999999-0000-0000-0000-000000000003'$$);
+
+select tests.as_user('44444444-4444-4444-4444-444444444444');
+select tests.expect_row_count(
+  'R7: no official_actions row for a self-withdrawal',
+  $$select * from public.official_actions where target_id = '99999999-0000-0000-0000-000000000003'$$,
+  0);
+
+-- R8: a fresh net-score removal (same 5-down/0-up margin-5 shape as the
+-- pin_votes_apply_net_score_removal fixture earlier in this file, on a new
+-- pin so its own trigger fires inside this block). Credited to
+-- 'Automatic — net score' with no human actor -- never the voter who tipped
+-- the threshold.
+insert into public.community_pins (id, zone_id, status_tag, caption, lat, lng, author_id)
+values ('99999999-0000-0000-0000-000000000004', 'tests-area-a1', 'flooded',
+        'R8 fixture pin (net-score removal)', 14.0, 121.0, '66666666-6666-6666-6666-666666666666');
+
+insert into public.pin_votes (pin_id, voter_id, direction) values ('99999999-0000-0000-0000-000000000004', '77777777-0000-0000-0000-000000000001', -1);
+insert into public.pin_votes (pin_id, voter_id, direction) values ('99999999-0000-0000-0000-000000000004', '77777777-0000-0000-0000-000000000002', -1);
+insert into public.pin_votes (pin_id, voter_id, direction) values ('99999999-0000-0000-0000-000000000004', '77777777-0000-0000-0000-000000000003', -1);
+insert into public.pin_votes (pin_id, voter_id, direction) values ('99999999-0000-0000-0000-000000000004', '77777777-0000-0000-0000-000000000004', -1);
+insert into public.pin_votes (pin_id, voter_id, direction) values ('99999999-0000-0000-0000-000000000004', '77777777-0000-0000-0000-000000000005', -1);
+
+select tests.as_user('44444444-4444-4444-4444-444444444444');
+select tests.expect_row_count(
+  'R8: net-score removal credited to Automatic — net score, no actor_id (not the voter)',
+  $$select * from public.official_actions
+    where action = 'pin.removed' and target_id = '99999999-0000-0000-0000-000000000004'
+      and actor_name = 'Automatic — net score' and actor_id is null$$,
+  1);
+
+-- R9: an automatic alert set as the owner (no impersonation) must credit
+-- 'Automatic — <source>', never the last-impersonated user. Reset role AND
+-- clear the JWT claims first -- auth.uid() reads a per-transaction GUC, not
+-- the role, so leaving the claims in place from R8's impersonation would
+-- otherwise credit this to whichever user tests.as_user last set.
+reset role;
+select set_config('request.jwt.claims', '', true);
+select public.set_zone_alert('tests-area-a2', 'orange', '{"en":"x","fil":"x"}'::jsonb, 'auto_crowdsourced');
+
+select tests.as_user('44444444-4444-4444-4444-444444444444');
+select tests.expect_row_count(
+  'R9: one alert.set row on a2 credited to Automatic — auto_crowdsourced',
+  $$select * from public.official_actions
+    where action = 'alert.set' and zone_id = 'tests-area-a2'
+      and actor_name = 'Automatic — auto_crowdsourced'$$,
+  1);
+
+-- R10-R12: official_actions is append-only against every client -- no
+-- client, official or not, can write to it at all. private.record_official_action
+-- is the sole writer, and it is not reachable by authenticated (EXECUTE
+-- revoked from public/anon/authenticated).
+select tests.as_user('44444444-4444-4444-4444-444444444444');
+select tests.expect_denied(
+  'R10: an official cannot INSERT into official_actions directly',
+  $$insert into public.official_actions (actor_name, action) values ('x', 'alert.set')$$);
+
+select tests.as_user('44444444-4444-4444-4444-444444444444');
+select tests.expect_denied(
+  'R11: an official cannot UPDATE official_actions (no UPDATE grant -- raises, does not just filter)',
+  $$update public.official_actions set actor_name = 'x'$$);
+
+select tests.as_user('44444444-4444-4444-4444-444444444444');
+select tests.expect_denied(
+  'R12: an official cannot DELETE from official_actions',
+  $$delete from public.official_actions$$);
+
+-- R13: a resident reads nothing from official_actions -- residents never see
+-- officials' names or the action record.
+select tests.as_user('66666666-6666-6666-6666-666666666666');
+select tests.expect_row_count(
+  'R13: a resident sees no official_actions rows',
+  $$select * from public.official_actions$$,
+  0);
+
+-- R14: every official reads every area's rows -- official_actions_read is
+-- gated on is_operator(), not manages_zone(). The Testtown official sees at
+-- least one row overall, including a1's entries, even though the read
+-- policy has no per-zone check at all.
+select tests.as_user('55555555-5555-5555-5555-555555555555');
+select tests.expect_row_count(
+  'R14: Testtown official sees at least one official_actions row',
+  $$select 1 from public.official_actions limit 1$$,
+  1);
+
+select tests.as_user('55555555-5555-5555-5555-555555555555');
+select tests.expect_row_count(
+  'R14: Testtown official sees a1''s entries too (every official reads every area)',
+  $$select 1 from public.official_actions where zone_id = 'tests-area-a1' limit 1$$,
+  1);
+
 rollback;
