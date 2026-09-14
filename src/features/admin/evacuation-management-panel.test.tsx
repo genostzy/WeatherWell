@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 const setCenterStatusMock = vi.fn().mockResolvedValue({ ok: true });
@@ -16,7 +16,8 @@ vi.mock("@/app/actions/set-center", () => ({
 }));
 
 import { EvacuationManagementPanel } from "./evacuation-management-panel";
-import { FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
+import { renderWithData, FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
+import type { Official } from "@/lib/auth/official";
 
 beforeEach(() => {
   setCenterStatusMock.mockClear();
@@ -26,12 +27,12 @@ beforeEach(() => {
 describe("EvacuationManagementPanel", () => {
   it("summarizes capacity across zones in the donut's center label", () => {
     // 3 of the 4 mock zones default to space_available.
-    render(<EvacuationManagementPanel zones={FIXTURE_REFERENCE_DATA.zones} />);
+    renderWithData(<EvacuationManagementPanel zones={FIXTURE_REFERENCE_DATA.zones} />);
     expect(screen.getByText("3/4")).toBeInTheDocument();
   });
 
   it("lists every zone's evacuation center and a callable hotline", () => {
-    render(<EvacuationManagementPanel zones={FIXTURE_REFERENCE_DATA.zones} />);
+    renderWithData(<EvacuationManagementPanel zones={FIXTURE_REFERENCE_DATA.zones} />);
     for (const zone of FIXTURE_REFERENCE_DATA.zones) {
       expect(screen.getByText(zone.evacuationCenterName)).toBeInTheDocument();
       expect(screen.getByRole("link", { name: zone.hotlineNumber })).toHaveAttribute(
@@ -49,7 +50,7 @@ describe("EvacuationManagementPanel", () => {
     // which nothing here re-fetches.
     const user = userEvent.setup();
     const zone = FIXTURE_REFERENCE_DATA.zones[0];
-    render(<EvacuationManagementPanel zones={FIXTURE_REFERENCE_DATA.zones} />);
+    renderWithData(<EvacuationManagementPanel zones={FIXTURE_REFERENCE_DATA.zones} />);
 
     const select = screen.getByRole("combobox", { name: new RegExp(`Capacity — ${zone.name}`) });
     await user.click(select);
@@ -64,7 +65,7 @@ describe("EvacuationManagementPanel", () => {
     setCenterStatusMock.mockResolvedValueOnce({ ok: false, permanent: true, error: "boom" });
     const user = userEvent.setup();
     const zone = FIXTURE_REFERENCE_DATA.zones[0];
-    render(<EvacuationManagementPanel zones={FIXTURE_REFERENCE_DATA.zones} />);
+    renderWithData(<EvacuationManagementPanel zones={FIXTURE_REFERENCE_DATA.zones} />);
 
     const select = screen.getByRole("combobox", { name: new RegExp(`Capacity — ${zone.name}`) });
     await user.click(select);
@@ -76,12 +77,27 @@ describe("EvacuationManagementPanel", () => {
   it("writes a headcount and tells the admin when that write fails", async () => {
     setCenterOccupancyMock.mockResolvedValueOnce({ ok: false, permanent: true, error: "boom" });
     const zone = FIXTURE_REFERENCE_DATA.zones[0];
-    render(<EvacuationManagementPanel zones={FIXTURE_REFERENCE_DATA.zones} />);
+    renderWithData(<EvacuationManagementPanel zones={FIXTURE_REFERENCE_DATA.zones} />);
 
     const input = screen.getByLabelText(new RegExp(`Headcount \\(of ${zone.evacuationCenterCapacity}`, "i"));
     fireEvent.change(input, { target: { value: "120" } });
 
     await waitFor(() => expect(setCenterOccupancyMock).toHaveBeenCalledWith({ zoneId: zone.id, occupancy: 120 }));
     expect(await screen.findByText(/could not save/i)).toBeInTheDocument();
+  });
+
+  it("only lists the evacuation center of a zone outside the official's area — it does not appear", () => {
+    const [ownZone, otherZone] = FIXTURE_REFERENCE_DATA.zones;
+    const official: Official = {
+      userId: "u1",
+      displayName: "Test",
+      areaCode: ownZone.psgcBarangayCode,
+      areaName: "Own barangay",
+      level: "barangay",
+    };
+    renderWithData(<EvacuationManagementPanel zones={FIXTURE_REFERENCE_DATA.zones} />, { official });
+
+    expect(screen.getByText(ownZone.evacuationCenterName)).toBeInTheDocument();
+    expect(screen.queryByText(otherZone.evacuationCenterName)).not.toBeInTheDocument();
   });
 });

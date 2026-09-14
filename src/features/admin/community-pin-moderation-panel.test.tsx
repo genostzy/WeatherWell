@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 // Every write in this panel asks the outbox to drain, which reaches the real
@@ -10,8 +10,9 @@ vi.mock("@/lib/auth/anonymous-session", () => ({
 }));
 
 import { CommunityPinModerationPanel } from "./community-pin-moderation-panel";
-import { FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
+import { renderWithData, FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
 import { addCommunityPin, type CommunityPin } from "@/lib/community-pins";
+import type { Official } from "@/lib/auth/official";
 
 /**
  * Pins the server already knows about. Most cases below queue their own pin
@@ -34,7 +35,7 @@ describe("CommunityPinModerationPanel", () => {
 
   it("lists active pins with a Remove action", async () => {
     addCommunityPin({ zoneId: "zone-1", statusTag: "flooded", caption: "Test pin", lat: 0, lng: 0 });
-    render(<CommunityPinModerationPanel zones={FIXTURE_REFERENCE_DATA.zones} />);
+    renderWithData(<CommunityPinModerationPanel zones={FIXTURE_REFERENCE_DATA.zones} />);
 
     expect(screen.getByText("Test pin")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /remove/i })).toBeInTheDocument();
@@ -43,7 +44,7 @@ describe("CommunityPinModerationPanel", () => {
   it("moves a pin to the removed section on Remove, offering Restore instead of deleting it", async () => {
     const user = userEvent.setup();
     addCommunityPin({ zoneId: "zone-1", statusTag: "flooded", caption: "Removable pin", lat: 0, lng: 0 });
-    render(<CommunityPinModerationPanel zones={FIXTURE_REFERENCE_DATA.zones} />);
+    renderWithData(<CommunityPinModerationPanel zones={FIXTURE_REFERENCE_DATA.zones} />);
 
     await user.click(screen.getByRole("button", { name: /remove — flooded/i }));
 
@@ -57,7 +58,7 @@ describe("CommunityPinModerationPanel", () => {
   it("brings a removed pin back to active on Restore", async () => {
     const user = userEvent.setup();
     addCommunityPin({ zoneId: "zone-1", statusTag: "impassable", caption: "Bring me back", lat: 0, lng: 0 });
-    render(<CommunityPinModerationPanel zones={FIXTURE_REFERENCE_DATA.zones} />);
+    renderWithData(<CommunityPinModerationPanel zones={FIXTURE_REFERENCE_DATA.zones} />);
 
     await user.click(screen.getByRole("button", { name: /remove — impassable/i }));
     await user.click(screen.getByRole("button", { name: /restore/i }));
@@ -70,21 +71,21 @@ describe("CommunityPinModerationPanel", () => {
     addCommunityPin({ zoneId: "zone-1", statusTag: "flooded", caption: "In zone 1", lat: 0, lng: 0 });
     addCommunityPin({ zoneId: "zone-2", statusTag: "rising", caption: "In zone 2", lat: 0, lng: 0 });
 
-    render(<CommunityPinModerationPanel zones={FIXTURE_REFERENCE_DATA.zones} zoneId="zone-1" />);
+    renderWithData(<CommunityPinModerationPanel zones={FIXTURE_REFERENCE_DATA.zones} zoneId="zone-1" />);
 
     expect(screen.getByText("In zone 1")).toBeInTheDocument();
     expect(screen.queryByText("In zone 2")).not.toBeInTheDocument();
   });
 
   it("says there are no pins when the (possibly zone-scoped) list is empty", () => {
-    render(<CommunityPinModerationPanel zones={FIXTURE_REFERENCE_DATA.zones} zoneId="zone-4" />);
+    renderWithData(<CommunityPinModerationPanel zones={FIXTURE_REFERENCE_DATA.zones} zoneId="zone-4" />);
     expect(screen.getByText(/no community pins/i)).toBeInTheDocument();
   });
 
   it("labels a net-score removal differently from an admin removal", async () => {
     servePins([removedServerPin({ caption: "Brigaded pin", removedReason: "net_score" })]);
 
-    render(<CommunityPinModerationPanel zones={FIXTURE_REFERENCE_DATA.zones} />);
+    renderWithData(<CommunityPinModerationPanel zones={FIXTURE_REFERENCE_DATA.zones} />);
 
     expect(await screen.findByText("Brigaded pin")).toBeInTheDocument();
     expect(screen.getByText(/removed by votes/i)).toBeInTheDocument();
@@ -97,11 +98,28 @@ describe("CommunityPinModerationPanel", () => {
     // operator their own team acted when nobody did.
     servePins([removedServerPin({ caption: "Withdrawn pin", removedReason: undefined })]);
 
-    render(<CommunityPinModerationPanel zones={FIXTURE_REFERENCE_DATA.zones} />);
+    renderWithData(<CommunityPinModerationPanel zones={FIXTURE_REFERENCE_DATA.zones} />);
 
     expect(await screen.findByText("Withdrawn pin")).toBeInTheDocument();
     expect(screen.getByText(/withdrawn by author/i)).toBeInTheDocument();
     expect(screen.queryByText(/removed by admin/i)).not.toBeInTheDocument();
+  });
+
+  it("only shows pins in zones inside the official's area, even without a zoneId scope", () => {
+    addCommunityPin({ zoneId: "zone-1", statusTag: "flooded", caption: "In my area", lat: 0, lng: 0 });
+    addCommunityPin({ zoneId: "zone-2", statusTag: "rising", caption: "Outside my area", lat: 0, lng: 0 });
+    const official: Official = {
+      userId: "u1",
+      displayName: "Test",
+      areaCode: FIXTURE_REFERENCE_DATA.zones[0].psgcBarangayCode, // zone-1
+      areaName: "Own barangay",
+      level: "barangay",
+    };
+
+    renderWithData(<CommunityPinModerationPanel zones={FIXTURE_REFERENCE_DATA.zones} />, { official });
+
+    expect(screen.getByText("In my area")).toBeInTheDocument();
+    expect(screen.queryByText("Outside my area")).not.toBeInTheDocument();
   });
 });
 

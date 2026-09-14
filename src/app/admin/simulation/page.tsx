@@ -31,6 +31,8 @@ import { t } from "@/lib/i18n";
 import { PredictionTimeline } from "@/features/alerts/prediction-timeline";
 import { MOCK_SCENARIOS, getPredictionsForZone, MOCK_CASCADES } from "@/lib/mock-data";
 import { useZones } from "@/lib/reference-data/use-reference-data";
+import { useOfficial } from "@/lib/auth/official-context";
+import { isInArea } from "@/lib/auth/official";
 import type { LocalizedText, Zone } from "@/lib/types";
 
 type SimulationStep =
@@ -178,7 +180,10 @@ function StepIndicator({
 
 export default function AdminSimulationPage() {
   const { lang } = useLanguage();
-  const zones = useZones();
+  const official = useOfficial();
+  // Only zones the signed-in official can act on; the database enforces the
+  // real limit. The picker's initial selection follows suit.
+  const zones = useZones().filter((zone) => isInArea(zone.psgcBarangayCode, official.areaCode));
   const [selectedZone, setSelectedZone] = useState<Zone>(zones[0]);
   const [selectedScenario, setSelectedScenario] = useState(MOCK_SCENARIOS[0].id);
   const [currentStep, setCurrentStep] = useState<SimulationStep>("idle");

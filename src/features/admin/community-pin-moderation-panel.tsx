@@ -8,6 +8,8 @@ import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { useAllCommunityPins, removePinByAdmin, restoreCommunityPin } from "@/lib/community-pins";
 import { PIN_STATUS_LABEL, PIN_STATUS_COLOR, type PinRemovalReason } from "@/lib/community-pin";
+import { useOfficial } from "@/lib/auth/official-context";
+import { isInArea } from "@/lib/auth/official";
 import type { LocalizedText, Zone } from "@/lib/types";
 
 const TITLE: LocalizedText = { en: "Community Pin Moderation", fil: "Pagmo-moderate ng Community Pins" };
@@ -49,7 +51,17 @@ function removalLabel(reason: PinRemovalReason | undefined): LocalizedText {
  */
 export function CommunityPinModerationPanel({ zones, zoneId }: { zones: Zone[]; zoneId?: string }) {
   const { lang } = useLanguage();
-  const allPins = useAllCommunityPins().filter((pin) => !zoneId || pin.zoneId === zoneId);
+  const official = useOfficial();
+  // A single zoneId (the per-zone dashboard) is its own scope regardless of
+  // area — the zone page decides separately whether to show action controls.
+  // Otherwise (the global dashboard), only pins in a zone the official
+  // manages are shown; the database enforces the real limit.
+  const inAreaZoneIds = new Set(
+    zones.filter((zone) => isInArea(zone.psgcBarangayCode, official.areaCode)).map((zone) => zone.id)
+  );
+  const allPins = useAllCommunityPins().filter((pin) =>
+    zoneId ? pin.zoneId === zoneId : inAreaZoneIds.has(pin.zoneId)
+  );
   const activePins = allPins.filter((pin) => !pin.removed);
   const removedPins = allPins.filter((pin) => pin.removed);
   const scopedZoneName = zoneId ? zones.find((z) => z.id === zoneId)?.name : undefined;

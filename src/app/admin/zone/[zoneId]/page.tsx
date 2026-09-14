@@ -22,6 +22,7 @@ import {
 } from "@/lib/mock-data";
 import { useHazardsForZone, useZones } from "@/lib/reference-data/use-reference-data";
 import { useActiveAlertForZone } from "@/lib/alerts-store";
+import { useManagesZone } from "@/lib/auth/official-context";
 import { SEVERITY_ORDER, SEVERITY_LABEL, SEVERITY_HEX, type Severity } from "@/lib/severity";
 import { CENTER_STATUS_LABEL, CENTER_STATUS_ORDER, resolveEffectiveCenterStatus } from "@/lib/center-status";
 import { SeverityBadge } from "@/features/alerts/severity-badge";
@@ -51,6 +52,10 @@ const HEADCOUNT_HINT: LocalizedText = {
   en: "Entering a headcount derives the status automatically instead of picking it manually",
   fil: "Ang paglagay ng bilang ay awtomatikong magtatakda ng status sa halip na piliin nang manu-mano",
 };
+const VIEW_ONLY_NOTE: LocalizedText = {
+  en: "View only — this barangay is outside your area",
+  fil: "Tingnan lang — wala sa saklaw mo ang barangay na ito",
+};
 
 const ALERT_SEVERITY_VALUES: (Severity | "none")[] = ["none", ...SEVERITY_ORDER];
 
@@ -62,6 +67,7 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
   const alert = useActiveAlertForZone(zoneId);
   const [alertError, setAlertError] = useState(false);
   const [statusError, setStatusError] = useState(false);
+  const managesZone = useManagesZone();
 
   const foundZone = zones.find((z) => z.id === zoneId);
   if (!foundZone) notFound();
@@ -69,6 +75,7 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
   // it does not carry the `if (!foundZone)` narrowing across a nested
   // function's own scope, even though `zone` is a const that cannot change.
   const zone = foundZone;
+  const canManage = managesZone(zone);
 
   // Reflects the live headcount carried through /api/zones as
   // zone.currentOccupancy, same as every other read-only surface; falls back
@@ -110,6 +117,9 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
         <div>
           <p className="text-sm text-muted-foreground">{t(MANAGE_ZONE, lang)}</p>
           <h1 className="text-2xl font-bold">{zone.name}</h1>
+          {!canManage && (
+            <p className="text-sm font-medium text-severity-orange">{t(VIEW_ONLY_NOTE, lang)}</p>
+          )}
         </div>
 
         <Card>
@@ -126,27 +136,29 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
               )}
             </div>
 
-            <div className="space-y-2">
-              <label htmlFor="alert-override-select" className="text-sm font-medium">
-                {t(ALERT_STATUS, lang)}
-              </label>
-              <Select
-                value={alert?.severity ?? "none"}
-                onValueChange={(value) => void handleAlertChange(value as Severity | "none")}
-              >
-                <SelectTrigger id="alert-override-select">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {ALERT_SEVERITY_VALUES.map((value) => (
-                    <SelectItem key={value} value={value}>
-                      {value === "none" ? t(CLEAR_NO_ALERT, lang) : t(SEVERITY_LABEL[value], lang)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {alertError && <p className="text-xs text-severity-red">{t(SAVE_FAILED, lang)}</p>}
-            </div>
+            {canManage && (
+              <div className="space-y-2">
+                <label htmlFor="alert-override-select" className="text-sm font-medium">
+                  {t(ALERT_STATUS, lang)}
+                </label>
+                <Select
+                  value={alert?.severity ?? "none"}
+                  onValueChange={(value) => void handleAlertChange(value as Severity | "none")}
+                >
+                  <SelectTrigger id="alert-override-select">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ALERT_SEVERITY_VALUES.map((value) => (
+                      <SelectItem key={value} value={value}>
+                        {value === "none" ? t(CLEAR_NO_ALERT, lang) : t(SEVERITY_LABEL[value], lang)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {alertError && <p className="text-xs text-severity-red">{t(SAVE_FAILED, lang)}</p>}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -166,29 +178,31 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
               {zone.hotlineNumber}
             </a>
 
-            <div className="space-y-2">
-              <label htmlFor="capacity-select" className="text-sm font-medium">
-                {t(CAPACITY, lang)}
-              </label>
-              <Select
-                value={centerStatus}
-                disabled={isTrackingHeadcount}
-                onValueChange={(value) => void handleStatusChange(value as CenterStatus)}
-              >
-                <SelectTrigger id="capacity-select">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {CENTER_STATUS_ORDER.map((status) => (
-                    <SelectItem key={status} value={status}>
-                      {t(CENTER_STATUS_LABEL[status], lang)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {statusError && <p className="text-xs text-severity-red">{t(SAVE_FAILED, lang)}</p>}
-              {isTrackingHeadcount && <p className="text-xs text-muted-foreground">{t(HEADCOUNT_HINT, lang)}</p>}
-            </div>
+            {canManage && (
+              <div className="space-y-2">
+                <label htmlFor="capacity-select" className="text-sm font-medium">
+                  {t(CAPACITY, lang)}
+                </label>
+                <Select
+                  value={centerStatus}
+                  disabled={isTrackingHeadcount}
+                  onValueChange={(value) => void handleStatusChange(value as CenterStatus)}
+                >
+                  <SelectTrigger id="capacity-select">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CENTER_STATUS_ORDER.map((status) => (
+                      <SelectItem key={status} value={status}>
+                        {t(CENTER_STATUS_LABEL[status], lang)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {statusError && <p className="text-xs text-severity-red">{t(SAVE_FAILED, lang)}</p>}
+                {isTrackingHeadcount && <p className="text-xs text-muted-foreground">{t(HEADCOUNT_HINT, lang)}</p>}
+              </div>
+            )}
           </CardContent>
         </Card>
 

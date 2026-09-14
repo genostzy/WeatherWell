@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { areaLevel } from "./official";
+import { areaLevel, isInArea, landingPathFor } from "./official";
+import type { Official } from "./official";
 
 describe("areaLevel", () => {
   it("reads a 10-digit PSGC prefix as a single barangay", () => {
@@ -8,5 +9,68 @@ describe("areaLevel", () => {
 
   it("reads a 7-digit PSGC prefix as a whole municipality", () => {
     expect(areaLevel("1234567")).toBe("municipality");
+  });
+});
+
+describe("isInArea", () => {
+  it("matches a barangay against its own town's 7-digit prefix — the municipal official's reach", () => {
+    // Two different barangays under the same town (Mapandan, PSGC 0105528).
+    expect(isInArea("0105528012", "0105528")).toBe(true);
+    expect(isInArea("0105528099", "0105528")).toBe(true);
+  });
+
+  it("refuses a barangay from a different town", () => {
+    // Mangaldan (0105526) is not Mapandan (0105528).
+    expect(isInArea("0105526000", "0105528")).toBe(false);
+  });
+
+  it("refuses a neighbouring barangay in the same town for a barangay-level area", () => {
+    // A barangay official's 10-digit area matches only an exact barangay —
+    // sharing the town's first 7 digits is not enough.
+    expect(isInArea("0105528099", "0105528012")).toBe(false);
+  });
+
+  it("matches a barangay against its own exact 10-digit code", () => {
+    expect(isInArea("0105528012", "0105528012")).toBe(true);
+  });
+});
+
+describe("landingPathFor", () => {
+  const zones = [
+    { id: "zone-1", psgcBarangayCode: "0105528012" },
+    { id: "zone-2", psgcBarangayCode: "0105526000" },
+  ];
+
+  it("sends a barangay official straight to their own zone", () => {
+    const official: Official = {
+      userId: "u1",
+      displayName: "Test",
+      areaCode: "0105528012",
+      areaName: "Barangay Nilombot",
+      level: "barangay",
+    };
+    expect(landingPathFor(official, zones)).toBe("/admin/zone/zone-1");
+  });
+
+  it("sends a municipal official to the overview (null)", () => {
+    const official: Official = {
+      userId: "u2",
+      displayName: "Test",
+      areaCode: "0105528",
+      areaName: "Mapandan",
+      level: "municipality",
+    };
+    expect(landingPathFor(official, zones)).toBeNull();
+  });
+
+  it("returns null when no zone matches the barangay official's area", () => {
+    const official: Official = {
+      userId: "u3",
+      displayName: "Test",
+      areaCode: "9999999999",
+      areaName: "Nowhere",
+      level: "barangay",
+    };
+    expect(landingPathFor(official, zones)).toBeNull();
   });
 });

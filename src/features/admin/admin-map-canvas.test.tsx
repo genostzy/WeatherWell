@@ -28,6 +28,7 @@ import { renderWithData, FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with
 import { readOutbox } from "@/lib/outbox/outbox";
 import type { CommunityPin } from "@/lib/community-pins";
 import type { OutboxPayloads } from "@/lib/outbox/types";
+import type { Official } from "@/lib/auth/official";
 
 /**
  * Same shallow approach as MapCanvas's own test: jsdom has no layout engine,
@@ -203,5 +204,32 @@ describe("AdminMapCanvas", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: /community pins/i }));
 
     expect(screen.queryByRole("img", { name: /flooded/i })).not.toBeInTheDocument();
+  });
+
+  it("shows controls for an in-area zone and 'View only' for a zone outside the official's area", () => {
+    const otherZone = FIXTURE_REFERENCE_DATA.zones[1];
+    const official: Official = {
+      userId: "u1",
+      displayName: "Test",
+      areaCode: zone.psgcBarangayCode,
+      areaName: "Own barangay",
+      level: "barangay",
+    };
+    renderWithData(<AdminMapCanvas zones={FIXTURE_REFERENCE_DATA.zones} />, { official });
+
+    fireEvent.click(screen.getByRole("img", { name: new RegExp(zone.name, "i") }));
+    expect(screen.getByRole("combobox", { name: new RegExp(zone.name, "i") })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("img", { name: new RegExp(zone.evacuationCenterName, "i") }));
+    expect(
+      screen.getByRole("spinbutton", { name: new RegExp(zone.evacuationCenterName, "i") })
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("img", { name: new RegExp(otherZone.name, "i") }));
+    expect(screen.queryByRole("combobox", { name: new RegExp(otherZone.name, "i") })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("img", { name: new RegExp(otherZone.evacuationCenterName, "i") }));
+    expect(
+      screen.queryByRole("spinbutton", { name: new RegExp(otherZone.evacuationCenterName, "i") })
+    ).not.toBeInTheDocument();
+    expect(screen.getAllByText(/view only/i).length).toBeGreaterThan(0);
   });
 });

@@ -23,6 +23,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DonutChart } from "./charts/donut-chart";
+import { useOfficial } from "@/lib/auth/official-context";
+import { isInArea } from "@/lib/auth/official";
 import type { CenterStatus, LanguageCode, LocalizedText, Zone } from "@/lib/types";
 
 const TITLE: LocalizedText = { en: "Evacuation Management", fil: "Pamamahala ng Evacuation" };
@@ -52,10 +54,15 @@ const CENTER_STATUS_COLOR: Record<CenterStatus, string> = {
 
 export function EvacuationManagementPanel({ zones }: { zones: Zone[] }) {
   const { lang } = useLanguage();
+  const official = useOfficial();
+  // Only zones the signed-in official can act on — a barangay official's own
+  // barangay, or every barangay in a municipal official's town. The database
+  // enforces the real limit; this only decides what's shown here.
+  const inAreaZones = zones.filter((zone) => isInArea(zone.psgcBarangayCode, official.areaCode));
 
   // Reflects each zone's live headcount, carried through /api/zones as
   // zone.currentOccupancy, same as every other read-only surface.
-  const effectiveStatuses = zones.map((zone) =>
+  const effectiveStatuses = inAreaZones.map((zone) =>
     resolveEffectiveCenterStatus(zone.centerStatus, zone.evacuationCenterCapacity, zone.currentOccupancy)
   );
   const countByStatus = (status: CenterStatus) =>
@@ -74,7 +81,7 @@ export function EvacuationManagementPanel({ zones }: { zones: Zone[] }) {
       <CardContent className="space-y-4">
         <DonutChart
           label={t(CAPACITY, lang)}
-          centerValue={`${withSpace}/${zones.length}`}
+          centerValue={`${withSpace}/${inAreaZones.length}`}
           centerLabel={t(WITH_SPACE, lang)}
           segments={CENTER_STATUS_ORDER.map((status) => ({
             label: t(CENTER_STATUS_LABEL[status], lang),
@@ -84,10 +91,10 @@ export function EvacuationManagementPanel({ zones }: { zones: Zone[] }) {
         />
 
         <p className="text-xs text-muted-foreground">
-          {zones.length} {t(CENTERS, lang)}
+          {inAreaZones.length} {t(CENTERS, lang)}
         </p>
 
-        {zones.map((zone) => (
+        {inAreaZones.map((zone) => (
           <EvacuationCenterRow key={zone.id} zone={zone} lang={lang} />
         ))}
       </CardContent>

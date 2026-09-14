@@ -17,12 +17,12 @@ import { ZonePicker } from "@/features/onboarding/zone-picker";
 import { InstallStep } from "@/features/onboarding/install-step";
 import { AlertDowngradeNotice } from "@/features/alerts/alert-downgrade-notice";
 import { AdminMapCanvas } from "@/features/admin/admin-map-canvas";
+import { AdminOverview } from "@/features/admin/admin-overview";
 import { EmergencyHotlineButton } from "@/components/emergency-hotline-button";
 import { ZoneAlertListFallback } from "@/features/homepage-map/zone-alert-list-fallback";
 import { MarkerLegend } from "@/features/map/marker-legend";
 import { HazardTypeSelector } from "@/features/map/hazard-type-selector";
 import { PersonalStatusHeadline } from "@/features/homepage-map/personal-status-headline";
-import AdminPage from "@/app/admin/page";
 import {
   MOCK_ALERTS,
   MOCK_CASCADES,
@@ -38,7 +38,7 @@ async function violationsFor(ui: ReactElement): Promise<string[]> {
   // supplies this via layout.tsx. TooltipProvider renders no DOM of its
   // own, so wrapping every case here is harmless for the other components.
   // renderWithData also supplies the reference-data context that several
-  // of these components (ZoneMap, AdminPage, AdminMapCanvas, ...) now read.
+  // of these components (ZoneMap, AdminOverview, AdminMapCanvas, ...) now read.
   const { container } = renderWithData(ui);
   const results = await axe.run(container, {
     rules: {
@@ -123,7 +123,7 @@ describe("accessibility (WCAG 2.1 AA, automated subset)", () => {
   });
 
   it("admin dashboard has no violations", async () => {
-    expect(await violationsFor(<AdminPage />)).toEqual([]);
+    expect(await violationsFor(<AdminOverview />)).toEqual([]);
   });
 
   it("admin operations map has no violations", async () => {

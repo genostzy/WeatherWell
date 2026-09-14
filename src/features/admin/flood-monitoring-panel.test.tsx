@@ -3,6 +3,7 @@ import { screen, waitFor } from "@testing-library/react";
 import { FloodMonitoringPanel } from "./flood-monitoring-panel";
 import { MOCK_WATER_LEVEL_REPORTS, REPORT_THRESHOLD } from "@/lib/mock-data";
 import { renderWithData, FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
+import type { Official } from "@/lib/auth/official";
 
 vi.mock("@/lib/auth/anonymous-session", () => ({
   ensureAnonymousSession: vi.fn().mockResolvedValue(null),
@@ -66,5 +67,20 @@ describe("FloodMonitoringPanel", () => {
     await waitFor(() =>
       expect(screen.getAllByText(new RegExp(latest.depthLevel, "i")).length).toBeGreaterThan(0)
     );
+  });
+
+  it("only monitors zones inside the official's area", () => {
+    const [ownZone, otherZone] = FIXTURE_REFERENCE_DATA.zones;
+    const official: Official = {
+      userId: "u1",
+      displayName: "Test",
+      areaCode: ownZone.psgcBarangayCode,
+      areaName: "Own barangay",
+      level: "barangay",
+    };
+    renderWithData(<FloodMonitoringPanel zones={FIXTURE_REFERENCE_DATA.zones} />, { official });
+
+    expect(screen.getByText(ownZone.name)).toBeInTheDocument();
+    expect(screen.queryByText(otherZone.name)).not.toBeInTheDocument();
   });
 });

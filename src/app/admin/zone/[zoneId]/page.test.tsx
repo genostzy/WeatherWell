@@ -16,6 +16,7 @@ vi.mock("@/app/actions/set-center", () => ({
 
 import ZoneDashboardPage from "./page";
 import { renderWithData, FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
+import type { Official } from "@/lib/auth/official";
 
 /**
  * The page reads its route param via React's `use(params)`, which suspends
@@ -54,5 +55,42 @@ describe("ZoneDashboardPage capacity control", () => {
     renderWithData(<ZoneDashboardPage params={resolvedParams({ zoneId: zone.id })} searchParams={emptySearchParams} />);
 
     expect(screen.getByLabelText(/evacuation center capacity/i)).toBeEnabled();
+  });
+});
+
+describe("ZoneDashboardPage area scoping", () => {
+  it("hides the alert and capacity controls, and says View only, for a zone outside the official's area", () => {
+    const zone = FIXTURE_REFERENCE_DATA.zones[1];
+    const official: Official = {
+      userId: "u1",
+      displayName: "Test",
+      areaCode: FIXTURE_REFERENCE_DATA.zones[0].psgcBarangayCode,
+      areaName: "Own barangay",
+      level: "barangay",
+    };
+    renderWithData(<ZoneDashboardPage params={resolvedParams({ zoneId: zone.id })} searchParams={emptySearchParams} />, {
+      official,
+    });
+
+    expect(screen.getByText(/view only — this barangay is outside your area/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/alert status/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/evacuation center capacity/i)).not.toBeInTheDocument();
+  });
+
+  it("shows the alert and capacity controls for a zone inside the official's area", () => {
+    const zone = FIXTURE_REFERENCE_DATA.zones[0];
+    const official: Official = {
+      userId: "u1",
+      displayName: "Test",
+      areaCode: zone.psgcBarangayCode,
+      areaName: "Own barangay",
+      level: "barangay",
+    };
+    renderWithData(<ZoneDashboardPage params={resolvedParams({ zoneId: zone.id })} searchParams={emptySearchParams} />, {
+      official,
+    });
+
+    expect(screen.queryByText(/view only — this barangay is outside your area/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/evacuation center capacity/i)).toBeInTheDocument();
   });
 });

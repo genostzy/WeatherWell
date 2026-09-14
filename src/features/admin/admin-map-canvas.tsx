@@ -17,6 +17,7 @@ import {
 import { PIN_STATUS_LABEL } from "@/lib/community-pin";
 import { buildZoneInputForZone, computeZoneState } from "@/lib/risk-engine/score";
 import { useHazards } from "@/lib/reference-data/use-reference-data";
+import { useManagesZone } from "@/lib/auth/official-context";
 import { MapShell } from "@/features/map/map-shell";
 import { HazardBackdropLayer } from "@/features/map/hazard-backdrop-layer";
 import { PoiMarkerLayer } from "@/features/map/poi-marker-layer";
@@ -54,6 +55,7 @@ const LAYER_POIS: LocalizedText = { en: "Essential services", fil: "Mahahalagang
 const LAYER_CASCADE: LocalizedText = { en: "Cascade chain", fil: "Cascade chain" };
 const CASCADE_LINE_COLOR = "#8b5cf6";
 const SAVE_FAILED: LocalizedText = { en: "Could not save — try again.", fil: "Hindi na-save — subukan ulit." };
+const VIEW_ONLY: LocalizedText = { en: "View only", fil: "Tingnan lang" };
 
 interface LayerVisibility {
   hazard: boolean;
@@ -78,6 +80,7 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
   const { lang } = useLanguage();
   const allPins = useAllCommunityPins();
   const hazards = useHazards();
+  const managesZone = useManagesZone();
   const alerts = useAlerts();
   const baseAlertFor = (zoneId: string) => alerts.find((a) => a.zoneId === zoneId && a.isActive);
   const [hazardType, setHazardType] = useState<HazardType>("flood");
@@ -178,7 +181,7 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
                   {t(ADVISORY_ONLY, lang)}
                 </p>
 
-                <ZoneAlertSelect zone={zone} alert={alert} lang={lang} />
+                <ZoneAlertSelect zone={zone} alert={alert} lang={lang} canManage={managesZone(zone)} />
               </div>
             </Popup>
           </Marker>
@@ -194,7 +197,7 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
           <Popup>
             <div className="space-y-2 text-sm">
               <p className="font-medium">{zone.evacuationCenterName}</p>
-              <CenterOccupancyControl zone={zone} lang={lang} />
+              <CenterOccupancyControl zone={zone} lang={lang} canManage={managesZone(zone)} />
             </div>
           </Popup>
         </Marker>
@@ -274,10 +277,12 @@ function ZoneAlertSelect({
   zone,
   alert,
   lang,
+  canManage,
 }: {
   zone: Zone;
   alert: AlertRecord | undefined;
   lang: LanguageCode;
+  canManage: boolean;
 }) {
   const [error, setError] = useState(false);
 
@@ -291,6 +296,15 @@ function ZoneAlertSelect({
     const { setZoneAlert } = await import("@/app/actions/set-zone-alert");
     const result = await setZoneAlert({ zoneId: zone.id, severity: value });
     if (!result.ok) setError(true);
+  }
+
+  if (!canManage) {
+    return (
+      <p className="space-y-1">
+        <span className="text-xs font-medium">{t(ALERT_SEVERITY, lang)}</span>
+        <span className="block text-xs text-muted-foreground">{t(VIEW_ONLY, lang)}</span>
+      </p>
+    );
   }
 
   return (
@@ -326,7 +340,15 @@ function ZoneAlertSelect({
  * fetch/reload. Typing here still derives the status shown below
  * immediately and writes it to the database via setCenterOccupancy.
  */
-function CenterOccupancyControl({ zone, lang }: { zone: Zone; lang: LanguageCode }) {
+function CenterOccupancyControl({
+  zone,
+  lang,
+  canManage,
+}: {
+  zone: Zone;
+  lang: LanguageCode;
+  canManage: boolean;
+}) {
   const [occupancy, setOccupancy] = useState<number | undefined>(zone.currentOccupancy);
   const [error, setError] = useState(false);
   const centerStatus = resolveEffectiveCenterStatus(zone.centerStatus, zone.evacuationCenterCapacity, occupancy);
@@ -341,6 +363,18 @@ function CenterOccupancyControl({ zone, lang }: { zone: Zone; lang: LanguageCode
     const { setCenterOccupancy } = await import("@/app/actions/set-center");
     const result = await setCenterOccupancy({ zoneId: zone.id, occupancy: value ?? null });
     if (!result.ok) setError(true);
+  }
+
+  if (!canManage) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        {t(CENTER_STATUS_LABEL[centerStatus], lang)}
+        {occupancy !== undefined &&
+          ` · ${Math.max(0, zone.evacuationCenterCapacity - occupancy)} ${t(SPOTS_LEFT, lang)}`}
+        {" — "}
+        {t(VIEW_ONLY, lang)}
+      </p>
+    );
   }
 
   return (

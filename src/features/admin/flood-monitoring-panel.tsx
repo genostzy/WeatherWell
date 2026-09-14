@@ -19,6 +19,8 @@ import { TimeAgo } from "@/components/time-ago";
 import { getZoneStatus, getZoneStatusColor, ZONE_STATUS_LABEL } from "@/lib/zone-status";
 import { useActiveAlertForZone } from "@/lib/alerts-store";
 import { DEPTH_LABEL } from "@/lib/depth";
+import { useOfficial } from "@/lib/auth/official-context";
+import { isInArea } from "@/lib/auth/official";
 import type { HazardRiskLevel, LanguageCode, LocalizedText, Zone } from "@/lib/types";
 
 const TITLE: LocalizedText = { en: "Flood Monitoring", fil: "Pagsubaybay sa Baha" };
@@ -42,7 +44,11 @@ const SUSCEPTIBILITY_LABEL: Record<HazardRiskLevel, LocalizedText> = {
 
 export function FloodMonitoringPanel({ zones }: { zones: Zone[] }) {
   const { lang } = useLanguage();
+  const official = useOfficial();
   const allReports = useWaterLevelReports();
+  // Only zones the signed-in official can act on. The database enforces the
+  // real limit; this only decides what's shown here.
+  const inAreaZones = zones.filter((zone) => isInArea(zone.psgcBarangayCode, official.areaCode));
 
   return (
     <Card>
@@ -54,7 +60,7 @@ export function FloodMonitoringPanel({ zones }: { zones: Zone[] }) {
         <p className="text-xs text-muted-foreground">{t(SUBTITLE, lang)}</p>
       </CardHeader>
       <CardContent className="space-y-3">
-        {zones.map((zone) => (
+        {inAreaZones.map((zone) => (
           <FloodMonitoringRow key={zone.id} zone={zone} lang={lang} allReports={allReports} />
         ))}
       </CardContent>

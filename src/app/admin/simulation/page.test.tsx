@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { act, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import AdminSimulationPage from "./page";
-import { renderWithData } from "@/test-utils/render-with-data";
+import { renderWithData, FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
+import type { Official } from "@/lib/auth/official";
 
 const TOTAL_SIMULATION_MS = 1500 + 1500 + 2000 + 1500 + 1500 + 1500 + 1500;
 
@@ -49,5 +51,23 @@ describe("AdminSimulationPage", () => {
     });
     expect(screen.getByRole("button", { name: /start simulation/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /reset/i })).not.toBeInTheDocument();
+  });
+
+  it("only offers zones inside the official's area in the zone picker", async () => {
+    vi.useRealTimers();
+    const user = userEvent.setup();
+    const [ownZone, otherZone] = FIXTURE_REFERENCE_DATA.zones;
+    const official: Official = {
+      userId: "u1",
+      displayName: "Test",
+      areaCode: ownZone.psgcBarangayCode,
+      areaName: "Own barangay",
+      level: "barangay",
+    };
+    renderWithData(<AdminSimulationPage />, { official });
+
+    await user.click(screen.getByRole("combobox", { name: /zone/i }));
+    expect(await screen.findByRole("option", { name: ownZone.name })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: otherZone.name })).not.toBeInTheDocument();
   });
 });
