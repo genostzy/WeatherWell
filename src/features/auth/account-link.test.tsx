@@ -74,6 +74,35 @@ describe("AccountLink", () => {
     expect(getSession).not.toHaveBeenCalled();
   });
 
+  it("renders nothing on the bare /admin route and on /admin/", async () => {
+    getSession.mockResolvedValue({ data: { session: { user: { id: "u1", is_anonymous: false } } } });
+
+    pathname = "/admin";
+    const first = renderWithData(<AccountLink />);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(first.container).toBeEmptyDOMElement();
+    first.unmount();
+
+    pathname = "/admin/";
+    const second = renderWithData(<AccountLink />);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(second.container).toBeEmptyDOMElement();
+  });
+
+  it("does NOT suppress on /administration or /admin-help — only real /admin routes", async () => {
+    // A bare `pathname.startsWith("/admin")` would wrongly treat these as
+    // admin routes too. Both should behave exactly like any other page.
+    getSession.mockResolvedValue({ data: { session: { user: { id: "u1", is_anonymous: false } } } });
+
+    pathname = "/administration";
+    renderWithData(<AccountLink />);
+    expect(await screen.findByRole("button", { name: "Sign out" })).toBeInTheDocument();
+
+    pathname = "/admin-help";
+    renderWithData(<AccountLink />);
+    expect((await screen.findAllByRole("button", { name: "Sign out" })).length).toBeGreaterThan(0);
+  });
+
   it("never calls signInAnonymously when mounted with no session", async () => {
     getSession.mockResolvedValue({ data: { session: null } });
 

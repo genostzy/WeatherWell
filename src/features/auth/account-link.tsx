@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { getBrowserClient } from "@/lib/supabase/browser";
+import { isAdminPath } from "@/lib/auth/admin-path";
 import type { LocalizedText } from "@/lib/types";
 
 const KEEP_REPORTS: LocalizedText = {
@@ -39,7 +40,7 @@ export function AccountLink() {
   const pathname = usePathname();
   const { lang } = useLanguage();
   const [kind, setKind] = useState<SessionKind>("none");
-  const isAdmin = pathname.startsWith("/admin");
+  const isAdmin = isAdminPath(pathname);
 
   useEffect(() => {
     if (isAdmin) return;

@@ -26,6 +26,23 @@ describe("SignInPanel", () => {
     expect(screen.getByText("Keep your reports on a new phone")).toBeInTheDocument();
   });
 
+  it("treats /admin/ as the officials' route too", () => {
+    render(<SignInPanel next="/admin/" />);
+    expect(screen.getByText("Sign in as an official")).toBeInTheDocument();
+  });
+
+  it("does not treat /administration or /admin-help as the officials' route", () => {
+    // A bare `next.startsWith("/admin")` would wrongly match both of these —
+    // "/admin" is a prefix of each, but neither is the admin area.
+    const { rerender } = render(<SignInPanel next="/administration" />);
+    expect(screen.queryByText("Sign in as an official")).not.toBeInTheDocument();
+    expect(screen.getByText("Keep your reports on a new phone")).toBeInTheDocument();
+
+    rerender(<SignInPanel next="/admin-help" />);
+    expect(screen.queryByText("Sign in as an official")).not.toBeInTheDocument();
+    expect(screen.getByText("Keep your reports on a new phone")).toBeInTheDocument();
+  });
+
   it("shows the official-only disclaimer under the official heading", () => {
     render(<SignInPanel next="/admin/zone/zone-1" />);
     expect(

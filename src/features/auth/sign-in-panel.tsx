@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { startGoogleSignIn, sendEmailSignInLink, type SignInResult } from "@/lib/auth/sign-in";
+import { isAdminPath } from "@/lib/auth/admin-path";
 import type { LocalizedText } from "@/lib/types";
 
 const OFFICIAL_HEADING: LocalizedText = { en: "Sign in as an official", fil: "Mag-sign in bilang opisyal" };
@@ -44,7 +45,7 @@ export function SignInPanel({ next, notice }: { next: string; notice?: string })
   const [pending, setPending] = useState<Control | null>(null);
   const [errors, setErrors] = useState<Partial<Record<Control, string>>>({});
 
-  const isOfficial = next.startsWith("/admin");
+  const isOfficial = isAdminPath(next);
   const failed = notice === "failed";
 
   async function handleResult(control: Control, run: () => Promise<SignInResult>) {
