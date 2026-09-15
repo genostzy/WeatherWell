@@ -111,6 +111,7 @@ export function buildSeedSql(): string {
         ` ${json(z.evacuationRouteText)}, ${z.lat}, ${z.lng},` +
         ` ${json(z.evacuationRoutePath)}, ${quote(z.hotlineNumber)})` +
         ` on conflict (id) do update set name = excluded.name,` +
+        ` psgc_barangay_code = excluded.psgc_barangay_code,` +
         ` evacuation_route_text = excluded.evacuation_route_text,` +
         ` evacuation_route_path = excluded.evacuation_route_path;`
     );

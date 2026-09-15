@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, it, expect } from "vitest";
 import { buildSeedSql, buildTeardownSql, quote, municipalitiesFrom } from "./generate-seed";
 import { MOCK_ZONES } from "@/lib/mock-data";
@@ -15,6 +16,26 @@ describe("buildSeedSql", () => {
 
   it("is idempotent, so re-seeding a pilot database is not destructive", () => {
     expect(buildSeedSql()).toContain("on conflict (id) do update");
+  });
+
+  it("re-seeding corrects a zone's PSGC barangay code, not only its name and route", () => {
+    // The permission boundary is a prefix test on psgc_barangay_code. An
+    // environment still holding an old wrong code must be fixed by re-seeding,
+    // not left silently wrong because the upsert skipped that column (M5).
+    const zoneRows = buildSeedSql()
+      .split("\n")
+      .filter((line) => line.startsWith("insert into public.zones"));
+
+    expect(zoneRows).toHaveLength(MOCK_ZONES.length);
+    for (const row of zoneRows) {
+      expect(row).toContain("psgc_barangay_code = excluded.psgc_barangay_code");
+    }
+  });
+
+  it("the committed supabase/seed/seed.sql is exactly what the generator emits", () => {
+    // A generator fix that is never regenerated changes nothing in any database.
+    const committed = readFileSync("supabase/seed/seed.sql", "utf8").replace(/\r\n/g, "\n");
+    expect(committed).toBe(buildSeedSql());
   });
 
   it("escapes apostrophes, which Filipino route text contains", () => {

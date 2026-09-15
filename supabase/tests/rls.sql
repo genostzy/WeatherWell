@@ -60,7 +60,8 @@ end $$;
 --
 -- Separately, and this is what DOES matter operationally: an earlier draft
 -- revoked EXECUTE from `authenticated` too, and that broke policy evaluation
--- — profiles_read_own_or_operator calls this function while running AS
+-- — profiles_read_own_or_operator (since replaced by profiles_read_own)
+-- called this function while running AS
 -- authenticated, so revoking from authenticated turns an ordinary own-row
 -- read into "permission denied for function is_operator" (see the identity
 -- migration's comment). The settled shape revokes from public and anon only.
@@ -201,7 +202,7 @@ select tests.expect_denied(
 -- is no longer in the authenticated UPDATE column grant on community_pins
 -- (`grant update (status_tag, caption, removed, removed_reason)` — author_id
 -- is absent). So the denial just above is now refused by the *column grant*
--- before pins_update_own_or_operator's WITH CHECK is ever reached — a
+-- before pins_update_own_or_in_area's WITH CHECK is ever reached — a
 -- stronger refusal, but one that leaves the WITH CHECK clause completely
 -- unexercised by anything in this suite. Two assertions close that:
 --
@@ -239,7 +240,7 @@ grant update (author_id) on public.community_pins to authenticated;
 
 select tests.as_user('11111111-1111-1111-1111-111111111111');
 select tests.expect_denied(
-  'pins_update_own_or_operator WITH CHECK refuses author_id reassignment even when the column grant allows it through',
+  'pins_update_own_or_in_area WITH CHECK refuses author_id reassignment even when the column grant allows it through',
   $$update public.community_pins
       set author_id = '22222222-2222-2222-2222-222222222222'
     where author_id = '11111111-1111-1111-1111-111111111111'$$);
@@ -267,7 +268,7 @@ select tests.expect_row_count(
   0);
 
 -- Critical 1, continued: an operator CAN read another resident's check-in —
--- the other half of checkins_read_own_or_operator that the denial test above
+-- the other half of checkins_read_own_or_in_area that the denial test above
 -- never exercised. Reuses the 2222... check-in inserted above.
 select tests.as_user('33333333-3333-3333-3333-333333333333');
 select tests.expect_row_count(
@@ -285,7 +286,7 @@ select tests.expect_row_count(
   $$select * from public.community_pins where author_id = '11111111-1111-1111-1111-111111111111'$$,
   1);
 
--- Important 2: pins_update_own_or_operator grants the author UPDATE on every
+-- Important 2: pins_update_own_or_in_area grants the author UPDATE on every
 -- column, including removed/removed_reason — so on its own it lets an author
 -- undo an operator's moderation by simply reissuing their own pin. Column
 -- GRANTs cannot fix that either: residents and operators are the same
@@ -634,8 +635,8 @@ select tests.expect_row_count(
 
 -- Important 4, bullet 3: insert was tested, update was not. Reuses the
 -- active 'red' alert on tests-fixture-zone from the uniqueness block above.
--- alerts_update_operator's USING clause is is_operator(), which is false
--- for a resident on every row, so — same reasoning again — no error, just
+-- alerts_update_in_area's USING clause is manages_zone(zone_id), which is
+-- false for a resident on every row, so — same reasoning again — no error, just
 -- a zero-row update. Unchanged-value assertion.
 do $$
 declare
@@ -824,8 +825,8 @@ select tests.expect_row_count(
 
 -- ---------------------------------------------------------------------------
 -- Task 8, assertion 14: evacuation_centers.current_occupancy is operator-
--- written through centers_update_operator, whose USING/WITH CHECK is bare
--- is_operator() — same shape as the zones/alerts unchanged-value assertions
+-- written through centers_update_in_area, whose USING/WITH CHECK is
+-- manages_zone(zone_id) — same shape as the zones/alerts unchanged-value assertions
 -- above, so a resident's UPDATE matches zero rows silently rather than
 -- raising. current_occupancy IS in the authenticated UPDATE column grant
 -- (`grant update (status, current_occupancy)` — see
@@ -1421,8 +1422,10 @@ insert into public.municipalities (code, name) values
 --   99999999-... is anonymous (is_anonymous = true, no email) -- an
 --   ordinary signed-in resident, standing in for "any authenticated
 --   caller" in P8.
-insert into auth.users (id, email) values
-  ('88888888-8888-8888-8888-888888888888', 'official.test@example.com');
+-- email_confirmed_at is set because appoint_official refuses an address
+-- the person has not confirmed (M6; see the M6 block at the end of this file).
+insert into auth.users (id, email, email_confirmed_at) values
+  ('88888888-8888-8888-8888-888888888888', 'official.test@example.com', now());
 insert into auth.users (id, is_anonymous) values
   ('99999999-9999-9999-9999-999999999999', true);
 
@@ -1687,5 +1690,95 @@ begin
   end;
   reset role;
 end $$;
+
+
+-- ===========================================================================
+-- Final-review hardening (M6, M8).
+--
+-- M6a: appoint_official refuses an account whose email is not confirmed.
+-- Safe today only because email autoconfirm is off; if it were ever turned on,
+-- anyone could pre-register an official's address and be appointed in their
+-- place. Run as postgres, the owner, the way the system owner runs it.
+-- ===========================================================================
+insert into auth.users (id, email) values
+  ('aaaaaaaa-0000-0000-0000-00000000000a', 'unconfirmed.test@example.com');
+
+do $$
+declare
+  v_result text;
+  v_raised boolean := false;
+begin
+  begin
+    select private.appoint_official('unconfirmed.test@example.com', '0199902', 'Unconfirmed Person') into v_result;
+  exception
+    when others then
+      v_raised := true;
+      if sqlerrm !~ 'finish signing in' then
+        raise exception using errcode = 'TSTFL', message = format(
+          'TEST FAILED — M6a: wrong exception message, got: %s', sqlerrm);
+      end if;
+  end;
+  if not v_raised then
+    raise exception using errcode = 'TSTFL',
+      message = 'TEST FAILED — M6a: appointing an unconfirmed email succeeded instead of raising';
+  end if;
+  if exists (select 1 from public.profiles
+              where id = 'aaaaaaaa-0000-0000-0000-00000000000a' and role = 'operator') then
+    raise exception using errcode = 'TSTFL',
+      message = 'TEST FAILED — M6a: the unconfirmed account was made an operator';
+  end if;
+  raise notice 'ok, M6a: appoint_official raised for an unconfirmed email';
+end $$;
+
+-- M6b: appoint_official refuses when the matched user has no profiles row,
+-- rather than echoing success and recording official.appointed for an
+-- update that changed nothing.
+insert into auth.users (id, email, email_confirmed_at) values
+  ('aaaaaaaa-0000-0000-0000-00000000000b', 'noprofile.test@example.com', now());
+delete from public.profiles where id = 'aaaaaaaa-0000-0000-0000-00000000000b';
+
+do $$
+declare
+  v_result text;
+  v_raised boolean := false;
+begin
+  begin
+    select private.appoint_official('noprofile.test@example.com', '0199902', 'No Profile Person') into v_result;
+  exception
+    when others then
+      v_raised := true;
+      if sqlerrm !~ 'no profile' then
+        raise exception using errcode = 'TSTFL', message = format(
+          'TEST FAILED — M6b: wrong exception message, got: %s', sqlerrm);
+      end if;
+  end;
+  if not v_raised then
+    raise exception using errcode = 'TSTFL',
+      message = 'TEST FAILED — M6b: appointing a user with no profile row succeeded instead of raising';
+  end if;
+  if exists (select 1 from public.official_actions
+              where target_id = 'aaaaaaaa-0000-0000-0000-00000000000b') then
+    raise exception using errcode = 'TSTFL',
+      message = 'TEST FAILED — M6b: an official.appointed row was recorded for an appointment that changed nothing';
+  end if;
+  raise notice 'ok, M6b: appoint_official raised for a user with no profile row';
+end $$;
+
+-- M8: anon holds no SELECT grant on official_actions. RLS already returns
+-- nothing to anon; the grant says no as well. Checked in the catalog, since
+-- that is what flips if the revoke is missing, and by attempting the read.
+do $$
+begin
+  if has_table_privilege('anon', 'public.official_actions', 'SELECT') then
+    raise exception using errcode = 'TSTFL',
+      message = 'TEST FAILED — M8: anon has SELECT on public.official_actions';
+  end if;
+  raise notice 'ok, M8: anon has no SELECT grant on public.official_actions';
+end $$;
+
+select tests.as_anon();
+select tests.expect_denied(
+  'M8: anon cannot select from official_actions (grant-level, not only RLS)',
+  $$select * from public.official_actions$$);
 
 rollback;
