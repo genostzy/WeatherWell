@@ -344,7 +344,7 @@ This table is the single source of truth for implementation state. Everything ab
 |---|---|---|
 | All resident and operator screens | **Built** | 9 routes, full first-run click-through |
 | Bilingual UI (English / Filipino) | **Built** | Every user-facing string, including screen-reader labels, goes through the localisation layer |
-| Onboarding, consent, zone selection | **Built** | GPS auto-detect is a stub — proposes a zone to confirm; real matching needs boundary polygons |
+| Onboarding, consent, zone selection | **Built** | "Use my location" proposes the closest covered barangay within 5 km with its distance, says plainly when the resident is outside coverage, and never confirms for them. It matches to each barangay's centre point, so it says "closest", not "inside"; boundary matching arrives with the country-wide barangay list |
 | Install prompt at the end of onboarding | **Built** | Uses the browser's real install dialog where one exists; explains the Share-sheet route on iOS, which has none. Skippable, and not shown to an already-installed device |
 | Homepage map, live position, markers, legend | **Built** | Leaflet with hazard backdrop and POI markers; zones, POIs and hazard ratings read from Postgres |
 | Community pins — create, edit, delete, moderate | **Built** | Shared via Postgres + Row Level Security — a pin dropped on one phone reaches every other one, not just the device that made it. No photo support: the form does not collect one, pending consent and retention rules |
