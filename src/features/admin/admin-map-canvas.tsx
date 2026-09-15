@@ -8,7 +8,7 @@ import { MOCK_CASCADES } from "@/lib/mock-data";
 import { getZoneStatus, getZoneStatusColor, ZONE_STATUS_LABEL } from "@/lib/zone-status";
 import { SEVERITY_ORDER, SEVERITY_LABEL, type Severity } from "@/lib/severity";
 import { CENTER_STATUS_LABEL, resolveEffectiveCenterStatus } from "@/lib/center-status";
-import { useAlerts } from "@/lib/alerts-store";
+import { useAlerts, useSetZoneAlert } from "@/lib/alerts-store";
 import {
   useAllCommunityPins,
   removePinByAdmin,
@@ -334,15 +334,12 @@ function ZoneAlertSelect({
   canManage: boolean;
 }) {
   const [error, setError] = useState(false);
+  // Through the alerts store, which refreshes the alert list once the write
+  // is confirmed, so this select and the marker follow it (C1).
+  const setZoneAlert = useSetZoneAlert();
 
-  // Dynamic import, not a static one: set-zone-alert.ts is a "use server"
-  // module that transitively imports "server-only", which throws if it is
-  // ever evaluated outside a server bundle. A static import here would pull
-  // it into every test that merely renders this component; the dynamic
-  // import defers that to the moment an admin actually changes the select.
   async function handleChange(value: Severity | "none") {
     setError(false);
-    const { setZoneAlert } = await import("@/app/actions/set-zone-alert");
     const result = await setZoneAlert({ zoneId: zone.id, severity: value });
     if (!result.ok) setError(true);
   }

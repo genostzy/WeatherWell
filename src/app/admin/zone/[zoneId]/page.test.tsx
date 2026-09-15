@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 
 // The community-pin panel's outbox drain reaches the real Supabase browser
 // client. Nothing here should sign anyone in.
@@ -25,6 +26,11 @@ import ZoneDashboardPage from "./page";
 import { renderWithData, FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
 import { addCommunityPin } from "@/lib/community-pins";
 import type { Official } from "@/lib/auth/official";
+import { OfficialContext } from "@/lib/auth/official-context";
+import { ReferenceDataProvider } from "@/lib/reference-data/provider";
+import { LanguageProvider } from "@/features/i18n/language-provider";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import type { AlertRecord } from "@/lib/types";
 
 /**
  * The page reads its route param via React's `use(params)`, which suspends
@@ -151,5 +157,102 @@ describe("ZoneDashboardPage community pin moderation gating (F6-1)", () => {
 
     expect(await screen.findByText("In-area pin")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /remove — flooded/i })).toBeInTheDocument();
+  });
+});
+
+describe("ZoneDashboardPage alert control after a confirmed write (C1)", () => {
+  // Mounts the real ReferenceDataProvider rather than renderWithData's fixed
+  // context value: the defect was that the provider fetched /api/alerts once
+  // and never again, so a static context cannot show it. `serverAlerts` is
+  // what /api/alerts answers with right now; the mocked Server Action
+  // changes it the way a successful set_zone_alert changes the database.
+  const zone = FIXTURE_REFERENCE_DATA.zones[0];
+  let serverAlerts: AlertRecord[] = [];
+
+  const OFFICIAL: Official = {
+    userId: "u1",
+    displayName: "Test",
+    areaCode: zone.psgcBarangayCode,
+    areaName: "Own barangay",
+    level: "barangay",
+  };
+
+  beforeEach(() => {
+    localStorage.clear();
+    serverAlerts = [];
+    setZoneAlertMock.mockReset();
+    setZoneAlertMock.mockImplementation(async ({ severity }: { severity: string }) => {
+      serverAlerts =
+        severity === "none"
+          ? []
+          : [
+              {
+                id: `alert-${severity}`,
+                zoneId: zone.id,
+                severity: severity as AlertRecord["severity"],
+                message: { en: "Set by test.", fil: "Itinakda ng test." },
+                source: "manual",
+                confidence: "validated",
+                issuedAt: new Date().toISOString(),
+                isActive: true,
+              },
+            ];
+      return { ok: true };
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url === "/api/zones") return { ok: true, json: async () => FIXTURE_REFERENCE_DATA };
+        if (url.startsWith("/api/alerts")) return { ok: true, json: async () => serverAlerts };
+        return { ok: true, json: async () => [] };
+      })
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    setZoneAlertMock.mockReset();
+    setZoneAlertMock.mockResolvedValue({ ok: true });
+  });
+
+  function renderLive() {
+    return render(
+      <TooltipProvider>
+        <LanguageProvider>
+          <ReferenceDataProvider>
+            <OfficialContext.Provider value={OFFICIAL}>
+              <ZoneDashboardPage params={resolvedParams({ zoneId: zone.id })} searchParams={emptySearchParams} />
+            </OfficialContext.Provider>
+          </ReferenceDataProvider>
+        </LanguageProvider>
+      </TooltipProvider>
+    );
+  }
+
+  it("shows the new severity once the write is confirmed, then lets the official choose Clear again", async () => {
+    const user = userEvent.setup();
+    renderLive();
+
+    const select = await screen.findByRole("combobox", { name: /alert status/i });
+    expect(select).toHaveTextContent(/clear — no alert/i);
+
+    await user.click(select);
+    await user.click(await screen.findByRole("option", { name: "Warning" }));
+
+    await waitFor(() => expect(setZoneAlertMock).toHaveBeenCalledWith({ zoneId: zone.id, severity: "red" }));
+    // Both the controlled select and the badge follow the store, no reload.
+    await waitFor(() => expect(screen.getByRole("combobox", { name: /alert status/i })).toHaveTextContent("Warning"));
+    expect(screen.queryByText("Clear", { exact: true })).not.toBeInTheDocument();
+
+    // "Clear" must be selectable again: while the select still showed
+    // "none", picking it fired no change at all.
+    await user.click(screen.getByRole("combobox", { name: /alert status/i }));
+    await user.click(await screen.findByRole("option", { name: /clear — no alert/i }));
+
+    await waitFor(() => expect(setZoneAlertMock).toHaveBeenCalledWith({ zoneId: zone.id, severity: "none" }));
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: /alert status/i })).toHaveTextContent(/clear — no alert/i)
+    );
+    expect(screen.getByText("Clear", { exact: true })).toBeInTheDocument();
   });
 });

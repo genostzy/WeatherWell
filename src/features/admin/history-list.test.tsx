@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { screen } from "@testing-library/react";
 import { renderWithData } from "@/test-utils/render-with-data";
 import { HistoryList } from "./history-list";
@@ -66,5 +66,45 @@ describe("HistoryList", () => {
     renderWithData(<HistoryList actions={[]} zones={ZONES} scope="mine" />);
     expect(screen.getByRole("link", { name: /my area/i })).toHaveAttribute("href", "/admin/history?scope=mine");
     expect(screen.getByRole("link", { name: /all areas/i })).toHaveAttribute("href", "/admin/history?scope=all");
+  });
+});
+
+describe("HistoryList timestamps (I6)", () => {
+  // A fixed local clock. Dates are built with the local-time Date constructor
+  // so "today" means the same thing to the test as to the component,
+  // whatever timezone the machine running the suite is in.
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 8, 15, 12, 0));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("shows a date as well as a time for an entry from an earlier day", () => {
+    renderWithData(
+      <HistoryList actions={[action({ occurredAt: new Date(2026, 8, 8, 14, 14).toISOString() })]} zones={ZONES} scope="mine" />
+    );
+
+    expect(screen.getByText(/Juan Dela Cruz, Sep 8, 2:14\sPM/)).toBeInTheDocument();
+  });
+
+  it("shows the time only for an entry from today", () => {
+    renderWithData(
+      <HistoryList actions={[action({ occurredAt: new Date(2026, 8, 15, 9, 5).toISOString() })]} zones={ZONES} scope="mine" />
+    );
+
+    const line = screen.getByText(/Juan Dela Cruz, /);
+    expect(line).toHaveTextContent(/9:05/);
+    expect(line).not.toHaveTextContent(/Sep/);
+  });
+
+  it("shows the date in Filipino too", () => {
+    renderWithData(
+      <HistoryList actions={[action({ occurredAt: new Date(2026, 8, 8, 14, 14).toISOString() })]} zones={ZONES} scope="mine" />,
+      { lang: "fil" }
+    );
+
+    expect(screen.getByText(/Set 8, 2:14\sPM/)).toBeInTheDocument();
   });
 });

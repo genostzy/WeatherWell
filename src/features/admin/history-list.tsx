@@ -6,11 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
-import { describeAction } from "@/lib/official-actions-copy";
+import { describeAction, formatActionTime } from "@/lib/official-actions-copy";
 import type { OfficialAction } from "@/lib/official-actions-mapper";
-import type { LanguageCode, LocalizedText } from "@/lib/types";
-
-const LOCALE: Record<LanguageCode, string> = { en: "en-PH", fil: "fil-PH" };
+import type { LocalizedText } from "@/lib/types";
 
 const BACK_TO_DASHBOARD: LocalizedText = { en: "Back to admin dashboard", fil: "Balik sa admin dashboard" };
 const TITLE: LocalizedText = { en: "History", fil: "Kasaysayan" };
@@ -82,7 +80,7 @@ export function HistoryList({
           <ul className="space-y-2">
             {actions.map((action) => {
               const zoneName = action.zoneId ? zoneById.get(action.zoneId)?.name : undefined;
-              const time = new Date(action.occurredAt).toLocaleTimeString(LOCALE[lang]);
+              const time = formatActionTime(action.occurredAt, lang);
               return (
                 <li key={action.id}>
                   <Card>

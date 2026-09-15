@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
 // The store drains the outbox after every moderation write, which reaches the
 // real Supabase browser client. Nothing here should sign anyone in.
@@ -29,6 +29,11 @@ import { readOutbox, markFailed } from "@/lib/outbox/outbox";
 import type { CommunityPin } from "@/lib/community-pins";
 import type { OutboxPayloads } from "@/lib/outbox/types";
 import type { Official } from "@/lib/auth/official";
+import { OfficialContext } from "@/lib/auth/official-context";
+import { ReferenceDataProvider } from "@/lib/reference-data/provider";
+import { LanguageProvider } from "@/features/i18n/language-provider";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import type { AlertRecord } from "@/lib/types";
 
 /**
  * Same shallow approach as MapCanvas's own test: jsdom has no layout engine,
@@ -320,5 +325,77 @@ describe("AdminMapCanvas", () => {
     markFailed(entry.id, "That pin is not yours to remove, or no longer exists.", true);
 
     expect(await screen.findByText(/could not save/i)).toBeInTheDocument();
+  });
+});
+
+describe("AdminMapCanvas alert control after a confirmed write (C1)", () => {
+  // The real ReferenceDataProvider, not renderWithData's fixed context: the
+  // defect was the provider never refetching /api/alerts after a write.
+  let serverAlerts: AlertRecord[] = [];
+
+  beforeEach(() => {
+    localStorage.clear();
+    serverAlerts = [];
+    setZoneAlertMock.mockReset();
+    setZoneAlertMock.mockImplementation(async ({ severity }: { severity: string }) => {
+      serverAlerts =
+        severity === "none"
+          ? []
+          : [
+              {
+                id: `alert-${severity}`,
+                zoneId: zone.id,
+                severity: severity as AlertRecord["severity"],
+                message: { en: "Set by test.", fil: "Itinakda ng test." },
+                source: "manual",
+                confidence: "validated",
+                issuedAt: new Date().toISOString(),
+                isActive: true,
+              },
+            ];
+      return { ok: true };
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url === "/api/zones") return { ok: true, json: async () => FIXTURE_REFERENCE_DATA };
+        if (url.startsWith("/api/alerts")) return { ok: true, json: async () => serverAlerts };
+        return { ok: true, json: async () => [] };
+      })
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    setZoneAlertMock.mockReset();
+    setZoneAlertMock.mockResolvedValue({ ok: true });
+  });
+
+  it("shows the new severity once the write is confirmed, and Clear can be chosen again", async () => {
+    render(
+      <TooltipProvider>
+        <LanguageProvider>
+          <ReferenceDataProvider>
+            <OfficialContext.Provider
+              value={{ userId: "u1", displayName: "Test", areaCode: zone.psgcBarangayCode, areaName: "Own", level: "barangay" }}
+            >
+              <AdminMapCanvas zones={FIXTURE_REFERENCE_DATA.zones} />
+            </OfficialContext.Provider>
+          </ReferenceDataProvider>
+        </LanguageProvider>
+      </TooltipProvider>
+    );
+
+    fireEvent.click(await screen.findByRole("img", { name: new RegExp(zone.name, "i") }));
+    const select = () => screen.getByRole("combobox", { name: new RegExp(zone.name, "i") }) as HTMLSelectElement;
+    expect(select().value).toBe("none");
+
+    fireEvent.change(select(), { target: { value: "red" } });
+    await waitFor(() => expect(setZoneAlertMock).toHaveBeenCalledWith({ zoneId: zone.id, severity: "red" }));
+    await waitFor(() => expect(select().value).toBe("red"));
+
+    fireEvent.change(select(), { target: { value: "none" } });
+    await waitFor(() => expect(setZoneAlertMock).toHaveBeenCalledWith({ zoneId: zone.id, severity: "none" }));
+    await waitFor(() => expect(select().value).toBe("none"));
   });
 });

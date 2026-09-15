@@ -1,12 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { useLanguage } from "@/features/i18n/language-provider";
-import { describeAction } from "@/lib/official-actions-copy";
+import { AlertsContext } from "@/lib/alerts-store";
+import { describeAction, formatActionTime } from "@/lib/official-actions-copy";
 import type { OfficialAction } from "@/lib/official-actions-mapper";
-import type { LanguageCode } from "@/lib/types";
-
-const LOCALE: Record<LanguageCode, string> = { en: "en-PH", fil: "fil-PH" };
 
 /**
  * The latest alert change for one zone, beside the alert status on the
@@ -14,9 +12,16 @@ const LOCALE: Record<LanguageCode, string> = { en: "en-PH", fil: "fil-PH" };
  * nothing while loading, when there is no entry yet, and when the fetch
  * fails — this is a supplementary line, not a gate, so a network hiccup here
  * must never block or error the page around it.
+ *
+ * Refetches whenever the alert list changes (C1). The alerts store replaces
+ * that list after every confirmed alert write, so this line follows the
+ * write just made instead of naming the change before it. Read with
+ * useContext rather than useAlerts so the line still renders, fetching once,
+ * where no alert list is mounted.
  */
 export function LastChangeLine({ zoneId }: { zoneId: string }) {
   const { lang } = useLanguage();
+  const alerts = useContext(AlertsContext);
   const [entry, setEntry] = useState<OfficialAction | null>(null);
 
   useEffect(() => {
@@ -34,11 +39,11 @@ export function LastChangeLine({ zoneId }: { zoneId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [zoneId]);
+  }, [zoneId, alerts]);
 
   if (!entry) return null;
 
-  const time = new Date(entry.occurredAt).toLocaleTimeString(LOCALE[lang]);
+  const time = formatActionTime(entry.occurredAt, lang);
 
   return (
     <p className="text-xs text-muted-foreground">

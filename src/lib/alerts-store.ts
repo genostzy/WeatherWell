@@ -1,9 +1,19 @@
 "use client";
 
-import { createContext, useContext } from "react";
+import { createContext, useCallback, useContext } from "react";
 import type { AlertRecord } from "./types";
+import type { SetZoneAlertInput } from "@/app/actions/set-zone-alert";
+import type { ActionResult } from "@/app/actions/action-result";
 
 export const AlertsContext = createContext<AlertRecord[] | null>(null);
+
+/**
+ * Re-reads /api/alerts into AlertsContext. Supplied by ReferenceDataProvider
+ * beside the alerts themselves, because that provider is the one place the
+ * alert list lives — a screen that patched its own copy would leave every
+ * other screen showing the old alert.
+ */
+export const AlertsRefreshContext = createContext<(() => Promise<void>) | null>(null);
 
 /** Every alert the response carried, active and recently superseded alike. */
 export function useAlerts(): AlertRecord[] {
@@ -21,4 +31,42 @@ export function useAlerts(): AlertRecord[] {
  */
 export function useActiveAlertForZone(zoneId: string): AlertRecord | undefined {
   return useAlerts().find((alert) => alert.zoneId === zoneId && alert.isActive);
+}
+
+/**
+ * The one way a screen sets a zone's alert (C1).
+ *
+ * The alert list is fetched once when the app opens. Before this existed each
+ * screen called the Server Action itself and did nothing on success, so the
+ * write landed in the database while every alert control kept showing the
+ * old state — and because a controlled select already showing "Clear" fires
+ * no change when Clear is picked, an official could not withdraw an alert
+ * they had just issued in error. Refreshing here, after the database has
+ * confirmed the write, means every screen reading AlertsContext follows.
+ *
+ * Refetched rather than patched locally: the database decides what the new
+ * row looks like (superseded_severity, generated copy), and a hand-built
+ * record would be a guess at that. The service worker sends /api/alerts
+ * network-first, so this reaches the database whenever a network exists.
+ *
+ * The dynamic import is for the same reason every caller used one before:
+ * set-zone-alert.ts is a "use server" module that transitively imports
+ * "server-only", and must not be evaluated in a client test's module graph.
+ */
+export function useSetZoneAlert(): (input: SetZoneAlertInput) => Promise<ActionResult> {
+  const refresh = useContext(AlertsRefreshContext);
+  const setAlert = useCallback(
+    async (input: SetZoneAlertInput) => {
+      const { setZoneAlert } = await import("@/app/actions/set-zone-alert");
+      const result = await setZoneAlert(input);
+      if (result.ok) await refresh?.();
+      return result;
+    },
+    [refresh]
+  );
+  if (!refresh) {
+    // A silent no-op here is exactly the C1 defect coming back.
+    throw new Error("useSetZoneAlert requires ReferenceDataProvider's alerts refresh. In tests, use renderWithData().");
+  }
+  return setAlert;
 }

@@ -3,7 +3,7 @@
 import { createContext, useCallback, useEffect, useState, type ReactNode } from "react";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
-import { AlertsContext } from "@/lib/alerts-store";
+import { AlertsContext, AlertsRefreshContext } from "@/lib/alerts-store";
 import type { AlertRecord, LocalizedText } from "@/lib/types";
 import type { ReferenceData } from "./types";
 
@@ -92,6 +92,29 @@ export function ReferenceDataProvider({ children }: { children: ReactNode }) {
       });
   }, []);
 
+  /**
+   * Re-reads alerts only, after an official's alert write is confirmed (C1).
+   * Zones are left alone: their route is stale-while-revalidate in the
+   * service worker, so refetching them would hand back the cached copy anyway.
+   *
+   * A failed refresh keeps the alerts already on screen rather than dropping
+   * to the "can't reach WeatherWell" card: the app was working a moment ago,
+   * and replacing every screen with an error because one follow-up read
+   * failed would take the dashboard away mid-flood. Never throws, so a caller
+   * awaiting it cannot turn a confirmed write into a reported failure.
+   */
+  const refreshAlerts = useCallback(
+    () =>
+      fetchWithTimeout("/api/alerts", FETCH_TIMEOUT_MS)
+        .then((response) => (response.ok ? (response.json() as Promise<AlertRecord[]>) : null))
+        .then((alerts) => {
+          if (!alerts) return;
+          setState((current) => (current.status === "ready" ? { ...current, alerts } : current));
+        })
+        .catch(() => undefined),
+    []
+  );
+
   const retry = useCallback(() => {
     setState({ status: "loading" });
     load();
@@ -128,7 +151,9 @@ export function ReferenceDataProvider({ children }: { children: ReactNode }) {
 
   return (
     <ReferenceDataContext.Provider value={state.data}>
-      <AlertsContext.Provider value={state.alerts}>{children}</AlertsContext.Provider>
+      <AlertsContext.Provider value={state.alerts}>
+        <AlertsRefreshContext.Provider value={refreshAlerts}>{children}</AlertsRefreshContext.Provider>
+      </AlertsContext.Provider>
     </ReferenceDataContext.Provider>
   );
 }

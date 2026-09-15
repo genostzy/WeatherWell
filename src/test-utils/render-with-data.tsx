@@ -4,7 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { LanguageProvider } from "@/features/i18n/language-provider";
 import { ReferenceDataContext } from "@/lib/reference-data/provider";
 import type { ReferenceData } from "@/lib/reference-data/types";
-import { AlertsContext } from "@/lib/alerts-store";
+import { AlertsContext, AlertsRefreshContext } from "@/lib/alerts-store";
 import { MOCK_ZONES, MOCK_POIS, MOCK_HAZARD_SUSCEPTIBILITY, MOCK_ALERTS } from "@/lib/mock-data";
 import type { AlertRecord, LanguageCode } from "@/lib/types";
 import { OfficialContext } from "@/lib/auth/official-context";
@@ -38,6 +38,13 @@ const TEST_OFFICIAL: Official = {
   level: "municipality",
 };
 
+/**
+ * The alerts here are a fixed value, so there is nothing to refetch. Tests
+ * that need a write to show up on screen mount the real ReferenceDataProvider
+ * (see the C1 tests on the zone page and the admin map).
+ */
+const noRefresh = async () => {};
+
 export function renderWithData(
   ui: ReactElement,
   options: {
@@ -55,7 +62,9 @@ export function renderWithData(
       <LanguageProvider initialLang={options.lang}>
         <ReferenceDataContext.Provider value={data}>
           <AlertsContext.Provider value={alerts}>
-            <OfficialContext.Provider value={official}>{ui}</OfficialContext.Provider>
+            <AlertsRefreshContext.Provider value={noRefresh}>
+              <OfficialContext.Provider value={official}>{ui}</OfficialContext.Provider>
+            </AlertsRefreshContext.Provider>
           </AlertsContext.Provider>
         </ReferenceDataContext.Provider>
       </LanguageProvider>

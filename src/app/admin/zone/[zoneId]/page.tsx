@@ -21,7 +21,7 @@ import {
   isHeavyRainfall,
 } from "@/lib/mock-data";
 import { useHazardsForZone, useZones } from "@/lib/reference-data/use-reference-data";
-import { useActiveAlertForZone } from "@/lib/alerts-store";
+import { useActiveAlertForZone, useSetZoneAlert } from "@/lib/alerts-store";
 import { useManagesZone } from "@/lib/auth/official-context";
 import { SEVERITY_ORDER, SEVERITY_LABEL, SEVERITY_HEX, type Severity } from "@/lib/severity";
 import { CENTER_STATUS_LABEL, CENTER_STATUS_ORDER, resolveEffectiveCenterStatus } from "@/lib/center-status";
@@ -66,6 +66,7 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
   const zones = useZones();
   const susceptibility = useHazardsForZone(zoneId);
   const alert = useActiveAlertForZone(zoneId);
+  const setZoneAlert = useSetZoneAlert();
   const [alertError, setAlertError] = useState(false);
   const [statusError, setStatusError] = useState(false);
   const managesZone = useManagesZone();
@@ -86,14 +87,14 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
   const rainfall = getRainfallForZone(zone.id);
   const rainfallHistory = getRainfallHistoryForZone(zone.id);
 
-  // Dynamic imports, not static ones: set-zone-alert.ts and set-center.ts are
-  // "use server" modules that transitively import "server-only", which
-  // throws if evaluated outside a server bundle. A static import here would
-  // pull them into every test that merely renders this page; the dynamic
-  // import defers that to the moment an admin actually changes a value.
+  // The alert write goes through the alerts store (useSetZoneAlert), which
+  // refreshes the alert list once the database confirms it — see C1 there.
+  // set-center.ts is still imported dynamically: it is a "use server" module
+  // that transitively imports "server-only", which throws if evaluated
+  // outside a server bundle, and a static import would pull it into every
+  // test that merely renders this page.
   async function handleAlertChange(value: Severity | "none") {
     setAlertError(false);
-    const { setZoneAlert } = await import("@/app/actions/set-zone-alert");
     const result = await setZoneAlert({ zoneId: zone.id, severity: value });
     if (!result.ok) setAlertError(true);
   }

@@ -121,3 +121,27 @@ function describeOfficialRemoved(detail: Record<string, unknown>, lang: Language
   const displayName = typeof detail.display_name === "string" ? detail.display_name : "?";
   return t({ en: `Removed ${displayName}`, fil: `Inalis si ${displayName}` }, lang);
 }
+
+const LOCALE: Record<LanguageCode, string> = { en: "en-PH", fil: "fil-PH" };
+
+/**
+ * When an action happened, for the history list and the last-change line
+ * (I6). Today's entries stay time-only; anything earlier carries its date,
+ * because on an indefinitely retained accountability record "2:14 PM" alone
+ * cannot tell tonight from last week. The year appears only when it is not
+ * this year. "Today" is the device's local day, the same clock the time
+ * itself is rendered in.
+ */
+export function formatActionTime(occurredAt: string, lang: LanguageCode, now: Date = new Date()): string {
+  const at = new Date(occurredAt);
+  const sameDay =
+    at.getFullYear() === now.getFullYear() && at.getMonth() === now.getMonth() && at.getDate() === now.getDate();
+  if (sameDay) return at.toLocaleTimeString(LOCALE[lang]);
+  return at.toLocaleString(LOCALE[lang], {
+    ...(at.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }),
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
