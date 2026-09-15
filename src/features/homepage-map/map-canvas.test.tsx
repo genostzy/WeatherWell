@@ -133,3 +133,25 @@ describe("MapCanvas", () => {
     });
   });
 });
+
+describe("MapCanvas with no hazard data (I3)", () => {
+  it("renders the hazard backdrop for zones with no hazard rows without throwing", () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => [] }));
+    try {
+      renderWithData(
+        <MapCanvas
+          zones={FIXTURE_REFERENCE_DATA.zones}
+          hazardType="landslide"
+          onHazardTypeChange={() => {}}
+          routeZone={null}
+          routeHazard={false}
+          onSelectZone={() => {}}
+        />,
+        { data: { hazards: {} } }
+      );
+      expect(screen.getByText(/map legend/i)).toBeInTheDocument();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});

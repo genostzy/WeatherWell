@@ -2,7 +2,8 @@
 
 import { useContext } from "react";
 import { ReferenceDataContext } from "./provider";
-import type { HazardRiskLevel, HazardType, PointOfInterest, Zone } from "@/lib/types";
+import { hazardsForZone, type HazardsByZone, type ZoneHazards } from "@/lib/hazards";
+import type { PointOfInterest, Zone } from "@/lib/types";
 
 function useData() {
   const data = useContext(ReferenceDataContext);
@@ -25,12 +26,15 @@ export function usePois(): PointOfInterest[] {
   return useData().pois;
 }
 
-/** Replaces the old per-zone mock-data hazard lookup. Returns an empty record for an unknown zone. */
-export function useHazardsForZone(zoneId: string): Record<HazardType, HazardRiskLevel> {
-  return useData().hazards[zoneId] ?? ({} as Record<HazardType, HazardRiskLevel>);
+/**
+ * One zone's hazard levels, every type present: a zone with no hazard rows,
+ * or missing one type, reads "unknown" for what is missing (I3).
+ */
+export function useHazardsForZone(zoneId: string): ZoneHazards {
+  return hazardsForZone(useData().hazards, zoneId);
 }
 
 /** Every zone's hazard ratings, keyed by zone id. For callers that need many zones at once — pure functions taking this as a parameter, rather than calling a hook per zone. */
-export function useHazards(): Record<string, Record<HazardType, HazardRiskLevel>> {
+export function useHazards(): HazardsByZone {
   return useData().hazards;
 }

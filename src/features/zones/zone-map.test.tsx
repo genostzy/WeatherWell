@@ -68,3 +68,18 @@ describe("ZoneMap", () => {
     expect(screen.getByRole("button", { name: /safe \(0\)/i })).toBeDisabled();
   });
 });
+
+describe("ZoneMap with no hazard data (I3)", () => {
+  it("renders every zone and labels missing baseline risk Unknown", () => {
+    renderWithData(<ZoneMap zones={FIXTURE_REFERENCE_DATA.zones} />, { data: { hazards: {} } });
+
+    expect(screen.getAllByText(/flood: unknown/i)).toHaveLength(FIXTURE_REFERENCE_DATA.zones.length);
+    expect(screen.getAllByText(/landslide: unknown/i)).toHaveLength(FIXTURE_REFERENCE_DATA.zones.length);
+  });
+
+  it("says Hindi tiyak in Filipino", () => {
+    renderWithData(<ZoneMap zones={FIXTURE_REFERENCE_DATA.zones} />, { data: { hazards: {} }, lang: "fil" });
+
+    expect(screen.getAllByText(/baha: hindi tiyak/i)).toHaveLength(FIXTURE_REFERENCE_DATA.zones.length);
+  });
+});

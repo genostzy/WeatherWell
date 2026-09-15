@@ -1,4 +1,5 @@
 import type { HazardRiskLevel, HazardType, PointOfInterest, Zone } from "@/lib/types";
+import type { HazardsByZone } from "@/lib/hazards";
 
 /**
  * Everything the app needs before it can render anything, in one response.
@@ -8,7 +9,8 @@ import type { HazardRiskLevel, HazardType, PointOfInterest, Zone } from "@/lib/t
 export interface ReferenceData {
   zones: Zone[];
   pois: PointOfInterest[];
-  hazards: Record<string, Record<HazardType, HazardRiskLevel>>;
+  /** Possibly missing per zone and per hazard type. Read through hazardsForZone. */
+  hazards: HazardsByZone;
 }
 
 /** Row shapes as Postgres returns them — snake_case, centre nested by the join. */
@@ -101,9 +103,9 @@ export function toReferenceData(
     lng: row.lng,
   }));
 
-  const hazards: ReferenceData["hazards"] = {};
+  const hazards: Record<string, Partial<Record<HazardType, HazardRiskLevel>>> = {};
   for (const row of hazardRows) {
-    hazards[row.zone_id] ??= {} as Record<HazardType, HazardRiskLevel>;
+    hazards[row.zone_id] ??= {};
     hazards[row.zone_id][row.hazard_type] = row.risk_level;
   }
 

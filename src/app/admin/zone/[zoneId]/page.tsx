@@ -21,6 +21,7 @@ import {
   isHeavyRainfall,
 } from "@/lib/mock-data";
 import { useHazardsForZone, useZones } from "@/lib/reference-data/use-reference-data";
+import { HAZARD_LEVEL_LABEL } from "@/lib/hazards";
 import { useActiveAlertForZone, useSetZoneAlert } from "@/lib/alerts-store";
 import { useManagesZone } from "@/lib/auth/official-context";
 import { SEVERITY_ORDER, SEVERITY_LABEL, SEVERITY_HEX, type Severity } from "@/lib/severity";
@@ -218,11 +219,11 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
             </div>
             <div>
               <p className="text-sm text-muted-foreground">{t(FLOOD_SUSCEPTIBILITY, lang)}</p>
-              <p className="text-lg font-semibold capitalize">{susceptibility.flood}</p>
+              <p className="text-lg font-semibold">{t(HAZARD_LEVEL_LABEL[susceptibility.flood], lang)}</p>
             </div>
             <div>
               <p className="text-sm text-muted-foreground">{t(LANDSLIDE_SUSCEPTIBILITY, lang)}</p>
-              <p className="text-lg font-semibold capitalize">{susceptibility.landslide}</p>
+              <p className="text-lg font-semibold">{t(HAZARD_LEVEL_LABEL[susceptibility.landslide], lang)}</p>
             </div>
           </CardContent>
         </Card>

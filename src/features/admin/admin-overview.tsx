@@ -89,7 +89,8 @@ export function AdminOverview() {
   // The database enforces the real limit; this filter only decides what an
   // official sees and can act on — a barangay official's own barangay, or
   // every barangay in a municipal official's town.
-  const zones = useZones().filter((zone) => isInArea(zone.psgcBarangayCode, official.areaCode));
+  const allZones = useZones();
+  const zones = allZones.filter((zone) => isInArea(zone.psgcBarangayCode, official.areaCode));
   const hazards = useHazards();
   const alerts = useAlerts();
   const baseAlertFor = (zoneId: string) => alerts.find((a) => a.zoneId === zoneId && a.isActive);
@@ -114,8 +115,12 @@ export function AdminOverview() {
     return status !== "space_available";
   }).length;
   const hasEffectiveAlert = (zoneId: string) => baseAlertFor(zoneId) !== undefined;
+  // Scored against every zone, not just the official's (I4): floods cross
+  // town lines, and the cascade factor looks for the zone upstream, which can
+  // sit in another town. Only what is displayed is limited to the area, so
+  // this tile agrees with /admin/map, which already scores against all zones.
   const zoneStates = zones.map((zone) =>
-    computeZoneState(buildZoneInputForZone(zone, zones, hasEffectiveAlert, hazards))
+    computeZoneState(buildZoneInputForZone(zone, allZones, hasEffectiveAlert, hazards))
   );
   const highestRiskState = zoneStates.reduce((highest, state) =>
     state.riskScore > highest.riskScore ? state : highest

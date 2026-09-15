@@ -36,7 +36,8 @@ import { useHazardsForZone } from "@/lib/reference-data/use-reference-data";
 import { getZoneStatus, getZoneStatusColor, ZONE_STATUS_LABEL, type ZoneStatus } from "@/lib/zone-status";
 import { CENTER_STATUS_LABEL, CENTER_STATUS_CLASS, resolveEffectiveCenterStatus } from "@/lib/center-status";
 import { useAlerts, useActiveAlertForZone } from "@/lib/alerts-store";
-import type { HazardRiskLevel, HazardType, LanguageCode, LocalizedText, Zone } from "@/lib/types";
+import { HAZARD_LEVEL_LABEL, type HazardLevel } from "@/lib/hazards";
+import type { HazardType, LanguageCode, LocalizedText, Zone } from "@/lib/types";
 
 const CLEAR_NO_ALERT: LocalizedText = { en: "Clear — no active alert", fil: "Ligtas — walang aktibong alerto" };
 const PLACEHOLDER_BOUNDARY: LocalizedText = {
@@ -66,15 +67,11 @@ const HAZARD_ICON: Record<HazardType, typeof Droplet> = {
   landslide: Mountain,
   storm_surge: Waves,
 };
-const RISK_LABEL: Record<HazardRiskLevel, LocalizedText> = {
-  low: { en: "Low", fil: "Mababa" },
-  medium: { en: "Medium", fil: "Katamtaman" },
-  high: { en: "High", fil: "Mataas" },
-};
-const RISK_CLASS: Record<HazardRiskLevel, string> = {
+const RISK_CLASS: Record<HazardLevel, string> = {
   low: "text-muted-foreground",
   medium: "text-severity-yellow",
   high: "text-severity-orange",
+  unknown: "text-muted-foreground",
 };
 
 const STATUS_FILTERS: ZoneStatus[] = ["safe", "cautionary", "dangerous", "hazardous"];
@@ -247,7 +244,7 @@ function ZoneCard({
                       return (
                         <span key={hazard} className={`flex items-center gap-1 ${RISK_CLASS[risk]}`}>
                           <Icon aria-hidden="true" className="h-4 w-4" />
-                          {t(HAZARD_LABEL[hazard], lang)}: {t(RISK_LABEL[risk], lang)}
+                          {t(HAZARD_LABEL[hazard], lang)}: {t(HAZARD_LEVEL_LABEL[risk], lang)}
                         </span>
                       );
                     })}

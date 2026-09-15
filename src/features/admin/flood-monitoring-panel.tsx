@@ -21,7 +21,8 @@ import { useActiveAlertForZone } from "@/lib/alerts-store";
 import { DEPTH_LABEL } from "@/lib/depth";
 import { useOfficial } from "@/lib/auth/official-context";
 import { isInArea } from "@/lib/auth/official";
-import type { HazardRiskLevel, LanguageCode, LocalizedText, Zone } from "@/lib/types";
+import type { HazardLevel } from "@/lib/hazards";
+import type { LanguageCode, LocalizedText, Zone } from "@/lib/types";
 
 const TITLE: LocalizedText = { en: "Flood Monitoring", fil: "Pagsubaybay sa Baha" };
 const SUBTITLE: LocalizedText = {
@@ -36,10 +37,11 @@ const THRESHOLD_MET: LocalizedText = { en: "Report threshold met", fil: "Naabot 
 const BELOW_THRESHOLD: LocalizedText = { en: "Below threshold", fil: "Wala pa sa threshold" };
 const MANAGE: LocalizedText = { en: "Manage", fil: "Pamahalaan" };
 
-const SUSCEPTIBILITY_LABEL: Record<HazardRiskLevel, LocalizedText> = {
+const SUSCEPTIBILITY_LABEL: Record<HazardLevel, LocalizedText> = {
   low: { en: "Low susceptibility", fil: "Mababang panganib" },
   medium: { en: "Medium susceptibility", fil: "Katamtamang panganib" },
   high: { en: "High susceptibility", fil: "Mataas na panganib" },
+  unknown: { en: "Susceptibility unknown", fil: "Hindi tiyak ang panganib" },
 };
 
 export function FloodMonitoringPanel({ zones }: { zones: Zone[] }) {

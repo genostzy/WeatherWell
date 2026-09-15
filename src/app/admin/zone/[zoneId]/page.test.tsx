@@ -256,3 +256,22 @@ describe("ZoneDashboardPage alert control after a confirmed write (C1)", () => {
     expect(screen.getByText("Clear", { exact: true })).toBeInTheDocument();
   });
 });
+
+describe("ZoneDashboardPage with no hazard data (I3)", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => [] }));
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("renders flood and landslide susceptibility as Unknown for a zone with no hazard rows", () => {
+    const zone = FIXTURE_REFERENCE_DATA.zones[0];
+    renderWithData(<ZoneDashboardPage params={resolvedParams({ zoneId: zone.id })} searchParams={emptySearchParams} />, {
+      data: { hazards: {} },
+    });
+
+    expect(screen.getAllByText("Unknown")).toHaveLength(2);
+  });
+});

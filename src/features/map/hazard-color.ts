@@ -1,5 +1,8 @@
 import { SEVERITY_HEX } from "@/lib/severity";
-import type { HazardRiskLevel } from "@/lib/types";
+import type { HazardLevel } from "@/lib/hazards";
+
+/** Neutral grey for a zone with no hazard data: no severity colour to borrow. */
+const UNKNOWN_HAZARD_HEX = "#9ca3af";
 
 /**
  * Reuses the locked severity hexes for the hazard-tile backdrop instead of
@@ -8,8 +11,10 @@ import type { HazardRiskLevel } from "@/lib/types";
  * markers that use the same colors at full strength (PRD: "one is a tile
  * fill and the other is a point marker").
  */
-export function hazardRiskColor(level: HazardRiskLevel): string {
+export function hazardRiskColor(level: HazardLevel): string {
   switch (level) {
+    case "unknown":
+      return UNKNOWN_HAZARD_HEX;
     case "low":
       return SEVERITY_HEX.yellow;
     case "medium":

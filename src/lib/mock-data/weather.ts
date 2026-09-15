@@ -1,4 +1,5 @@
 import type { HazardRiskLevel, HazardType, LocalizedText } from "../types";
+import type { HazardLevel } from "../hazards";
 
 /**
  * PRD's Current Conditions panel calls for near-real-time rainfall per zone,
@@ -95,9 +96,15 @@ export const MOCK_DROUGHT_OUTLOOK: LocalizedText = {
   fil: "Walang inaasahang tagtuyot sa susunod na 30 araw.",
 };
 
-/** Medium/High landslide susceptibility plus currently-heavy rainfall — the pairing the Current Conditions panel's caution note calls out. Shared by the resident-facing panel and the admin Landslide Risk panel so both read the same rule. */
-export function hasElevatedLandslideRisk(susceptibility: HazardRiskLevel, mmPerHour: number): boolean {
-  return susceptibility !== "low" && isHeavyRainfall(mmPerHour);
+/**
+ * Medium/High landslide susceptibility plus currently-heavy rainfall — the
+ * pairing the Current Conditions panel's caution note calls out. Shared by
+ * the resident-facing panel and the admin Landslide Risk panel so both read
+ * the same rule. Unknown susceptibility is never elevated (I3): a caution
+ * built on missing data is a false alarm.
+ */
+export function hasElevatedLandslideRisk(susceptibility: HazardLevel, mmPerHour: number): boolean {
+  return (susceptibility === "medium" || susceptibility === "high") && isHeavyRainfall(mmPerHour);
 }
 
 const WEATHER_READ_LIGHT_RAIN: LocalizedText = {

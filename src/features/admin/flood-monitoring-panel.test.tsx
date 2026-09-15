@@ -84,3 +84,19 @@ describe("FloodMonitoringPanel", () => {
     expect(screen.queryByText(otherZone.name)).not.toBeInTheDocument();
   });
 });
+
+describe("FloodMonitoringPanel with no hazard data (I3)", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => [] }));
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("renders every zone with its susceptibility shown as unknown", () => {
+    renderWithData(<FloodMonitoringPanel zones={FIXTURE_REFERENCE_DATA.zones} />, { data: { hazards: {} } });
+
+    expect(screen.getAllByText("Susceptibility unknown")).toHaveLength(FIXTURE_REFERENCE_DATA.zones.length);
+  });
+});

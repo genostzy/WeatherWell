@@ -5,7 +5,8 @@ import {
   getReportsTodayForZone,
   REPORT_THRESHOLD,
 } from "../mock-data";
-import type { HazardRiskLevel, HazardType, Zone } from "../types";
+import { hazardsForZone, type HazardsByZone } from "../hazards";
+import type { Zone } from "../types";
 import type { Factor, TrendDirection, ZoneInput, ZoneState } from "./types";
 
 const WEIGHTS = {
@@ -41,8 +42,10 @@ function crowdReportsFactor(input: ZoneInput): number {
   return clamp(input.reportCount24h / (REPORT_THRESHOLD * REPORT_SATURATION_MULTIPLIER), 0, 1);
 }
 
-function hazardBaselineFactor(input: ZoneInput): number {
-  return HAZARD_LEVEL_VALUE[input.hazardSusceptibility.flood];
+/** Null when the flood level is unknown: there is no baseline to contribute. */
+function hazardBaselineFactor(input: ZoneInput): number | null {
+  const level = input.hazardSusceptibility.flood;
+  return level === "unknown" ? null : HAZARD_LEVEL_VALUE[level];
 }
 
 function cascadeFactor(input: ZoneInput): number {
@@ -71,20 +74,29 @@ function detectTrend(rainfallHistory: number[]): TrendDirection {
  * to real data.
  */
 export function computeZoneState(input: ZoneInput): ZoneState {
+  const hazardBaseline = hazardBaselineFactor(input);
   const factors: Factor[] = [
     { source: "rainfall", weight: WEIGHTS.rainfall, value: rainfallFactor(input) },
     { source: "crowd_reports", weight: WEIGHTS.crowdReports, value: crowdReportsFactor(input) },
-    { source: "hazard_baseline", weight: WEIGHTS.hazardBaseline, value: hazardBaselineFactor(input) },
+    ...(hazardBaseline === null
+      ? []
+      : [{ source: "hazard_baseline" as const, weight: WEIGHTS.hazardBaseline, value: hazardBaseline }]),
     { source: "cascade", weight: WEIGHTS.cascade, value: cascadeFactor(input) },
   ];
 
   const weightedSum = factors.reduce((sum, factor) => sum + factor.weight * factor.value, 0);
-  const riskScore = Math.round(clamp(weightedSum, 0, 1) * 100);
+  // An unknown flood baseline is excluded, not scored as low (I3). Scoring it
+  // 0 would quietly understate risk for every unrated barangay, so the
+  // remaining weights are renormalised to cover the whole scale. With every
+  // factor known the divisor is exactly 1, leaving existing scores untouched.
+  const knownWeight = hazardBaseline === null ? factors.reduce((sum, factor) => sum + factor.weight, 0) : 1;
+  const riskScore = Math.round(clamp(weightedSum / knownWeight, 0, 1) * 100);
 
   return {
     zoneId: input.zoneId,
     riskScore,
-    confidence: input.reportCount24h >= REPORT_THRESHOLD ? "validated" : "estimated",
+    // A score missing one of its inputs is never "validated".
+    confidence: input.reportCount24h >= REPORT_THRESHOLD && hazardBaseline !== null ? "validated" : "estimated",
     trendDirection: detectTrend(input.rainfallHistory),
     contributingFactors: factors,
   };
@@ -110,13 +122,14 @@ export function computeZoneState(input: ZoneInput): ZoneState {
  * so it cannot call `useHazardsForZone` itself — the caller must fetch the
  * bulk map once via `useHazards()` and pass it in. A default here would let a
  * future call site silently fall back to stale or empty data instead of
- * wiring the hook up correctly.
+ * wiring the hook up correctly. A zone missing from `hazards`, or missing a
+ * hazard type, reads "unknown" for it via hazardsForZone (I3).
  */
 export function buildZoneInputForZone(
   zone: Zone,
   allZones: Zone[],
   upstreamHasActiveAlert: (zoneId: string) => boolean,
-  hazards: Record<string, Record<HazardType, HazardRiskLevel>>
+  hazards: HazardsByZone
 ): ZoneInput {
   const upstreamZone = allZones.find((z) => z.downstreamZoneId === zone.id);
   const cascadeFromUpstream = upstreamZone ? upstreamHasActiveAlert(upstreamZone.id) : false;
@@ -126,7 +139,7 @@ export function buildZoneInputForZone(
     rainfallMmPerHour: getRainfallForZone(zone.id),
     rainfallHistory: getRainfallHistoryForZone(zone.id),
     thunderstormWatch: hasThunderstormWatch(zone.id),
-    hazardSusceptibility: hazards[zone.id],
+    hazardSusceptibility: hazardsForZone(hazards, zone.id),
     reportCount24h: getReportsTodayForZone(zone.id),
     cascadeFromUpstream,
   };

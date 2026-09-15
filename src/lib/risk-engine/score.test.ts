@@ -159,3 +159,41 @@ describe("buildZoneInputForZone", () => {
     expect(input.cascadeFromUpstream).toBe(false);
   });
 });
+
+describe("unknown hazard data (I3)", () => {
+  it("excludes an unknown flood level from the score and renormalises, rather than treating it as low", () => {
+    // Rainfall alone at saturation: 0.4 of the known weights. Treated as low
+    // it would read 40; with the 0.2 hazard weight excluded the remaining
+    // 0.8 is the whole, so it reads 50.
+    const unknown = computeZoneState(
+      baseInput({ rainfallMmPerHour: 50, hazardSusceptibility: { flood: "unknown", landslide: "unknown", storm_surge: "unknown" } })
+    );
+    const low = computeZoneState(baseInput({ rainfallMmPerHour: 50 }));
+
+    expect(low.riskScore).toBe(40);
+    expect(unknown.riskScore).toBe(50);
+    expect(unknown.contributingFactors.map((factor) => factor.source)).not.toContain("hazard_baseline");
+  });
+
+  it("marks a score with unknown hazard data as estimated, even with enough reports to validate", () => {
+    const state = computeZoneState(
+      baseInput({ reportCount24h: 100, hazardSusceptibility: { flood: "unknown", landslide: "low", storm_surge: "low" } })
+    );
+    expect(state.confidence).toBe("estimated");
+  });
+
+  it("builds a complete all-unknown hazard record for a zone with no hazard rows", () => {
+    const zone1 = MOCK_ZONES.find((z) => z.id === "zone-1")!;
+    const input = buildZoneInputForZone(zone1, MOCK_ZONES, () => false, {});
+
+    expect(input.hazardSusceptibility).toEqual({ flood: "unknown", landslide: "unknown", storm_surge: "unknown" });
+    expect(Number.isFinite(computeZoneState(input).riskScore)).toBe(true);
+  });
+
+  it("fills only the missing hazard type as unknown", () => {
+    const zone1 = MOCK_ZONES.find((z) => z.id === "zone-1")!;
+    const input = buildZoneInputForZone(zone1, MOCK_ZONES, () => false, { "zone-1": { flood: "high" } });
+
+    expect(input.hazardSusceptibility).toEqual({ flood: "high", landslide: "unknown", storm_surge: "unknown" });
+  });
+});

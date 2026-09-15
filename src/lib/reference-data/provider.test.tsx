@@ -214,14 +214,20 @@ describe("useHazardsForZone", () => {
         </ReferenceDataProvider>
       </LanguageProvider>
     );
+    // The fixture rates flood only; the types it does not rate read
+    // "unknown" rather than being absent (I3).
     await waitFor(() =>
-      expect(screen.getByTestId("hazards").textContent).toBe(JSON.stringify({ flood: "high" }))
+      expect(screen.getByTestId("hazards").textContent).toBe(
+        JSON.stringify({ flood: "high", landslide: "unknown", storm_surge: "unknown" })
+      )
     );
   });
 
-  it("falls back to an empty record for an unknown zone rather than throwing", async () => {
-    // The `?? {}` fallback in useHazardsForZone: an unwired or mistyped zone
-    // id must render as "no hazard data", not crash the page.
+  it("falls back to an all-unknown record for an unknown zone rather than throwing", async () => {
+    // An unwired or mistyped zone id, or a barangay with no hazard rows, must
+    // render as "no hazard data", not crash the page. It used to fall back to
+    // an empty record, which every reader then dereferenced into undefined
+    // and crashed on (I3); every type now reads "unknown".
     (fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
       json: async () => ZONE_WITH_POIS_AND_HAZARDS,
@@ -233,6 +239,10 @@ describe("useHazardsForZone", () => {
         </ReferenceDataProvider>
       </LanguageProvider>
     );
-    await waitFor(() => expect(screen.getByTestId("hazards").textContent).toBe(JSON.stringify({})));
+    await waitFor(() =>
+      expect(screen.getByTestId("hazards").textContent).toBe(
+        JSON.stringify({ flood: "unknown", landslide: "unknown", storm_surge: "unknown" })
+      )
+    );
   });
 });

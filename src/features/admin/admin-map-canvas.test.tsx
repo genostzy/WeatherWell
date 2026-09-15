@@ -399,3 +399,20 @@ describe("AdminMapCanvas alert control after a confirmed write (C1)", () => {
     await waitFor(() => expect(select().value).toBe("none"));
   });
 });
+
+describe("AdminMapCanvas with no hazard data (I3)", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => [] }));
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("renders and shows a finite risk score for a zone with no hazard rows", () => {
+    renderWithData(<AdminMapCanvas zones={FIXTURE_REFERENCE_DATA.zones} />, { data: { hazards: {} } });
+    fireEvent.click(screen.getByRole("img", { name: new RegExp(zone.name, "i") }));
+
+    expect(screen.getByText(/risk score/i).textContent).toMatch(/risk score: \d+\/100/i);
+  });
+});

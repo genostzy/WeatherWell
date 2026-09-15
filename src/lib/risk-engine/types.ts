@@ -1,4 +1,5 @@
-import type { ConfidenceLevel, HazardRiskLevel, HazardType } from "../types";
+import type { ConfidenceLevel } from "../types";
+import type { ZoneHazards } from "../hazards";
 
 /**
  * Stage 2 (scoring) input only — see docs/plans/2026-09-03-risk-engine-simulation-climate-resilience.md.
@@ -16,7 +17,8 @@ export interface ZoneInput {
   /** Twelve hourly readings, oldest first — same shape as getRainfallHistoryForZone. */
   rainfallHistory: number[];
   thunderstormWatch: boolean;
-  hazardSusceptibility: Record<HazardType, HazardRiskLevel>;
+  /** "unknown" where the zone has no hazard row; excluded from the score. */
+  hazardSusceptibility: ZoneHazards;
   reportCount24h: number;
   /** True if the zone immediately upstream (via Zone.downstreamZoneId) currently has an active alert. */
   cascadeFromUpstream: boolean;

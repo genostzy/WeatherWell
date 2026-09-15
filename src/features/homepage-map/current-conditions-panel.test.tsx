@@ -37,3 +37,16 @@ describe("CurrentConditionsPanel", () => {
     expect(screen.queryByText(/thunderstorm watch/i)).not.toBeInTheDocument();
   });
 });
+
+describe("CurrentConditionsPanel with no hazard data (I3)", () => {
+  it("renders, and raises no landslide caution from missing data under heavy rain", async () => {
+    const user = userEvent.setup();
+    // zone-2 has heavy mock rainfall (32mm/hr), so only the susceptibility
+    // decides the caution. Unknown must not read as elevated.
+    renderWithData(<CurrentConditionsPanel zone={FIXTURE_REFERENCE_DATA.zones[1]} />, { data: { hazards: {} } });
+    await user.click(screen.getByRole("button", { name: /current conditions/i }));
+
+    expect(screen.getByText("Typhoon track")).toBeInTheDocument();
+    expect(screen.queryByText(/landslide-prone/i)).not.toBeInTheDocument();
+  });
+});

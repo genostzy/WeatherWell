@@ -20,3 +20,12 @@ describe("LandslideRiskPanel", () => {
     expect(screen.queryByText(/elevated now/i)).not.toBeInTheDocument();
   });
 });
+
+describe("LandslideRiskPanel with no hazard data (I3)", () => {
+  it("renders Unknown, and never Elevated now, for zones with no hazard rows", () => {
+    renderWithData(<LandslideRiskPanel zones={FIXTURE_REFERENCE_DATA.zones} />, { data: { hazards: {} } });
+
+    expect(screen.getAllByText("Unknown")).toHaveLength(FIXTURE_REFERENCE_DATA.zones.length);
+    expect(screen.queryByText(/elevated now/i)).not.toBeInTheDocument();
+  });
+});

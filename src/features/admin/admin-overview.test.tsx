@@ -12,6 +12,8 @@ import { AdminOverview } from "./admin-overview";
 import { renderWithData, FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
 import { addCommunityPin } from "@/lib/community-pins";
 import type { Official } from "@/lib/auth/official";
+import type { AlertRecord } from "@/lib/types";
+import { buildZoneInputForZone, computeZoneState } from "@/lib/risk-engine/score";
 
 describe("AdminOverview dashboard", () => {
   it("leads with at-a-glance figures rather than the simulation", () => {
@@ -112,5 +114,64 @@ describe("AdminOverview dashboard", () => {
     expect(card).not.toBeNull();
     // Only the in-area pin counts, even though two pins were queued.
     expect(within(card as HTMLElement).getByText("1")).toBeInTheDocument();
+  });
+});
+
+describe("AdminOverview with missing hazard data (I3)", () => {
+  it("renders, with a finite risk score, when no zone has hazard rows", () => {
+    renderWithData(<AdminOverview />, { data: { hazards: {} } });
+
+    const card = screen.getByText(/^highest risk score$/i).closest('[data-slot="card"]') as HTMLElement;
+    expect(within(card).getByText(/^\d+$/)).toBeInTheDocument();
+    expect(screen.getAllByText("Susceptibility unknown").length).toBeGreaterThan(0);
+  });
+
+  it("renders when one zone is missing a single hazard type", () => {
+    renderWithData(<AdminOverview />, {
+      data: { hazards: { ...FIXTURE_REFERENCE_DATA.hazards, "zone-1": { flood: "high" } } as never },
+    });
+
+    expect(screen.getByText(/zones under alert/i)).toBeInTheDocument();
+    expect(screen.getAllByText("Unknown").length).toBeGreaterThan(0);
+  });
+});
+
+describe("AdminOverview risk score across town lines (I4)", () => {
+  it("counts an alert on an upstream barangay outside the official's area", () => {
+    // zone-1 (Mapandan) drains into zone-2 (Mangaldan). A Mangaldan official
+    // only sees zone-2, but zone-1's alert still raises zone-2's score.
+    const [zone1, zone2] = FIXTURE_REFERENCE_DATA.zones;
+    expect(zone1.downstreamZoneId).toBe(zone2.id);
+    const official: Official = {
+      userId: "u1",
+      displayName: "Test",
+      areaCode: zone2.psgcBarangayCode,
+      areaName: "Mangaldan barangay",
+      level: "barangay",
+    };
+    const upstreamAlert: AlertRecord = {
+      id: "upstream",
+      zoneId: zone1.id,
+      severity: "red",
+      message: { en: "x", fil: "x" },
+      source: "manual",
+      confidence: "validated",
+      issuedAt: new Date().toISOString(),
+      isActive: true,
+    };
+
+    renderWithData(<AdminOverview />, { official, alerts: [upstreamAlert] });
+
+    const hazards = FIXTURE_REFERENCE_DATA.hazards;
+    const withCascade = computeZoneState(
+      buildZoneInputForZone(zone2, FIXTURE_REFERENCE_DATA.zones, (id) => id === zone1.id, hazards)
+    ).riskScore;
+    const withoutCascade = computeZoneState(buildZoneInputForZone(zone2, [zone2], () => false, hazards)).riskScore;
+    expect(withCascade).toBeGreaterThan(withoutCascade);
+
+    const card = screen.getByText(/^highest risk score$/i).closest('[data-slot="card"]') as HTMLElement;
+    expect(within(card).getByText(String(withCascade))).toBeInTheDocument();
+    // Still only the official's own barangay is displayed.
+    expect(screen.queryAllByText(zone1.name)).toHaveLength(0);
   });
 });

@@ -7,14 +7,10 @@ import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { getRainfallForZone, hasElevatedLandslideRisk } from "@/lib/mock-data";
 import { useHazardsForZone } from "@/lib/reference-data/use-reference-data";
-import type { HazardRiskLevel, LanguageCode, LocalizedText, Zone } from "@/lib/types";
+import { HAZARD_LEVEL_LABEL } from "@/lib/hazards";
+import type { LanguageCode, LocalizedText, Zone } from "@/lib/types";
 
 const TITLE: LocalizedText = { en: "Landslide Risk Alerts", fil: "Alerto sa Panganib ng Guho" };
-const SUSCEPTIBILITY_LABEL: Record<HazardRiskLevel, LocalizedText> = {
-  low: { en: "Low", fil: "Mababa" },
-  medium: { en: "Medium", fil: "Katamtaman" },
-  high: { en: "High", fil: "Mataas" },
-};
 const ELEVATED_NOW: LocalizedText = {
   en: "Elevated now — heavy rain on susceptible terrain",
   fil: "Tumaas ang panganib — malakas na ulan sa lupaing madaling maguho",
@@ -49,7 +45,7 @@ function LandslideRiskRow({ zone, lang }: { zone: Zone; lang: LanguageCode }) {
       <span className="font-medium">{zone.name}</span>
       <div className="flex items-center gap-2">
         <Badge variant="outline" className="text-xs">
-          {t(SUSCEPTIBILITY_LABEL[susceptibility], lang)}
+          {t(HAZARD_LEVEL_LABEL[susceptibility], lang)}
         </Badge>
         {elevated ? (
           <Badge className="bg-severity-red text-white">{t(ELEVATED_NOW, lang)}</Badge>
