@@ -1,4 +1,4 @@
-import { SEVERITY_ORDER, type Severity } from "./severity";
+import { SEVERITY_ORDER, SEVERITY_LABEL, type Severity } from "./severity";
 import { CENTER_STATUS_LABEL } from "./center-status";
 import { t } from "./i18n";
 import type { LanguageCode } from "./types";
@@ -6,12 +6,10 @@ import type { OfficialAction } from "./official-actions-mapper";
 
 /**
  * One sentence describing an official_actions entry, in the requested
- * language. Severities are rendered by their raw value, capitalized — "Set
- * to Yellow", not "Set to Advisory" (SEVERITY_LABEL's word) — matching the
- * PAGASA rainfall-warning colour names, which this codebase already keeps in
- * English inside Filipino copy (see severity.ts's PAGASA_RAINFALL_WARNING_LABEL
- * and its callers). SEVERITY_ORDER is what actually does the work here: it is
- * how "Lowered to Yellow" is told apart from "Raised to Evacuate".
+ * language. Severities use SEVERITY_LABEL — "Lowered to Advisory", the same
+ * word the SeverityBadge beside this line shows — so an official never reads
+ * two different names for one severity in the same card. SEVERITY_ORDER is
+ * what tells "Lowered to Advisory" apart from "Raised to Evacuate Now".
  *
  * A missing or unrecognised `action`, or a detail shape that doesn't match
  * what the trigger that wrote it promises, degrades to a generic sentence
@@ -51,10 +49,6 @@ function isSeverity(value: unknown): value is Severity {
   return typeof value === "string" && (SEVERITY_ORDER as string[]).includes(value);
 }
 
-function capitalize(value: string): string {
-  return value.charAt(0).toUpperCase() + value.slice(1);
-}
-
 function describeAlertSet(detail: Record<string, unknown>, lang: LanguageCode): string {
   const to = detail.to;
   if (!isSeverity(to)) {
@@ -62,7 +56,7 @@ function describeAlertSet(detail: Record<string, unknown>, lang: LanguageCode): 
     // inserted row's severity), but a row is a row: degrade rather than crash.
     return t({ en: "Alert set", fil: "Naitakda ang alerto" }, lang);
   }
-  const toWord = capitalize(to);
+  const toWord = t(SEVERITY_LABEL[to], lang);
   const from = detail.from;
 
   if (from === null || from === undefined) {

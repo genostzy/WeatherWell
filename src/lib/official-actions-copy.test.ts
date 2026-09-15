@@ -17,34 +17,34 @@ function action(overrides: Partial<OfficialAction>): OfficialAction {
 }
 
 describe("describeAction", () => {
-  it("alert.set, from null: Set to Orange", () => {
+  it("alert.set, from null: Set to Watch", () => {
     const a = action({ action: "alert.set", detail: { from: null, to: "orange" } });
-    expect(describeAction(a, "en")).toBe("Set to Orange");
+    expect(describeAction(a, "en")).toBe("Set to Watch");
   });
 
   it("alert.set, from null (fil)", () => {
     const a = action({ action: "alert.set", detail: { from: null, to: "orange" } });
-    expect(describeAction(a, "fil")).toBe("Itinakda sa Orange");
+    expect(describeAction(a, "fil")).toBe("Itinakda sa Pagbabantay");
   });
 
-  it("alert.set, to lower than from: Lowered to Yellow", () => {
+  it("alert.set, to lower than from: Lowered to Advisory", () => {
     const a = action({ action: "alert.set", detail: { from: "orange", to: "yellow" } });
-    expect(describeAction(a, "en")).toBe("Lowered to Yellow");
+    expect(describeAction(a, "en")).toBe("Lowered to Advisory");
   });
 
   it("alert.set, to lower than from (fil)", () => {
     const a = action({ action: "alert.set", detail: { from: "orange", to: "yellow" } });
-    expect(describeAction(a, "fil")).toBe("Ibinaba sa Yellow");
+    expect(describeAction(a, "fil")).toBe("Ibinaba sa Paalala");
   });
 
-  it("alert.set, to higher than from: Raised to Evacuate", () => {
+  it("alert.set, to higher than from: Raised to Evacuate Now", () => {
     const a = action({ action: "alert.set", detail: { from: "red", to: "evacuate" } });
-    expect(describeAction(a, "en")).toBe("Raised to Evacuate");
+    expect(describeAction(a, "en")).toBe("Raised to Evacuate Now");
   });
 
-  it("alert.set, to equal to from: Confirmed Red", () => {
+  it("alert.set, to equal to from: Confirmed Warning", () => {
     const a = action({ action: "alert.set", detail: { from: "red", to: "red" } });
-    expect(describeAction(a, "en")).toBe("Confirmed Red");
+    expect(describeAction(a, "en")).toBe("Confirmed Warning");
   });
 
   it("alert.cleared: Alert cleared", () => {

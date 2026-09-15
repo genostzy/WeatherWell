@@ -10,7 +10,7 @@ const LOCALE: Record<LanguageCode, string> = { en: "en-PH", fil: "fil-PH" };
 
 /**
  * The latest alert change for one zone, beside the alert status on the
- * Manage zone page: "Lowered to Yellow by Juan Dela Cruz, 2:14 AM". Renders
+ * Manage zone page: "Lowered to Advisory by Juan Dela Cruz, 2:14 AM". Renders
  * nothing while loading, when there is no entry yet, and when the fetch
  * fails — this is a supplementary line, not a gate, so a network hiccup here
  * must never block or error the page around it.

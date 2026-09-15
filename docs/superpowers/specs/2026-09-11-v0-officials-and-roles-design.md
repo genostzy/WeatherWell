@@ -258,7 +258,7 @@ This gate only decides what to show. The database is still the lock: every chang
 - **Operations map (`/admin/map`):** shows every barangay, because floods cross boundaries. Controls work only inside the official's area; other barangays are marked **View only**.
 - **Check-in summary and pin moderation:** the official's own area only.
 - **Drill mode (`/admin/simulation`):** unchanged — it notifies nobody — and limited to the official's own barangays.
-- **Manage zone (`/admin/zone/[zoneId]`):** beside the alert, the latest record entry: "Lowered to Yellow by Juan Dela Cruz, 2:14 AM". A barangay outside the official's area opens view-only.
+- **Manage zone (`/admin/zone/[zoneId]`):** beside the alert, the latest record entry: "Lowered to Advisory by Juan Dela Cruz, 2:14 AM". A barangay outside the official's area opens view-only.
 - **History (`/admin/history`, new):** every recorded action across all areas, newest first, opening filtered to the official's own area with a filter to see others.
 
 **Failures stay visible.** Operator writes already show their failure in both languages next to the control. That covers the case where an appointment is removed mid-session.

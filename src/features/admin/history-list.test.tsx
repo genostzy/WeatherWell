@@ -24,7 +24,7 @@ describe("HistoryList", () => {
   it("renders a row's description, barangay name, actor and time", () => {
     renderWithData(<HistoryList actions={[action({})]} zones={ZONES} scope="mine" />);
 
-    expect(screen.getByText(/Lowered to Yellow — Barangay Uno/)).toBeInTheDocument();
+    expect(screen.getByText(/Lowered to Advisory — Barangay Uno/)).toBeInTheDocument();
     expect(screen.getByText(/Juan Dela Cruz/)).toBeInTheDocument();
   });
 

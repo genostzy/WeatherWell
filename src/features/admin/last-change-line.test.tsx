@@ -36,7 +36,7 @@ describe("LastChangeLine", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText(/Lowered to Yellow/)).toBeInTheDocument();
+      expect(screen.getByText(/Lowered to Advisory/)).toBeInTheDocument();
     });
     expect(screen.getByText(/by Juan Dela Cruz/)).toBeInTheDocument();
     expect(fetch).toHaveBeenCalledWith("/api/official-actions?zone=zone-1&kind=alert&limit=1");
