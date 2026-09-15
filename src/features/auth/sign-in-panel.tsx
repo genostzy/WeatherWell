@@ -32,8 +32,8 @@ const FAILED_NOTICE: LocalizedText = {
   fil: "Hindi ito gumana. Kung ang Google account na ito ay ginagamit na sa ibang telepono, mag-sign in na lang doon.",
 };
 const SIGN_IN_EXISTING: LocalizedText = {
-  en: "Sign in to my existing account",
-  fil: "Mag-sign in sa aking umiiral na account",
+  en: "Sign in to your existing account",
+  fil: "Mag-sign in sa iyong umiiral na account",
 };
 
 type Control = "google" | "email" | "existing";

@@ -72,7 +72,7 @@ describe("SignInPanel", () => {
 
   it("shows the failure notice and existing-account button only when notice=failed, which calls startGoogleSignIn with link:false", async () => {
     const { rerender } = render(<SignInPanel next="/admin" />);
-    expect(screen.queryByRole("button", { name: "Sign in to my existing account" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Sign in to your existing account" })).not.toBeInTheDocument();
 
     rerender(<SignInPanel next="/admin" notice="failed" />);
     expect(
@@ -81,7 +81,7 @@ describe("SignInPanel", () => {
       )
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Sign in to my existing account" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sign in to your existing account" }));
 
     await waitFor(() =>
       expect(startGoogleSignIn).toHaveBeenCalledWith("/admin", { link: false })
