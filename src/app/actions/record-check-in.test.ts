@@ -97,4 +97,33 @@ describe("recordCheckIn", () => {
 
     expect(result.ok).toBe(false);
   });
+
+  it("sends checked_in_at when madeAt is given, so a queued check-in keeps the time it was made", async () => {
+    const upsert = vi.fn().mockResolvedValue({ error: null });
+    from.mockReturnValue({ upsert });
+    const { recordCheckIn } = await import("./record-check-in");
+
+    await recordCheckIn({
+      id: "id-1",
+      zoneId: "zone-1",
+      status: "safe",
+      madeAt: "2026-09-16T02:00:00.000Z",
+    });
+
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ checked_in_at: "2026-09-16T02:00:00.000Z" }),
+      expect.anything()
+    );
+  });
+
+  it("sends no checked_in_at key at all when madeAt is not given", async () => {
+    const upsert = vi.fn().mockResolvedValue({ error: null });
+    from.mockReturnValue({ upsert });
+    const { recordCheckIn } = await import("./record-check-in");
+
+    await recordCheckIn({ id: "id-1", zoneId: "zone-1", status: "safe" });
+
+    const payload = upsert.mock.calls[0][0];
+    expect(payload).not.toHaveProperty("checked_in_at");
+  });
 });

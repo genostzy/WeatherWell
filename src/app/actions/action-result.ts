@@ -16,4 +16,6 @@
  * `error` is a diagnostic string for the queue's `lastError`, not user-facing
  * copy: nothing in the UI surfaces a queued write's failure state yet.
  */
-export type ActionResult = { ok: true } | { ok: false; permanent: boolean; error: string };
+export type ActionResult =
+  | { ok: true }
+  | { ok: false; permanent: boolean; error: string; reason?: "too_old" };

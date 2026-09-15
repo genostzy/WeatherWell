@@ -69,6 +69,17 @@ export interface RecordCheckInInput {
   id: string;
   zoneId: string;
   status: CheckInStatus;
+  /**
+   * ISO timestamp of when the resident actually checked in, carried through
+   * by the outbox for a write sent later than it was made. Omitted for an
+   * ordinary, non-queued check-in, so the column keeps its database-clock
+   * default. private.honest_check_in_time() (see
+   * supabase/migrations/20260915103000_honest_write_times.sql) is what
+   * actually enforces honesty server-side: it clamps a future time to now()
+   * and, on the upsert conflict path below, never lets an older write
+   * regress a newer one already stored.
+   */
+  madeAt?: string;
 }
 
 /**
@@ -110,6 +121,10 @@ export async function recordCheckIn(input: RecordCheckInInput): Promise<ActionRe
       // RLS has to catch.
       user_id: userId,
       status: input.status,
+      // Only sent when the outbox is replaying a write made earlier — an
+      // ordinary check-in omits the key entirely and keeps the column's
+      // database-clock default.
+      ...(input.madeAt ? { checked_in_at: input.madeAt } : {}),
     },
     { onConflict: "zone_id,user_id" }
   );

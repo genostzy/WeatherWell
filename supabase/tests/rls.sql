@@ -756,16 +756,43 @@ select tests.expect_denied(
     from public.community_pins
     where author_id = '11111111-1111-1111-1111-111111111111' and caption = 'ordinary resident pin'$$);
 
+-- checked_in_at is the one exception to assertion 12's "server clock, not
+-- client input" rule, and deliberately so as of offline-sending Task 1 (see
+-- the H1-H9 block at the end of this file): a queued check-in must keep the
+-- time it was actually made, which can legitimately be hours in the past.
+-- private.honest_check_in_time() (20260915103000_honest_write_times.sql)
+-- is what still refuses a check-in's clock to be trusted blindly -- it
+-- clamps a future timestamp to now() and, on the upsert conflict path, never
+-- lets an older write regress a newer one -- but a plain past timestamp on
+-- a fresh row, like this 30-day-old one, is honoured exactly as sent.
+-- Own zone (tests-fixture-zone-2, not tests-fixture-zone) so this fresh
+-- (zone_id, user_id) pair cannot collide with the "check in when
+-- checked_in_at is left to its default" assertion below, which inserts
+-- (tests-fixture-zone, 11111111...) -- evacuation_check_ins is unique on
+-- (zone_id, user_id).
 select tests.as_user('11111111-1111-1111-1111-111111111111');
-select tests.expect_denied(
-  'a resident cannot backdate a check-in''s checked_in_at',
+select tests.expect_allowed(
+  'a resident CAN backdate a check-in''s checked_in_at (offline-sending Task 1: the outbox keeps the time it was made)',
   $$insert into public.evacuation_check_ins (zone_id, user_id, status, checked_in_at)
-    values ('tests-fixture-zone', '11111111-1111-1111-1111-111111111111', 'safe',
+    values ('tests-fixture-zone-2', '11111111-1111-1111-1111-111111111111', 'needs_help',
             now() - interval '30 days')$$);
 
--- The pairing half for assertion 12: the same three inserts, minus the
--- backdated column, must succeed — otherwise none of the three denials
--- above would prove anything about which column the grant is refusing.
+select tests.as_user('11111111-1111-1111-1111-111111111111');
+select tests.expect_row_count(
+  'the backdated check-in above actually kept its own time, not the time it landed',
+  $$select * from public.evacuation_check_ins
+    where zone_id = 'tests-fixture-zone-2' and user_id = '11111111-1111-1111-1111-111111111111'
+      and status = 'needs_help'
+      and checked_in_at between now() - interval '30 days 1 minute' and now() - interval '29 days 23 hours 59 minutes'$$,
+  1);
+
+-- The pairing half for assertion 12: the pin and vote inserts, minus their
+-- backdated column, must still succeed -- otherwise the two denials above
+-- (created_at, voted_at) would prove nothing about which column the grant
+-- is refusing. checked_in_at no longer needs this pairing the same way
+-- (the ALLOW case for it is the backdated insert just above, not an omitted
+-- column), but the existing default-checked_in_at case right after still
+-- covers the ordinary path where a resident sends no time at all.
 select tests.as_user('11111111-1111-1111-1111-111111111111');
 select tests.expect_allowed(
   'a resident CAN vote on a pin when voted_at is left to its default',
@@ -1857,5 +1884,285 @@ end $$;
 select tests.as_anon();
 select tests.expect_row_count('M10: recent_app_error_count counts the last 15 minutes',
   $$select 1 where public.recent_app_error_count() >= 303$$, 1);
+
+-- ===========================================================================
+-- Task 1 (offline-sending): honest write times. A queued write keeps the
+-- time it was made, not the time it arrives at the server. Reuses fixture
+-- zone tests-area-a1 ('0199901001', inserted for the officials-and-roles
+-- area-limit block above) and resident 66666666-6666-6666-6666-666666666666
+-- (still role 'resident' -- see the net-score fixture comment earlier in
+-- this file). The check-in cases (H5-H9) cannot reuse tests-area-a2 for
+-- 66666666...: A11 above already inserted (tests-area-a2, 66666666...) and
+-- evacuation_check_ins is unique on (zone_id, user_id), so each check-in
+-- case below uses its own zone (or, for H7/H8, its own fresh row) to stay
+-- independent.
+-- ===========================================================================
+
+select tests.as_user('66666666-6666-6666-6666-666666666666');
+select tests.expect_allowed('H1: a 5-hour-old report is kept with its own time',
+  $$insert into public.water_level_reports (id, zone_id, depth_level, reporter_id, reported_at)
+    values ('a0000000-0000-4000-8000-000000000001', 'tests-area-a1', 'knee',
+            '66666666-6666-6666-6666-666666666666', now() - interval '5 hours')$$);
+select tests.expect_row_count('H2: its reported_at is the made-at time, not arrival',
+  $$select 1 from public.water_level_reports
+     where id = 'a0000000-0000-4000-8000-000000000001'
+       and reported_at between now() - interval '5 hours 1 minute' and now() - interval '4 hours 59 minutes'$$, 1);
+-- H3: a future reported_at is clamped to now(). A do-block, not
+-- tests.expect_row_count, because expect_row_count wraps its query as
+-- `select count(*) from (<query>) as subquery` -- and Postgres refuses a
+-- data-modifying WITH clause (the INSERT ... RETURNING the brief's own H3
+-- wording uses) once it is nested inside another query's subquery rather
+-- than sitting at the statement's top level ("WITH clause containing a
+-- data-modifying statement must be at the top level", confirmed live).
+do $$
+declare
+  v_reported_at timestamptz;
+begin
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', '66666666-6666-6666-6666-666666666666', 'role', 'authenticated')::text, true);
+
+  insert into public.water_level_reports (id, zone_id, depth_level, reporter_id, reported_at)
+    values ('a0000000-0000-4000-8000-000000000002', 'tests-area-a1', 'ankle',
+            '66666666-6666-6666-6666-666666666666', now() + interval '2 days');
+
+  reset role;
+
+  select reported_at into v_reported_at from public.water_level_reports
+    where id = 'a0000000-0000-4000-8000-000000000002';
+
+  if v_reported_at is distinct from now() then
+    raise exception using errcode = 'TSTFL',
+      message = format('H3: expected a future reported_at clamped to now(), got %s', v_reported_at);
+  end if;
+  raise notice 'ok, H3: a future reported_at is clamped to now()';
+end $$;
+
+-- H4: a 7-hour-old report is refused outright (SQLSTATE 22023, 'report too
+-- old'), not silently clamped like H3's future timestamp. tests.expect_denied
+-- only catches insufficient_privilege, so this is a do-block that switches
+-- role the same way the file's other role-switching blocks do (e.g. the
+-- self-promotion block at the top of this file), capturing the SQLSTATE and
+-- message via GET STACKED DIAGNOSTICS so the role is reset on every exit
+-- path before any assertion raises (Minor 8's rule).
+do $$
+declare
+  v_sqlstate text;
+  v_message text;
+  v_raised boolean := false;
+begin
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', '66666666-6666-6666-6666-666666666666', 'role', 'authenticated')::text, true);
+
+  begin
+    insert into public.water_level_reports (id, zone_id, depth_level, reporter_id, reported_at)
+      values ('a0000000-0000-4000-8000-000000000003', 'tests-area-a1', 'ankle',
+              '66666666-6666-6666-6666-666666666666', now() - interval '7 hours');
+  exception
+    when others then
+      v_raised := true;
+      get stacked diagnostics v_sqlstate = returned_sqlstate, v_message = message_text;
+  end;
+
+  reset role;
+
+  if not v_raised then
+    raise exception using errcode = 'TSTFL',
+      message = 'H4: a 7-hour-old report was accepted instead of refused';
+  end if;
+  if v_sqlstate is distinct from '22023' then
+    raise exception using errcode = 'TSTFL',
+      message = format('H4: expected SQLSTATE 22023 for an over-old report, got %s (%s)', v_sqlstate, v_message);
+  end if;
+  if v_message !~ 'report too old' then
+    raise exception using errcode = 'TSTFL',
+      message = format('H4: wrong error message for an over-old report: %s', v_message);
+  end if;
+  raise notice 'ok, H4: a 7-hour-old report raised 22023 (report too old)';
+end $$;
+
+-- H9: an insert naming no reported_at at all still gets now() (the column
+-- default, unchanged by this task, but worth pinning down alongside H1-H4).
+-- A do-block for the same reason as H3: expect_row_count's own wrapping
+-- subquery refuses a nested data-modifying WITH clause.
+do $$
+declare
+  v_reported_at timestamptz;
+begin
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', '66666666-6666-6666-6666-666666666666', 'role', 'authenticated')::text, true);
+
+  insert into public.water_level_reports (id, zone_id, depth_level, reporter_id)
+    values ('a0000000-0000-4000-8000-000000000004', 'tests-area-a1', 'knee',
+            '66666666-6666-6666-6666-666666666666');
+
+  reset role;
+
+  select reported_at into v_reported_at from public.water_level_reports
+    where id = 'a0000000-0000-4000-8000-000000000004';
+
+  if v_reported_at is distinct from now() then
+    raise exception using errcode = 'TSTFL',
+      message = format('H9: expected reported_at to default to now(), got %s', v_reported_at);
+  end if;
+  raise notice 'ok, H9: an insert with no reported_at gets now()';
+end $$;
+
+-- H5: a check-in with checked_in_at = now() - 9 hours is kept with that
+-- time. Own zone (tests-area-a1) so it cannot collide with A11's
+-- (tests-area-a2, 66666666...) check-in already in the table.
+do $$
+declare
+  v_checked_in_at timestamptz;
+begin
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', '66666666-6666-6666-6666-666666666666', 'role', 'authenticated')::text, true);
+
+  insert into public.evacuation_check_ins (id, zone_id, user_id, status, checked_in_at)
+    values ('b0000000-0000-4000-8000-000000000001', 'tests-area-a1',
+            '66666666-6666-6666-6666-666666666666', 'safe', now() - interval '9 hours');
+
+  reset role;
+
+  select checked_in_at into v_checked_in_at from public.evacuation_check_ins
+    where id = 'b0000000-0000-4000-8000-000000000001';
+
+  if v_checked_in_at is null
+     or v_checked_in_at < now() - interval '9 hours 1 minute'
+     or v_checked_in_at > now() - interval '8 hours 59 minutes' then
+    raise exception using errcode = 'TSTFL',
+      message = format('H5: expected checked_in_at ~9 hours ago, got %s', v_checked_in_at);
+  end if;
+  raise notice 'ok, H5: a 9-hour-old check-in is kept with its own time';
+end $$;
+
+-- H6: a future checked_in_at is clamped to now(). Own zone (tests-area-b1,
+-- inserted for the area-limit block above) so it cannot collide with H5's
+-- (tests-area-a1, 66666666...) row just inserted.
+do $$
+declare
+  v_checked_in_at timestamptz;
+begin
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', '66666666-6666-6666-6666-666666666666', 'role', 'authenticated')::text, true);
+
+  insert into public.evacuation_check_ins (id, zone_id, user_id, status, checked_in_at)
+    values ('b0000000-0000-4000-8000-000000000002', 'tests-area-b1',
+            '66666666-6666-6666-6666-666666666666', 'safe', now() + interval '2 days');
+
+  reset role;
+
+  select checked_in_at into v_checked_in_at from public.evacuation_check_ins
+    where id = 'b0000000-0000-4000-8000-000000000002';
+
+  if v_checked_in_at is distinct from now() then
+    raise exception using errcode = 'TSTFL',
+      message = format('H6: expected a future checked_in_at clamped to now(), got %s', v_checked_in_at);
+  end if;
+  raise notice 'ok, H6: a future checked_in_at is clamped to now()';
+end $$;
+
+-- H7 setup: an initial check-in on a fresh (zone_id, user_id) pair --
+-- tests-fixture-zone has never held a check-in for 66666666... -- stored at
+-- now() - 1 hour, status safe.
+do $$
+begin
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', '66666666-6666-6666-6666-666666666666', 'role', 'authenticated')::text, true);
+
+  insert into public.evacuation_check_ins (id, zone_id, user_id, status, checked_in_at)
+    values ('b0000000-0000-4000-8000-000000000003', 'tests-fixture-zone',
+            '66666666-6666-6666-6666-666666666666', 'safe', now() - interval '1 hour');
+
+  reset role;
+end $$;
+
+-- H7: an upsert on the same (zone_id, user_id) with an OLDER checked_in_at
+-- (now() - 3 hours) and a different status (needs_help) must not replace
+-- either the status or the time -- the BEFORE UPDATE trigger's older-than
+-- guard returns OLD outright, making the whole row update a no-op. The
+-- INSERT ... ON CONFLICT (zone_id, user_id) DO UPDATE SET <every payload
+-- column> shape below is exactly what PostgREST emits for supabase-js
+-- .upsert(..., { onConflict: "zone_id,user_id" }) -- not a bare UPDATE -- so
+-- this exercises the path the Server Action (record-check-in.ts) actually
+-- uses. A fresh id (…004) stands in for the outbox's own id on this second
+-- queued write, the same way a second real queued write would carry one.
+do $$
+declare
+  v_status text;
+  v_checked_in_at timestamptz;
+begin
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', '66666666-6666-6666-6666-666666666666', 'role', 'authenticated')::text, true);
+
+  insert into public.evacuation_check_ins (id, zone_id, user_id, status, checked_in_at)
+    values ('b0000000-0000-4000-8000-000000000004', 'tests-fixture-zone',
+            '66666666-6666-6666-6666-666666666666', 'needs_help', now() - interval '3 hours')
+  on conflict (zone_id, user_id) do update set
+    id = excluded.id,
+    zone_id = excluded.zone_id,
+    user_id = excluded.user_id,
+    status = excluded.status,
+    checked_in_at = excluded.checked_in_at;
+
+  reset role;
+
+  select status, checked_in_at into v_status, v_checked_in_at
+    from public.evacuation_check_ins
+    where zone_id = 'tests-fixture-zone' and user_id = '66666666-6666-6666-6666-666666666666';
+
+  if v_status is distinct from 'safe'
+     or v_checked_in_at < now() - interval '1 hour 1 minute'
+     or v_checked_in_at > now() - interval '59 minutes' then
+    raise exception using errcode = 'TSTFL',
+      message = format(
+        'H7: an older check-in overwrote the newer stored one -- status %s, checked_in_at %s', v_status, v_checked_in_at);
+  end if;
+  raise notice 'ok, H7: an upsert carrying an older checked_in_at does not overwrite the newer stored row';
+end $$;
+
+-- H8: the pairing half -- an upsert on the same pair with a NEWER
+-- checked_in_at than the row H7 left in place (now() - 1 hour) DOES update,
+-- status included. Another fresh id (…005), same reasoning as H7.
+do $$
+declare
+  v_status text;
+  v_checked_in_at timestamptz;
+begin
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', '66666666-6666-6666-6666-666666666666', 'role', 'authenticated')::text, true);
+
+  insert into public.evacuation_check_ins (id, zone_id, user_id, status, checked_in_at)
+    values ('b0000000-0000-4000-8000-000000000005', 'tests-fixture-zone',
+            '66666666-6666-6666-6666-666666666666', 'needs_help', now() - interval '30 minutes')
+  on conflict (zone_id, user_id) do update set
+    id = excluded.id,
+    zone_id = excluded.zone_id,
+    user_id = excluded.user_id,
+    status = excluded.status,
+    checked_in_at = excluded.checked_in_at;
+
+  reset role;
+
+  select status, checked_in_at into v_status, v_checked_in_at
+    from public.evacuation_check_ins
+    where zone_id = 'tests-fixture-zone' and user_id = '66666666-6666-6666-6666-666666666666';
+
+  if v_status is distinct from 'needs_help'
+     or v_checked_in_at < now() - interval '31 minutes'
+     or v_checked_in_at > now() - interval '29 minutes' then
+    raise exception using errcode = 'TSTFL',
+      message = format(
+        'H8: a newer check-in did not overwrite the older stored one -- status %s, checked_in_at %s', v_status, v_checked_in_at);
+  end if;
+  raise notice 'ok, H8: an upsert carrying a newer checked_in_at updates the stored row (status included)';
+end $$;
 
 rollback;

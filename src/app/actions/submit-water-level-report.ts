@@ -9,6 +9,16 @@ export interface SubmitReportInput {
   id: string;
   zoneId: string;
   depthLevel: DepthLevel;
+  /**
+   * ISO timestamp of when the resident actually made this report, carried
+   * through by the outbox for a write sent later than it was made. Omitted
+   * for an ordinary, non-queued submission, so the column keeps its
+   * database-clock default. private.honest_report_time() (see
+   * supabase/migrations/20260915103000_honest_write_times.sql) is what
+   * actually enforces honesty on the server side: it clamps a future time to
+   * now() and refuses one more than 6 hours old.
+   */
+  madeAt?: string;
 }
 
 /** Postgres SQLSTATEs the outbox must not keep retrying. */
@@ -16,6 +26,8 @@ const UNIQUE_VIOLATION = "23505";
 const INSUFFICIENT_PRIVILEGE = "42501";
 const CHECK_VIOLATION = "23514";
 const FOREIGN_KEY_VIOLATION = "23503";
+/** private.honest_report_time() raises this for a report more than 6 hours old. */
+const REPORT_TOO_OLD = "22023";
 
 /**
  * Files a resident's water-level report.
@@ -66,6 +78,10 @@ export async function submitWaterLevelReport(
     // The caller's own uid, never one supplied by the client. RLS enforces
     // this too; doing it here means we never even ask.
     reporter_id: userId,
+    // Only sent when the outbox is replaying a write made earlier — an
+    // ordinary submission omits the key entirely and keeps the column's
+    // database-clock default.
+    ...(input.madeAt ? { reported_at: input.madeAt } : {}),
   });
 
   if (!error) return { ok: true };
@@ -73,6 +89,14 @@ export async function submitWaterLevelReport(
   // The outbox re-sends anything it did not see confirmed, so a row that
   // already landed is a success, not a failure.
   if (error.code === UNIQUE_VIOLATION) return { ok: true };
+
+  // Checked before the general classification below: a report more than 6
+  // hours old can never succeed on retry, so this must be permanent, and the
+  // outbox needs the specific reason to drop the entry rather than keep it
+  // queued indefinitely.
+  if (error.code === REPORT_TOO_OLD) {
+    return { ok: false, permanent: true, reason: "too_old", error: error.message };
+  }
 
   const permanent =
     error.code === INSUFFICIENT_PRIVILEGE ||

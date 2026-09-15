@@ -108,4 +108,61 @@ describe("submitWaterLevelReport", () => {
 
     expect(result).toMatchObject({ ok: false, permanent: false });
   });
+
+  it("sends reported_at when madeAt is given, so a queued report keeps the time it was made", async () => {
+    // The outbox may replay this hours after the report was actually filed.
+    // madeAt carries the honest time through to the database trigger.
+    getClaims.mockResolvedValue({ data: { claims: { sub: "user-1" } } });
+    insert.mockResolvedValue({ error: null });
+
+    await submitWaterLevelReport({
+      id: "11111111-1111-1111-1111-111111111111",
+      zoneId: "zone-1",
+      depthLevel: "knee",
+      madeAt: "2026-09-16T02:00:00.000Z",
+    });
+
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({ reported_at: "2026-09-16T02:00:00.000Z" })
+    );
+  });
+
+  it("sends no reported_at key at all when madeAt is not given", async () => {
+    // Letting the column default to the server clock (rather than sending an
+    // explicit "now") keeps this action's ordinary, non-queued path
+    // unchanged.
+    getClaims.mockResolvedValue({ data: { claims: { sub: "user-1" } } });
+    insert.mockResolvedValue({ error: null });
+
+    await submitWaterLevelReport({
+      id: "11111111-1111-1111-1111-111111111111",
+      zoneId: "zone-1",
+      depthLevel: "knee",
+    });
+
+    const payload = insert.mock.calls[0][0];
+    expect(payload).not.toHaveProperty("reported_at");
+  });
+
+  it("maps a too-old report (22023) to a permanent failure with reason too_old", async () => {
+    // private.honest_report_time() refuses a report more than 6 hours old --
+    // this can never succeed on retry, so the outbox must drop it for good,
+    // not keep resending it.
+    getClaims.mockResolvedValue({ data: { claims: { sub: "user-1" } } });
+    insert.mockResolvedValue({ error: { code: "22023", message: "report too old" } });
+
+    const result = await submitWaterLevelReport({
+      id: "11111111-1111-1111-1111-111111111111",
+      zoneId: "zone-1",
+      depthLevel: "knee",
+      madeAt: "2020-01-01T00:00:00.000Z",
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      permanent: true,
+      reason: "too_old",
+      error: "report too old",
+    });
+  });
 });
