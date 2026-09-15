@@ -23,6 +23,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DonutChart } from "./charts/donut-chart";
+import { useSetCenterStatus } from "@/lib/reference-data/use-reference-data";
 import { useOfficial } from "@/lib/auth/official-context";
 import { isInArea } from "@/lib/auth/official";
 import type { CenterStatus, LanguageCode, LocalizedText, Zone } from "@/lib/types";
@@ -111,29 +112,30 @@ export function EvacuationManagementPanel({ zones }: { zones: Zone[] }) {
  *
  * The typed headcount is seeded from zone.currentOccupancy (the last value
  * carried through /api/zones) and then tracked in this component's own
- * state as the admin edits it — a write doesn't itself refetch reference
- * data, so this state only reflects the server again after the next
- * fetch/reload. Typing here derives the status shown immediately; the
- * database write via setCenterOccupancy happens once the value is committed
- * (see useHeadcountCommit).
+ * state as the admin edits it — an occupancy write doesn't itself refetch or
+ * patch reference data, so this state only reflects the server again after
+ * the next fetch/reload. Typing here derives the status shown immediately;
+ * the database write via setCenterOccupancy happens once the value is
+ * committed (see useHeadcountCommit). A manual status pick is different: it
+ * goes through useSetCenterStatus, which patches zone.centerStatus in
+ * ReferenceDataProvider's state once the write is confirmed (R1), so
+ * centerStatus below reflects it without a reload.
  */
 function EvacuationCenterRow({ zone, lang }: { zone: Zone; lang: LanguageCode }) {
   const [statusError, setStatusError] = useState(false);
   const [occupancyError, setOccupancyError] = useState(false);
+  const setCenterStatus = useSetCenterStatus();
   // Written once per committed value, not per keystroke (M9).
   const headcount = useHeadcountCommit(zone.currentOccupancy, writeOccupancy);
   const occupancy = headcount.occupancy;
   const isTrackingHeadcount = occupancy !== undefined;
   const centerStatus = resolveEffectiveCenterStatus(zone.centerStatus, zone.evacuationCenterCapacity, occupancy);
 
-  // Dynamic import, not a static one: set-center.ts is a "use server" module
-  // that transitively imports "server-only", which throws if it is ever
-  // evaluated outside a server bundle. A static import here would pull it
-  // into every test that merely renders this panel; the dynamic import
-  // defers that to the moment an admin actually changes a value.
+  // The status write goes through useSetCenterStatus, which patches the
+  // zone's centerStatus in ReferenceDataProvider's state once the database
+  // confirms it — see R1 there.
   async function handleStatusChange(value: CenterStatus) {
     setStatusError(false);
-    const { setCenterStatus } = await import("@/app/actions/set-center");
     const result = await setCenterStatus({ zoneId: zone.id, status: value });
     if (!result.ok) setStatusError(true);
   }

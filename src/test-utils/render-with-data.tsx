@@ -2,7 +2,7 @@ import { render, type RenderResult } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { LanguageProvider } from "@/features/i18n/language-provider";
-import { ReferenceDataContext } from "@/lib/reference-data/provider";
+import { ReferenceDataContext, SetCenterStatusContext } from "@/lib/reference-data/provider";
 import type { ReferenceData } from "@/lib/reference-data/types";
 import { AlertsContext, AlertsRefreshContext } from "@/lib/alerts-store";
 import { MOCK_ZONES, MOCK_POIS, MOCK_HAZARD_SUSCEPTIBILITY, MOCK_ALERTS } from "@/lib/mock-data";
@@ -45,6 +45,14 @@ const TEST_OFFICIAL: Official = {
  */
 const noRefresh = async () => {};
 
+/**
+ * The zones here are a fixed value too, so there is nothing to patch. Tests
+ * that need a confirmed status write to show up on screen mount the real
+ * ReferenceDataProvider (see the R1 tests on the zone page and the
+ * evacuation panel).
+ */
+const noSetCenterStatus = () => {};
+
 export function renderWithData(
   ui: ReactElement,
   options: {
@@ -61,11 +69,13 @@ export function renderWithData(
     <TooltipProvider>
       <LanguageProvider initialLang={options.lang}>
         <ReferenceDataContext.Provider value={data}>
-          <AlertsContext.Provider value={alerts}>
-            <AlertsRefreshContext.Provider value={noRefresh}>
-              <OfficialContext.Provider value={official}>{ui}</OfficialContext.Provider>
-            </AlertsRefreshContext.Provider>
-          </AlertsContext.Provider>
+          <SetCenterStatusContext.Provider value={noSetCenterStatus}>
+            <AlertsContext.Provider value={alerts}>
+              <AlertsRefreshContext.Provider value={noRefresh}>
+                <OfficialContext.Provider value={official}>{ui}</OfficialContext.Provider>
+              </AlertsRefreshContext.Provider>
+            </AlertsContext.Provider>
+          </SetCenterStatusContext.Provider>
         </ReferenceDataContext.Provider>
       </LanguageProvider>
     </TooltipProvider>

@@ -4,10 +4,28 @@ import { createContext, useCallback, useEffect, useState, type ReactNode } from 
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { AlertsContext, AlertsRefreshContext } from "@/lib/alerts-store";
-import type { AlertRecord, LocalizedText } from "@/lib/types";
+import type { AlertRecord, CenterStatus, LocalizedText } from "@/lib/types";
 import type { ReferenceData } from "./types";
 
 export const ReferenceDataContext = createContext<ReferenceData | null>(null);
+
+/**
+ * Applies a confirmed centre-status write to the matching zone in
+ * ReferenceDataContext's own state, so every screen reading useZones() sees
+ * it (R1). Supplied by ReferenceDataProvider beside the zones themselves, the
+ * same way AlertsRefreshContext sits beside AlertsContext — a screen that
+ * patched its own copy would leave every other screen showing the old status.
+ *
+ * Deliberately a local patch rather than a refetch (unlike
+ * AlertsRefreshContext/refreshAlerts above): /api/zones is served
+ * stale-while-revalidate by the service worker (see public/sw.js), so
+ * refetching it after the write would hand back the cached, pre-write copy.
+ * Patching locally is safe here because `status` is exactly the value the
+ * database just accepted — evacuation_centers.status is not derived from
+ * anything else server-side — so the client can be sure of the new state
+ * without waiting on a round trip the cache would swallow anyway.
+ */
+export const SetCenterStatusContext = createContext<((zoneId: string, status: CenterStatus) => void) | null>(null);
 
 const LOADING: LocalizedText = { en: "Loading your zone…", fil: "Kinukuha ang iyong zone…" };
 const UNREACHABLE: LocalizedText = {
@@ -115,6 +133,26 @@ export function ReferenceDataProvider({ children }: { children: ReactNode }) {
     []
   );
 
+  /**
+   * Patches one zone's centerStatus in place once a setCenterStatus write is
+   * confirmed (R1). No fetch involved — see the comment on
+   * SetCenterStatusContext above for why a refetch would not work here.
+   */
+  const applyCenterStatus = useCallback((zoneId: string, status: CenterStatus) => {
+    setState((current) => {
+      if (current.status !== "ready") return current;
+      return {
+        ...current,
+        data: {
+          ...current.data,
+          zones: current.data.zones.map((zone) =>
+            zone.id === zoneId ? { ...zone, centerStatus: status } : zone
+          ),
+        },
+      };
+    });
+  }, []);
+
   const retry = useCallback(() => {
     setState({ status: "loading" });
     load();
@@ -151,9 +189,11 @@ export function ReferenceDataProvider({ children }: { children: ReactNode }) {
 
   return (
     <ReferenceDataContext.Provider value={state.data}>
-      <AlertsContext.Provider value={state.alerts}>
-        <AlertsRefreshContext.Provider value={refreshAlerts}>{children}</AlertsRefreshContext.Provider>
-      </AlertsContext.Provider>
+      <SetCenterStatusContext.Provider value={applyCenterStatus}>
+        <AlertsContext.Provider value={state.alerts}>
+          <AlertsRefreshContext.Provider value={refreshAlerts}>{children}</AlertsRefreshContext.Provider>
+        </AlertsContext.Provider>
+      </SetCenterStatusContext.Provider>
     </ReferenceDataContext.Provider>
   );
 }

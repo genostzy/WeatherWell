@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { screen, waitFor, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 const setCenterStatusMock = vi.fn().mockResolvedValue({ ok: true });
@@ -18,6 +18,11 @@ vi.mock("@/app/actions/set-center", () => ({
 import { EvacuationManagementPanel } from "./evacuation-management-panel";
 import { renderWithData, FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
 import type { Official } from "@/lib/auth/official";
+import { OfficialContext } from "@/lib/auth/official-context";
+import { ReferenceDataProvider } from "@/lib/reference-data/provider";
+import { useZones } from "@/lib/reference-data/use-reference-data";
+import { LanguageProvider } from "@/features/i18n/language-provider";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 beforeEach(() => {
   setCenterStatusMock.mockClear();
@@ -112,5 +117,113 @@ describe("EvacuationManagementPanel", () => {
 
     expect(screen.getByText(ownZone.evacuationCenterName)).toBeInTheDocument();
     expect(screen.queryByText(otherZone.evacuationCenterName)).not.toBeInTheDocument();
+  });
+});
+
+describe("EvacuationManagementPanel capacity control after a confirmed write (R1)", () => {
+  // Mounts the real ReferenceDataProvider rather than renderWithData's fixed
+  // context value: the defect was that the row's status select read
+  // zone.centerStatus from a zone list fetched once and never patched, so a
+  // static context cannot show the regression. zones[0] starts
+  // "space_available" and is not tracking a headcount, so its select stays
+  // enabled here.
+  const zone = FIXTURE_REFERENCE_DATA.zones[0];
+
+  const OFFICIAL: Official = {
+    userId: "u1",
+    displayName: "Test",
+    areaCode: zone.psgcBarangayCode,
+    areaName: "Own barangay",
+    level: "barangay",
+  };
+
+  beforeEach(() => {
+    localStorage.clear();
+    setCenterStatusMock.mockReset();
+    setCenterStatusMock.mockResolvedValue({ ok: true });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url === "/api/zones") return { ok: true, json: async () => FIXTURE_REFERENCE_DATA };
+        if (url.startsWith("/api/alerts")) return { ok: true, json: async () => [] };
+        return { ok: true, json: async () => [] };
+      })
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    setCenterStatusMock.mockReset();
+    setCenterStatusMock.mockResolvedValue({ ok: true });
+  });
+
+  // EvacuationManagementPanel takes zones as a prop rather than reading
+  // useZones() itself (see admin-overview.tsx, its only real caller) — so a
+  // live test has to read the zones from the provider the same way, or the
+  // provider's own patched copy never reaches the panel.
+  function PanelWithLiveZones() {
+    const zones = useZones();
+    return <EvacuationManagementPanel zones={zones} />;
+  }
+
+  function renderLive() {
+    return render(
+      <TooltipProvider>
+        <LanguageProvider>
+          <ReferenceDataProvider>
+            <OfficialContext.Provider value={OFFICIAL}>
+              <PanelWithLiveZones />
+            </OfficialContext.Provider>
+          </ReferenceDataProvider>
+        </LanguageProvider>
+      </TooltipProvider>
+    );
+  }
+
+  it("shows Full once the write is confirmed, then lets the official pick Space available again", async () => {
+    const user = userEvent.setup();
+    renderLive();
+
+    const select = await screen.findByRole("combobox", { name: new RegExp(`Capacity — ${zone.name}`) });
+    expect(select).toHaveTextContent(/space available/i);
+
+    await user.click(select);
+    await user.click(await screen.findByRole("option", { name: "Full" }));
+
+    await waitFor(() => expect(setCenterStatusMock).toHaveBeenCalledWith({ zoneId: zone.id, status: "full" }));
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: new RegExp(`Capacity — ${zone.name}`) })).toHaveTextContent("Full")
+    );
+
+    // "Space available" must be selectable again: while the select still
+    // showed Full, picking it fired no change at all.
+    await user.click(screen.getByRole("combobox", { name: new RegExp(`Capacity — ${zone.name}`) }));
+    await user.click(await screen.findByRole("option", { name: "Space available" }));
+
+    await waitFor(() =>
+      expect(setCenterStatusMock).toHaveBeenCalledWith({ zoneId: zone.id, status: "space_available" })
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: new RegExp(`Capacity — ${zone.name}`) })).toHaveTextContent(
+        /space available/i
+      )
+    );
+  });
+
+  it("leaves the displayed status unchanged and shows the error when the write fails", async () => {
+    setCenterStatusMock.mockResolvedValueOnce({ ok: false, permanent: true, error: "boom" });
+    const user = userEvent.setup();
+    renderLive();
+
+    const select = await screen.findByRole("combobox", { name: new RegExp(`Capacity — ${zone.name}`) });
+    expect(select).toHaveTextContent(/space available/i);
+
+    await user.click(select);
+    await user.click(await screen.findByRole("option", { name: "Full" }));
+
+    expect(await screen.findByText(/could not save/i)).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: new RegExp(`Capacity — ${zone.name}`) })).toHaveTextContent(
+      /space available/i
+    );
   });
 });

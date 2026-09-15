@@ -6,6 +6,11 @@ import type { ActionResult } from "./action-result";
 
 const CENTER_STATUSES: CenterStatus[] = ["space_available", "limited", "full"];
 
+export interface SetCenterStatusInput {
+  zoneId: string;
+  status: CenterStatus;
+}
+
 /**
  * getClaims, never getSession: it verifies the JWT signature against the
  * project's published keys. getSession does not revalidate and a spoofed
@@ -45,7 +50,7 @@ function refused(): ActionResult {
  */
 
 /** An operator marking a zone's evacuation center status by hand. */
-export async function setCenterStatus(input: { zoneId: string; status: CenterStatus }): Promise<ActionResult> {
+export async function setCenterStatus(input: SetCenterStatusInput): Promise<ActionResult> {
   if (!CENTER_STATUSES.includes(input.status)) {
     return { ok: false, permanent: true, error: `Unknown center status: ${input.status}` };
   }

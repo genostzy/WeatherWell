@@ -257,6 +257,106 @@ describe("ZoneDashboardPage alert control after a confirmed write (C1)", () => {
   });
 });
 
+describe("ZoneDashboardPage capacity control after a confirmed write (R1)", () => {
+  // Mounts the real ReferenceDataProvider rather than renderWithData's fixed
+  // context value: the defect was that the select read zone.centerStatus from
+  // a zone list fetched once and never patched, so a static context cannot
+  // show the regression. zones[0] starts "space_available" and is not
+  // tracking a headcount (see the "capacity control" describe block above),
+  // so the capacity select stays enabled here.
+  const zone = FIXTURE_REFERENCE_DATA.zones[0];
+
+  const OFFICIAL: Official = {
+    userId: "u1",
+    displayName: "Test",
+    areaCode: zone.psgcBarangayCode,
+    areaName: "Own barangay",
+    level: "barangay",
+  };
+
+  beforeEach(() => {
+    localStorage.clear();
+    setCenterStatusMock.mockReset();
+    setCenterStatusMock.mockResolvedValue({ ok: true });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url === "/api/zones") return { ok: true, json: async () => FIXTURE_REFERENCE_DATA };
+        if (url.startsWith("/api/alerts")) return { ok: true, json: async () => [] };
+        return { ok: true, json: async () => [] };
+      })
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    setCenterStatusMock.mockReset();
+    setCenterStatusMock.mockResolvedValue({ ok: true });
+  });
+
+  function renderLive() {
+    return render(
+      <TooltipProvider>
+        <LanguageProvider>
+          <ReferenceDataProvider>
+            <OfficialContext.Provider value={OFFICIAL}>
+              <ZoneDashboardPage params={resolvedParams({ zoneId: zone.id })} searchParams={emptySearchParams} />
+            </OfficialContext.Provider>
+          </ReferenceDataProvider>
+        </LanguageProvider>
+      </TooltipProvider>
+    );
+  }
+
+  it("shows Full once the write is confirmed, then lets the official pick Space available again", async () => {
+    const user = userEvent.setup();
+    renderLive();
+
+    const select = await screen.findByRole("combobox", { name: /evacuation center capacity/i });
+    expect(select).toHaveTextContent(/space available/i);
+
+    await user.click(select);
+    await user.click(await screen.findByRole("option", { name: "Full" }));
+
+    await waitFor(() => expect(setCenterStatusMock).toHaveBeenCalledWith({ zoneId: zone.id, status: "full" }));
+    // The select must follow the confirmed write, no reload.
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: /evacuation center capacity/i })).toHaveTextContent("Full")
+    );
+
+    // "Space available" must be selectable again: while the select still
+    // showed Full, picking it fired no change at all.
+    await user.click(screen.getByRole("combobox", { name: /evacuation center capacity/i }));
+    await user.click(await screen.findByRole("option", { name: "Space available" }));
+
+    await waitFor(() =>
+      expect(setCenterStatusMock).toHaveBeenCalledWith({ zoneId: zone.id, status: "space_available" })
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("combobox", { name: /evacuation center capacity/i })).toHaveTextContent(
+        /space available/i
+      )
+    );
+  });
+
+  it("leaves the displayed status unchanged and shows the error when the write fails", async () => {
+    setCenterStatusMock.mockResolvedValueOnce({ ok: false, permanent: true, error: "boom" });
+    const user = userEvent.setup();
+    renderLive();
+
+    const select = await screen.findByRole("combobox", { name: /evacuation center capacity/i });
+    expect(select).toHaveTextContent(/space available/i);
+
+    await user.click(select);
+    await user.click(await screen.findByRole("option", { name: "Full" }));
+
+    expect(await screen.findByText(/could not save/i)).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: /evacuation center capacity/i })).toHaveTextContent(
+      /space available/i
+    );
+  });
+});
+
 describe("ZoneDashboardPage with no hazard data (I3)", () => {
   beforeEach(() => {
     localStorage.clear();

@@ -20,7 +20,7 @@ import {
   getRainfallHistoryForZone,
   isHeavyRainfall,
 } from "@/lib/mock-data";
-import { useHazardsForZone, useZones } from "@/lib/reference-data/use-reference-data";
+import { useHazardsForZone, useSetCenterStatus, useZones } from "@/lib/reference-data/use-reference-data";
 import { HAZARD_LEVEL_LABEL } from "@/lib/hazards";
 import { useActiveAlertForZone, useSetZoneAlert } from "@/lib/alerts-store";
 import { useManagesZone } from "@/lib/auth/official-context";
@@ -68,6 +68,7 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
   const susceptibility = useHazardsForZone(zoneId);
   const alert = useActiveAlertForZone(zoneId);
   const setZoneAlert = useSetZoneAlert();
+  const setCenterStatus = useSetCenterStatus();
   const [alertError, setAlertError] = useState(false);
   const [statusError, setStatusError] = useState(false);
   const managesZone = useManagesZone();
@@ -90,19 +91,17 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
 
   // The alert write goes through the alerts store (useSetZoneAlert), which
   // refreshes the alert list once the database confirms it — see C1 there.
-  // set-center.ts is still imported dynamically: it is a "use server" module
-  // that transitively imports "server-only", which throws if evaluated
-  // outside a server bundle, and a static import would pull it into every
-  // test that merely renders this page.
   async function handleAlertChange(value: Severity | "none") {
     setAlertError(false);
     const result = await setZoneAlert({ zoneId: zone.id, severity: value });
     if (!result.ok) setAlertError(true);
   }
 
+  // The status write goes through useSetCenterStatus, which patches the
+  // zone's centerStatus in ReferenceDataProvider's state once the database
+  // confirms it — see R1 there.
   async function handleStatusChange(value: CenterStatus) {
     setStatusError(false);
-    const { setCenterStatus } = await import("@/app/actions/set-center");
     const result = await setCenterStatus({ zoneId: zone.id, status: value });
     if (!result.ok) setStatusError(true);
   }
