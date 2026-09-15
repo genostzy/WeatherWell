@@ -45,7 +45,7 @@ describe("AccountLink", () => {
 
     renderWithData(<AccountLink />);
 
-    const link = await screen.findByRole("link", { name: "Keep my reports on a new phone" });
+    const link = await screen.findByRole("link", { name: "Keep your reports on a new phone" });
     expect(link).toHaveAttribute("href", "/sign-in?next=%2Freport");
   });
 

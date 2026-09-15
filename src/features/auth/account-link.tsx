@@ -11,8 +11,8 @@ import { isAdminPath } from "@/lib/auth/admin-path";
 import type { LocalizedText } from "@/lib/types";
 
 const KEEP_REPORTS: LocalizedText = {
-  en: "Keep my reports on a new phone",
-  fil: "Panatilihin ang aking mga ulat sa bagong telepono",
+  en: "Keep your reports on a new phone",
+  fil: "Panatilihin ang iyong mga ulat sa bagong telepono",
 };
 const SIGN_OUT: LocalizedText = { en: "Sign out", fil: "Mag-sign out" };
 

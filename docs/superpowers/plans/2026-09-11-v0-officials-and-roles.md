@@ -98,7 +98,7 @@ Every task's requirements implicitly include this section.
 | `src/app/api/official-actions/route.ts` | Officials' read of the record, never cached. |
 | `src/features/admin/last-change-line.tsx` | "Lowered to Yellow by Juan Dela Cruz, 2:14 AM". |
 | `src/app/admin/history/page.tsx` | The history page. |
-| `src/features/auth/account-link.tsx` | Residents' optional "Keep my reports on a new phone". |
+| `src/features/auth/account-link.tsx` | Residents' optional "Keep your reports on a new phone". |
 
 **Modified:** `supabase/tests/rls.sql`, `scripts/generate-seed.ts` (+ test), `supabase/seed/seed.sql`, `src/lib/supabase/database.types.ts`, `public/sw.js`, `src/lib/service-worker.test.ts`, `src/app/admin/page.tsx`, `src/app/admin/zone/[zoneId]/page.tsx`, `src/app/admin/simulation/page.tsx`, `src/features/admin/admin-map-canvas.tsx`, `src/features/admin/evacuation-management-panel.tsx`, `src/features/admin/community-pin-moderation-panel.tsx`, `src/features/admin/flood-monitoring-panel.tsx`, `src/test-utils/render-with-data.tsx`, `src/app/layout.tsx`, `PRD.md`.
 
@@ -1393,7 +1393,7 @@ git commit -m "feat(admin): show who changed what, beside each alert and on a hi
 | Session | Shows |
 |---|---|
 | none | nothing — a visitor who has never written has nothing to keep, and must not be signed in |
-| anonymous | a link, "Keep my reports on a new phone", to `/sign-in?next=<current path>` |
+| anonymous | a link, "Keep your reports on a new phone", to `/sign-in?next=<current path>` |
 | permanent | a **Sign out** form posting to `/auth/signout` with `next` = the current path |
 | any, on a `/admin…` route | nothing (the admin header has its own sign-out) |
 
@@ -1452,7 +1452,7 @@ Run the production build locally on port 3100 through the browser preview toolin
 
 **Agents never enter a password or a Google credential.** The Google leg is done by the user, in their own browser session.
 
-- [ ] **Step 1 — residents unchanged.** Record `select count(*) from auth.users`. Open `/`, `/map`, `/report` and `/evacuation` and confirm the count is unchanged. File one report; confirm exactly one new anonymous user. Confirm no resident screen shows an official's name. The header shows "Keep my reports on a new phone" only after that first write.
+- [ ] **Step 1 — residents unchanged.** Record `select count(*) from auth.users`. Open `/`, `/map`, `/report` and `/evacuation` and confirm the count is unchanged. File one report; confirm exactly one new anonymous user. Confirm no resident screen shows an official's name. The header shows "Keep your reports on a new phone" only after that first write.
 - [ ] **Step 2 — test fixtures.** To have two barangays in one town, insert a temporary zone in Mapandan (`'0105528999'`, named "Barangay Testlive, Mapandan") with its centre. Use **one** browser identity: the anonymous user Step 1's report created. Promote it with SQL to barangay official for Nilombot (`update public.profiles set role = 'operator', area_code = <Nilombot's code>, display_name = 'Live Test Nilombot' where id = …`). This bypasses `appoint_official`, which requires an email account; it is a test-only shortcut, because real officials use permanent accounts. Later legs switch the same user's `area_code` with SQL — the gate re-reads the profile on every request. For a second official's actions, create a second identity with a real anonymous sign-up against the Auth REST endpoint, promote it, and act through PostgREST with its access token, as earlier plans' reviewers did.
 - [ ] **Step 3 — scoping, in the browser.**
   - The Nilombot official lands on Nilombot's Manage zone page.

@@ -271,7 +271,7 @@ This gate only decides what to show. The database is still the lock: every chang
 
 The PRD's V0 done-when says **"optional login works"**. This design reads that as residents, and meets it with the same sign-in machinery officials use:
 
-- A small **Keep my reports on a new phone** option in the app header that opens `/sign-in`, never shown as a gate and never required.
+- A small **Keep your reports on a new phone** option in the app header that opens `/sign-in`, never shown as a gate and never required.
 - It links Google or an email to the resident's existing anonymous identity (the same `linkIdentity` / `updateUser` path as officials), so their reports, pins, votes and check-in follow them to a new phone.
 - It never runs on page load, and a resident who never taps it stays exactly as they are today.
 - It costs nothing extra: a linked account is the same `auth.users` row, not a new one.
