@@ -7,7 +7,7 @@ import { LanguageProvider } from "@/features/i18n/language-provider";
 describe("ConsentNotice", () => {
   it("names both kinds of personal data it collects", () => {
     render(<ConsentNotice onAccept={() => {}} />);
-    expect(screen.getByText(/location/i)).toBeInTheDocument();
+    expect(screen.getByText(/asks for your location/i)).toBeInTheDocument();
     expect(screen.getByText(/phone number/i)).toBeInTheDocument();
   });
 
@@ -43,5 +43,23 @@ describe("ConsentNotice", () => {
     );
     expect(screen.getByText(/RA 10173/i)).toBeInTheDocument();
     expect(screen.getByText(/pahintulot/i)).toBeInTheDocument();
+  });
+
+  it("discloses anonymous crash reporting in English", () => {
+    render(<ConsentNotice onAccept={() => {}} />);
+    expect(
+      screen.getByText(/an anonymous error report — with no name, location or account — is sent/)
+    ).toBeInTheDocument();
+  });
+
+  it("discloses anonymous crash reporting in Filipino", () => {
+    render(
+      <LanguageProvider initialLang="fil">
+        <ConsentNotice onAccept={() => {}} />
+      </LanguageProvider>
+    );
+    expect(
+      screen.getByText(/isang hindi nagpapakilalang ulat ng error — walang pangalan, lokasyon, o account/)
+    ).toBeInTheDocument();
   });
 });

@@ -263,6 +263,7 @@ Location is personal data under the **Data Privacy Act of 2012 (RA 10173)**.
 | Resident check-ins | Short-term | Self-report of current safety status, not a permanent record; never cached by the service worker even on the reporting device — see Risks & Open Questions below |
 | Officials' email address and display name | Until the system owner removes the appointment | Needed to identify who may act in an area; removal clears the role and area, but the action record keeps the name as it was at the time |
 | The action record (`official_actions`) | Indefinite | Append-only accountability record; contains no resident data |
+| `app_errors` | 30 days | Scrubbed crash reports with no personal data |
 
 **RA 10173 Article 16** — data export and deletion, keyed to the resident's anonymous identity. No phone numbers stored.
 
@@ -330,6 +331,8 @@ Six one-time steps, all free, each involving a secret or an account setting — 
 
 **Never turn on email autoconfirm** (Authentication → Sign In / Providers → Email → "Confirm email" must stay on). `appoint_official` refuses an account whose email is unconfirmed, but with autoconfirm on every address counts as confirmed the moment it is typed, so anyone could register an official's address first and be appointed in their place.
 
+**Monitoring needs no setup.** The `Monitor` GitHub Actions workflow and `/api/health` require no secret, no account setting, and no step above — they run against the already-deployed app. The one thing that must stay on is GitHub's own notification email for failed workflow runs (GitHub → Settings → Notifications → Actions), which is on by default; that email is the alert a failed run produces.
+
 **Before appointing anyone for a new barangay:** confirm its PSGC code against the PSA's official published list at psa.gov.ph (a code ending in `000` is the town's, not a barangay's). The four demo barangays were checked on 15 September 2026 — see the "Officials, areas and sign-in" row in [Build Status](#build-status). This code is the exact permission boundary that decides who may issue an alert for a barangay; appointing an official against a wrong code silently hands them the wrong area, and nothing else in the system would catch it.
 
 ---
@@ -374,7 +377,7 @@ This table is the single source of truth for implementation state. Everything ab
 | Geofence, rate limit (layers 1–3) | **Not started** | Stage 3 |
 | Audit trail (layer 8) | **Partly delivered** | Official actions are recorded as they happen, and the record already knows how to attribute an automatic one: a net-score pin removal is credited "Automatic — net score" today, and the same trigger would credit an alert with no signed-in actor as "Automatic — <source>". That second case has never actually fired, because nothing yet calls `set_zone_alert` with a non-manual source — the automatic alert engine itself is Stage 3, arriving into a record already built to receive it |
 | Background Sync (offline report queue) | **Not started** | Stage 2. Reports submitted offline still queue client-side, but not through the service worker's Background Sync API |
-| Error / uptime monitoring | **Not started** | Stage 2 |
+| Error / uptime monitoring | **Built** | Crashes are saved scrubbed to `app_errors` (read in Supabase → Table Editor); `/api/health`; the GitHub `Monitor` workflow every 15 minutes emails the owner on failure or new crashes. GitHub may delay runs and pauses schedules after 60 days of repository inactivity (re-enable in the Actions tab). The log can be flooded to its 300/hour cap |
 | Outlier downweighting (layer 4) | **UI only** | Downweighting behaviour is real — flagged reports are excluded from the agreeing count and badged — but the flag itself is set in fixture data, not detected |
 | Reputation scoring (layer 6) | **Not started** | Stage 4 — a trust weight exists on the data model but nothing reads it |
 | Real PAGASA and hazard data | **Not started** | Zones, POIs and hazard ratings are real Postgres rows now, but the values themselves are still the seeded demo dataset, not live PAGASA/DENR-MGB feeds |

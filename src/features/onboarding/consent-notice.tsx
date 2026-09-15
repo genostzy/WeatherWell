@@ -29,6 +29,10 @@ const CONSENT_COPY = {
     en: "WeatherWell also asks for your phone number so it can send SMS alerts if your internet connection drops. It is stored securely and never shared.",
     fil: "Hinihingi rin ng WeatherWell ang iyong numero ng telepono upang makapagpadala ng SMS alert kung mawalan ka ng koneksyon sa internet. Ligtas itong iniimbak at hindi kailanman ibinabahagi.",
   },
+  errors: {
+    en: "If the app crashes, an anonymous error report — with no name, location or account — is sent so it can be fixed.",
+    fil: "Kung ma-crash ang app, isang hindi nagpapakilalang ulat ng error — walang pangalan, lokasyon, o account — ay ipinapadala upang maisaayos ito.",
+  },
   decline: {
     en: "You can decline either and still see public alerts for your area.",
     fil: "Maaari mong tanggihan ang alinman sa dalawa at makikita mo pa rin ang mga pampublikong alerto para sa iyong lugar.",
@@ -55,6 +59,7 @@ export function ConsentNotice({ onAccept }: { onAccept: () => void }) {
         <p>{t(CONSENT_COPY.location, lang)}</p>
         <p>{t(CONSENT_COPY.liveLocation, lang)}</p>
         <p>{t(CONSENT_COPY.phone, lang)}</p>
+        <p>{t(CONSENT_COPY.errors, lang)}</p>
         <p>{t(CONSENT_COPY.decline, lang)}</p>
         <p className="text-muted-foreground">{t(CONSENT_COPY.legalBasis, lang)}</p>
         <Button onClick={onAccept} className="w-full" size="lg">
