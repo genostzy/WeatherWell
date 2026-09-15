@@ -1656,4 +1656,36 @@ select tests.expect_denied(
   'P9: the removed official cannot set an alert on the very next statement',
   $$select public.set_zone_alert('tests-area-a1', 'red', '{"en":"x","fil":"x"}'::jsonb)$$);
 
+-- ===========================================================================
+-- P5-b (parked finding, officials-and-roles): psgc_barangay_code is the
+-- actual permission boundary private.manages_zone enforces (a prefix match
+-- against it decides who may act on a zone), and
+-- src/lib/auth/load-official.ts looks a zone up by it with .maybeSingle(),
+-- which throws if two zones ever share a code. There was no UNIQUE
+-- constraint stopping that. This proves the database itself now refuses a
+-- duplicate, regardless of role -- run as postgres (bypassing RLS, exactly
+-- like the one-active-alert-per-zone and one-vote-per-pin blocks earlier in
+-- this file) because a UNIQUE constraint is not a policy, so
+-- tests.expect_denied (which only catches insufficient_privilege) cannot
+-- express this; the expected exception is unique_violation.
+-- '0105528012' is the seeded live code for zone-1 (Barangay Nilombot,
+-- Mapandan) -- a real row already in the table this suite runs against, not
+-- a fixture inserted above.
+-- ===========================================================================
+do $$
+begin
+  set local role postgres;
+  begin
+    insert into public.zones
+      (id, psgc_barangay_code, name, evacuation_route_text, lat, lng, evacuation_route_path, hotline_number)
+    values
+      ('tests-fixture-dup-zone', '0105528012', 'Duplicate Code Zone', '{"en":"x","fil":"x"}'::jsonb, 0, 0, '[]'::jsonb, '000');
+    raise exception using errcode = 'TSTFL',
+      message = 'P5-b: a duplicate psgc_barangay_code was allowed onto two zones';
+  exception
+    when unique_violation then raise notice 'ok, P5-b: zones_psgc_barangay_code_key refuses a duplicate psgc_barangay_code';
+  end;
+  reset role;
+end $$;
+
 rollback;
