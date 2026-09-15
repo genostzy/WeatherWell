@@ -1781,4 +1781,81 @@ select tests.expect_denied(
   'M8: anon cannot select from official_actions (grant-level, not only RLS)',
   $$select * from public.official_actions$$);
 
+-- ===========================================================================
+-- Monitoring: app_errors is written only through report_app_error, read by no
+-- client, deduplicated, capped, and self-cleaning.
+-- ===========================================================================
+select tests.as_anon();
+select tests.expect_denied('M1: anon cannot read app_errors', $$select * from public.app_errors$$);
+select tests.expect_denied('M2: anon cannot insert app_errors directly',
+  $$insert into public.app_errors (source, kind, message, route, environment, fingerprint)
+    values ('client','unhandled','x','/','preview','f')$$);
+select tests.as_user('66666666-6666-6666-6666-666666666666');
+select tests.expect_denied('M3: authenticated cannot delete app_errors', $$delete from public.app_errors$$);
+select tests.expect_denied('M4: authenticated cannot update app_errors', $$update public.app_errors set message = 'x'$$);
+
+select tests.as_anon();
+select tests.expect_allowed('M5: anon can report an error',
+  $$select public.report_app_error('client','unhandled','boom','at a (x.js:1:1)','/map','preview','abc123','fp-m5')$$);
+select tests.expect_allowed('M6: a repeat within 5 minutes is accepted but not stored twice',
+  $$select public.report_app_error('client','unhandled','boom','at a (x.js:1:1)','/map','preview','abc123','fp-m5')$$);
+
+do $$
+begin
+  set local role postgres;
+  perform set_config('request.jwt.claims', '', true);
+  if (select count(*) from public.app_errors where fingerprint = 'fp-m5') <> 1 then
+    raise exception using errcode = 'TSTFL', message = 'M6: duplicate fingerprint stored twice';
+  end if;
+end $$;
+
+select tests.as_anon();
+select tests.expect_allowed('M7: over-long input is truncated, not raised',
+  $$select public.report_app_error('server','request', repeat('m', 900), repeat('s', 9000), repeat('/r', 300), 'production', repeat('z', 90), 'fp-m7')$$);
+
+do $$
+declare r record;
+begin
+  set local role postgres;
+  select length(message) lm, length(stack) ls, length(route) lr, length(release) lrel into r
+    from public.app_errors where fingerprint = 'fp-m7';
+  if r.lm <> 500 or r.ls <> 4000 or r.lr <> 200 or r.lrel <> 64 then
+    raise exception using errcode = 'TSTFL', message = format('M7: not truncated to limits: %s', r);
+  end if;
+
+  -- M8: rows older than 30 days are removed by the next report.
+  insert into public.app_errors (occurred_at, source, kind, message, route, environment, fingerprint)
+    values (now() - interval '31 days', 'client', 'unhandled', 'old', '/', 'preview', 'fp-old');
+end $$;
+
+select tests.as_anon();
+select public.report_app_error('client','render','fresh', null,'/','preview', null,'fp-m8');
+
+do $$
+begin
+  set local role postgres;
+  if exists (select 1 from public.app_errors where fingerprint = 'fp-old') then
+    raise exception using errcode = 'TSTFL', message = 'M8: 31-day-old row was not cleaned up';
+  end if;
+
+  -- M9: the hourly cap. Fill to 300 rows in the last hour, then one more must not store.
+  insert into public.app_errors (source, kind, message, route, environment, fingerprint)
+    select 'client','unhandled','fill','/','preview','fill-' || g from generate_series(1, 300) g;
+end $$;
+
+select tests.as_anon();
+select public.report_app_error('client','unhandled','over cap', null,'/','preview', null,'fp-m9');
+
+do $$
+begin
+  set local role postgres;
+  if exists (select 1 from public.app_errors where fingerprint = 'fp-m9') then
+    raise exception using errcode = 'TSTFL', message = 'M9: report stored beyond the hourly cap';
+  end if;
+end $$;
+
+select tests.as_anon();
+select tests.expect_row_count('M10: recent_app_error_count counts the last 15 minutes',
+  $$select 1 where public.recent_app_error_count() >= 303$$, 1);
+
 rollback;

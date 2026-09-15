@@ -76,6 +76,45 @@ export type Database = {
           },
         ]
       }
+      app_errors: {
+        Row: {
+          environment: string
+          fingerprint: string
+          id: number
+          kind: string
+          message: string
+          occurred_at: string
+          release: string | null
+          route: string
+          source: string
+          stack: string | null
+        }
+        Insert: {
+          environment: string
+          fingerprint: string
+          id?: never
+          kind: string
+          message: string
+          occurred_at?: string
+          release?: string | null
+          route: string
+          source: string
+          stack?: string | null
+        }
+        Update: {
+          environment?: string
+          fingerprint?: string
+          id?: never
+          kind?: string
+          message?: string
+          occurred_at?: string
+          release?: string | null
+          route?: string
+          source?: string
+          stack?: string | null
+        }
+        Relationships: []
+      }
       community_pins: {
         Row: {
           author_id: string
@@ -473,6 +512,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      recent_app_error_count: { Args: never; Returns: number }
+      report_app_error: {
+        Args: {
+          p_environment: string
+          p_fingerprint: string
+          p_kind: string
+          p_message: string
+          p_release: string
+          p_route: string
+          p_source: string
+          p_stack: string
+        }
+        Returns: undefined
+      }
       set_zone_alert: {
         Args: {
           p_message: Json
