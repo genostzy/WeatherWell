@@ -354,6 +354,21 @@ describe("service worker request routing", () => {
     expect(store.size).toBe(0);
   });
 
+  it("sends /api/health straight to the network, uncached — the monitor must see live status, never a stale cache entry", async () => {
+    // /api/health is not in PUBLIC_API_PATHS, so it already falls under the
+    // allowlist-inversion rule above. This test pins that specifically for
+    // the health endpoint the uptime monitor polls: nothing about the app
+    // being cached-and-offline should ever read back as "healthy".
+    const { listeners, store } = loadServiceWorker({
+      fetch: async () => response('{"status":"ok","database":"ok","recentErrors":0}'),
+    });
+
+    const result = await handleFetch(listeners, { url: `${ORIGIN}/api/health` });
+
+    expect(result?.body).toBe('{"status":"ok","database":"ok","recentErrors":0}');
+    expect(store.size).toBe(0);
+  });
+
   it("still caches /api/reports, the allowlisted public API path", async () => {
     // The other half of the allowlist: a path that IS named must keep
     // getting the stale-while-revalidate treatment it had under the old
