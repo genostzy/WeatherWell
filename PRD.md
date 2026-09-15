@@ -93,11 +93,13 @@ The challenge names three failures, and they map onto the first three mechanisms
 
 | Audience | How they use it |
 |---|---|
-| **Residents** of flood-prone barangays | View alerts, report water levels, follow evacuation guidance, share alerts onward. Guest mode by default — no account required. |
-| **Operators** — the barangay's disaster officer (DRRMO) or a designated administrator | Issue and override alerts, track evacuation headcounts, moderate community reports, rehearse in drill mode. |
+| **Residents** of flood-prone barangays | View alerts, report water levels, follow evacuation guidance, share alerts onward. Guest mode by default — no account required, with an optional sign-in to keep the same reports and pins on a new phone. |
+| **Barangay officials** — a barangay's disaster officer (BDRRMO), signed in under their own account | Issue and override alerts, track evacuation headcounts, moderate community reports, rehearse in drill mode — within their own barangay. |
+| **Municipal officials** — a town's disaster office (MDRRMO), signed in under their own account | The same actions as a barangay official, across every barangay in their town, including one with no barangay official of its own. |
+| **The system owner** — outside the app entirely | Appoints and removes officials by hand, in Supabase. No admin screen, no in-app role. |
 | **Non-smartphone residents** | Reached through the community relay and printed emergency cards, not the app UI directly. |
 
-**On roles and access control.** The system models exactly two roles — operator and resident — with no per-officer accounts and no role-based permission tiers. This is a scale decision, not a statement about who operates it: one barangay pilot has one operator, and inventing a permission hierarchy for a single user would be complexity without a beneficiary. The operator role is precisely the DRRMO function IDEA describes. Multi-officer LGU deployments would need real per-user authentication, permissions, and audit requirements — that is a genuine future expansion, noted in [Scope Boundaries](#scope-boundaries).
+**On roles and access control.** The system models residents, barangay officials and municipal officials, each official signed in under their own account and limited by the database to their own area — a barangay for one, a town for the other. This replaces the earlier plan for exactly two roles with no per-officer accounts: a shared PIN cannot be revoked for one person and cannot say who acted, and one official per barangay is a single point of failure during a night flood. The principle **"works at barangay scale with one operator" still holds**: a barangay with one official works, and so does one with none, because the municipal official covers it. Internally the role is still named `operator`, matching this document's term; screens say "official." Both official roles are precisely the BDRRMO/MDRRMO function IDEA describes.
 
 ---
 
@@ -245,6 +247,7 @@ Location is personal data under the **Data Privacy Act of 2012 (RA 10173)**.
 - Guest mode collects nothing beyond location. If an account is created, the email is for authentication only — never shared, never marketing.
 - **Filing a report, a pin, a vote, or a check-in creates a persistent, server-issued anonymous identity for that device.** This replaced a random ID the device itself generated and could clear at will — the improvement anti-abuse layer 5 describes — but the trade is real and worth stating plainly: that identity is no longer something a resident can walk away from by clearing local storage. It is created only at the first *write*, never merely by reading the app, and a reaping job for anonymous identities with nothing attributed to them is scoped for before pilot scale (see Risks & Open Questions below).
 - **Community pin photos are not supported.** The pin form collects a status, a caption, and a location only. Consent and retention rules for photos would need to be designed before any photo upload ships, and until then the form does not offer one — a resident cannot attach evidence the system would then discard.
+- **Officials hold real identity, unlike residents.** An official's email address (via Google sign-in or an email link) and a display name set by the system owner at appointment are held against their account, because the action record needs to say who acted. This is genuine personal data, not the anonymous identity a resident gets — the trade this design accepts so a flood alert is attributable to a person. Every official can read the full action record, across every area, because floods cross town lines and these are public officials acting in an official role; residents cannot read it at all and never see an official's name.
 
 **Retention**
 
@@ -258,6 +261,8 @@ Location is personal data under the **Data Privacy Act of 2012 (RA 10173)**.
 | Community pins | Short-term, auto-expiring | Reflects current conditions, not a permanent record |
 | Pin votes | Tied to parent pin | Tally only meaningful while the pin is live |
 | Resident check-ins | Short-term | Self-report of current safety status, not a permanent record; never cached by the service worker even on the reporting device — see Risks & Open Questions below |
+| Officials' email address and display name | Until the system owner removes the appointment | Needed to identify who may act in an area; removal clears the role and area, but the action record keeps the name as it was at the time |
+| The action record (`official_actions`) | Indefinite | Append-only accountability record; contains no resident data |
 
 **RA 10173 Article 16** — data export and deletion, keyed to the resident's anonymous identity. No phone numbers stored.
 
@@ -314,7 +319,7 @@ All free and public: PAGASA bulletins (rainfall, wind, typhoon track, thundersto
 
 ## Build Status
 
-**As of 11 September 2026 · Stage 1 (`hi-fi`) complete, Stage 2 (`v0`) in progress.**
+**As of 15 September 2026 · Stage 1 (`hi-fi`) complete, Stage 2 (`v0`) in progress.**
 
 This table is the single source of truth for implementation state. Everything above describes the design; this describes what exists today.
 
@@ -341,13 +346,18 @@ This table is the single source of truth for implementation state. Everything ab
 | Transparent downgrade (layer 9) | **Built** | A lowered or withdrawn alert states itself on the homepage and the evacuation page, naming what was withdrawn. States no reason, because the operator is not asked for one |
 | Anonymous identity (layer 5) | **Built** | Server-issued, verified anonymous auth identity (Supabase Auth) — not a client-generated ID a resident could clear at will. Gates one-vote-per-resident and own-pin editing; enforced by Row Level Security itself, not just the client |
 | Pin vote protection (layer 10) | **Built** | One vote per resident and net-score removal are both enforced server-side now (a unique constraint and a database trigger); the geofence and rate limit it also depends on (layers 1, 2) still do not exist |
-| Operator PIN gate | **Not started** | `/admin` is unauthenticated. Now urgent rather than theoretical: with a shared backend, an unauthorised visitor can change what a whole barangay is told, not only what they themselves see |
+| Officials, areas and sign-in | **Built** | `/sign-in` (Google or an email link), `/auth/callback` and `/auth/confirm` exchange the session; the `/admin` gate (`src/app/admin/layout.tsx`) redirects a signed-out visitor, shows a not-appointed notice, or opens the dashboard. `private.manages_zone` restricts every write to the official's own barangay or town, enforced by the database, not just the UI. **Open item, blocking real-world use:** the four demo barangays' PSGC codes are unverified against the PSA's official list — three end in `000` and look like placeholders — and this code is exactly the permission boundary that decides who may issue an alert for a barangay. Verification was attempted and blocked by psa.gov.ph's human-verification check; it must be done by a person before any real appointment is made. **Known limit:** a community pin whose zone cannot be resolved is hidden from every admin surface (map, moderation panel) with no in-app way for anyone, including the system owner, to moderate it |
+| Appointing officials | **Built, by hand only** | `private.appoint_official(email, area, display_name)` and `private.remove_official(email)`, run from Supabase's SQL editor by the system owner — no admin screen. The command echoes exactly what it granted, e.g. "covers 0 barangay(s): none"; an area matching zero barangays is accepted, not refused, and such an official sees a "No barangays in your area" notice instead of a crash |
+| The action record | **Built** | Append-only `official_actions`, written by database triggers on `alerts`, `evacuation_centers` and `community_pins` (`supabase/migrations/20260914065551_official_actions.sql`), readable by every official at `/admin/history`. See the audit-trail row below for what "automatic" means here today |
 | Real push delivery, SMS provider | **Not started** | Stage 3. The service worker's receive-and-display handler exists, but there is no subscription, no VAPID keys and nothing that sends |
-| Geofence, rate limit, audit trail (layers 1–3, 8) | **Not started** | Stage 3 |
+| Geofence, rate limit (layers 1–3) | **Not started** | Stage 3 |
+| Audit trail (layer 8) | **Partly delivered** | Official actions are recorded as they happen, and the record already knows how to attribute an automatic one: a net-score pin removal is credited "Automatic — net score" today, and the same trigger would credit an alert with no signed-in actor as "Automatic — <source>". That second case has never actually fired, because nothing yet calls `set_zone_alert` with a non-manual source — the automatic alert engine itself is Stage 3, arriving into a record already built to receive it |
+| Background Sync (offline report queue) | **Not started** | Stage 2. Reports submitted offline still queue client-side, but not through the service worker's Background Sync API |
+| Error / uptime monitoring | **Not started** | Stage 2 |
 | Outlier downweighting (layer 4) | **UI only** | Downweighting behaviour is real — flagged reports are excluded from the agreeing count and badged — but the flag itself is set in fixture data, not detected |
 | Reputation scoring (layer 6) | **Not started** | Stage 4 — a trust weight exists on the data model but nothing reads it |
 | Real PAGASA and hazard data | **Not started** | Zones, POIs and hazard ratings are real Postgres rows now, but the values themselves are still the seeded demo dataset, not live PAGASA/DENR-MGB feeds |
-| Offline map tile caching | **Not started** | Stage 2 |
+| Offline map tile caching | **Not started** | Stage 3, moved from Stage 2 (see [Roadmap](#roadmap)) |
 | Offline fallback when the map cannot draw | **Built** | Degrades to a plain zone-alert list. Uses connectivity as a Stage 1 proxy for "are tiles available" |
 
 ---
@@ -366,16 +376,16 @@ Every screen, on realistic mock data, no backend.
 That last criterion is deliberately part of the bar rather than a note. Every item on the build list existed before the review, and the build still contained a path that showed residents "Evacuate immediately" under an "Advisory" badge. "Everything is built" and "everything works" are different claims, and only the second is worth making about a warning system.
 
 ### Stage 2 — `v0` · Functional build
-Real data and real offline capability. Supabase schema with Row Level Security, Server Actions, Auth, and the operator PIN gate. Service worker with Background Sync. Offline map tiles for the resident's home zone. Self-hosted OSRM for real safest-route calculation. Real PAGASA readings and real hazard data replacing the mocks. A decision on whether pin photos go live.
+Real data and real offline capability. Supabase schema with Row Level Security, Server Actions, Auth, officials with their own accounts limited by the database to their area, and an append-only record of official actions. Service worker with Background Sync. A decision on whether pin photos go live.
 
-**Done when:** the app works fully offline on real seeded data, optional login works, the operator PIN gate is live, and error/uptime monitoring is active.
+**Done when:** the app works fully offline on real seeded data, optional resident sign-in works, officials sign in with their own accounts, each limited to their area, and every official action is recorded, and error/uptime monitoring is active.
 
-> The PIN gate ships **in this stage, alongside the database — not after it.** `/admin` is unauthenticated today, and with the shared backend now live, that is no longer harmless: before it existed, a stranger who opened `/admin` could only mislead themselves, since every override wrote to their own device alone. Now the same unauthenticated screen can change what a whole barangay is told during a flood. The gate must ship before any real deployment, which is why it is an exit criterion rather than a task on a list.
+> Officials, areas and the action record ship **in this stage, alongside the database — not after it.** `/admin` was unauthenticated once the shared backend went live, and that was no longer harmless: before the backend existed, a stranger who opened `/admin` could only mislead themselves, since every override wrote to their own device alone. With a shared backend, the same unauthenticated screen could change what a whole barangay is told during a flood. Officials must be able to sign in, each limited to their own area, before any real deployment — which is why it is an exit criterion rather than a task on a list.
 
-> Start the PAGASA data request at the *beginning* of this stage. It gates the highest-quality data option and moves on an institutional timeline, not ours.
+> Start the PAGASA data request at the *beginning* of this stage. It gates the highest-quality data option and moves on an institutional timeline, not ours, even though the data it returns is not wired in until Stage 3.
 
 ### Stage 3 — `v1` · Full implementation
-The core mechanism goes live: threshold engine, Web Push with retry, anti-abuse layers 1–3 and the audit trail, and the analytics dashboard rewired from mock data onto that real audit trail.
+The core mechanism goes live: threshold engine, Web Push with retry, anti-abuse layers 1–3 and the audit trail, and the analytics dashboard rewired from mock data onto that real audit trail. Alongside it, one **geography and real data** theme: the country-wide barangay list, real GPS detection, offline map tiles, real PAGASA and hazard data replacing the mocks, and self-hosted OSRM for real safest-route calculation. These move together to this stage rather than shipping for Stage 2's four demo barangays first — building any of them for four barangays now would be redone nationally once the real, country-wide list lands, so they wait for it.
 
 **Done when:** a genuine crowd-report scenario auto-triggers an alert and delivers it via push with retry — end to end, no mocks in the path.
 
@@ -422,7 +432,6 @@ Targets are hypotheses for the pilot, not guarantees — no baseline exists from
 
 **Future expansion, deliberately deferred**
 
-- **Role-based access for multi-officer LGU deployments.** A reversal of the two-role model, and not a small one — real authentication, permissions, and audit requirements come with it.
 - **Active early warning for landslide, storm surge, drought, and heatwave** — meaning their own crowd reports, thresholds, and response coordination. Note this is *not* the same as what already ships for those hazards: landslide and storm surge carry a static risk rating, heat and drought a read-only bulletin. Both are informational. Going from informational to active would need a separate data model and crowd-report vocabulary for each — there is no landslide equivalent of the ankle/knee/waist/neck scale — making them parallel products rather than extensions of the flood engine.
 
 ### How new scope gets admitted
