@@ -1472,3 +1472,24 @@ Run the production build locally on port 3100 through the browser preview toolin
 ## Carried forward, not in this plan
 
 The other three V0 pieces get their own designs: the **outbox upgrade** (Background Sync, the outbox moving to storage the service worker can read, a retry cap, a visible "waiting to send" state, releasing delivered entries), **error and uptime monitoring**, and **honest "Use my location"**. Plan 4's smaller follow-ups remain in `docs/superpowers/plans/2026-09-09-v0-community-stores.md` under "Found during execution".
+
+## Found during execution
+
+Everything below surfaced while this plan ran — in task reviews, the live end-to-end run (15 September 2026) and the final whole-branch review — and is **not** fixed on the branch. The execution ledger that recorded it is scratch and is deleted when the plan completes, so it lives here.
+
+**For the outbox-upgrade design**
+- **Unauthored first write.** A resident's very first write is queued before any session exists, so it carries no author and is claimed by whoever next signs in on that device. Accepted for V0: only resident writes can be unauthored, and none reach the action record. Neither "stamp the anonymous id first" (impossible offline) nor "anonymous sessions only" (strands a genuine offline write) closes it.
+- **Held entries look like the current person's own.** Entries held back because they belong to another user still render as the signed-in person's pending writes.
+- **Cross-tab account change.** The cached session user id is refreshed only on page load and drain; if another tab switches accounts, a write can be stamped with the previous user.
+
+**For V1 (geography and real data)**
+- **Forged alert history.** `authenticated` holds INSERT on `alerts.superseded_severity` and `confidence`, so an in-area official inserting directly (not through `set_zone_alert`) can forge the "from" value the action record shows. Fix by making `set_zone_alert` the only writer — a security-model change.
+- **Orphaned community pins** (a pin whose zone cannot be resolved) are hidden from every admin surface, with no in-app path for anyone to moderate them.
+- **Unknown hazard data** is now shown as "Unknown / Hindi tiyak" and left out of the risk score instead of crashing. When the country-wide barangay list arrives, most barangays will be in this state — decide how the score and cautions should read with partial data.
+
+**Before launch**
+- **Email-link sign-in is untested live.** Google sign-in and anonymous-to-Google linking were verified live; the email link needs setup steps 4 (SMTP) and 6 (email template) first.
+- **Never enable email autoconfirm.** `appoint_official` now requires a confirmed email; autoconfirm would let someone pre-register an official's address.
+
+**Lesson from the live run**
+- A test that drives a real barangay's controls writes to the shared database even when the page appears not to change. During the run, a real Warning was active on Nilombot for about 15 minutes. Live tests write only to a temporary zone.
