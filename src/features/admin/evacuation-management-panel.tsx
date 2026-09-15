@@ -26,6 +26,7 @@ import { DonutChart } from "./charts/donut-chart";
 import { useOfficial } from "@/lib/auth/official-context";
 import { isInArea } from "@/lib/auth/official";
 import type { CenterStatus, LanguageCode, LocalizedText, Zone } from "@/lib/types";
+import { useHeadcountCommit } from "./use-headcount-commit";
 
 const TITLE: LocalizedText = { en: "Evacuation Management", fil: "Pamamahala ng Evacuation" };
 const SUBTITLE: LocalizedText = {
@@ -112,13 +113,16 @@ export function EvacuationManagementPanel({ zones }: { zones: Zone[] }) {
  * carried through /api/zones) and then tracked in this component's own
  * state as the admin edits it — a write doesn't itself refetch reference
  * data, so this state only reflects the server again after the next
- * fetch/reload. Typing here still derives the status shown immediately and
- * writes it to the database via setCenterOccupancy.
+ * fetch/reload. Typing here derives the status shown immediately; the
+ * database write via setCenterOccupancy happens once the value is committed
+ * (see useHeadcountCommit).
  */
 function EvacuationCenterRow({ zone, lang }: { zone: Zone; lang: LanguageCode }) {
-  const [occupancy, setOccupancy] = useState<number | undefined>(zone.currentOccupancy);
   const [statusError, setStatusError] = useState(false);
   const [occupancyError, setOccupancyError] = useState(false);
+  // Written once per committed value, not per keystroke (M9).
+  const headcount = useHeadcountCommit(zone.currentOccupancy, writeOccupancy);
+  const occupancy = headcount.occupancy;
   const isTrackingHeadcount = occupancy !== undefined;
   const centerStatus = resolveEffectiveCenterStatus(zone.centerStatus, zone.evacuationCenterCapacity, occupancy);
 
@@ -134,8 +138,7 @@ function EvacuationCenterRow({ zone, lang }: { zone: Zone; lang: LanguageCode })
     if (!result.ok) setStatusError(true);
   }
 
-  async function handleOccupancyChange(value: number | undefined) {
-    setOccupancy(value);
+  async function writeOccupancy(value: number | undefined) {
     setOccupancyError(false);
     const { setCenterOccupancy } = await import("@/app/actions/set-center");
     const result = await setCenterOccupancy({ zoneId: zone.id, occupancy: value ?? null });
@@ -204,12 +207,16 @@ function EvacuationCenterRow({ zone, lang }: { zone: Zone; lang: LanguageCode })
             value={occupancy ?? ""}
             onChange={(event) => {
               const raw = event.target.value;
-              void handleOccupancyChange(raw === "" ? undefined : Number(raw));
+              headcount.change(raw === "" ? undefined : Number(raw));
+            }}
+            onBlur={() => headcount.commit()}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") headcount.commit();
             }}
           />
         </div>
         {isTrackingHeadcount && (
-          <Button type="button" variant="ghost" size="sm" onClick={() => void handleOccupancyChange(undefined)}>
+          <Button type="button" variant="ghost" size="sm" onClick={() => headcount.set(undefined)}>
             {t(CLEAR, lang)}
           </Button>
         )}

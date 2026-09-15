@@ -44,6 +44,34 @@ describe("LastChangeLine", () => {
     expect(fetch).toHaveBeenCalledWith("/api/official-actions?zone=zone-1&kind=alert&limit=1");
   });
 
+  it("does not show the English 'by' in Filipino, and names a database-written actor in Filipino (M2)", async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => [
+        {
+          id: 1,
+          occurredAt: "2026-09-14T02:14:00.000Z",
+          actorName: "Automatic — auto_crowdsourced",
+          actorArea: null,
+          action: "alert.set",
+          zoneId: "zone-1",
+          targetId: "alert-1",
+          detail: { from: "orange", to: "yellow" },
+        },
+      ],
+    });
+
+    render(
+      <LanguageProvider initialLang="fil">
+        <LastChangeLine zoneId="zone-1" />
+      </LanguageProvider>
+    );
+
+    const line = await screen.findByText(/Ibinaba sa Paalala/);
+    expect(line).toHaveTextContent(/^Ibinaba sa Paalala \(Awtomatiko — mga ulat ng komunidad\), /);
+    expect(line).not.toHaveTextContent(/\bby\b/);
+  });
+
   it("renders nothing when the response is an empty list", async () => {
     (fetch as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true, json: async () => [] });
 

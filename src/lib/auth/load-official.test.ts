@@ -23,10 +23,11 @@ vi.mock("@/lib/supabase/server", () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
-  // loadOfficial is wrapped in React's `cache`, which memoizes per module
-  // instance outside of a real Next.js request. Without resetting the module
-  // registry, the second test in this file would silently reuse the first
-  // test's resolved promise instead of exercising the mocks it just set up.
+  // loadOfficial is wrapped in React's `cache`. Under Vitest, `react` resolves
+  // to its client build, where `cache` is a non-memoising passthrough, so no
+  // result leaks from one test to the next and this reset is a precaution
+  // only. The flip side: loadOfficial's per-request memoisation, which is real
+  // in the Next.js server runtime, is not exercised by anything in this file.
   vi.resetModules();
 });
 

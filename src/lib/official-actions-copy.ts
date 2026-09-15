@@ -1,7 +1,7 @@
 import { SEVERITY_ORDER, SEVERITY_LABEL, type Severity } from "./severity";
 import { CENTER_STATUS_LABEL } from "./center-status";
 import { t } from "./i18n";
-import type { LanguageCode } from "./types";
+import type { LanguageCode, LocalizedText } from "./types";
 import type { OfficialAction } from "./official-actions-mapper";
 
 /**
@@ -120,6 +120,58 @@ function describeOfficialAppointed(detail: Record<string, unknown>, lang: Langua
 function describeOfficialRemoved(detail: Record<string, unknown>, lang: LanguageCode): string {
   const displayName = typeof detail.display_name === "string" ? detail.display_name : "?";
   return t({ en: `Removed ${displayName}`, fil: `Inalis si ${displayName}` }, lang);
+}
+
+const SYSTEM_OWNER = "System owner";
+const NOT_AN_OFFICIAL = "Not an official";
+const AUTOMATIC_PREFIX = "Automatic — ";
+
+const FIXED_ACTOR: Record<string, LocalizedText> = {
+  [SYSTEM_OWNER]: { en: "System owner", fil: "May-ari ng sistema" },
+  [NOT_AN_OFFICIAL]: { en: "Not an official", fil: "Hindi opisyal" },
+};
+
+/** What follows "Automatic — " in a stored actor name: "net score", or an alert source. */
+const AUTOMATIC_CAUSE: Record<string, LocalizedText> = {
+  "net score": { en: "net score", fil: "net score" },
+  auto_crowdsourced: { en: "community reports", fil: "mga ulat ng komunidad" },
+  predicted: { en: "prediction", fil: "prediksyon" },
+  cascade: { en: "upstream alert", fil: "babala mula sa itaas" },
+};
+
+/**
+ * The actor of an official_actions entry, in the requested language (M2).
+ * The database triggers write a fixed set of English names for actors that
+ * are not a person ("System owner", "Not an official", "Automatic — net
+ * score", "Automatic — <alert source>"); those are translated here for
+ * display only, and the stored value is never changed. An official's own
+ * display name is shown exactly as stored. An automatic cause this module
+ * does not know keeps its raw text, so a new source is never hidden.
+ */
+export function describeActor(actorName: string, lang: LanguageCode): string {
+  const fixed = FIXED_ACTOR[actorName];
+  if (fixed) return t(fixed, lang);
+  if (actorName.startsWith(AUTOMATIC_PREFIX)) {
+    const cause = actorName.slice(AUTOMATIC_PREFIX.length);
+    const causeLabel = AUTOMATIC_CAUSE[cause];
+    const causeText = causeLabel ? t(causeLabel, lang) : cause;
+    return t({ en: `Automatic — ${causeText}`, fil: `Awtomatiko — ${causeText}` }, lang);
+  }
+  return actorName;
+}
+
+/**
+ * The Manage zone page's last-change line: what changed, who did it, when.
+ * English reads "Lowered to Advisory by Juan Dela Cruz, 2:14 PM". Filipino
+ * puts the actor in parentheses rather than a connector word, because the
+ * natural one ("ni") is only correct before a person's name and several
+ * actors here are not people ("May-ari ng sistema", "Awtomatiko — …").
+ */
+export function describeLastChange(action: OfficialAction, lang: LanguageCode, now: Date = new Date()): string {
+  const what = describeAction(action, lang);
+  const who = describeActor(action.actorName, lang);
+  const when = formatActionTime(action.occurredAt, lang, now);
+  return t({ en: `${what} by ${who}, ${when}`, fil: `${what} (${who}), ${when}` }, lang);
 }
 
 const LOCALE: Record<LanguageCode, string> = { en: "en-PH", fil: "fil-PH" };

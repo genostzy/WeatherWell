@@ -46,6 +46,19 @@ describe("HistoryList", () => {
     expect(screen.getByText("Appointed Juan Dela Cruz for Uno, Testtown")).toBeInTheDocument();
   });
 
+  it("shows a database-written actor name in Filipino when the language is Filipino (M2)", () => {
+    renderWithData(
+      <HistoryList
+        actions={[action({ action: "pin.removed", actorName: "Automatic — net score", detail: { reason: "net_score" } })]}
+        zones={ZONES}
+        scope="mine"
+      />,
+      { lang: "fil" }
+    );
+
+    expect(screen.getByText(/^Awtomatiko — net score, /)).toBeInTheDocument();
+  });
+
   it("shows the empty-state message when there are no actions", () => {
     renderWithData(<HistoryList actions={[]} zones={ZONES} scope="mine" />);
 

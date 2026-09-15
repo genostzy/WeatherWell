@@ -31,6 +31,7 @@ import {
   createCommunityPinMarkerIcon,
 } from "@/features/map/marker-icons";
 import type { AlertRecord, HazardType, LanguageCode, LocalizedText, Zone } from "@/lib/types";
+import { useHeadcountCommit } from "./use-headcount-commit";
 
 const MAP_ARIA_LABEL: LocalizedText = {
   en: "Admin operations map",
@@ -383,8 +384,9 @@ function ZoneAlertSelect({
  * carried through /api/zones) and then tracked in this component's own
  * state as the admin edits it — a write doesn't itself refetch reference
  * data, so this state only reflects the server again after the next
- * fetch/reload. Typing here still derives the status shown below
- * immediately and writes it to the database via setCenterOccupancy.
+ * fetch/reload. Typing here derives the status shown below immediately;
+ * the database write via setCenterOccupancy happens once the value is
+ * committed (see useHeadcountCommit).
  */
 function CenterOccupancyControl({
   zone,
@@ -395,21 +397,22 @@ function CenterOccupancyControl({
   lang: LanguageCode;
   canManage: boolean;
 }) {
-  const [occupancy, setOccupancy] = useState<number | undefined>(zone.currentOccupancy);
   const [error, setError] = useState(false);
-  const centerStatus = resolveEffectiveCenterStatus(zone.centerStatus, zone.evacuationCenterCapacity, occupancy);
 
   // Dynamic import for the same reason ZoneAlertSelect's does: set-center.ts
   // is a "use server" module and must not be pulled statically into a
   // client-component test's module graph.
-  async function handleChange(raw: string) {
-    const value = raw === "" ? undefined : Number(raw);
-    setOccupancy(value);
+  async function writeOccupancy(value: number | undefined) {
     setError(false);
     const { setCenterOccupancy } = await import("@/app/actions/set-center");
     const result = await setCenterOccupancy({ zoneId: zone.id, occupancy: value ?? null });
     if (!result.ok) setError(true);
   }
+
+  // Written once per committed value, not per keystroke (M9).
+  const headcount = useHeadcountCommit(zone.currentOccupancy, writeOccupancy);
+  const occupancy = headcount.occupancy;
+  const centerStatus = resolveEffectiveCenterStatus(zone.centerStatus, zone.evacuationCenterCapacity, occupancy);
 
   if (!canManage) {
     return (
@@ -439,7 +442,11 @@ function CenterOccupancyControl({
           min={0}
           max={zone.evacuationCenterCapacity}
           value={occupancy ?? ""}
-          onChange={(event) => void handleChange(event.target.value)}
+          onChange={(event) => headcount.change(event.target.value === "" ? undefined : Number(event.target.value))}
+          onBlur={() => headcount.commit()}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") headcount.commit();
+          }}
           aria-label={`${t(HEADCOUNT, lang)} — ${zone.evacuationCenterName}`}
           className="w-full rounded-md border-2 border-border bg-background px-2 py-1 text-sm"
         />

@@ -106,8 +106,8 @@ export async function voteOnPin(input: VoteOnPinInput): Promise<ActionResult> {
   // the tally and removes the pin as a side effect of the upsert above,
   // already inside this same request, running as the table's owner rather
   // than as this voter — which is the only way it can work at all, since
-  // RLS's pins_update_own_or_operator refuses a direct UPDATE from anyone
-  // but the pin's own author (silently, zero rows, no error) and PostgREST
+  // RLS's pins_update_own_or_in_area refuses a direct UPDATE from anyone
+  // but the pin's own author or an official for its area (silently, zero rows, no error) and PostgREST
   // will not even resolve an RPC into schema `private` for this voter to
   // call instead. See `src/lib/community-pin.ts` for where the threshold
   // itself is defined.

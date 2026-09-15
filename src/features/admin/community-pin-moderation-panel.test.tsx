@@ -157,6 +157,18 @@ describe("CommunityPinModerationPanel", () => {
     expect(screen.queryByText("Orphaned")).not.toBeInTheDocument();
   });
 
+  it("never lists a pin with no resolvable zone, even when scoped to that zone id (P6-a)", () => {
+    // Every listed pin carries its resolved zone, so there is no "Unassigned"
+    // row to render in either view. Queued, so it renders synchronously.
+    addCommunityPin({ zoneId: "zone-does-not-exist", statusTag: "flooded", caption: "Orphaned", lat: 0, lng: 0 });
+
+    renderWithData(<CommunityPinModerationPanel zones={FIXTURE_REFERENCE_DATA.zones} zoneId="zone-does-not-exist" />);
+
+    expect(screen.queryByText("Orphaned")).not.toBeInTheDocument();
+    expect(screen.queryByText(/unassigned/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/no community pins/i)).toBeInTheDocument();
+  });
+
   it("tells the admin when a moderation write is permanently refused, instead of silently reverting (F6-3)", async () => {
     const user = userEvent.setup();
     addCommunityPin({ zoneId: "zone-1", statusTag: "flooded", caption: "Test pin", lat: 0, lng: 0 });

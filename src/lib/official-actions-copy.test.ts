@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { describeAction } from "./official-actions-copy";
+import { describeAction, describeActor } from "./official-actions-copy";
 import type { OfficialAction } from "./official-actions-mapper";
 
 function action(overrides: Partial<OfficialAction>): OfficialAction {
@@ -139,15 +139,40 @@ describe("describeAction", () => {
     expect(describeAction(a, "fil")).toBe("Aksyong naitala: something.new");
   });
 
-  it("alert.set with a malformed detail (missing to) degrades instead of crashing or rendering blank", () => {
+  it("alert.set with a malformed detail (missing to) degrades to the generic alert sentence", () => {
     const a = action({ action: "alert.set", detail: {} });
-    expect(() => describeAction(a, "en")).not.toThrow();
-    expect(describeAction(a, "en")).not.toBe("");
+    expect(describeAction(a, "en")).toBe("Alert set");
+    expect(describeAction(a, "fil")).toBe("Naitakda ang alerto");
   });
 
-  it("centre.status with a malformed detail (missing to) degrades instead of crashing or rendering blank", () => {
+  it("centre.status with a malformed detail (missing to) degrades to the generic centre sentence", () => {
     const a = action({ action: "centre.status", detail: {} });
-    expect(() => describeAction(a, "en")).not.toThrow();
-    expect(describeAction(a, "en")).not.toBe("");
+    expect(describeAction(a, "en")).toBe("Evacuation centre status changed");
+    expect(describeAction(a, "fil")).toBe("Nagbago ang katayuan ng evacuation center");
+  });
+});
+
+describe("describeActor (M2)", () => {
+  // The database writes these actor names in English. The stored value stays
+  // as it is; only what an official reads changes with the language.
+  it.each([
+    ["System owner", "System owner", "May-ari ng sistema"],
+    ["Not an official", "Not an official", "Hindi opisyal"],
+    ["Automatic — net score", "Automatic — net score", "Awtomatiko — net score"],
+    ["Automatic — auto_crowdsourced", "Automatic — community reports", "Awtomatiko — mga ulat ng komunidad"],
+    ["Automatic — predicted", "Automatic — prediction", "Awtomatiko — prediksyon"],
+    ["Automatic — cascade", "Automatic — upstream alert", "Awtomatiko — babala mula sa itaas"],
+  ])("%s", (stored, en, fil) => {
+    expect(describeActor(stored, "en")).toBe(en);
+    expect(describeActor(stored, "fil")).toBe(fil);
+  });
+
+  it("an automatic actor with a source it does not know keeps the raw source rather than dropping it", () => {
+    expect(describeActor("Automatic — something_new", "fil")).toBe("Awtomatiko — something_new");
+  });
+
+  it("an official's own name is shown exactly as stored, in both languages", () => {
+    expect(describeActor("Juan Dela Cruz, BDRRMO Nilombot", "en")).toBe("Juan Dela Cruz, BDRRMO Nilombot");
+    expect(describeActor("Juan Dela Cruz, BDRRMO Nilombot", "fil")).toBe("Juan Dela Cruz, BDRRMO Nilombot");
   });
 });

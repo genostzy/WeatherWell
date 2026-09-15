@@ -159,8 +159,8 @@ export async function createPin(input: CreatePinInput): Promise<ActionResult> {
 /**
  * A resident correcting their own pin.
  *
- * Filtered by id alone. RLS's `pins_update_own_or_operator` is what scopes
- * this to the author (or an operator fixing an obvious mistake); repeating
+ * Filtered by id alone. RLS's `pins_update_own_or_in_area` is what scopes
+ * this to the author (or an official for that pin's area); repeating
  * that as an author_id filter here would be a second copy of the same rule in
  * a second language, and two copies drift.
  */
@@ -232,7 +232,7 @@ export async function deleteOwnPin(input: { pinId: string }): Promise<ActionResu
  * voting took down wrongly — PRD Core Feature #5's "remove or restore any
  * pin", the same human override the alert pipeline has.
  *
- * Nothing here checks who the caller is. `private.is_operator()` inside the
+ * Nothing here checks who the caller is. `private.manages_zone()` inside the
  * RLS policy and the moderation trigger is the authority, and a role check
  * written here as well would be a second copy free to drift from it. A
  * resident whose client called this gets zero rows or 42501, both permanent.

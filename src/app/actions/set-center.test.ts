@@ -49,7 +49,7 @@ describe("setCenterStatus", () => {
   });
 
   it("treats zero affected rows as a permanent refusal — a resident calling this must not be told it worked", async () => {
-    // centers_update_operator refuses a non-operator's UPDATE by matching zero
+    // centers_update_in_area refuses an out-of-area UPDATE by matching zero
     // rows and raising no error. Without asking for the affected rows, this
     // would report success to a resident whose write RLS actually discarded.
     getClaims.mockResolvedValue({ data: { claims: { sub: "resident-1" } } });

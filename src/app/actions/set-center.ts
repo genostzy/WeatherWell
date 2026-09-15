@@ -21,8 +21,9 @@ async function callerId(
 /**
  * Zero rows and no error is what an UPDATE refused by RLS looks like from
  * postgrest — there is no error to inspect, only an empty result.
- * `centers_update_operator` is the only policy that touches this table's
- * UPDATE, and it is operator-only, so a resident calling either action below
+ * `centers_update_in_area` is the only policy that touches this table's
+ * UPDATE, and it admits only an official for the centre's area, so a resident
+ * (or an official for another area) calling either action below
  * would otherwise be told it worked while nothing changed.
  */
 function refused(): ActionResult {

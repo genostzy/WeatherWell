@@ -3,7 +3,7 @@
 import { useContext, useEffect, useState } from "react";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { AlertsContext } from "@/lib/alerts-store";
-import { describeAction, formatActionTime } from "@/lib/official-actions-copy";
+import { describeLastChange } from "@/lib/official-actions-copy";
 import type { OfficialAction } from "@/lib/official-actions-mapper";
 
 /**
@@ -43,11 +43,5 @@ export function LastChangeLine({ zoneId }: { zoneId: string }) {
 
   if (!entry) return null;
 
-  const time = formatActionTime(entry.occurredAt, lang);
-
-  return (
-    <p className="text-xs text-muted-foreground">
-      {describeAction(entry, lang)} by {entry.actorName}, {time}
-    </p>
-  );
+  return <p className="text-xs text-muted-foreground">{describeLastChange(entry, lang)}</p>;
 }

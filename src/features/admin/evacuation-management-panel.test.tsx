@@ -74,6 +74,19 @@ describe("EvacuationManagementPanel", () => {
     expect(await screen.findByText(/could not save/i)).toBeInTheDocument();
   });
 
+  it("writes a typed headcount of 120 once when the field is left, not once per keystroke (M9)", async () => {
+    const zone = FIXTURE_REFERENCE_DATA.zones[0];
+    renderWithData(<EvacuationManagementPanel zones={FIXTURE_REFERENCE_DATA.zones} />);
+
+    const input = screen.getByLabelText(new RegExp(`Headcount \\(of ${zone.evacuationCenterCapacity}`, "i"));
+    for (const value of ["1", "12", "120"]) fireEvent.change(input, { target: { value } });
+    fireEvent.blur(input);
+
+    await waitFor(() => expect(setCenterOccupancyMock).toHaveBeenCalledWith({ zoneId: zone.id, occupancy: 120 }));
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    expect(setCenterOccupancyMock).toHaveBeenCalledTimes(1);
+  });
+
   it("writes a headcount and tells the admin when that write fails", async () => {
     setCenterOccupancyMock.mockResolvedValueOnce({ ok: false, permanent: true, error: "boom" });
     const zone = FIXTURE_REFERENCE_DATA.zones[0];

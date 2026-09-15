@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
-import { describeAction, formatActionTime } from "@/lib/official-actions-copy";
+import { describeAction, describeActor, formatActionTime } from "@/lib/official-actions-copy";
 import type { OfficialAction } from "@/lib/official-actions-mapper";
 import type { LocalizedText } from "@/lib/types";
 
@@ -90,7 +90,7 @@ export function HistoryList({
                         {zoneName ? ` — ${zoneName}` : ""}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {action.actorName}, {time}
+                        {describeActor(action.actorName, lang)}, {time}
                       </p>
                     </CardContent>
                   </Card>

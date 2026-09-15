@@ -83,6 +83,9 @@ function queuedModeration(): OutboxPayloads["setPinRemoved"] {
 
 const zone = FIXTURE_REFERENCE_DATA.zones[0];
 
+/** Comfortably longer than the headcount control's commit debounce. */
+const HEADCOUNT_SETTLE_MS = 900;
+
 describe("AdminMapCanvas", () => {
   beforeEach(() => {
     localStorage.clear();
@@ -161,6 +164,34 @@ describe("AdminMapCanvas", () => {
     await waitFor(() =>
       expect(setCenterOccupancyMock).toHaveBeenCalledWith({ zoneId: zone.id, occupancy: 120 })
     );
+  });
+
+  it("writes a typed headcount of 120 once, on Enter, not once per keystroke (M9)", async () => {
+    // Each write records a centre.occupancy history row, so typing "120" one
+    // character at a time must not leave rows for 1 and 12 as well.
+    renderWithData(<AdminMapCanvas zones={FIXTURE_REFERENCE_DATA.zones} />);
+    fireEvent.click(screen.getByRole("img", { name: new RegExp(zone.evacuationCenterName, "i") }));
+    const input = screen.getByRole("spinbutton", { name: new RegExp(zone.evacuationCenterName, "i") });
+
+    for (const value of ["1", "12", "120"]) fireEvent.change(input, { target: { value } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => expect(setCenterOccupancyMock).toHaveBeenCalledWith({ zoneId: zone.id, occupancy: 120 }));
+    await new Promise((resolve) => setTimeout(resolve, HEADCOUNT_SETTLE_MS));
+    expect(setCenterOccupancyMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("writes a typed headcount once when typing stops, without Enter or leaving the field (M9)", async () => {
+    renderWithData(<AdminMapCanvas zones={FIXTURE_REFERENCE_DATA.zones} />);
+    fireEvent.click(screen.getByRole("img", { name: new RegExp(zone.evacuationCenterName, "i") }));
+    const input = screen.getByRole("spinbutton", { name: new RegExp(zone.evacuationCenterName, "i") });
+
+    for (const value of ["1", "12", "120"]) fireEvent.change(input, { target: { value } });
+
+    await waitFor(() => expect(setCenterOccupancyMock).toHaveBeenCalledWith({ zoneId: zone.id, occupancy: 120 }));
+    fireEvent.blur(input);
+    await new Promise((resolve) => setTimeout(resolve, HEADCOUNT_SETTLE_MS));
+    expect(setCenterOccupancyMock).toHaveBeenCalledTimes(1);
   });
 
   it("tells the admin when a headcount write fails", async () => {

@@ -225,7 +225,7 @@ describe("setPinRemoved", () => {
   });
 
   it("treats a non-operator's refused moderation write as permanent", async () => {
-    // is_operator() is what gates this. A resident whose client called it
+    // manages_zone() is what gates this. A resident whose client called it
     // gets zero rows (RLS) or 42501 (the trigger); neither becomes true later.
     getClaims.mockResolvedValue({ data: { claims: { sub: "resident" } } });
     updateChain({ data: [] });

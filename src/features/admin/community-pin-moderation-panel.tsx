@@ -28,7 +28,6 @@ const NO_PINS: LocalizedText = { en: "No community pins right now.", fil: "Walan
 const REMOVE: LocalizedText = { en: "Remove", fil: "Alisin" };
 const RESTORE: LocalizedText = { en: "Restore", fil: "Ibalik" };
 const NET_SCORE: LocalizedText = { en: "net", fil: "net" };
-const UNKNOWN_ZONE: LocalizedText = { en: "Unassigned", fil: "Walang zone" };
 const REMOVED_SECTION: LocalizedText = { en: "Removed (restorable)", fil: "Inalis (maaaring ibalik)" };
 const REMOVED_BY_VOTES: LocalizedText = { en: "Removed by votes", fil: "Inalis ng boto" };
 const REMOVED_BY_ADMIN: LocalizedText = { en: "Removed by admin", fil: "Inalis ng admin" };
@@ -67,16 +66,18 @@ export function CommunityPinModerationPanel({ zones, zoneId }: { zones: Zone[]; 
   // per-pin via managesZone rather than assuming the list itself is safe.
   // Otherwise (the global dashboard) only pins in a zone the official
   // manages are listed at all; the database enforces the real limit either
-  // way. A pin whose zone cannot be resolved is hidden here — same as the
-  // Operations map (see admin-map-canvas.tsx) — since it cannot be proven
-  // to be in area.
-  const allPins = useAllCommunityPins().filter((pin) => {
-    if (zoneId) return pin.zoneId === zoneId;
+  // way. A pin whose zone cannot be resolved is hidden in both views — same
+  // as the Operations map (see admin-map-canvas.tsx) — since it cannot be
+  // proven to be in area. Each listed pin carries its resolved zone, so a
+  // row never has to render a pin with no zone.
+  const allPins = useAllCommunityPins().flatMap((pin) => {
     const zone = zones.find((z) => z.id === pin.zoneId);
-    return zone ? managesZone(zone) : false;
+    if (!zone) return [];
+    if (zoneId ? zone.id !== zoneId : !managesZone(zone)) return [];
+    return [{ pin, zone }];
   });
-  const activePins = allPins.filter((pin) => !pin.removed);
-  const removedPins = allPins.filter((pin) => pin.removed);
+  const activePins = allPins.filter(({ pin }) => !pin.removed);
+  const removedPins = allPins.filter(({ pin }) => pin.removed);
   const scopedZoneName = zoneId ? zones.find((z) => z.id === zoneId)?.name : undefined;
 
   // Tracked here, not inside each row: a pin optimistically flips between
@@ -113,40 +114,34 @@ export function CommunityPinModerationPanel({ zones, zoneId }: { zones: Zone[]; 
       <CardContent className="space-y-4">
         {activePins.length === 0 && <p className="text-sm text-muted-foreground">{t(NO_PINS, lang)}</p>}
 
-        {activePins.map((pin) => {
-          const zone = zones.find((z) => z.id === pin.zoneId);
-          return (
-            <ActivePinRow
-              key={pin.id}
-              pin={pin}
-              zone={zone}
-              scopedZoneName={scopedZoneName}
-              canModerate={zone ? managesZone(zone) : false}
-              failed={failedFor(pin.id)}
-              onRemove={() => trackWrite(pin.id, removePinByAdmin(pin.id).id)}
-              lang={lang}
-            />
-          );
-        })}
+        {activePins.map(({ pin, zone }) => (
+          <ActivePinRow
+            key={pin.id}
+            pin={pin}
+            zone={zone}
+            scopedZoneName={scopedZoneName}
+            canModerate={managesZone(zone)}
+            failed={failedFor(pin.id)}
+            onRemove={() => trackWrite(pin.id, removePinByAdmin(pin.id).id)}
+            lang={lang}
+          />
+        ))}
 
         {removedPins.length > 0 && (
           <div className="space-y-3 border-t pt-3">
             <p className="text-sm font-medium text-muted-foreground">{t(REMOVED_SECTION, lang)}</p>
-            {removedPins.map((pin) => {
-              const zone = zones.find((z) => z.id === pin.zoneId);
-              return (
-                <RemovedPinRow
-                  key={pin.id}
-                  pin={pin}
-                  zone={zone}
-                  scopedZoneName={scopedZoneName}
-                  canModerate={zone ? managesZone(zone) : false}
-                  failed={failedFor(pin.id)}
-                  onRestore={() => trackWrite(pin.id, restoreCommunityPin(pin.id).id)}
-                  lang={lang}
-                />
-              );
-            })}
+            {removedPins.map(({ pin, zone }) => (
+              <RemovedPinRow
+                key={pin.id}
+                pin={pin}
+                zone={zone}
+                scopedZoneName={scopedZoneName}
+                canModerate={managesZone(zone)}
+                failed={failedFor(pin.id)}
+                onRestore={() => trackWrite(pin.id, restoreCommunityPin(pin.id).id)}
+                lang={lang}
+              />
+            ))}
           </div>
         )}
       </CardContent>
@@ -171,7 +166,7 @@ function ActivePinRow({
   lang,
 }: {
   pin: CommunityPin;
-  zone: Zone | undefined;
+  zone: Zone;
   scopedZoneName: string | undefined;
   canModerate: boolean;
   failed: boolean;
@@ -192,7 +187,7 @@ function ActivePinRow({
           <span className="font-medium">{t(PIN_STATUS_LABEL[pin.statusTag], lang)}</span>
           {!scopedZoneName && (
             <span className="truncate text-xs text-muted-foreground">
-              {zone ? zone.name : t(UNKNOWN_ZONE, lang)}
+              {zone.name}
             </span>
           )}
         </div>
@@ -234,7 +229,7 @@ function RemovedPinRow({
   lang,
 }: {
   pin: CommunityPin;
-  zone: Zone | undefined;
+  zone: Zone;
   scopedZoneName: string | undefined;
   canModerate: boolean;
   failed: boolean;
@@ -248,7 +243,7 @@ function RemovedPinRow({
           <span className="font-medium line-through">{t(PIN_STATUS_LABEL[pin.statusTag], lang)}</span>
           {!scopedZoneName && (
             <span className="truncate text-xs text-muted-foreground">
-              {zone ? zone.name : t(UNKNOWN_ZONE, lang)}
+              {zone.name}
             </span>
           )}
           <Badge variant="outline" className="text-xs">
