@@ -52,4 +52,11 @@ export interface OutboxEntry {
   lastError?: string;
   /** True when retrying cannot help — an RLS denial, a validation rejection. */
   permanentlyFailed: boolean;
+  /**
+   * Who queued this (I2): the session's user id, or null when this device had
+   * no identity yet. Only the matching session replays it; see
+   * drainForCurrentSession. Absent on entries queued by an older build, which
+   * are held because nothing says whose they are.
+   */
+  userId?: string | null;
 }

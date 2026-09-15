@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import vm from "node:vm";
+import { isAdminPath } from "@/lib/auth/admin-path";
 
 /**
  * public/sw.js runs in a worker, never imported by the app, so it cannot be
@@ -69,6 +70,8 @@ function loadServiceWorker(options: {
       put: async (req: never, res: FakeResponse) => {
         entries.set(urlOf(req), res.body);
       },
+      keys: async () => [...entries.keys()].map((url) => ({ url })),
+      delete: async (req: never) => entries.delete(urlOf(req)),
       addAll: async (urls: string[]) => {
         for (const url of urls) entries.set(url, `precached:${url}`);
       },
@@ -120,7 +123,7 @@ function loadServiceWorker(options: {
   vm.createContext(sandbox);
   vm.runInContext(SW_SOURCE, sandbox);
 
-  return { listeners, store };
+  return { listeners, store, context: sandbox as unknown as Record<string, unknown> };
 }
 
 /** Drives the fetch listener and resolves with whatever it responded with. */
@@ -581,10 +584,9 @@ describe("service worker install", () => {
 
   it("no longer precaches /admin, /admin/map or /admin/simulation", async () => {
     // Once /admin needs a sign-in, pre-downloading it would save the sign-in
-    // page on every device and serve it back in place of the dashboard. An
-    // official's own visits are still cached by the network-first navigation
-    // branch — this is only about what INSTALL fetches unconditionally for
-    // every visitor, official or not.
+    // page on every device and serve it back in place of the dashboard. This
+    // is only about what INSTALL fetches unconditionally for every visitor;
+    // an official's own visits are network-only too (see the I1 tests).
     const { listeners, store } = loadServiceWorker({
       fetch: async () => response("ok"),
     });
@@ -680,5 +682,134 @@ describe("service worker cache lifecycle", () => {
     await Promise.all(waits);
 
     expect(store.has(ZONE_CACHE)).toBe(true);
+  });
+});
+
+describe("service worker and admin-scoped responses (I1)", () => {
+  // An official's pages carry official names, the action record and check-in
+  // summaries. On a shared family phone, anything the worker keeps from them
+  // is readable by the next person to open the app — so these are
+  // network-only, never stored, and never answered from a store.
+
+  it("never writes an /admin navigation to any cache", async () => {
+    const { listeners, store } = loadServiceWorker({
+      fetch: async () => response("ADMIN PAGE"),
+    });
+
+    await handleFetch(listeners, { url: `${ORIGIN}/admin/history`, mode: "navigate" });
+    await handleFetch(listeners, { url: `${ORIGIN}/admin`, mode: "navigate" });
+
+    expect(store.size).toBe(0);
+  });
+
+  it("does not answer an /admin navigation from a cached copy when the network fails", async () => {
+    // The shared-phone case itself: offline, a resident types /admin/history.
+    const { listeners } = loadServiceWorker({
+      caches: { [SHELL_CACHE]: { [`${ORIGIN}/admin/history`]: "SOMEONE ELSE'S HISTORY" } },
+      fetch: async () => {
+        throw new Error("offline");
+      },
+    });
+
+    await expect(
+      handleFetch(listeners, { url: `${ORIGIN}/admin/history`, mode: "navigate" })
+    ).rejects.toThrow();
+  });
+
+  it("never stores an /admin RSC fetch, and never serves one stale", async () => {
+    // Client-side <Link> navigation fetches `?_rsc=` flight data, which the
+    // catch-all branch used to put in the asset cache stale-while-revalidate.
+    const { listeners, store } = loadServiceWorker({
+      caches: { [ASSET_CACHE]: { [`${ORIGIN}/admin/zone/zone-1?_rsc=abc`]: "PREVIOUS VISIT" } },
+      fetch: async () => response("FRESH FLIGHT DATA"),
+    });
+
+    const result = await handleFetch(listeners, { url: `${ORIGIN}/admin/zone/zone-1?_rsc=abc` });
+
+    expect(result?.body).toBe("FRESH FLIGHT DATA");
+    expect(store.get(ASSET_CACHE)?.get(`${ORIGIN}/admin/zone/zone-1?_rsc=abc`)).toBe("PREVIOUS VISIT");
+    expect(store.get(ASSET_CACHE)?.size).toBe(1);
+  });
+
+  it("sends /api/official-actions straight to the network, never stored or served from a store", async () => {
+    const { listeners, store } = loadServiceWorker({
+      caches: { [API_CACHE]: { [`${ORIGIN}/api/official-actions?zone=zone-1&kind=alert&limit=1`]: "STALE RECORD" } },
+      fetch: async () => {
+        throw new Error("offline");
+      },
+    });
+
+    await expect(
+      handleFetch(listeners, { url: `${ORIGIN}/api/official-actions?zone=zone-1&kind=alert&limit=1` })
+    ).rejects.toThrow();
+    expect(store.get(API_CACHE)?.size).toBe(1);
+  });
+
+  it("matches admin paths exactly as isAdminPath does (sw.js cannot import it)", () => {
+    const { context } = loadServiceWorker({});
+    const isAdminPathname = context.isAdminPathname as (path: string) => boolean;
+    const paths = ["/admin", "/admin/", "/admin/history", "/admin/zone/zone-1", "/administration", "/admin-help", "/", "/map"];
+
+    for (const path of paths) {
+      expect(isAdminPathname(path), path).toBe(isAdminPath(path));
+    }
+  });
+
+  it("still caches an ordinary page whose name merely starts with 'admin'", async () => {
+    const { listeners, store } = loadServiceWorker({
+      fetch: async () => response("NOT ADMIN"),
+    });
+
+    await handleFetch(listeners, { url: `${ORIGIN}/administration`, mode: "navigate" });
+
+    expect(store.get(SHELL_CACHE)?.has(`${ORIGIN}/administration`)).toBe(true);
+  });
+
+  it("purges every admin-scoped entry, in every cache, when a sign-out is posted", async () => {
+    // Covers devices that stored admin pages before this worker version, and
+    // anything a future branch lets slip. Other entries survive: signing out
+    // must not cost a resident their offline zone data.
+    const { listeners, store } = loadServiceWorker({
+      caches: {
+        [SHELL_CACHE]: { [`${ORIGIN}/admin/history`]: "HISTORY", [`${ORIGIN}/evacuation`]: "EVACUATION" },
+        [ASSET_CACHE]: { [`${ORIGIN}/admin?_rsc=x`]: "FLIGHT", [`${ORIGIN}/icon-192.png`]: "ICON" },
+        [API_CACHE]: { [`${ORIGIN}/api/official-actions?limit=1`]: "RECORD" },
+        [ZONE_CACHE]: { [`${ORIGIN}/api/zones`]: "ZONES" },
+      },
+    });
+
+    const waits: Promise<unknown>[] = [];
+    listeners.fetch({
+      request: { method: "POST", mode: "navigate", url: `${ORIGIN}/auth/signout` },
+      respondWith: () => {
+        throw new Error("the sign-out POST itself must go to the network untouched");
+      },
+      waitUntil: (p: Promise<unknown>) => waits.push(p),
+    });
+    await Promise.all(waits);
+
+    expect(waits.length).toBe(1);
+    expect(store.get(SHELL_CACHE)?.has(`${ORIGIN}/admin/history`)).toBe(false);
+    expect(store.get(ASSET_CACHE)?.has(`${ORIGIN}/admin?_rsc=x`)).toBe(false);
+    expect(store.get(API_CACHE)?.has(`${ORIGIN}/api/official-actions?limit=1`)).toBe(false);
+    expect(store.get(SHELL_CACHE)?.get(`${ORIGIN}/evacuation`)).toBe("EVACUATION");
+    expect(store.get(ASSET_CACHE)?.get(`${ORIGIN}/icon-192.png`)).toBe("ICON");
+    expect(store.get(ZONE_CACHE)?.get(`${ORIGIN}/api/zones`)).toBe("ZONES");
+  });
+
+  it("evicts the v9 caches, which may already hold admin pages, on activate", async () => {
+    const { listeners, store } = loadServiceWorker({
+      caches: {
+        "weatherwell-shell-v9": { [`${ORIGIN}/admin/history`]: "HISTORY" },
+        "weatherwell-assets-v9": { [`${ORIGIN}/admin?_rsc=x`]: "FLIGHT" },
+      },
+    });
+
+    const waits: Promise<unknown>[] = [];
+    listeners.activate({ waitUntil: (p: Promise<unknown>) => waits.push(p) });
+    await Promise.all(waits);
+
+    expect(store.has("weatherwell-shell-v9")).toBe(false);
+    expect(store.has("weatherwell-assets-v9")).toBe(false);
   });
 });

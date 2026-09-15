@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { flushOutbox, onDelivered, PermanentFailure } from "./outbox/drain";
+import { onDelivered, PermanentFailure } from "./outbox/drain";
 import { enqueue, readOutbox, useOutbox } from "./outbox/outbox";
-import { dispatchQueued, payloadOf } from "./outbox/dispatchers";
-import { ensureAnonymousSession } from "./auth/anonymous-session";
+import { payloadOf } from "./outbox/dispatchers";
+import { drainForCurrentSession } from "./outbox/session-drain";
 import type { PinStatusTag, PinRemovalReason } from "./community-pin";
 import type { OutboxEntry, OutboxOperation } from "./outbox/types";
 
@@ -305,9 +305,9 @@ export function useCommunityPins(): CommunityPin[] {
  * re-runs is a write that never leaves the device while the app is open.
  */
 function triggerDrain(): void {
-  void ensureAnonymousSession().then((userId) => {
-    if (userId) void flushOutbox(dispatchQueued);
-  });
+  // Sends only this session's own writes, and signs in only for a write
+  // queued with no identity yet. See drainForCurrentSession (I2).
+  drainForCurrentSession();
 }
 
 /**

@@ -99,7 +99,11 @@ describe("sendEmailSignInLink", () => {
 
   it("falls back to signInWithOtp when updateUser errors (the email already belongs to another account)", async () => {
     getSession.mockResolvedValue({ data: { session: { user: { is_anonymous: true } } } });
-    updateUser.mockResolvedValue({ error: { message: "email exists" } });
+    // The error Supabase Auth actually returns for this case (M11): the
+    // fallback keys on the code, so the fixture carries it.
+    updateUser.mockResolvedValue({
+      error: { code: "email_exists", message: "A user with this email address has already been registered" },
+    });
     const { sendEmailSignInLink } = await import("./sign-in");
 
     await sendEmailSignInLink("resident@example.com", "/admin");
@@ -108,6 +112,30 @@ describe("sendEmailSignInLink", () => {
       email: "resident@example.com",
       options: { emailRedirectTo: `${origin}/auth/confirm?next=%2Fadmin`, shouldCreateUser: true },
     });
+  });
+
+  it("surfaces any other updateUser error as a failure instead of signing into a different account (M11)", async () => {
+    // A transient failure must not quietly abandon the resident's anonymous
+    // history by signing them into a new or other account.
+    getSession.mockResolvedValue({ data: { session: { user: { is_anonymous: true } } } });
+    updateUser.mockResolvedValue({ error: { code: "over_email_send_rate_limit", message: "Email rate limit exceeded" } });
+    const { sendEmailSignInLink } = await import("./sign-in");
+
+    const result = await sendEmailSignInLink("resident@example.com", "/admin");
+
+    expect(signInWithOtp).not.toHaveBeenCalled();
+    expect(result).toEqual({ ok: false, error: "Email rate limit exceeded" });
+  });
+
+  it("surfaces an updateUser error that carries no code at all as a failure (M11)", async () => {
+    getSession.mockResolvedValue({ data: { session: { user: { is_anonymous: true } } } });
+    updateUser.mockResolvedValue({ error: { message: "Failed to fetch" } });
+    const { sendEmailSignInLink } = await import("./sign-in");
+
+    const result = await sendEmailSignInLink("resident@example.com", "/admin");
+
+    expect(signInWithOtp).not.toHaveBeenCalled();
+    expect(result).toEqual({ ok: false, error: "Failed to fetch" });
   });
 
   it("calls signInWithOtp directly when there is no session", async () => {

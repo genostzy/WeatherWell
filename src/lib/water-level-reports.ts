@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { flushOutbox, onDelivered, PermanentFailure } from "./outbox/drain";
+import { onDelivered, PermanentFailure } from "./outbox/drain";
 import { enqueue, useOutbox } from "./outbox/outbox";
-import { ensureAnonymousSession } from "./auth/anonymous-session";
-import { dispatchQueued } from "./outbox/dispatchers";
+import { drainForCurrentSession } from "./outbox/session-drain";
 import type { OutboxEntry, OutboxPayloads } from "./outbox/types";
 import type { DepthLevel } from "./depth";
 
@@ -249,14 +248,9 @@ export async function dispatchQueuedReport(entry: OutboxEntry): Promise<void> {
  * queue, one dispatcher.
  */
 function triggerDrain(): void {
-  void ensureAnonymousSession().then((userId) => {
-    // flushOutbox, not drainOutbox: this is the call most likely to be
-    // declined, because the resident tapping "Report again" during a flood is
-    // filing while the previous report's drain is still on the wire. A
-    // declined drain that nobody re-runs is a report that never leaves the
-    // device while the app is open.
-    if (userId) void flushOutbox(dispatchQueued);
-  });
+  // Sends only this session's own writes, and signs in only for a write
+  // queued with no identity yet. See drainForCurrentSession (I2).
+  drainForCurrentSession();
 }
 
 /**

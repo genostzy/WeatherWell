@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { flushOutbox, onDelivered, PermanentFailure } from "./outbox/drain";
+import { onDelivered, PermanentFailure } from "./outbox/drain";
 import { enqueue, useOutbox } from "./outbox/outbox";
-import { dispatchQueued, payloadOf } from "./outbox/dispatchers";
-import { ensureAnonymousSession, useSessionUserId } from "./auth/anonymous-session";
+import { payloadOf } from "./outbox/dispatchers";
+import { drainForCurrentSession } from "./outbox/session-drain";
+import { useSessionUserId } from "./auth/anonymous-session";
 import type { CheckInStatus } from "./types";
 import type { OutboxEntry, OutboxPayloads } from "./outbox/types";
 
@@ -236,9 +237,9 @@ export function getOwnCheckInForZone(
  * then checks in must not flush only the check-in.
  */
 function triggerDrain(): void {
-  void ensureAnonymousSession().then((userId) => {
-    if (userId) void flushOutbox(dispatchQueued);
-  });
+  // Sends only this session's own writes, and signs in only for a write
+  // queued with no identity yet. See drainForCurrentSession (I2).
+  drainForCurrentSession();
 }
 
 /**

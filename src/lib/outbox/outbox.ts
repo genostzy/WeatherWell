@@ -1,6 +1,7 @@
 "use client";
 
 import { createLocalStorageStore } from "@/lib/local-storage-store";
+import { knownSessionUserId } from "@/lib/auth/session-user";
 import type { OutboxEntry, OutboxOperation, OutboxPayloads } from "./types";
 
 const EMPTY: OutboxEntry[] = [];
@@ -54,6 +55,7 @@ export function enqueue<K extends OutboxOperation>(
     queuedAt: new Date().toISOString(),
     attempts: 0,
     permanentlyFailed: false,
+    userId: knownSessionUserId(),
   };
   store.update((all) => [...all, entry]);
 
@@ -67,6 +69,16 @@ export function enqueue<K extends OutboxOperation>(
   }
 
   return entry;
+}
+
+/**
+ * Attributes every entry queued with no identity (`userId: null`) to
+ * `userId`. Legacy entries with no `userId` field are left alone; see
+ * drainForCurrentSession.
+ */
+export function claimUnattributed(userId: string): void {
+  if (!readOutbox().some((entry) => entry.userId === null)) return;
+  store.update((all) => all.map((entry) => (entry.userId === null ? { ...entry, userId } : entry)));
 }
 
 /** The write landed. Drop it — the server row is the record now. */

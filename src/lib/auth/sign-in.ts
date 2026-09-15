@@ -31,6 +31,12 @@ export async function startGoogleSignIn(next: string, opts: { link?: boolean } =
   return error ? { ok: false, error: error.message } : { ok: true };
 }
 
+/**
+ * The Supabase Auth error codes meaning "this email already belongs to an
+ * account". Only these justify signing into that account instead (M11).
+ */
+const EMAIL_TAKEN_CODES = new Set(["email_exists", "user_already_exists"]);
+
 /** The email-link backup, with the same linking rule. */
 export async function sendEmailSignInLink(email: string, next: string): Promise<SignInResult> {
   const supabase = getBrowserClient();
@@ -40,8 +46,12 @@ export async function sendEmailSignInLink(email: string, next: string): Promise<
   if (data.session?.user.is_anonymous) {
     const { error } = await supabase.auth.updateUser({ email }, { emailRedirectTo });
     if (!error) return { ok: true };
-    // Most likely the email already belongs to another account. Sign into
-    // that one instead; this phone's anonymous history stays where it is.
+    // Only when the email already belongs to another account: sign into that
+    // one instead, and this phone's anonymous history stays where it is. Any
+    // other error (a rate limit, a dropped connection) is reported as a
+    // failure, because falling back would sign the resident into a new or
+    // different account and abandon their anonymous history for no reason.
+    if (!EMAIL_TAKEN_CODES.has(error.code ?? "")) return { ok: false, error: error.message };
   }
   const { error } = await supabase.auth.signInWithOtp({
     email,

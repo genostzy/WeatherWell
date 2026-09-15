@@ -14,4 +14,18 @@ describe("NotAppointed", () => {
     const link = screen.getByRole("link", { name: /sign in/i });
     expect(link).toHaveAttribute("href", "/sign-in?next=/admin");
   });
+
+  it("offers Sign out as a form POST to /auth/signout, for a wrong account or a removed official (M10)", () => {
+    render(<NotAppointed email="resident@example.com" />);
+    const button = screen.getByRole("button", { name: /sign out/i });
+    const form = button.closest("form");
+    expect(form).toHaveAttribute("method", "post");
+    expect(form).toHaveAttribute("action", "/auth/signout");
+    expect(form?.querySelector('input[name="next"]')).toHaveAttribute("value", "/");
+  });
+
+  it("offers Sign out to an anonymous session too", () => {
+    render(<NotAppointed email={null} />);
+    expect(screen.getByRole("button", { name: /sign out/i }).closest("form")).toHaveAttribute("action", "/auth/signout");
+  });
 });

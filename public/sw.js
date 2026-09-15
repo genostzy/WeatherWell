@@ -20,7 +20,7 @@
  * CURRENT_CACHES, so a bump is what evicts a bad build from installed devices.
  * Leaving it unchanged is what pins users to a stale app forever.
  */
-const VERSION = "v9";
+const VERSION = "v10";
 
 const SHELL_CACHE = `weatherwell-shell-${VERSION}`;
 const ASSET_CACHE = `weatherwell-assets-${VERSION}`;
@@ -84,9 +84,8 @@ const PUBLIC_API_PATHS = ["/api/reports", "/api/pins"];
 
 // /admin, /admin/map and /admin/simulation are deliberately NOT precached
 // here. Once /admin needs a sign-in, pre-downloading it would save the
-// sign-in page on every device and serve it back in place of the dashboard —
-// an official's own visits are still cached by the network-first navigation
-// branch below, same as any other page.
+// sign-in page on every device and serve it back in place of the dashboard.
+// An official's own visits are not cached either: see isAdminScoped below.
 const PRECACHED_ROUTES = ["/", "/evacuation", "/report", "/map"];
 
 self.addEventListener("install", (event) => {
@@ -133,6 +132,58 @@ self.addEventListener("activate", (event) => {
   );
   self.clients.claim();
 });
+
+/**
+ * Mirrors isAdminPath in src/lib/auth/admin-path.ts, which this worker cannot
+ * import; service-worker.test.ts pins the two together. `/admin` itself or
+ * `/admin/` followed by anything — not "/administration".
+ */
+function isAdminPathname(pathname) {
+  return pathname === "/admin" || pathname.startsWith("/admin/");
+}
+
+/**
+ * Responses that belong to one signed-in official (I1): every /admin page,
+ * as a navigation or as the `?_rsc=` flight data a client-side <Link> fetches,
+ * and the action record. They carry official names, who did what, and
+ * check-in summaries. On a shared family phone — the risk the spec mitigates
+ * with Sign out — anything kept here would be served to the next person,
+ * offline or on a slow connection, after that sign-out. So they go straight
+ * to the network in every branch and are never stored or answered from a
+ * store; an official offline sees the browser's own offline page instead.
+ */
+function isAdminScoped(pathname) {
+  return (
+    isAdminPathname(pathname) ||
+    pathname === "/api/official-actions" ||
+    pathname.startsWith("/api/official-actions/")
+  );
+}
+
+/**
+ * Deletes every admin-scoped entry from every cache this origin holds, and
+ * nothing else — a resident's offline zone data survives a sign-out. Run when
+ * a sign-out is posted. Nothing current writes these entries, so in practice
+ * this clears what a device stored under an older worker, and anything a
+ * future branch lets slip; the VERSION bump evicts the rest on activate.
+ */
+function purgeAdminEntries() {
+  return caches.keys().then((names) =>
+    Promise.all(
+      names.map((name) =>
+        caches.open(name).then((cache) =>
+          cache.keys().then((requests) =>
+            Promise.all(
+              requests
+                .filter((cached) => isAdminScoped(new URL(cached.url, self.location.origin).pathname))
+                .map((cached) => cache.delete(cached))
+            )
+          )
+        )
+      )
+    )
+  );
+}
 
 function putInCache(cacheName, request, response) {
   // Opaque cross-origin responses report status 0 and are not worth storing.
@@ -282,17 +333,36 @@ function revalidatePlainEntry(request, plainUrl, cacheName) {
 
 self.addEventListener("fetch", (event) => {
   const { request } = event;
+  const url = new URL(request.url);
+
+  // Sign-out is a form POST to /auth/signout from every sign-out control
+  // (AdminHeader, NotAppointed, AccountLink). Watching for it here, rather
+  // than posting a message from each form, is what actually runs: it needs no
+  // client script, so it holds with JS disabled and for any future sign-out
+  // form, and it runs exactly when this worker controls the page — the only
+  // time these caches exist. The POST itself still goes to the network
+  // untouched; this only extends the event to finish the purge.
+  if (request.method === "POST" && url.origin === self.location.origin && url.pathname === "/auth/signout") {
+    event.waitUntil(purgeAdminEntries());
+    return;
+  }
 
   // Never interfere with mutations, and leave cross-origin traffic (map tiles,
   // any future third-party call) to the network untouched.
   if (request.method !== "GET") return;
 
-  const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
   // Sign-in and its callbacks carry one-time codes and set the session.
   // Never stored, and never answered from a store.
   if (url.pathname === "/sign-in" || url.pathname.startsWith("/auth/")) {
+    event.respondWith(fetch(request));
+    return;
+  }
+
+  // An official's pages, their RSC payloads, and the action record: network
+  // only, in every mode. See isAdminScoped.
+  if (isAdminScoped(url.pathname)) {
     event.respondWith(fetch(request));
     return;
   }

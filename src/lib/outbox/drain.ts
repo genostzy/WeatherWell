@@ -65,9 +65,18 @@ export function onDelivered(listener: DeliveryListener): () => void {
 let draining = false;
 let inFlight: Promise<DrainResult> | null = null;
 
+/**
+ * Which entries a drain may send. Anything it declines is left exactly as it
+ * is (not attempted, not marked) so the session it belongs to can send it.
+ */
+type EntryFilter = (entry: OutboxEntry) => boolean;
+
+const EVERY_ENTRY: EntryFilter = () => true;
+
 async function runDrain(
   dispatch: (entry: OutboxEntry) => Promise<void>,
-  delivered: OutboxEntry[]
+  delivered: OutboxEntry[],
+  accept: EntryFilter
 ): Promise<DrainResult> {
   const result: DrainResult = { delivered: 0, failed: 0, skipped: false };
 
@@ -87,7 +96,7 @@ async function runDrain(
     const pending = readOutbox().filter(
       // A permanent failure is never retried — an RLS denial or a CHECK
       // violation cannot become true later.
-      (entry) => !entry.permanentlyFailed && !attempted.has(entry.id)
+      (entry) => !entry.permanentlyFailed && !attempted.has(entry.id) && accept(entry)
     );
     if (pending.length === 0) break;
 
@@ -114,7 +123,8 @@ async function runDrain(
 }
 
 export function drainOutbox(
-  dispatch: (entry: OutboxEntry) => Promise<void>
+  dispatch: (entry: OutboxEntry) => Promise<void>,
+  accept: EntryFilter = EVERY_ENTRY
 ): Promise<DrainResult> {
   if (draining) return Promise.resolve({ delivered: 0, failed: 0, skipped: true });
 
@@ -131,7 +141,7 @@ export function drainOutbox(
 
   const delivered: OutboxEntry[] = [];
 
-  const run = runDrain(dispatch, delivered).finally(() => {
+  const run = runDrain(dispatch, delivered, accept).finally(() => {
     draining = false;
     inFlight = null;
   });
@@ -159,13 +169,14 @@ export function drainOutbox(
  * itself subject to this same rule.
  */
 export async function flushOutbox(
-  dispatch: (entry: OutboxEntry) => Promise<void>
+  dispatch: (entry: OutboxEntry) => Promise<void>,
+  accept: EntryFilter = EVERY_ENTRY
 ): Promise<DrainResult> {
-  const result = await drainOutbox(dispatch);
+  const result = await drainOutbox(dispatch, accept);
   if (!result.skipped) return result;
 
   // The drain that declined us. It handles its own failures, so a rejection
   // here is not ours to act on — we only need to know it has finished.
   await inFlight?.catch(() => undefined);
-  return drainOutbox(dispatch);
+  return drainOutbox(dispatch, accept);
 }
