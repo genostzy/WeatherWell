@@ -317,6 +317,21 @@ All free and public: PAGASA bulletins (rainfall, wind, typhoon track, thundersto
 
 ---
 
+## Setup the System Owner Does
+
+Six one-time steps, all free, each involving a secret or an account setting — so the system owner does them by hand, never through the app and never an agent. Steps 1–3 and 5 are needed before any official can sign in at all; steps 4 and 6 only matter for the email-link backup, since Google sign-in works without them.
+
+1. **Google sign-in** (Google Cloud Console, then Supabase). Create an OAuth client under APIs & Services → Credentials, and paste its Client ID and Client Secret into Supabase → Authentication → Providers → Google. Move the OAuth consent screen out of "Testing" — while it stays there, only accounts added as test users can sign in.
+2. **Manual linking** (Supabase). Switch on "Manual linking" in Authentication's sign-in settings. Without it, linking a new Google or email identity to an existing anonymous resident session fails, so an official who was already using the app as a resident cannot carry their reports and pins across to their official account.
+3. **Redirect URLs** (Supabase). Add the app's origins to Authentication → URL Configuration → Redirect URLs, one per origin as `<origin>/**` — for example `http://localhost:<port>/**` for local development and `https://<project>-git-<branch>-<team>.vercel.app/**` for a deployed preview. An origin entered this way covers both `/auth/callback` (where Google's OAuth redirect lands) and `/auth/confirm` (where an email sign-in link lands), since both are paths under the same origin.
+4. **Email sending** (Supabase). Connect a free SMTP provider under Authentication → SMTP Settings before launch. Supabase's built-in sender only reaches addresses pre-authorised inside the Supabase organisation, so without this the email-link backup cannot reach a real official.
+5. **Vercel Preview settings** (Vercel). In the project's Environment Variables, tick `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` for the **Preview** environment as well as Production — left unticked, a preview deployment cannot reach Supabase at all.
+6. **Email templates** (Supabase). `/auth/confirm` reads a one-time `token_hash` and `type` from the query string rather than exchanging a code, because a code-exchange link opened in a different browser than the one that requested it cannot complete. In Authentication → Email Templates, set the **Magic Link** template's link to `{{ .RedirectTo }}&token_hash={{ .TokenHash }}&type=email`, and the **Change Email Address** template's link to `{{ .RedirectTo }}&token_hash={{ .TokenHash }}&type=email_change`. `{{ .RedirectTo }}` already carries `/auth/confirm?next=…`, which is why each addition starts with `&`.
+
+**Before appointing anyone for real:** confirm all four demo barangays' PSGC codes against the PSA's official published list at psa.gov.ph. See the open item on the "Officials, areas and sign-in" row in [Build Status](#build-status) — three of the four look like placeholders, and this code is the exact permission boundary that decides who may issue an alert for a barangay. Appointing an official against a wrong code silently hands them the wrong area; nothing else in the system would catch it.
+
+---
+
 ## Build Status
 
 **As of 15 September 2026 · Stage 1 (`hi-fi`) complete, Stage 2 (`v0`) in progress.**
