@@ -3,7 +3,7 @@ import type { Zone } from "../types";
 export const MOCK_ZONES: Zone[] = [
   {
     id: "zone-1",
-    // Real PSGC code for Barangay Nilombot, Mapandan.
+    // PSGC code for Barangay Nilombot, Mapandan, confirmed against psa.gov.ph (2026-09-15).
     psgcBarangayCode: "0105528012",
     name: "Barangay Nilombot, Mapandan",
     evacuationCenterName: "Nilombot Elementary School",
@@ -27,8 +27,8 @@ export const MOCK_ZONES: Zone[] = [
   },
   {
     id: "zone-2",
-    // Municipal-level PSGC for Mangaldan; Poblacion's own barangay code is not verified.
-    psgcBarangayCode: "0105526000",
+    // PSGC code for Barangay Poblacion, Mangaldan, confirmed against psa.gov.ph (2026-09-15).
+    psgcBarangayCode: "0105526025",
     name: "Barangay Poblacion, Mangaldan",
     evacuationCenterName: "Mangaldan Central School",
     evacuationRouteText: {
@@ -51,8 +51,8 @@ export const MOCK_ZONES: Zone[] = [
   },
   {
     id: "zone-3",
-    // Municipal-level PSGC for Manaoag; Poblacion's own barangay code is not verified.
-    psgcBarangayCode: "0105525000",
+    // PSGC code for Barangay Poblacion, Manaoag, confirmed against psa.gov.ph (2026-09-15).
+    psgcBarangayCode: "0105525039",
     name: "Barangay Poblacion, Manaoag",
     evacuationCenterName: "Manaoag Municipal Gymnasium",
     evacuationRouteText: {
@@ -75,9 +75,10 @@ export const MOCK_ZONES: Zone[] = [
   },
   {
     id: "zone-4",
-    // Municipal-level PSGC for Santa Barbara; Poblacion's own barangay code is not verified.
-    psgcBarangayCode: "0105538000",
-    name: "Barangay Poblacion, Santa Barbara",
+    // PSGC code for Barangay Poblacion Norte, Santa Barbara, confirmed against psa.gov.ph
+    // (2026-09-15). Santa Barbara has two Poblacions; the demo is Norte (Sur is 0105538022).
+    psgcBarangayCode: "0105538021",
+    name: "Barangay Poblacion Norte, Santa Barbara",
     evacuationCenterName: "Santa Barbara Central School",
     evacuationRouteText: {
       en: "Head toward the municipal hall, then straight ahead to the central school on your left.",

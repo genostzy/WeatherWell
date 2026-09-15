@@ -57,8 +57,8 @@ export const MOCK_ALERTS: AlertRecord[] = [
     zoneId: "zone-4",
     severity: "yellow",
     message: {
-      en: "Light rainfall building near Barangay Poblacion, Santa Barbara. Stay alert for updates. (Yellow Rainfall Warning level.)",
-      fil: "Unti-unting lumalakas ang ulan malapit sa Barangay Poblacion, Santa Barbara. Manatiling alerto. (Antas ng Yellow Rainfall Warning.)",
+      en: "Light rainfall building near Barangay Poblacion Norte, Santa Barbara. Stay alert for updates. (Yellow Rainfall Warning level.)",
+      fil: "Unti-unting lumalakas ang ulan malapit sa Barangay Poblacion Norte, Santa Barbara. Manatiling alerto. (Antas ng Yellow Rainfall Warning.)",
     },
     source: "auto_crowdsourced",
     confidence: "estimated",

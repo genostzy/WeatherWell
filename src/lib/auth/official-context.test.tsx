@@ -46,6 +46,6 @@ describe("useManagesZone", () => {
     const { result } = renderHook(() => useManagesZone(), withOfficial(official));
     expect(result.current({ psgcBarangayCode: "0105528012" })).toBe(true);
     expect(result.current({ psgcBarangayCode: "0105528099" })).toBe(true);
-    expect(result.current({ psgcBarangayCode: "0105526000" })).toBe(false);
+    expect(result.current({ psgcBarangayCode: "0105526025" })).toBe(false);
   });
 });

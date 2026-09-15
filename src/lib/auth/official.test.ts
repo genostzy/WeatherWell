@@ -21,7 +21,7 @@ describe("isInArea", () => {
 
   it("refuses a barangay from a different town", () => {
     // Mangaldan (0105526) is not Mapandan (0105528).
-    expect(isInArea("0105526000", "0105528")).toBe(false);
+    expect(isInArea("0105526025", "0105528")).toBe(false);
   });
 
   it("refuses a neighbouring barangay in the same town for a barangay-level area", () => {
@@ -38,7 +38,7 @@ describe("isInArea", () => {
 describe("landingPathFor", () => {
   const zones = [
     { id: "zone-1", psgcBarangayCode: "0105528012" },
-    { id: "zone-2", psgcBarangayCode: "0105526000" },
+    { id: "zone-2", psgcBarangayCode: "0105526025" },
   ];
 
   it("sends a barangay official straight to their own zone", () => {

@@ -68,9 +68,9 @@ describe("municipalitiesFrom", () => {
     // each code the first seven digits of that barangay's PSGC code.
     const zones = [
       { psgcBarangayCode: "0105528012", name: "Barangay Nilombot, Mapandan" },
-      { psgcBarangayCode: "0105526000", name: "Barangay Poblacion, Mangaldan" },
-      { psgcBarangayCode: "0105525000", name: "Barangay Poblacion, Manaoag" },
-      { psgcBarangayCode: "0105538000", name: "Barangay Poblacion, Santa Barbara" },
+      { psgcBarangayCode: "0105526025", name: "Barangay Poblacion, Mangaldan" },
+      { psgcBarangayCode: "0105525039", name: "Barangay Poblacion, Manaoag" },
+      { psgcBarangayCode: "0105538021", name: "Barangay Poblacion Norte, Santa Barbara" },
     ];
 
     const result = municipalitiesFrom(zones);
