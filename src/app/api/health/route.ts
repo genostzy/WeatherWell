@@ -4,11 +4,19 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 const HEADERS = { "Cache-Control": "no-store" };
 const TIMEOUT_MS = 5000;
 
+/**
+ * Races a promise against a timeout. `Promise.race` never cancels the
+ * loser, so on a fast success the timer would otherwise stay alive for up to
+ * TIMEOUT_MS after the response is already sent — a real cost for an
+ * endpoint a monitor polls indefinitely. Clearing it in `finally` (which
+ * runs once the race settles, whichever side won) avoids that.
+ */
 function withTimeout<T>(promise: PromiseLike<T>): Promise<T> {
-  return Promise.race([
-    Promise.resolve(promise),
-    new Promise<T>((_, reject) => setTimeout(() => reject(new Error("timeout")), TIMEOUT_MS)),
-  ]);
+  let timer: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<T>((_, reject) => {
+    timer = setTimeout(() => reject(new Error("timeout")), TIMEOUT_MS);
+  });
+  return Promise.race([Promise.resolve(promise), timeout]).finally(() => clearTimeout(timer));
 }
 
 /**

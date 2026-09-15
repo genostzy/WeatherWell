@@ -42,14 +42,30 @@ describe("ErrorReporter", () => {
     });
   });
 
-  it("stops listening after unmount", () => {
+  it("removes both the error and the unhandledrejection listener on unmount", () => {
+    // Dispatching a listener-less "error" event on window (the previous
+    // version of this test) trips jsdom's own uncaught-error reporting and
+    // produces a false "Unhandled Errors" failure unrelated to this
+    // component. Spying on add/removeEventListener instead proves listener
+    // removal directly, for both event types, without dispatching anything.
+    const addSpy = vi.spyOn(window, "addEventListener");
+    const removeSpy = vi.spyOn(window, "removeEventListener");
+
     const { unmount } = render(<ErrorReporter />);
+
+    const errorCall = addSpy.mock.calls.find(([type]) => type === "error");
+    const rejectionCall = addSpy.mock.calls.find(([type]) => type === "unhandledrejection");
+    expect(errorCall).toBeDefined();
+    expect(rejectionCall).toBeDefined();
+    const errorHandler = errorCall![1];
+    const rejectionHandler = rejectionCall![1];
+
     unmount();
 
-    const event = new Event("unhandledrejection") as PromiseRejectionEvent;
-    Object.defineProperty(event, "reason", { value: new Error("after unmount") });
-    window.dispatchEvent(event);
+    expect(removeSpy).toHaveBeenCalledWith("error", errorHandler);
+    expect(removeSpy).toHaveBeenCalledWith("unhandledrejection", rejectionHandler);
 
-    expect(reportError).not.toHaveBeenCalled();
+    addSpy.mockRestore();
+    removeSpy.mockRestore();
   });
 });

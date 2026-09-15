@@ -54,6 +54,7 @@ describe("GET /api/health", () => {
     expect(response.status).toBe(503);
     expect(text).not.toContain("secret detail");
     expect(JSON.parse(text)).toEqual({ status: "unavailable" });
+    expect(response.headers.get("cache-control")).toContain("no-store");
   });
 
   it("reports unavailable when the zones read hangs past the timeout", async () => {
@@ -69,6 +70,26 @@ describe("GET /api/health", () => {
 
     expect(response.status).toBe(503);
     expect(body).toEqual({ status: "unavailable" });
+    expect(response.headers.get("cache-control")).toContain("no-store");
+  });
+
+  it("reports ok with recentErrors 0 when the count RPC hangs past the timeout", async () => {
+    // Only an errored (rejected/error-populated) RPC response was covered
+    // before. A regression that replaced withTimeout(supabase.rpc(...)) with
+    // a bare await would hang the whole response on a stuck RPC; this pins
+    // that the inner withTimeout is what actually bounds it.
+    vi.useFakeTimers();
+    from.mockReturnValue(makeBuilder({ data: [{ id: "zone-1" }], error: null }));
+    rpc.mockReturnValue(new Promise(() => {}));
+    const { GET } = await import("./route");
+
+    const responsePromise = GET();
+    await vi.advanceTimersByTimeAsync(5000);
+    const response = await responsePromise;
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toEqual({ status: "ok", database: "ok", recentErrors: 0 });
   });
 
   it("still reports ok with recentErrors 0 when the count RPC errors", async () => {
@@ -94,5 +115,6 @@ describe("GET /api/health", () => {
 
     expect(response.status).toBe(503);
     expect(body).toEqual({ status: "unavailable" });
+    expect(response.headers.get("cache-control")).toContain("no-store");
   });
 });

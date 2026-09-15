@@ -13,7 +13,7 @@ export default function GlobalError({ error, retry }: { error: Error & { digest?
     void reportError(error, { source: "client", kind: "render", route: window.location.pathname });
   }, [error]);
   return (
-    <html lang="fil">
+    <html lang="en">
       <body style={{ fontFamily: "system-ui, sans-serif", padding: 24, textAlign: "center" }}>
         <p role="alert">Something went wrong loading WeatherWell. Please try again.</p>
         <p lang="fil">May naganap na problema sa pag-load ng WeatherWell. Pakisubukang muli.</p>
