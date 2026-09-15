@@ -1,8 +1,10 @@
 "use client";
 
+import { useEffect } from "react";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import type { LocalizedText } from "@/lib/types";
+import { reportError } from "@/lib/monitoring/report";
 
 /**
  * Root error boundary. Without this, an unexpected render error (e.g.
@@ -18,8 +20,11 @@ const MESSAGE: LocalizedText = {
 };
 const RETRY: LocalizedText = { en: "Try again", fil: "Subukang muli" };
 
-export default function Error({ reset }: { error: Error & { digest?: string }; reset: () => void }) {
+export default function Error({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   const { lang } = useLanguage();
+  useEffect(() => {
+    void reportError(error, { source: "client", kind: "render", route: window.location.pathname });
+  }, [error]);
   return (
     <div className="flex flex-col items-center gap-4 p-6">
       <p role="alert" lang={lang} className="max-w-md text-center text-sm">

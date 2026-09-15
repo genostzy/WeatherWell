@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { LanguageProvider } from "@/features/i18n/language-provider";
 import { LanguageToggle } from "@/features/i18n/language-toggle";
 import { AccountLink } from "@/features/auth/account-link";
+import { ErrorReporter } from "@/features/monitoring/error-reporter";
 import { SelectedZoneHotlineButton } from "@/components/selected-zone-hotline-button";
 import { ServiceWorkerRegistration } from "@/components/service-worker-registration";
 import { OutboxDrain } from "@/components/outbox-drain";
@@ -42,6 +43,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               <span className="font-semibold">WeatherWell</span>
               <LanguageToggle />
               <AccountLink />
+              <ErrorReporter />
             </header>
             <ReferenceDataProvider>
               {children}
