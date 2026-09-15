@@ -21,16 +21,19 @@ The third seam, the unowned first write, stays accepted.
 
 ## 1. Where the queue lives, and who sends it
 
-- **Storage: IndexedDB,** database `weatherwell`, object store `outbox`, keyed by entry id. It is readable by both the page and the service worker.
-  - On the first page load after this ships, entries in `localStorage` `weatherwell.outbox` are copied into IndexedDB and then removed from `localStorage`.
-  - The copy is idempotent (keyed by id), so an interrupted copy loses nothing and duplicates nothing.
+- **Storage: IndexedDB for the worker, with the page's synchronous copy kept.** *(Amended during planning, 16 September 2026.)*
+  - The service worker reads and writes IndexedDB database `weatherwell`, object store `outbox`, keyed by entry id.
+  - The page keeps its existing synchronous `localStorage` queue, because 13 call sites rely on `enqueue` and `readOutbox` being synchronous, including the report page's "couldn't save" error.
+  - Every page change is mirrored into IndexedDB. Every worker change is written to IndexedDB and broadcast (`BroadcastChannel("weatherwell-outbox")`) so an open page applies it at once. On load the page reconciles the two copies by id, using an `updatedAt` stamp.
+  - When it is impossible to tell whether an entry was delivered by the worker or never mirrored, the entry is **sent again**. That is always safe, because every write is idempotent by its id.
+  - This replaces the original "copy localStorage into IndexedDB, then remove it" step; there is nothing to migrate away from.
 - **The entry shape stays** `id`, `operation`, `payload`, `queuedAt`, `attempts`, `userId`, plus these new fields:
   - `status: "pending" | "stuck" | "held"`, which replaces the boolean `permanentlyFailed`;
   - `nextAttemptAt: string | null`;
   - `lastError?: string`;
   - `stuckReason?: "permanent" | "too_old" | "gave_up"`.
 - **The public queue API stays** `enqueue`, `readOutbox`, `useOutbox`, `markDelivered`, `markFailed` and `claimUnattributed`, with the same meaning for existing callers.
-  - Reads become async internally. `useOutbox` keeps a synchronous snapshot refreshed on change (a `BroadcastChannel("weatherwell-outbox")` message, sent by page and worker alike), so components do not change.
+  - They stay synchronous against the page's copy. `useOutbox` re-renders on a local change or on a `BroadcastChannel("weatherwell-outbox")` message from the worker, so components do not change.
   - `enqueue` still throws `OutboxWriteFailed` when the entry cannot be persisted.
 - **Three ways to send:**
   1. **Page open:** as today, right after a write, on `online`, and on load.
@@ -39,7 +42,7 @@ The third seam, the unowned first write, stays accepted.
 - **Worker endpoints:**
   - `POST /api/outbox/<operation>`, one per operation: `submitWaterLevelReport`, `createPin`, `editPin`, `deleteOwnPin`, `setPinRemoved`, `voteOnPin`, `recordCheckIn`.
   - **Request body:** `{ id, userId, queuedAt, payload }`.
-  - **Behaviour:** each route authenticates with `createSupabaseUserClient()` + `getClaims()` (never `getSession()`) and calls the same server function the Server Action calls. The actions' bodies move into shared server modules, and both the actions and the routes call them. There is one implementation of every rule.
+  - **Behaviour:** each route authenticates with `createSupabaseUserClient()` + `getClaims()` (never `getSession()`) and then imports and calls the existing Server Action function directly (an ordinary async function on the server). There is still one implementation of every rule. *(Amended during planning: no separate shared modules are needed.)*
   - **Responses:**
 
     | Status | Body | When |
@@ -120,6 +123,8 @@ The third seam, the unowned first write, stays accepted.
 
   If any entry is still due and temporarily failing, throw so the browser reschedules.
 - **Message `{ type: "outbox-drain" }`** from the page runs the same routine. It is a fallback trigger for when `sync` is unavailable but the worker is alive.
+- **Queue order is respected:** an `editPin` / `deleteOwnPin` / `setPinRemoved` entry is not sent while a `createPin` for the same pin is still queued. That is the rule `assertPinIsNotAwaitingCreate` enforces today.
+- **The retry rules exist twice**, in `src/lib/outbox/schedule.ts` and in `public/sw.js`, because the worker is plain JavaScript the app build does not compile. Both are tested against one shared case table, `src/lib/outbox/schedule-cases.json`, so they cannot drift.
 - **The worker never:**
   - calls Supabase directly;
   - creates or refreshes a session itself (the route handler's Supabase client refreshes cookies from the refresh token);
