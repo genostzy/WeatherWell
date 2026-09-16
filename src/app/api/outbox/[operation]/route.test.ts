@@ -297,6 +297,46 @@ describe("POST /api/outbox/[operation]", () => {
     }
   });
 
+  it.each(["constructor", "toString", "hasOwnProperty", "__proto__", "valueOf"])(
+    "refuses the inherited object key %s as an unknown operation, never touching auth",
+    async (operation) => {
+      const response = await post(operation, { id: "e1", userId: "user-1", queuedAt: "2026-09-16T00:00:00.000Z", payload: {} });
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual({ result: "permanent", reason: "unknown_operation" });
+      expect(getClaims).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each([
+    ["submitWaterLevelReport", () => submitWaterLevelReport, { zoneId: "zone-1", depthLevel: "knee" }],
+    ["recordCheckIn", () => recordCheckIn, { zoneId: "zone-1", status: "safe" }],
+    ["createPin", () => createPin, { zoneId: "zone-1", statusTag: "flooded", caption: "x", lat: 1, lng: 2 }],
+  ] as const)(
+    "keeps the queue's own entry id for %s even when the payload carries a different id",
+    async (operation, action, payload) => {
+      action().mockResolvedValue({ ok: true });
+      const response = await post(operation, {
+        id: "entry-id",
+        userId: "user-1",
+        queuedAt: "2026-09-16T00:00:00.000Z",
+        payload: { ...payload, id: "attacker-id" },
+      });
+      expect(response.status).toBe(200);
+      expect(action()).toHaveBeenCalledWith(expect.objectContaining({ id: "entry-id" }));
+    }
+  );
+
+  it.each([
+    ["editPin", () => editPin, { pinId: "pin-1", statusTag: "flooded", caption: "x" }],
+    ["deleteOwnPin", () => deleteOwnPin, { pinId: "pin-1" }],
+    ["setPinRemoved", () => setPinRemoved, { pinId: "pin-1", removed: true, reason: "admin" }],
+  ] as const)("calls %s with exactly the queued payload", async (operation, action, payload) => {
+    action().mockResolvedValue({ ok: true });
+    const response = await post(operation, { id: "e1", userId: "user-1", queuedAt: "2026-09-16T00:00:00.000Z", payload });
+    expect(response.status).toBe(200);
+    expect(action()).toHaveBeenCalledWith(payload);
+  });
+
   it("never calls getSession — this route trusts only getClaims, whose session is always current", () => {
     const source = readFileSync(
       join(process.cwd(), "src", "app", "api", "outbox", "[operation]", "route.ts"),

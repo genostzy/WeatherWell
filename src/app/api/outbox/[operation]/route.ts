@@ -27,18 +27,22 @@ type Runner = (id: string, payload: Record<string, unknown>, queuedAt: string) =
 const RUNNERS: Record<string, Runner> = {
   submitWaterLevelReport: async (id, payload, madeAt) =>
     (await import("@/app/actions/submit-water-level-report")).submitWaterLevelReport({
-      id,
       ...payload,
+      // After the spread: the queue's own id and time always win over anything
+      // a payload carries, so a replay stays idempotent by the entry id.
+      id,
       madeAt,
     } as never),
   recordCheckIn: async (id, payload, madeAt) =>
     (await import("@/app/actions/record-check-in")).recordCheckIn({
-      id,
       ...payload,
+      // After the spread: the queue's own id and time always win over anything
+      // a payload carries, so a replay stays idempotent by the entry id.
+      id,
       madeAt,
     } as never),
   createPin: async (id, payload) =>
-    (await import("@/app/actions/pins")).createPin({ id, ...payload } as never),
+    (await import("@/app/actions/pins")).createPin({ ...payload, id } as never),
   editPin: async (_id, payload) => (await import("@/app/actions/pins")).editPin(payload as never),
   deleteOwnPin: async (_id, payload) => (await import("@/app/actions/pins")).deleteOwnPin(payload as never),
   setPinRemoved: async (_id, payload) => (await import("@/app/actions/pins")).setPinRemoved(payload as never),
@@ -65,7 +69,9 @@ export async function POST(
   { params }: { params: Promise<{ operation: string }> }
 ) {
   const { operation } = await params;
-  const run = RUNNERS[operation];
+  // Own keys only: a plain-object lookup would resolve "constructor",
+  // "toString" and friends to Object.prototype members.
+  const run = Object.hasOwn(RUNNERS, operation) ? RUNNERS[operation] : undefined;
   if (!run) return reply(404, { result: "permanent", reason: "unknown_operation" });
 
   let body: { id?: unknown; userId?: unknown; queuedAt?: unknown; payload?: unknown };
