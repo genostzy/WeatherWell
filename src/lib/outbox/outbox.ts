@@ -39,28 +39,46 @@ const store = createLocalStorageStore<OutboxEntry[]>(
  * migration time, so it also normalizes whatever `reconcileWithMirror` pulls
  * out of IndexedDB — including a future service worker's writes, which are
  * already current-shape but pass through the same defensive branch.
+ *
+ * Takes `unknown`, not `OutboxEntry`, and returns `null` for anything that
+ * cannot be salvaged into an entry (not an object at all, or an object that
+ * throws while being normalized) rather than letting that throw escape.
+ * There is no error boundary anywhere in this app around a `useOutbox()`
+ * read, so a value `localStorage`/IndexedDB never itself writes but could
+ * still hold — a hand-edited value, a `null` slipped into the array, a
+ * non-array root — must never crash every screen that reads the outbox.
+ * Losing the one unsalvageable entry is acceptable; the caller (see
+ * `normalizedSnapshot`) filters out every `null` this returns.
  */
-function normalize(raw: OutboxEntry & { permanentlyFailed?: boolean }): OutboxEntry {
-  const { permanentlyFailed, status, stuckReason, nextAttemptAt, updatedAt, ...rest } = raw;
+function normalize(raw: unknown): OutboxEntry | null {
+  if (typeof raw !== "object" || raw === null) return null;
 
-  if (status !== undefined) {
+  try {
+    const { permanentlyFailed, status, stuckReason, nextAttemptAt, updatedAt, ...rest } = raw as OutboxEntry & {
+      permanentlyFailed?: boolean;
+    };
+
+    if (status !== undefined) {
+      return {
+        ...rest,
+        status,
+        ...(stuckReason !== undefined ? { stuckReason } : {}),
+        nextAttemptAt: nextAttemptAt ?? null,
+        updatedAt: updatedAt ?? rest.queuedAt,
+      };
+    }
+
+    const legacyStatus: OutboxStatus = permanentlyFailed ? "stuck" : "pending";
     return {
       ...rest,
-      status,
-      ...(stuckReason !== undefined ? { stuckReason } : {}),
+      status: legacyStatus,
+      ...(permanentlyFailed ? { stuckReason: "permanent" as const } : {}),
       nextAttemptAt: nextAttemptAt ?? null,
       updatedAt: updatedAt ?? rest.queuedAt,
     };
+  } catch {
+    return null;
   }
-
-  const legacyStatus: OutboxStatus = permanentlyFailed ? "stuck" : "pending";
-  return {
-    ...rest,
-    status: legacyStatus,
-    ...(permanentlyFailed ? { stuckReason: "permanent" as const } : {}),
-    nextAttemptAt: nextAttemptAt ?? null,
-    updatedAt: updatedAt ?? rest.queuedAt,
-  };
 }
 
 // getSnapshot must return a referentially stable value when nothing changed
@@ -69,14 +87,20 @@ function normalize(raw: OutboxEntry & { permanentlyFailed?: boolean }): OutboxEn
 // stability for the raw parsed array; this layer memoizes the normalized
 // array on top of it, keyed by that same reference, so mapping every entry
 // through `normalize` on every read never breaks it.
-let lastRaw: OutboxEntry[] | null = null;
+let lastRaw: unknown = undefined;
 let lastNormalized: OutboxEntry[] = EMPTY;
 
 function normalizedSnapshot(): OutboxEntry[] {
-  const raw = store.getSnapshot();
+  // createLocalStorageStore's own JSON.parse is cast (unsafely) to T —
+  // `store.getSnapshot()` claims OutboxEntry[] at the type level even when
+  // the stored value parses to something else entirely (an object, a bare
+  // string), so this is read as `unknown` rather than trusted.
+  const raw: unknown = store.getSnapshot();
   if (raw !== lastRaw) {
     lastRaw = raw;
-    lastNormalized = raw.length === 0 ? EMPTY : raw.map(normalize);
+    const source = Array.isArray(raw) ? raw : [];
+    const normalized = source.map(normalize).filter((entry): entry is OutboxEntry => entry !== null);
+    lastNormalized = normalized.length === 0 ? EMPTY : normalized;
   }
   return lastNormalized;
 }
@@ -322,10 +346,24 @@ function sameEntry(a: OutboxEntry, b: OutboxEntry): boolean {
  * whether an entry was delivered by the worker or never mirrored, the entry
  * is sent again" (design doc, section 1). The only path that removes an
  * entry here is the explicit prune in step 6.
+ *
+ * The page copy is read AFTER the `await` below, not before it — reading it
+ * first and merging against that snapshot once `idbGetAll` resolves is a
+ * real, reproduced data-loss bug: any `commit` (an `enqueue`, a delivery, a
+ * retry) that lands on this page while `idbGetAll` is in flight would be
+ * invisible to a pre-await snapshot, and this function's own `commit` at
+ * the end does an unconditional `localStorage` overwrite — silently
+ * reverting that write, with no self-correction, since a tab's own
+ * `BroadcastChannel` post never loops back to itself. `idbGetAll` is the
+ * only `await` in this function; everything from the post-await read
+ * through the final `commit` below is synchronous, so there is no second
+ * window for another write to land unseen between that read and the
+ * `localStorage` write inside `commit` — JS's run-to-completion guarantees
+ * no other module-level code can interleave with a synchronous stretch.
  */
 export async function reconcileWithMirror(): Promise<void> {
+  const mirrorEntries = (await idbGetAll()).map(normalize).filter((entry): entry is OutboxEntry => entry !== null);
   const pageEntries = readOutbox();
-  const mirrorEntries = (await idbGetAll()).map(normalize);
 
   const pageById = new Map(pageEntries.map((entry) => [entry.id, entry] as const));
   const mirrorById = new Map(mirrorEntries.map((entry) => [entry.id, entry] as const));

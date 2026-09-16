@@ -13,6 +13,7 @@ import {
   OutboxWriteFailed,
 } from "./outbox";
 import { idbGetAll, idbPut, idbDelete, OUTBOX_DB, OUTBOX_CHANNEL } from "./idb";
+import * as idb from "./idb";
 import type { OutboxEntry } from "./types";
 
 /** Lets a fire-and-forget IndexedDB write actually land before we check it. */
@@ -363,5 +364,139 @@ describe("applyEntryOutcome / retryEntry / discardEntry", () => {
 
     expect(readOutbox()).toHaveLength(0);
     expect(await idbGetAll()).toHaveLength(0);
+  });
+});
+
+describe("reconcileWithMirror does not race a concurrent local write", () => {
+  /**
+   * Intercepts exactly the NEXT call to idbGetAll and hands back a promise
+   * this test controls the resolution of; every call after that (including
+   * ones this test makes itself, to check the real mirror afterward) goes
+   * through to the real implementation, because `vi.spyOn` without a queued
+   * override falls back to calling through.
+   */
+  function gateNextIdbGetAll(): { release: (value: OutboxEntry[]) => void; spy: ReturnType<typeof vi.spyOn> } {
+    const spy = vi.spyOn(idb, "idbGetAll");
+    let release: (value: OutboxEntry[]) => void = () => {};
+    const gate = new Promise<OutboxEntry[]>((resolve) => {
+      release = resolve;
+    });
+    spy.mockImplementationOnce(() => gate);
+    return { release, spy };
+  }
+
+  it("does not drop an entry enqueued while reconcileWithMirror's IndexedDB read is in flight", async () => {
+    // A reconcile with NOTHING to reconcile returns before ever calling
+    // commit() (see the early-return guard), so a race here needs real work
+    // for the in-flight reconcile to do — a mirror-only entry, exactly like
+    // a service worker delivery the page has not heard about yet.
+    const fromWorker: OutboxEntry = {
+      id: "worker-only",
+      operation: "recordCheckIn",
+      payload: { zoneId: "zone-1", status: "safe" },
+      queuedAt: "2026-09-16T00:00:00.000Z",
+      attempts: 0,
+      userId: "user-1",
+      status: "pending",
+      nextAttemptAt: null,
+      updatedAt: "2026-09-16T00:00:00.000Z",
+    };
+    await idbPut(fromWorker);
+
+    const { release, spy } = gateNextIdbGetAll();
+    try {
+      const reconciling = reconcileWithMirror();
+
+      // Lands entirely inside reconcile's await window: idbGetAll has
+      // already been called (and is suspended on our gate) but has not
+      // resolved yet.
+      const entry = enqueue("submitWaterLevelReport", { zoneId: "zone-1", depthLevel: "knee" });
+
+      release([fromWorker]);
+      await reconciling;
+
+      expect(readOutbox().map((e) => e.id)).toEqual(expect.arrayContaining([entry.id, "worker-only"]));
+
+      await tick();
+      const mirrored = await idbGetAll();
+      expect(mirrored.map((e) => e.id)).toEqual(expect.arrayContaining([entry.id, "worker-only"]));
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("does not resurrect an entry delivered-and-deleted while reconcileWithMirror's IndexedDB read is in flight", async () => {
+    const entry = enqueue("submitWaterLevelReport", { zoneId: "zone-1", depthLevel: "knee" });
+    await idbPut(entry);
+    await tick();
+
+    const { release, spy } = gateNextIdbGetAll();
+    try {
+      const reconciling = reconcileWithMirror();
+
+      // Lands entirely inside reconcile's await window: the write that
+      // deletes this entry from the page copy happens after reconcile
+      // already took whatever snapshot it took, but before it commits.
+      applyEntryOutcome(entry.id, { result: "delivered" });
+      expect(readOutbox()).toHaveLength(0);
+
+      // The mirror resolves as having already caught up with the delete —
+      // the realistic case, since this simulates the delete's own idbDelete
+      // having already landed by the time this reconcile's read completes.
+      release([]);
+      await reconciling;
+
+      expect(readOutbox()).toHaveLength(0);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
+
+describe("normalize degrades rather than crashes on malformed stored data", () => {
+  it("treats a non-array root value as an empty queue instead of throwing", () => {
+    localStorage.setItem("weatherwell.outbox", JSON.stringify({ not: "an array" }));
+    expect(() => readOutbox()).not.toThrow();
+    expect(readOutbox()).toEqual([]);
+  });
+
+  it("treats a bare string root value as an empty queue instead of throwing", () => {
+    localStorage.setItem("weatherwell.outbox", JSON.stringify("not an array either"));
+    expect(() => readOutbox()).not.toThrow();
+    expect(readOutbox()).toEqual([]);
+  });
+
+  it("skips a null element in the array but keeps the salvageable entries around it", () => {
+    const good = {
+      id: "good-1",
+      operation: "submitWaterLevelReport",
+      payload: { zoneId: "zone-1", depthLevel: "knee" },
+      queuedAt: "2026-09-01T00:00:00.000Z",
+      attempts: 0,
+      status: "pending",
+      nextAttemptAt: null,
+      updatedAt: "2026-09-01T00:00:00.000Z",
+    };
+    localStorage.setItem("weatherwell.outbox", JSON.stringify([good, null]));
+
+    expect(() => readOutbox()).not.toThrow();
+    expect(readOutbox().map((e) => e.id)).toEqual(["good-1"]);
+  });
+
+  it("skips a non-object primitive element in the array but keeps the salvageable entries", () => {
+    const good = {
+      id: "good-2",
+      operation: "submitWaterLevelReport",
+      payload: { zoneId: "zone-1", depthLevel: "knee" },
+      queuedAt: "2026-09-01T00:00:00.000Z",
+      attempts: 0,
+      status: "pending",
+      nextAttemptAt: null,
+      updatedAt: "2026-09-01T00:00:00.000Z",
+    };
+    localStorage.setItem("weatherwell.outbox", JSON.stringify(["not an entry", 42, good]));
+
+    expect(() => readOutbox()).not.toThrow();
+    expect(readOutbox().map((e) => e.id)).toEqual(["good-2"]);
   });
 });
