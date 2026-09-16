@@ -38,6 +38,9 @@ export interface OutboxPayloads {
   recordCheckIn: { zoneId: string; status: CheckInStatus };
 }
 
+export type OutboxStatus = "pending" | "stuck" | "held";
+export type StuckReason = "permanent" | "too_old" | "gave_up";
+
 export interface OutboxEntry {
   /**
    * Generated on the client and used as the database row's primary key. This
@@ -49,9 +52,6 @@ export interface OutboxEntry {
   payload: OutboxPayloads[OutboxOperation];
   queuedAt: string;
   attempts: number;
-  lastError?: string;
-  /** True when retrying cannot help — an RLS denial, a validation rejection. */
-  permanentlyFailed: boolean;
   /**
    * Who queued this (I2): the session's user id, or null when this device had
    * no identity yet. Only the matching session replays it; see
@@ -59,4 +59,18 @@ export interface OutboxEntry {
    * are held because nothing says whose they are.
    */
   userId?: string | null;
+  /** See `src/lib/outbox/schedule.ts` for how these five fields evolve. */
+  status: OutboxStatus;
+  nextAttemptAt: string | null;
+  updatedAt: string;
+  lastError?: string;
+  stuckReason?: StuckReason;
+  /**
+   * @deprecated Removed in Task 3, which replaces every read of this with
+   * `status === "stuck"`. Kept here, optional, only so this commit's
+   * `permanentlyFailed`-reading call sites (see the Task 2 report for the
+   * full list) keep typechecking; nothing in this commit writes it as part
+   * of `OutboxEntry`'s required shape.
+   */
+  permanentlyFailed?: boolean;
 }

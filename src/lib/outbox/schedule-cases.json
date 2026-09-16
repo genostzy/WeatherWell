@@ -1,0 +1,733 @@
+{
+  "applyOutcome": [
+    {
+      "name": "delivered removes the entry",
+      "entry": {
+        "id": "e-delivered",
+        "operation": "submitWaterLevelReport",
+        "payload": { "zoneId": "zone-1", "depthLevel": "knee" },
+        "queuedAt": "2026-09-16T11:00:00.000Z",
+        "attempts": 2,
+        "userId": "user-1",
+        "status": "pending",
+        "nextAttemptAt": "2026-09-16T12:00:00.000Z",
+        "updatedAt": "2026-09-16T11:00:00.000Z"
+      },
+      "outcome": { "result": "delivered" },
+      "now": "2026-09-16T12:00:00.000Z",
+      "expect": null
+    },
+    {
+      "name": "retry at attempts 0 waits 0 minutes",
+      "entry": {
+        "id": "e-retry-0",
+        "operation": "submitWaterLevelReport",
+        "payload": { "zoneId": "zone-1", "depthLevel": "knee" },
+        "queuedAt": "2026-09-16T11:00:00.000Z",
+        "attempts": 0,
+        "userId": "user-1",
+        "status": "pending",
+        "nextAttemptAt": null,
+        "updatedAt": "2026-09-16T11:00:00.000Z"
+      },
+      "outcome": { "result": "retry", "error": "network" },
+      "now": "2026-09-16T12:00:00.000Z",
+      "expect": {
+        "attempts": 1,
+        "status": "pending",
+        "nextAttemptAt": "2026-09-16T12:00:00.000Z",
+        "updatedAt": "2026-09-16T12:00:00.000Z"
+      }
+    },
+    {
+      "name": "retry at attempts 1 waits 1 minute",
+      "entry": {
+        "id": "e-retry-1",
+        "operation": "submitWaterLevelReport",
+        "payload": { "zoneId": "zone-1", "depthLevel": "knee" },
+        "queuedAt": "2026-09-16T11:00:00.000Z",
+        "attempts": 1,
+        "userId": "user-1",
+        "status": "pending",
+        "nextAttemptAt": "2026-09-16T12:00:00.000Z",
+        "updatedAt": "2026-09-16T11:00:00.000Z"
+      },
+      "outcome": { "result": "retry", "error": "network" },
+      "now": "2026-09-16T12:00:00.000Z",
+      "expect": {
+        "attempts": 2,
+        "status": "pending",
+        "nextAttemptAt": "2026-09-16T12:01:00.000Z",
+        "updatedAt": "2026-09-16T12:00:00.000Z"
+      }
+    },
+    {
+      "name": "retry at attempts 2 waits 5 minutes",
+      "entry": {
+        "id": "e-retry-2",
+        "operation": "submitWaterLevelReport",
+        "payload": { "zoneId": "zone-1", "depthLevel": "knee" },
+        "queuedAt": "2026-09-16T11:00:00.000Z",
+        "attempts": 2,
+        "userId": "user-1",
+        "status": "pending",
+        "nextAttemptAt": "2026-09-16T12:00:00.000Z",
+        "updatedAt": "2026-09-16T11:00:00.000Z"
+      },
+      "outcome": { "result": "retry", "error": "network" },
+      "now": "2026-09-16T12:00:00.000Z",
+      "expect": {
+        "attempts": 3,
+        "status": "pending",
+        "nextAttemptAt": "2026-09-16T12:05:00.000Z",
+        "updatedAt": "2026-09-16T12:00:00.000Z"
+      }
+    },
+    {
+      "name": "retry at attempts 3 waits 15 minutes",
+      "entry": {
+        "id": "e-retry-3",
+        "operation": "submitWaterLevelReport",
+        "payload": { "zoneId": "zone-1", "depthLevel": "knee" },
+        "queuedAt": "2026-09-16T11:00:00.000Z",
+        "attempts": 3,
+        "userId": "user-1",
+        "status": "pending",
+        "nextAttemptAt": "2026-09-16T12:00:00.000Z",
+        "updatedAt": "2026-09-16T11:00:00.000Z"
+      },
+      "outcome": { "result": "retry", "error": "network" },
+      "now": "2026-09-16T12:00:00.000Z",
+      "expect": {
+        "attempts": 4,
+        "status": "pending",
+        "nextAttemptAt": "2026-09-16T12:15:00.000Z",
+        "updatedAt": "2026-09-16T12:00:00.000Z"
+      }
+    },
+    {
+      "name": "retry at attempts 4 waits 60 minutes",
+      "entry": {
+        "id": "e-retry-4",
+        "operation": "submitWaterLevelReport",
+        "payload": { "zoneId": "zone-1", "depthLevel": "knee" },
+        "queuedAt": "2026-09-16T11:00:00.000Z",
+        "attempts": 4,
+        "userId": "user-1",
+        "status": "pending",
+        "nextAttemptAt": "2026-09-16T12:00:00.000Z",
+        "updatedAt": "2026-09-16T11:00:00.000Z"
+      },
+      "outcome": { "result": "retry", "error": "network" },
+      "now": "2026-09-16T12:00:00.000Z",
+      "expect": {
+        "attempts": 5,
+        "status": "pending",
+        "nextAttemptAt": "2026-09-16T13:00:00.000Z",
+        "updatedAt": "2026-09-16T12:00:00.000Z"
+      }
+    },
+    {
+      "name": "retry at attempts 7 still waits 60 minutes, the table does not grow",
+      "entry": {
+        "id": "e-retry-7",
+        "operation": "submitWaterLevelReport",
+        "payload": { "zoneId": "zone-1", "depthLevel": "knee" },
+        "queuedAt": "2026-09-16T11:00:00.000Z",
+        "attempts": 7,
+        "userId": "user-1",
+        "status": "pending",
+        "nextAttemptAt": "2026-09-16T12:00:00.000Z",
+        "updatedAt": "2026-09-16T11:00:00.000Z"
+      },
+      "outcome": { "result": "retry", "error": "network" },
+      "now": "2026-09-16T12:00:00.000Z",
+      "expect": {
+        "attempts": 8,
+        "status": "pending",
+        "nextAttemptAt": "2026-09-16T13:00:00.000Z",
+        "updatedAt": "2026-09-16T12:00:00.000Z"
+      }
+    },
+    {
+      "name": "retry reaching attempts 10 gives up",
+      "entry": {
+        "id": "e-retry-max-attempts",
+        "operation": "submitWaterLevelReport",
+        "payload": { "zoneId": "zone-1", "depthLevel": "knee" },
+        "queuedAt": "2026-09-16T11:00:00.000Z",
+        "attempts": 9,
+        "userId": "user-1",
+        "status": "pending",
+        "nextAttemptAt": "2026-09-16T12:00:00.000Z",
+        "updatedAt": "2026-09-16T11:00:00.000Z"
+      },
+      "outcome": { "result": "retry", "error": "network" },
+      "now": "2026-09-16T12:00:00.000Z",
+      "expect": {
+        "attempts": 10,
+        "status": "stuck",
+        "stuckReason": "gave_up",
+        "nextAttemptAt": null,
+        "updatedAt": "2026-09-16T12:00:00.000Z"
+      }
+    },
+    {
+      "name": "retry when queuedAt is 3 days and 1 minute before now gives up regardless of attempts",
+      "entry": {
+        "id": "e-retry-too-old",
+        "operation": "submitWaterLevelReport",
+        "payload": { "zoneId": "zone-1", "depthLevel": "knee" },
+        "queuedAt": "2026-09-13T11:59:00.000Z",
+        "attempts": 0,
+        "userId": "user-1",
+        "status": "pending",
+        "nextAttemptAt": "2026-09-13T11:59:00.000Z",
+        "updatedAt": "2026-09-13T11:59:00.000Z"
+      },
+      "outcome": { "result": "retry", "error": "network" },
+      "now": "2026-09-16T12:00:00.000Z",
+      "expect": {
+        "status": "stuck",
+        "stuckReason": "gave_up",
+        "nextAttemptAt": null,
+        "updatedAt": "2026-09-16T12:00:00.000Z"
+      }
+    },
+    {
+      "name": "permanent too_old marks stuck with the reason as lastError",
+      "entry": {
+        "id": "e-permanent-too-old",
+        "operation": "submitWaterLevelReport",
+        "payload": { "zoneId": "zone-1", "depthLevel": "knee" },
+        "queuedAt": "2026-09-16T11:00:00.000Z",
+        "attempts": 1,
+        "userId": "user-1",
+        "status": "pending",
+        "nextAttemptAt": "2026-09-16T12:00:00.000Z",
+        "updatedAt": "2026-09-16T11:00:00.000Z"
+      },
+      "outcome": { "result": "permanent", "reason": "too_old" },
+      "now": "2026-09-16T12:00:00.000Z",
+      "expect": {
+        "status": "stuck",
+        "stuckReason": "too_old",
+        "lastError": "too_old",
+        "nextAttemptAt": null,
+        "updatedAt": "2026-09-16T12:00:00.000Z"
+      }
+    },
+    {
+      "name": "permanent with another reason marks stuck as permanent",
+      "entry": {
+        "id": "e-permanent-other",
+        "operation": "editPin",
+        "payload": { "pinId": "pin-1", "statusTag": "impassable", "caption": "flooded" },
+        "queuedAt": "2026-09-16T11:00:00.000Z",
+        "attempts": 1,
+        "userId": "user-1",
+        "status": "pending",
+        "nextAttemptAt": "2026-09-16T12:00:00.000Z",
+        "updatedAt": "2026-09-16T11:00:00.000Z"
+      },
+      "outcome": { "result": "permanent", "reason": "row-level security" },
+      "now": "2026-09-16T12:00:00.000Z",
+      "expect": {
+        "status": "stuck",
+        "stuckReason": "permanent",
+        "lastError": "row-level security",
+        "nextAttemptAt": null,
+        "updatedAt": "2026-09-16T12:00:00.000Z"
+      }
+    },
+    {
+      "name": "permanent with no reason falls back to a permanent lastError",
+      "entry": {
+        "id": "e-permanent-no-reason",
+        "operation": "createPin",
+        "payload": { "zoneId": "zone-1", "statusTag": "impassable", "caption": "flooded", "lat": 14.5, "lng": 121.0 },
+        "queuedAt": "2026-09-16T11:00:00.000Z",
+        "attempts": 1,
+        "userId": "user-1",
+        "status": "pending",
+        "nextAttemptAt": "2026-09-16T12:00:00.000Z",
+        "updatedAt": "2026-09-16T11:00:00.000Z"
+      },
+      "outcome": { "result": "permanent" },
+      "now": "2026-09-16T12:00:00.000Z",
+      "expect": {
+        "status": "stuck",
+        "stuckReason": "permanent",
+        "lastError": "permanent",
+        "nextAttemptAt": null,
+        "updatedAt": "2026-09-16T12:00:00.000Z"
+      }
+    },
+    {
+      "name": "held leaves attempts unchanged and clears nextAttemptAt",
+      "entry": {
+        "id": "e-held",
+        "operation": "recordCheckIn",
+        "payload": { "zoneId": "zone-1", "status": "safe" },
+        "queuedAt": "2026-09-16T11:00:00.000Z",
+        "attempts": 3,
+        "userId": "user-1",
+        "status": "pending",
+        "nextAttemptAt": "2026-09-16T12:00:00.000Z",
+        "updatedAt": "2026-09-16T11:00:00.000Z"
+      },
+      "outcome": { "result": "held" },
+      "now": "2026-09-16T12:00:00.000Z",
+      "expect": {
+        "attempts": 3,
+        "status": "held",
+        "nextAttemptAt": null,
+        "updatedAt": "2026-09-16T12:00:00.000Z"
+      }
+    },
+    {
+      "name": "signed_out leaves the entry unchanged apart from updatedAt",
+      "entry": {
+        "id": "e-signed-out",
+        "operation": "voteOnPin",
+        "payload": { "pinId": "pin-1", "direction": 1 },
+        "queuedAt": "2026-09-16T11:00:00.000Z",
+        "attempts": 2,
+        "userId": "user-1",
+        "status": "pending",
+        "nextAttemptAt": "2026-09-16T12:00:00.000Z",
+        "updatedAt": "2026-09-16T11:00:00.000Z"
+      },
+      "outcome": { "result": "signed_out" },
+      "now": "2026-09-16T12:00:00.000Z",
+      "expect": {
+        "attempts": 2,
+        "status": "pending",
+        "nextAttemptAt": "2026-09-16T12:00:00.000Z",
+        "updatedAt": "2026-09-16T12:00:00.000Z"
+      }
+    }
+  ],
+  "isDue": [
+    {
+      "name": "pending with nextAttemptAt equal to now is due",
+      "entry": {
+        "id": "d-1",
+        "operation": "submitWaterLevelReport",
+        "payload": { "zoneId": "zone-1", "depthLevel": "knee" },
+        "queuedAt": "2026-09-16T11:00:00.000Z",
+        "attempts": 0,
+        "userId": "user-1",
+        "status": "pending",
+        "nextAttemptAt": "2026-09-16T12:00:00.000Z",
+        "updatedAt": "2026-09-16T11:00:00.000Z"
+      },
+      "now": "2026-09-16T12:00:00.000Z",
+      "expect": true
+    },
+    {
+      "name": "pending with nextAttemptAt in the past is due",
+      "entry": {
+        "id": "d-2",
+        "operation": "submitWaterLevelReport",
+        "payload": { "zoneId": "zone-1", "depthLevel": "knee" },
+        "queuedAt": "2026-09-16T11:00:00.000Z",
+        "attempts": 0,
+        "userId": "user-1",
+        "status": "pending",
+        "nextAttemptAt": "2026-09-16T11:00:00.000Z",
+        "updatedAt": "2026-09-16T11:00:00.000Z"
+      },
+      "now": "2026-09-16T12:00:00.000Z",
+      "expect": true
+    },
+    {
+      "name": "pending with a null nextAttemptAt is due",
+      "entry": {
+        "id": "d-3",
+        "operation": "submitWaterLevelReport",
+        "payload": { "zoneId": "zone-1", "depthLevel": "knee" },
+        "queuedAt": "2026-09-16T11:00:00.000Z",
+        "attempts": 0,
+        "userId": "user-1",
+        "status": "pending",
+        "nextAttemptAt": null,
+        "updatedAt": "2026-09-16T11:00:00.000Z"
+      },
+      "now": "2026-09-16T12:00:00.000Z",
+      "expect": true
+    },
+    {
+      "name": "pending with a future nextAttemptAt is not due",
+      "entry": {
+        "id": "d-4",
+        "operation": "submitWaterLevelReport",
+        "payload": { "zoneId": "zone-1", "depthLevel": "knee" },
+        "queuedAt": "2026-09-16T11:00:00.000Z",
+        "attempts": 1,
+        "userId": "user-1",
+        "status": "pending",
+        "nextAttemptAt": "2026-09-16T12:05:00.000Z",
+        "updatedAt": "2026-09-16T11:00:00.000Z"
+      },
+      "now": "2026-09-16T12:00:00.000Z",
+      "expect": false
+    },
+    {
+      "name": "stuck is never due, even with a past nextAttemptAt",
+      "entry": {
+        "id": "d-5",
+        "operation": "submitWaterLevelReport",
+        "payload": { "zoneId": "zone-1", "depthLevel": "knee" },
+        "queuedAt": "2026-09-16T11:00:00.000Z",
+        "attempts": 10,
+        "userId": "user-1",
+        "status": "stuck",
+        "stuckReason": "gave_up",
+        "nextAttemptAt": null,
+        "updatedAt": "2026-09-16T11:00:00.000Z"
+      },
+      "now": "2026-09-16T12:00:00.000Z",
+      "expect": false
+    },
+    {
+      "name": "held is never due",
+      "entry": {
+        "id": "d-6",
+        "operation": "recordCheckIn",
+        "payload": { "zoneId": "zone-1", "status": "safe" },
+        "queuedAt": "2026-09-16T11:00:00.000Z",
+        "attempts": 0,
+        "userId": "user-1",
+        "status": "held",
+        "nextAttemptAt": null,
+        "updatedAt": "2026-09-16T11:00:00.000Z"
+      },
+      "now": "2026-09-16T12:00:00.000Z",
+      "expect": false
+    }
+  ],
+  "shouldPrune": [
+    {
+      "name": "stuck and queued 7 days and 1 minute ago is pruned",
+      "entry": {
+        "id": "p-1",
+        "operation": "submitWaterLevelReport",
+        "payload": { "zoneId": "zone-1", "depthLevel": "knee" },
+        "queuedAt": "2026-09-09T11:59:00.000Z",
+        "attempts": 10,
+        "userId": "user-1",
+        "status": "stuck",
+        "stuckReason": "gave_up",
+        "nextAttemptAt": null,
+        "updatedAt": "2026-09-09T11:59:00.000Z"
+      },
+      "now": "2026-09-16T12:00:00.000Z",
+      "expect": true
+    },
+    {
+      "name": "stuck at 6 days is not pruned yet",
+      "entry": {
+        "id": "p-2",
+        "operation": "submitWaterLevelReport",
+        "payload": { "zoneId": "zone-1", "depthLevel": "knee" },
+        "queuedAt": "2026-09-10T12:00:00.000Z",
+        "attempts": 10,
+        "userId": "user-1",
+        "status": "stuck",
+        "stuckReason": "gave_up",
+        "nextAttemptAt": null,
+        "updatedAt": "2026-09-10T12:00:00.000Z"
+      },
+      "now": "2026-09-16T12:00:00.000Z",
+      "expect": false
+    },
+    {
+      "name": "held is never pruned, even at 30 days",
+      "entry": {
+        "id": "p-3",
+        "operation": "recordCheckIn",
+        "payload": { "zoneId": "zone-1", "status": "safe" },
+        "queuedAt": "2026-08-17T12:00:00.000Z",
+        "attempts": 0,
+        "userId": "user-1",
+        "status": "held",
+        "nextAttemptAt": null,
+        "updatedAt": "2026-08-17T12:00:00.000Z"
+      },
+      "now": "2026-09-16T12:00:00.000Z",
+      "expect": false
+    },
+    {
+      "name": "pending is never pruned, regardless of age",
+      "entry": {
+        "id": "p-4",
+        "operation": "submitWaterLevelReport",
+        "payload": { "zoneId": "zone-1", "depthLevel": "knee" },
+        "queuedAt": "2026-08-17T12:00:00.000Z",
+        "attempts": 1,
+        "userId": "user-1",
+        "status": "pending",
+        "nextAttemptAt": "2026-08-17T12:01:00.000Z",
+        "updatedAt": "2026-08-17T12:00:00.000Z"
+      },
+      "now": "2026-09-16T12:00:00.000Z",
+      "expect": false
+    }
+  ],
+  "isBlockedByPendingCreate": [
+    {
+      "name": "editPin whose pinId equals a queued createPin id is blocked",
+      "entry": {
+        "id": "edit-1",
+        "operation": "editPin",
+        "payload": { "pinId": "pin-1", "statusTag": "impassable", "caption": "flooded" },
+        "queuedAt": "2026-09-16T11:00:00.000Z",
+        "attempts": 0,
+        "userId": "user-1",
+        "status": "pending",
+        "nextAttemptAt": null,
+        "updatedAt": "2026-09-16T11:00:00.000Z"
+      },
+      "queue": [
+        {
+          "id": "pin-1",
+          "operation": "createPin",
+          "payload": { "zoneId": "zone-1", "statusTag": "impassable", "caption": "flooded", "lat": 14.5, "lng": 121.0 },
+          "queuedAt": "2026-09-16T10:00:00.000Z",
+          "attempts": 0,
+          "userId": "user-1",
+          "status": "pending",
+          "nextAttemptAt": null,
+          "updatedAt": "2026-09-16T10:00:00.000Z"
+        },
+        {
+          "id": "edit-1",
+          "operation": "editPin",
+          "payload": { "pinId": "pin-1", "statusTag": "impassable", "caption": "flooded" },
+          "queuedAt": "2026-09-16T11:00:00.000Z",
+          "attempts": 0,
+          "userId": "user-1",
+          "status": "pending",
+          "nextAttemptAt": null,
+          "updatedAt": "2026-09-16T11:00:00.000Z"
+        }
+      ],
+      "expect": true
+    },
+    {
+      "name": "deleteOwnPin whose pinId equals a queued createPin id is blocked",
+      "entry": {
+        "id": "delete-1",
+        "operation": "deleteOwnPin",
+        "payload": { "pinId": "pin-2" },
+        "queuedAt": "2026-09-16T11:00:00.000Z",
+        "attempts": 0,
+        "userId": "user-1",
+        "status": "pending",
+        "nextAttemptAt": null,
+        "updatedAt": "2026-09-16T11:00:00.000Z"
+      },
+      "queue": [
+        {
+          "id": "pin-2",
+          "operation": "createPin",
+          "payload": { "zoneId": "zone-1", "statusTag": "impassable", "caption": "flooded", "lat": 14.5, "lng": 121.0 },
+          "queuedAt": "2026-09-16T10:00:00.000Z",
+          "attempts": 0,
+          "userId": "user-1",
+          "status": "pending",
+          "nextAttemptAt": null,
+          "updatedAt": "2026-09-16T10:00:00.000Z"
+        },
+        {
+          "id": "delete-1",
+          "operation": "deleteOwnPin",
+          "payload": { "pinId": "pin-2" },
+          "queuedAt": "2026-09-16T11:00:00.000Z",
+          "attempts": 0,
+          "userId": "user-1",
+          "status": "pending",
+          "nextAttemptAt": null,
+          "updatedAt": "2026-09-16T11:00:00.000Z"
+        }
+      ],
+      "expect": true
+    },
+    {
+      "name": "setPinRemoved whose pinId equals a queued createPin id is blocked",
+      "entry": {
+        "id": "moderate-1",
+        "operation": "setPinRemoved",
+        "payload": { "pinId": "pin-3", "removed": true, "reason": "spam" },
+        "queuedAt": "2026-09-16T11:00:00.000Z",
+        "attempts": 0,
+        "userId": "operator-1",
+        "status": "pending",
+        "nextAttemptAt": null,
+        "updatedAt": "2026-09-16T11:00:00.000Z"
+      },
+      "queue": [
+        {
+          "id": "pin-3",
+          "operation": "createPin",
+          "payload": { "zoneId": "zone-1", "statusTag": "impassable", "caption": "flooded", "lat": 14.5, "lng": 121.0 },
+          "queuedAt": "2026-09-16T10:00:00.000Z",
+          "attempts": 0,
+          "userId": "user-1",
+          "status": "pending",
+          "nextAttemptAt": null,
+          "updatedAt": "2026-09-16T10:00:00.000Z"
+        },
+        {
+          "id": "moderate-1",
+          "operation": "setPinRemoved",
+          "payload": { "pinId": "pin-3", "removed": true, "reason": "spam" },
+          "queuedAt": "2026-09-16T11:00:00.000Z",
+          "attempts": 0,
+          "userId": "operator-1",
+          "status": "pending",
+          "nextAttemptAt": null,
+          "updatedAt": "2026-09-16T11:00:00.000Z"
+        }
+      ],
+      "expect": true
+    },
+    {
+      "name": "voteOnPin is never blocked by a pending create",
+      "entry": {
+        "id": "vote-1",
+        "operation": "voteOnPin",
+        "payload": { "pinId": "pin-4", "direction": 1 },
+        "queuedAt": "2026-09-16T11:00:00.000Z",
+        "attempts": 0,
+        "userId": "user-1",
+        "status": "pending",
+        "nextAttemptAt": null,
+        "updatedAt": "2026-09-16T11:00:00.000Z"
+      },
+      "queue": [
+        {
+          "id": "pin-4",
+          "operation": "createPin",
+          "payload": { "zoneId": "zone-1", "statusTag": "impassable", "caption": "flooded", "lat": 14.5, "lng": 121.0 },
+          "queuedAt": "2026-09-16T10:00:00.000Z",
+          "attempts": 0,
+          "userId": "user-1",
+          "status": "pending",
+          "nextAttemptAt": null,
+          "updatedAt": "2026-09-16T10:00:00.000Z"
+        },
+        {
+          "id": "vote-1",
+          "operation": "voteOnPin",
+          "payload": { "pinId": "pin-4", "direction": 1 },
+          "queuedAt": "2026-09-16T11:00:00.000Z",
+          "attempts": 0,
+          "userId": "user-1",
+          "status": "pending",
+          "nextAttemptAt": null,
+          "updatedAt": "2026-09-16T11:00:00.000Z"
+        }
+      ],
+      "expect": false
+    },
+    {
+      "name": "createPin is never blocked, even alongside another queued createPin",
+      "entry": {
+        "id": "pin-5",
+        "operation": "createPin",
+        "payload": { "zoneId": "zone-1", "statusTag": "impassable", "caption": "flooded", "lat": 14.5, "lng": 121.0 },
+        "queuedAt": "2026-09-16T11:00:00.000Z",
+        "attempts": 0,
+        "userId": "user-1",
+        "status": "pending",
+        "nextAttemptAt": null,
+        "updatedAt": "2026-09-16T11:00:00.000Z"
+      },
+      "queue": [
+        {
+          "id": "pin-5",
+          "operation": "createPin",
+          "payload": { "zoneId": "zone-1", "statusTag": "impassable", "caption": "flooded", "lat": 14.5, "lng": 121.0 },
+          "queuedAt": "2026-09-16T11:00:00.000Z",
+          "attempts": 0,
+          "userId": "user-1",
+          "status": "pending",
+          "nextAttemptAt": null,
+          "updatedAt": "2026-09-16T11:00:00.000Z"
+        }
+      ],
+      "expect": false
+    },
+    {
+      "name": "an edit for a pin with no queued create is not blocked",
+      "entry": {
+        "id": "edit-2",
+        "operation": "editPin",
+        "payload": { "pinId": "pin-6", "statusTag": "impassable", "caption": "flooded" },
+        "queuedAt": "2026-09-16T11:00:00.000Z",
+        "attempts": 0,
+        "userId": "user-1",
+        "status": "pending",
+        "nextAttemptAt": null,
+        "updatedAt": "2026-09-16T11:00:00.000Z"
+      },
+      "queue": [
+        {
+          "id": "edit-2",
+          "operation": "editPin",
+          "payload": { "pinId": "pin-6", "statusTag": "impassable", "caption": "flooded" },
+          "queuedAt": "2026-09-16T11:00:00.000Z",
+          "attempts": 0,
+          "userId": "user-1",
+          "status": "pending",
+          "nextAttemptAt": null,
+          "updatedAt": "2026-09-16T11:00:00.000Z"
+        }
+      ],
+      "expect": false
+    },
+    {
+      "name": "an editPin is not blocked once its matching createPin is stuck",
+      "entry": {
+        "id": "edit-3",
+        "operation": "editPin",
+        "payload": { "pinId": "pin-7", "statusTag": "impassable", "caption": "flooded" },
+        "queuedAt": "2026-09-16T11:00:00.000Z",
+        "attempts": 0,
+        "userId": "user-1",
+        "status": "pending",
+        "nextAttemptAt": null,
+        "updatedAt": "2026-09-16T11:00:00.000Z"
+      },
+      "queue": [
+        {
+          "id": "pin-7",
+          "operation": "createPin",
+          "payload": { "zoneId": "zone-1", "statusTag": "impassable", "caption": "flooded", "lat": 14.5, "lng": 121.0 },
+          "queuedAt": "2026-09-16T09:00:00.000Z",
+          "attempts": 10,
+          "userId": "user-1",
+          "status": "stuck",
+          "stuckReason": "permanent",
+          "lastError": "row-level security",
+          "nextAttemptAt": null,
+          "updatedAt": "2026-09-16T09:05:00.000Z"
+        },
+        {
+          "id": "edit-3",
+          "operation": "editPin",
+          "payload": { "pinId": "pin-7", "statusTag": "impassable", "caption": "flooded" },
+          "queuedAt": "2026-09-16T11:00:00.000Z",
+          "attempts": 0,
+          "userId": "user-1",
+          "status": "pending",
+          "nextAttemptAt": null,
+          "updatedAt": "2026-09-16T11:00:00.000Z"
+        }
+      ],
+      "expect": false
+    }
+  ]
+}

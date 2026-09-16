@@ -48,14 +48,22 @@ export function enqueue<K extends OutboxOperation>(
   operation: K,
   payload: OutboxPayloads[K]
 ): OutboxEntry {
+  const queuedAt = new Date().toISOString();
   const entry: OutboxEntry = {
     id: crypto.randomUUID(),
     operation,
     payload,
-    queuedAt: new Date().toISOString(),
+    queuedAt,
     attempts: 0,
     permanentlyFailed: false,
     userId: knownSessionUserId(),
+    // Task 3 wires this module through schedule.ts (isDue/applyOutcome/etc.).
+    // For now these three just need a valid, honest initial value so a
+    // freshly queued entry satisfies OutboxEntry's shape: newly queued means
+    // due immediately, so nextAttemptAt is null (see schedule.ts's isDue).
+    status: "pending",
+    nextAttemptAt: null,
+    updatedAt: queuedAt,
   };
   store.update((all) => [...all, entry]);
 
