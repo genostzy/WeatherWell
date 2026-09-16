@@ -201,6 +201,53 @@ describe("usePois", () => {
   });
 });
 
+describe("ReferenceDataProvider's chrome prop (fix round 1, finding 5)", () => {
+  function renderWithChrome(childUi = <ZoneNames />) {
+    return render(
+      <LanguageProvider>
+        <ReferenceDataProvider chrome={<div data-testid="chrome">chrome content</div>}>
+          {childUi}
+        </ReferenceDataProvider>
+      </LanguageProvider>
+    );
+  }
+
+  it("renders chrome while data is loading, alongside the loading status", () => {
+    (fetch as ReturnType<typeof vi.fn>).mockReturnValue(new Promise(() => {}));
+    renderWithChrome();
+    expect(screen.getByTestId("chrome")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toBeInTheDocument();
+  });
+
+  it("renders chrome after a load failure, alongside the failure card", async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockRejectedValue(new TypeError("Failed to fetch"));
+    renderWithChrome();
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+    expect(screen.getByTestId("chrome")).toBeInTheDocument();
+  });
+
+  it("renders chrome once data is ready, alongside the real children", async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ONE_ZONE,
+    });
+    renderWithChrome();
+    expect(await screen.findByText("Barangay Nilombot, Mapandan")).toBeInTheDocument();
+    expect(screen.getByTestId("chrome")).toBeInTheDocument();
+  });
+
+  it("renders nothing extra when chrome is omitted, leaving every existing call site unchanged", () => {
+    // Guards the "existing assertions stay unchanged" rule: a provider with
+    // no `chrome` prop (every call site before this fix round) must behave
+    // exactly as it did — this is the same render `renderProvider()` above
+    // uses, just spelled out here to keep the point next to the new tests.
+    (fetch as ReturnType<typeof vi.fn>).mockReturnValue(new Promise(() => {}));
+    renderProvider();
+    expect(screen.queryByTestId("chrome")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toBeInTheDocument();
+  });
+});
+
 describe("useHazardsForZone", () => {
   it("returns the hazard levels for a known zone", async () => {
     (fetch as ReturnType<typeof vi.fn>).mockResolvedValue({

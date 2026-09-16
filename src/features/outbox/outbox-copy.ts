@@ -52,16 +52,26 @@ const GAVE_UP_REASON: LocalizedText = {
 };
 
 /**
- * Defensive-only fallback, not from the spec table: `stuckReason:
- * "permanent"` (design doc section 2, "a 422 becomes stuck ... with ... the
- * reason text") carries whatever text the server actually sent back in
- * `lastError` — there is no fixed bilingual wording for it, because it isn't
- * this module's text to translate. `applyOutcome` always sets `lastError` to
- * at least the literal string "permanent" on that path, so this constant is
- * reached only for a hand-edited or otherwise unreachable entry with neither
- * a reason nor a stored error.
+ * Not from the spec table (fix round 1, finding 2). `stuckReason: "permanent"`
+ * (design doc section 2, "a 422 becomes stuck ... with ... the reason text")
+ * carries whatever text the server actually sent back in `lastError` — a raw
+ * database message, "invalid", "unknown_operation", "pin was never created"
+ * (`drain.ts`'s `PIN_NEVER_CREATED`), sometimes only in English. A resident
+ * must never see that raw text, in either language, so every `permanent` (or
+ * legacy, reason-less) stuck entry reads this one bilingual sentence instead.
+ * `lastError` stays on the entry for debugging — this module just stops
+ * rendering it.
+ *
+ * "Could not save — try again." (the admin screens' existing failure copy —
+ * see admin-map-canvas.tsx, community-pin-moderation-panel.tsx,
+ * evacuation-management-panel.tsx, admin/zone/[zoneId]/page.tsx) does not fit
+ * here: it tells the reader retrying the same action will likely work, which
+ * is true for the transient save failures those screens show it for, but
+ * false for a `permanent` outcome — the same request will be refused again
+ * unchanged. Reusing it would be actively misleading, so this uses its own
+ * wording instead.
  */
-const UNKNOWN_REASON: LocalizedText = { en: "Couldn't be sent.", fil: "Hindi maipadala." };
+const NOT_ACCEPTED: LocalizedText = { en: "This couldn't be accepted.", fil: "Hindi ito tinanggap." };
 
 export const RETRY_LABEL: LocalizedText = { en: "Retry", fil: "Subukang muli" };
 export const DISCARD_LABEL: LocalizedText = { en: "Discard", fil: "Huwag ipadala" };
@@ -117,11 +127,16 @@ export function entryDescription(entry: OutboxEntry, zones: Zone[], lang: Langua
   }
 }
 
-/** The stuck reason's own sentence — "Too old to send…", "Tried many times…", or the server's own text. */
+/**
+ * The stuck reason's own sentence — "Too old to send…", "Tried many
+ * times…", or (for "permanent" and any other/missing reason) the bilingual
+ * "This couldn't be accepted." `entry.lastError` is never read here — see
+ * `NOT_ACCEPTED`'s comment for why raw server text must not reach this UI.
+ */
 function stuckReasonText(entry: OutboxEntry, lang: LanguageCode): string {
   if (entry.stuckReason === "too_old") return t(TOO_OLD_REASON, lang);
   if (entry.stuckReason === "gave_up") return t(GAVE_UP_REASON, lang);
-  return entry.lastError ?? t(UNKNOWN_REASON, lang);
+  return t(NOT_ACCEPTED, lang);
 }
 
 /** "Will send when online", or "Couldn't send: {reason}" for a stuck entry. */

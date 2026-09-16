@@ -1,13 +1,12 @@
 "use client";
 
-import { useContext, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { OverlayDialog } from "@/components/overlay-dialog";
-import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { useOutbox, retryEntry, discardEntry } from "@/lib/outbox/outbox";
-import { knownSessionUserId } from "@/lib/auth/session-user";
+import { useSessionUserId } from "@/lib/auth/anonymous-session";
 import { ReferenceDataContext } from "@/lib/reference-data/provider";
 import { formatActionTime } from "@/lib/official-actions-copy";
 import type { OutboxEntry } from "@/lib/outbox/types";
@@ -28,11 +27,17 @@ import {
  * section 3: "counts only entries whose userId is the current session user,
  * or null on this device"). A held entry is never counted, no matter whose
  * it is — it is waiting on its owner signing back in, not on a send.
+ *
+ * `currentUserId` must be the REACTIVE session id (`useSessionUserId()`),
+ * not `knownSessionUserId()`'s one-shot snapshot — fix round 1, finding 1.
+ * On a shared phone, a sign-out or a different Google account changes who
+ * `auth.uid()` is without a reload, and this component must stop showing
+ * the previous person's entries the instant that happens, not just on the
+ * next drain or page load.
  */
-function isCountedForThisSession(entry: OutboxEntry): boolean {
+function isCountedForThisSession(entry: OutboxEntry, currentUserId: string | null): boolean {
   if (entry.status === "held") return false;
-  const userId = knownSessionUserId();
-  return entry.userId === userId || entry.userId === null;
+  return entry.userId === currentUserId || entry.userId === null;
 }
 
 /**
@@ -51,6 +56,14 @@ function badgeState(entries: OutboxEntry[]): { state: OutboxBadgeState; count: n
   return null;
 }
 
+function discardButtonId(entryId: string): string {
+  return `outbox-discard-${entryId}`;
+}
+
+function confirmButtonId(entryId: string): string {
+  return `outbox-discard-confirm-${entryId}`;
+}
+
 /**
  * Sits beside `LanguageToggle` in the root header (mounted in
  * src/app/layout.tsx as `ReferenceDataProvider`'s `chrome`), on every screen
@@ -65,22 +78,62 @@ function badgeState(entries: OutboxEntry[]): { state: OutboxBadgeState; count: n
  * window; an empty zone list just means `entryDescription` falls back to
  * showing the raw zone id until the real data arrives.
  *
+ * Discard's confirmation is INLINE in the same list dialog (fix round 1,
+ * finding 3) rather than a second stacked `OverlayDialog` — two nested
+ * modals meant two focus traps and two controls both named "Discard". Only
+ * one `role="dialog"` ever exists here.
+ *
  * Hidden entirely at zero — see `badgeState`.
  */
 export function OutboxBadge() {
   const { lang } = useLanguage();
   const outbox = useOutbox();
+  const currentUserId = useSessionUserId();
   const zones = useContext(ReferenceDataContext)?.zones ?? [];
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [discarding, setDiscarding] = useState<string | null>(null);
+  const [discardingId, setDiscardingId] = useState<string | null>(null);
+  // Which entry's Discard button gets focus back after Cancel — see the
+  // effect below. Not state: changing it must never itself trigger a render.
+  const returnFocusIdRef = useRef<string | null>(null);
 
-  const counted = outbox.filter(isCountedForThisSession);
+  // Moves focus to the inline Confirm button the moment its row appears, and
+  // back to that row's own Discard button the moment Cancel closes it — the
+  // same "trap focus inside what just took over the screen, restore it on
+  // the way out" contract OverlayDialog already gives the dialog itself.
+  useEffect(() => {
+    if (discardingId) {
+      document.getElementById(confirmButtonId(discardingId))?.focus();
+      return;
+    }
+    const returnTo = returnFocusIdRef.current;
+    if (returnTo) {
+      returnFocusIdRef.current = null;
+      document.getElementById(discardButtonId(returnTo))?.focus();
+    }
+  }, [discardingId]);
+
+  const counted = outbox.filter((entry) => isCountedForThisSession(entry, currentUserId));
   const summary = badgeState(counted);
 
   if (!summary) return null;
 
   const label = badgeLabel(summary.state, summary.count, lang);
-  const discardingEntry = discarding ? counted.find((entry) => entry.id === discarding) : undefined;
+
+  function beginDiscard(entryId: string) {
+    returnFocusIdRef.current = entryId;
+    setDiscardingId(entryId);
+  }
+
+  function cancelDiscard() {
+    setDiscardingId(null);
+  }
+
+  function confirmDiscard(entryId: string) {
+    discardEntry(entryId);
+    // The row (and its Discard button) is gone — nothing to return focus to.
+    returnFocusIdRef.current = null;
+    setDiscardingId(null);
+  }
 
   return (
     <>
@@ -107,16 +160,36 @@ export function OutboxBadge() {
                 <p className="font-medium">{entryDescription(entry, zones, lang)}</p>
                 <p className="text-sm text-muted-foreground">{formatActionTime(entry.queuedAt, lang)}</p>
                 <p className="text-sm">{entryStatusText(entry, lang)}</p>
-                {entry.status === "stuck" && (
+                {entry.status === "stuck" && discardingId === entry.id && (
+                  <div className="space-y-2 pt-1">
+                    <p className="text-sm font-medium">{t(DISCARD_CONFIRM, lang)}</p>
+                    <div className="flex gap-2">
+                      <Button
+                        id={confirmButtonId(entry.id)}
+                        type="button"
+                        size="lg"
+                        variant="outline"
+                        onClick={() => confirmDiscard(entry.id)}
+                      >
+                        {t(DISCARD_LABEL, lang)}
+                      </Button>
+                      <Button type="button" size="lg" variant="outline" onClick={cancelDiscard}>
+                        {t(CANCEL, lang)}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                {entry.status === "stuck" && discardingId !== entry.id && (
                   <div className="flex gap-2 pt-1">
                     <Button type="button" size="lg" variant="outline" onClick={() => retryEntry(entry.id)}>
                       {t(RETRY_LABEL, lang)}
                     </Button>
                     <Button
+                      id={discardButtonId(entry.id)}
                       type="button"
                       size="lg"
                       variant="outline"
-                      onClick={() => setDiscarding(entry.id)}
+                      onClick={() => beginDiscard(entry.id)}
                     >
                       {t(DISCARD_LABEL, lang)}
                     </Button>
@@ -126,21 +199,6 @@ export function OutboxBadge() {
             ))}
           </ul>
         </OverlayDialog>
-      )}
-
-      {discardingEntry && (
-        <ConfirmDialog
-          title={t(DISCARD_LABEL, lang)}
-          body={t(DISCARD_CONFIRM, lang)}
-          confirmLabel={t(DISCARD_LABEL, lang)}
-          cancelLabel={t(CANCEL, lang)}
-          closeLabel={t(CLOSE, lang)}
-          onConfirm={() => {
-            discardEntry(discardingEntry.id);
-            setDiscarding(null);
-          }}
-          onCancel={() => setDiscarding(null)}
-        />
       )}
     </>
   );
