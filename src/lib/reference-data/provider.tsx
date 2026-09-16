@@ -75,7 +75,23 @@ type State =
  * On a repeat visit the service worker answers /api/zones from cache with no
  * network, so this resolves immediately and the gate is invisible.
  */
-export function ReferenceDataProvider({ children }: { children: ReactNode }) {
+export function ReferenceDataProvider({
+  children,
+  chrome,
+}: {
+  children: ReactNode;
+  /**
+   * Rendered unconditionally, wrapped in the same `ReferenceDataContext` as
+   * `children` but never gated behind it — for header content (Task 6's
+   * `OutboxBadge`) that must stay visible while data is loading or the fetch
+   * has failed, the same as `LanguageToggle` and `AccountLink` beside it
+   * always have been. A `chrome` consumer reading the context directly
+   * (rather than through `useZones()`, which still throws on `null`) sees
+   * `null` until `state.status === "ready"`, exactly when `children` itself
+   * would not exist yet either.
+   */
+  chrome?: ReactNode;
+}) {
   const { lang } = useLanguage();
   const [state, setState] = useState<State>({ status: "loading" });
 
@@ -162,38 +178,35 @@ export function ReferenceDataProvider({ children }: { children: ReactNode }) {
     load();
   }, [load]);
 
-  if (state.status === "loading") {
-    return (
-      <p role="status" lang={lang} className="p-6 text-center text-sm text-muted-foreground">
-        {t(LOADING, lang)}
-      </p>
-    );
-  }
-
-  if (state.status === "failed") {
-    return (
-      <div className="flex flex-col items-center gap-4 p-6">
-        <p role="alert" lang={lang} className="max-w-md text-center text-sm">
-          {t(UNREACHABLE, lang)}
-        </p>
-        <button
-          type="button"
-          onClick={retry}
-          className="rounded-md border-2 border-border px-4 py-2 text-sm font-medium"
-        >
-          {t(RETRY, lang)}
-        </button>
-      </div>
-    );
-  }
-
   return (
-    <ReferenceDataContext.Provider value={state.data}>
-      <SetCenterStatusContext.Provider value={applyCenterStatus}>
-        <AlertsContext.Provider value={state.alerts}>
-          <AlertsRefreshContext.Provider value={refreshAlerts}>{children}</AlertsRefreshContext.Provider>
-        </AlertsContext.Provider>
-      </SetCenterStatusContext.Provider>
+    <ReferenceDataContext.Provider value={state.status === "ready" ? state.data : null}>
+      {chrome}
+      {state.status === "loading" && (
+        <p role="status" lang={lang} className="p-6 text-center text-sm text-muted-foreground">
+          {t(LOADING, lang)}
+        </p>
+      )}
+      {state.status === "failed" && (
+        <div className="flex flex-col items-center gap-4 p-6">
+          <p role="alert" lang={lang} className="max-w-md text-center text-sm">
+            {t(UNREACHABLE, lang)}
+          </p>
+          <button
+            type="button"
+            onClick={retry}
+            className="rounded-md border-2 border-border px-4 py-2 text-sm font-medium"
+          >
+            {t(RETRY, lang)}
+          </button>
+        </div>
+      )}
+      {state.status === "ready" && (
+        <SetCenterStatusContext.Provider value={applyCenterStatus}>
+          <AlertsContext.Provider value={state.alerts}>
+            <AlertsRefreshContext.Provider value={refreshAlerts}>{children}</AlertsRefreshContext.Provider>
+          </AlertsContext.Provider>
+        </SetCenterStatusContext.Provider>
+      )}
     </ReferenceDataContext.Provider>
   );
 }

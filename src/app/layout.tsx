@@ -3,6 +3,7 @@ import "./globals.css";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { LanguageProvider } from "@/features/i18n/language-provider";
 import { LanguageToggle } from "@/features/i18n/language-toggle";
+import { OutboxBadge } from "@/features/outbox/outbox-badge";
 import { AccountLink } from "@/features/auth/account-link";
 import { ErrorReporter } from "@/features/monitoring/error-reporter";
 import { SelectedZoneHotlineButton } from "@/components/selected-zone-hotline-button";
@@ -39,13 +40,17 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             <ServiceWorkerRegistration />
             <OutboxDrain />
             <RetiredStorageSweep />
-            <header className="flex items-center justify-center gap-4 p-3">
-              <span className="font-semibold">WeatherWell</span>
-              <LanguageToggle />
-              <AccountLink />
-              <ErrorReporter />
-            </header>
-            <ReferenceDataProvider>
+            <ReferenceDataProvider
+              chrome={
+                <header className="flex items-center justify-center gap-4 p-3">
+                  <span className="font-semibold">WeatherWell</span>
+                  <LanguageToggle />
+                  <OutboxBadge />
+                  <AccountLink />
+                  <ErrorReporter />
+                </header>
+              }
+            >
               {children}
               <SelectedZoneHotlineButton />
             </ReferenceDataProvider>
