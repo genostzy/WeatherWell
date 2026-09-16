@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { onDelivered, PermanentFailure } from "./outbox/drain";
+import { onDelivered } from "./outbox/drain";
 import { enqueue, readOutbox, useOutbox, visibleToCurrentUser } from "./outbox/outbox";
 import { payloadOf } from "./outbox/dispatchers";
 import { drainForCurrentSession } from "./outbox/session-drain";
@@ -300,9 +300,10 @@ export function useCommunityPins(): CommunityPin[] {
  * here because there is now something queued to attribute — the rule this plan
  * is bound by is that a visitor who only READS never becomes an auth.users row.
  *
- * Drains through dispatchQueued, not dispatchQueuedPinWrite directly: one
- * queue, one dispatcher. A resident with a queued report and no signal who
- * then drops a pin must not flush only the pin.
+ * Drains through dispatchQueued (dispatchers.ts), which sends every
+ * operation through the one route-checked endpoint: one queue, one
+ * dispatcher. A resident with a queued report and no signal who then drops
+ * a pin must not flush only the pin.
  *
  * flushOutbox, not drainOutbox: this is the call most likely to be declined,
  * because a resident marking three flooded streets in a row is writing while
@@ -429,7 +430,7 @@ export function hasVotedOnPin(pin: CommunityPin): boolean {
  *
  * Queued like every other write; mergePins draws the queued direction onto
  * the pin at once (see mergePins), so the resident sees their vote land
- * before dispatchQueuedVote ever reaches the server.
+ * before it ever reaches the server through dispatchQueued.
  *
  * Net-score auto-removal moved to the database with the tallies. It cannot be
  * computed here any more and should not be: a threshold evaluated on one
@@ -443,14 +444,14 @@ export function voteOnPin(pinId: string, direction: 1 | -1): void {
   // this is the belt to that braces: a second queued vote for one pin is a
   // duplicate the server refuses and the outbox then carries forever.
   //
-  // Excludes stuck entries, deliberately. dispatchQueuedVote can raise
-  // PermanentFailure (the placeholder it replaced never could), and without
-  // this exclusion a resident whose vote was permanently refused — say, a
-  // rejected direction from a stale client build — would have that dead
-  // entry sit in the outbox forever satisfying this guard, locking them out
-  // of ever voting on the pin again. A stuck entry cannot be "already
-  // queued" in any sense that should block a fresh attempt: it is never
-  // going to be delivered without an explicit retry.
+  // Excludes stuck entries, deliberately. A vote's route call can answer
+  // 422 permanent (a rejected direction from a stale client build, or —
+  // since Task 4 — a pin whose own create gave up: see
+  // isOrphanedByFailedCreate in schedule.ts), and without this exclusion
+  // that dead entry would sit in the outbox forever satisfying this guard,
+  // locking the resident out of ever voting on the pin again. A stuck entry
+  // cannot be "already queued" in any sense that should block a fresh
+  // attempt: it is never going to be delivered without an explicit retry.
   const alreadyQueued = readOutbox().some(
     (entry) => entry.status !== "stuck" && payloadOf(entry, "voteOnPin")?.pinId === pinId
   );
@@ -460,120 +461,3 @@ export function voteOnPin(pinId: string, direction: 1 | -1): void {
   triggerDrain();
 }
 
-/**
- * Finds this device's still-queued createPin entry for a pin id, if any.
- *
- * A createPin entry's own outbox id IS the pin's row id (see
- * `dispatchQueuedPinWrite`'s create branch and `CreatePinInput.id`), so this
- * is an exact lookup, not a heuristic: an edit/delete/moderation/vote naming
- * `pinId` matches the createPin entry whose `id` equals it, never itself.
- */
-function findQueuedCreateForPin(pinId: string): OutboxEntry | undefined {
-  return readOutbox().find((candidate) => candidate.operation === "createPin" && candidate.id === pinId);
-}
-
-/**
- * Fix for F1/F5: a write that references a pin (edit, delete, moderation, or
- * vote) must not race that pin's own still-queued createPin.
- *
- * drainOutbox deliberately does not stop on a failure — one bad entry must
- * not strand the ones behind it (see drain.ts) — so without this guard a
- * transient createPin failure lets the SAME drain carry on to a queued
- * edit/delete for that pin. The UPDATE then affects zero rows (the pin does
- * not exist yet), which the pins actions correctly — and unavoidably, from
- * their side — treat as a permanent refusal, binning a perfectly good edit or
- * delete. A deleted pin then reappears once its create finally lands (F1). A
- * vote has the mirror problem: a permanently-failed create makes every
- * queued vote 23503 forever, which vote-on-pin.ts classifies transient, so it
- * retries against a pin that will never exist (F5).
- *
- * So: while the create is live (queued, not yet confirmed, not yet
- * permanently failed), the dependent write is deferred — thrown as transient
- * without ever reaching the server — and retried on the next drain, by which
- * time the create has either landed (this lookup then finds nothing, since
- * markDelivered removed the create entry) or failed for good. Once the
- * create HAS permanently failed, the pin will never exist, so the dependent
- * write is made permanent too, rather than retried forever or sent to the
- * server as a doomed call. With no queued create for the pin at all — the
- * common case, and every case once the create has landed — this is a no-op
- * and the write proceeds exactly as before.
- */
-function assertPinIsNotAwaitingCreate(pinId: string): void {
-  const create = findQueuedCreateForPin(pinId);
-  if (!create) return;
-  if (create.status === "stuck") {
-    throw new PermanentFailure(
-      `Pin ${pinId} will never exist — its create permanently failed.`
-    );
-  }
-  throw new Error(`Pin ${pinId}'s create is still queued; waiting for it before this write.`);
-}
-
-/**
- * Replays one queued pin write. Thrown errors are what tell drainOutbox
- * whether to retry.
- *
- * The Server Actions are imported dynamically, not at module scope: they pull
- * in user-server.ts's `import "server-only"` transitively, and this file is
- * imported by every component that only READS pins (the map, the zone list,
- * the admin dashboard). A static import would make evaluating this module fail
- * server-only's guard for all of them.
- */
-export async function dispatchQueuedPinWrite(entry: OutboxEntry): Promise<void> {
-  const actions = await import("@/app/actions/pins");
-
-  const create = payloadOf(entry, "createPin");
-  if (create) return settle(await actions.createPin({ id: entry.id, ...create }));
-
-  const edit = payloadOf(entry, "editPin");
-  if (edit) {
-    assertPinIsNotAwaitingCreate(edit.pinId);
-    return settle(await actions.editPin(edit));
-  }
-
-  const deletion = payloadOf(entry, "deleteOwnPin");
-  if (deletion) {
-    assertPinIsNotAwaitingCreate(deletion.pinId);
-    return settle(await actions.deleteOwnPin(deletion));
-  }
-
-  const moderation = payloadOf(entry, "setPinRemoved");
-  if (moderation) {
-    assertPinIsNotAwaitingCreate(moderation.pinId);
-    return settle(await actions.setPinRemoved(moderation));
-  }
-
-  // dispatchers.ts routes four operations here. A fifth added there without a
-  // branch here must fail loudly rather than succeed silently and drop the
-  // write.
-  throw new Error(`Pin dispatcher received an entry it does not handle (${entry.operation})`);
-}
-
-function settle(result: { ok: true } | { ok: false; permanent: boolean; error: string }): void {
-  if (result.ok) return;
-  throw result.permanent ? new PermanentFailure(result.error) : new Error(result.error);
-}
-
-/**
- * Replays one queued vote. Thrown errors are what tell drainOutbox whether to
- * retry, exactly like dispatchQueuedPinWrite.
- *
- * Imported dynamically, for the same reason dispatchQueuedPinWrite is: the
- * Server Action pulls in user-server.ts's `import "server-only"`
- * transitively, and this file is imported by every component that only READS
- * pins. A static import here would fail server-only's guard for all of them.
- */
-export async function dispatchQueuedVote(entry: OutboxEntry): Promise<void> {
-  const vote = payloadOf(entry, "voteOnPin");
-  if (!vote) {
-    // dispatchers.ts routes exactly one operation here. An entry that is not
-    // a vote reaching this function is a routing bug, and it must fail loudly
-    // rather than silently drop the write.
-    throw new Error(`Vote dispatcher received an entry it does not handle (${entry.operation})`);
-  }
-
-  assertPinIsNotAwaitingCreate(vote.pinId);
-
-  const { voteOnPin: voteOnPinAction } = await import("@/app/actions/vote-on-pin");
-  settle(await voteOnPinAction(vote));
-}

@@ -2,18 +2,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook } from "@testing-library/react";
 
 const ensureAnonymousSession = vi.fn();
-const dispatchQueuedReport = vi.fn();
+const fetchMock = vi.fn();
 
 // Mocked so this file never touches the real Supabase browser client, and
 // so we can assert on exactly when it is (and is not) called.
 vi.mock("@/lib/auth/anonymous-session", () => ({
   ensureAnonymousSession: (...args: unknown[]) => ensureAnonymousSession(...args),
-}));
-
-// The real dispatcher dynamically imports the Server Action, which pulls in
-// `server-only`. The drain itself is real below — only the wire is stubbed.
-vi.mock("@/lib/water-level-reports", () => ({
-  dispatchQueuedReport: (...args: unknown[]) => dispatchQueuedReport(...args),
 }));
 
 import { useOutboxDrain } from "./use-outbox-drain";
@@ -24,8 +18,13 @@ describe("useOutboxDrain", () => {
     localStorage.clear();
     ensureAnonymousSession.mockReset();
     ensureAnonymousSession.mockResolvedValue(null);
-    dispatchQueuedReport.mockReset();
-    dispatchQueuedReport.mockResolvedValue(undefined);
+    // The drain itself is real, all the way down to dispatchQueued — only
+    // the wire is stubbed: every operation now sends through
+    // /api/outbox/<operation> (Task 4) rather than a dynamically imported
+    // Server Action.
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue({ status: 200, json: () => Promise.resolve({ result: "delivered" }) });
+    vi.stubGlobal("fetch", fetchMock);
   });
 
   it("does not sign anyone in when the outbox is empty", () => {
@@ -57,9 +56,12 @@ describe("useOutboxDrain", () => {
     window.dispatchEvent(new Event("online"));
 
     await vi.waitFor(() => expect(readOutbox()).toHaveLength(0));
-    expect(dispatchQueuedReport).toHaveBeenCalledWith(
-      expect.objectContaining({ id: entry.id })
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/outbox/submitWaterLevelReport",
+      expect.objectContaining({ method: "POST" })
     );
+    const [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse(init.body as string)).toMatchObject({ id: entry.id });
   });
 
   it("stops listening once unmounted", async () => {

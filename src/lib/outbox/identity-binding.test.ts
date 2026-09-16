@@ -7,19 +7,18 @@ import { renderHook } from "@testing-library/react";
  * The session is faked at the Supabase client, not at anonymous-session.ts:
  * the real ensureAnonymousSession runs, so "never signs anyone in" is proved
  * against signInAnonymously itself rather than against a mock of its caller.
+ *
+ * The drain itself is real, all the way down to dispatchQueued — only the
+ * wire is stubbed: `fetch`, since every operation now sends through
+ * `/api/outbox/<operation>` (Task 4) rather than through a dynamically
+ * imported Server Action.
  */
 const getSession = vi.fn();
 const signInAnonymously = vi.fn();
-const dispatchQueuedReport = vi.fn();
+const fetchMock = vi.fn();
 
 vi.mock("@/lib/supabase/browser", () => ({
   getBrowserClient: () => ({ auth: { getSession, signInAnonymously } }),
-}));
-
-// The real dispatcher dynamically imports the Server Action, which pulls in
-// `server-only`. The drain itself is real — only the wire is stubbed.
-vi.mock("@/lib/water-level-reports", () => ({
-  dispatchQueuedReport: (...args: unknown[]) => dispatchQueuedReport(...args),
 }));
 
 import { useOutboxDrain } from "./use-outbox-drain";
@@ -53,7 +52,12 @@ function seed(entries: Array<Partial<OutboxEntry> & { id: string }>) {
   );
 }
 
-/** Lets the drain's promise chain (session lookup, dynamic import, dispatch) run out. */
+/** The outbox entry ids `fetch` was actually POSTed for, in call order. */
+function sentIds(): string[] {
+  return fetchMock.mock.calls.map(([, init]) => (JSON.parse((init as RequestInit).body as string) as { id: string }).id);
+}
+
+/** Lets the drain's promise chain (session lookup, fetch, dispatch) run out. */
 async function settle() {
   for (let i = 0; i < 10; i += 1) await new Promise((resolve) => setTimeout(resolve, 0));
 }
@@ -64,8 +68,9 @@ describe("outbox identity binding (I2)", () => {
     getSession.mockReset();
     signInAnonymously.mockReset();
     signInAnonymously.mockResolvedValue({ data: { user: { id: "new-anonymous" } }, error: null });
-    dispatchQueuedReport.mockReset();
-    dispatchQueuedReport.mockResolvedValue(undefined);
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue({ status: 200, json: () => Promise.resolve({ result: "delivered" }) });
+    vi.stubGlobal("fetch", fetchMock);
   });
 
   it("stamps a new entry with the user id of the session that queued it", async () => {
@@ -89,7 +94,7 @@ describe("outbox identity binding (I2)", () => {
     await vi.waitFor(() => expect(getSession).toHaveBeenCalled());
     await settle();
 
-    expect(dispatchQueuedReport).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
     expect(readOutbox()).toHaveLength(1);
     expect(readOutbox()[0]).toMatchObject({ id: "from-a", userId: "user-a", attempts: 0, status: "pending" });
   });
@@ -106,7 +111,7 @@ describe("outbox identity binding (I2)", () => {
     await settle();
 
     expect(signInAnonymously).not.toHaveBeenCalled();
-    expect(dispatchQueuedReport).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
     expect(readOutbox()).toHaveLength(1);
   });
 
@@ -119,7 +124,7 @@ describe("outbox identity binding (I2)", () => {
     renderHook(() => useOutboxDrain());
 
     await vi.waitFor(() => expect(readOutbox()).toHaveLength(0));
-    expect(dispatchQueuedReport).toHaveBeenCalledWith(expect.objectContaining({ id: "from-resident" }));
+    expect(sentIds()).toContain("from-resident");
     expect(signInAnonymously).not.toHaveBeenCalled();
   });
 
@@ -132,9 +137,39 @@ describe("outbox identity binding (I2)", () => {
     await vi.waitFor(() => expect(getSession).toHaveBeenCalled());
     await settle();
 
-    expect(dispatchQueuedReport).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
     expect(signInAnonymously).not.toHaveBeenCalled();
     expect(readOutbox()).toHaveLength(1);
+  });
+
+  it("returns this session's own held entries to pending and sends them, once its owner is signed in again", async () => {
+    // A 409 from an earlier drain (a different person's session at the time)
+    // set this to held. Now the same user is signed in on this device again
+    // — design doc, "Held entries": "When a drain runs as the entry's owner
+    // again, held entries owned by that user return to pending." There is
+    // nothing left to wait for, so the same drain sends it.
+    seed([{ id: "was-held", userId: "user-1", status: "held" }]);
+    sessionFor("user-1");
+
+    renderHook(() => useOutboxDrain());
+
+    await vi.waitFor(() => expect(readOutbox()).toHaveLength(0));
+    expect(sentIds()).toContain("was-held");
+  });
+
+  it("leaves another user's held entry alone even while draining this session's own writes", async () => {
+    // The shared-phone seam this closes must stay closed from both sides:
+    // signing back in as the entry's rightful owner unholds it (above), but
+    // signing in as anyone ELSE must not.
+    seed([{ id: "held-for-a", userId: "user-a", status: "held" }]);
+    sessionFor("user-b");
+
+    renderHook(() => useOutboxDrain());
+    await vi.waitFor(() => expect(getSession).toHaveBeenCalled());
+    await settle();
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(readOutbox()[0]).toMatchObject({ id: "held-for-a", userId: "user-a", status: "held" });
   });
 
   it("signs a first-time resident in for a write queued with no identity, sending only that write", async () => {
@@ -149,17 +184,21 @@ describe("outbox identity binding (I2)", () => {
 
     renderHook(() => useOutboxDrain());
 
-    await vi.waitFor(() =>
-      expect(dispatchQueuedReport).toHaveBeenCalledWith(expect.objectContaining({ id: "no-identity-yet" }))
-    );
+    await vi.waitFor(() => expect(sentIds()).toContain("no-identity-yet"));
     await settle();
     expect(signInAnonymously).toHaveBeenCalledTimes(1);
-    expect(dispatchQueuedReport).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(readOutbox().map((entry) => entry.id)).toEqual(["from-a"]);
   });
 });
 
 describe("M13: a held entry from a different person on a shared phone stays invisible to this one", () => {
+  beforeEach(() => {
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue({ status: 200, json: () => Promise.resolve({ result: "delivered" }) });
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
   afterEach(() => {
     // Module-level state in session-user.ts — reset so this test's identity
     // does not leak into a later test file's first read of it.

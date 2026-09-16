@@ -1,7 +1,7 @@
 "use client";
 
 import { flushOutbox } from "./drain";
-import { claimUnattributed, readOutbox } from "./outbox";
+import { claimUnattributed, readOutbox, unholdOwnEntries } from "./outbox";
 import { dispatchQueued } from "./dispatchers";
 import { ensureAnonymousSession } from "@/lib/auth/anonymous-session";
 import { currentSessionUserId, rememberSessionUserId } from "@/lib/auth/session-user";
@@ -46,6 +46,13 @@ export function drainForCurrentSession(): void {
     if (!userId) return;
     rememberSessionUserId(userId);
     claimUnattributed(userId);
+    // A drain running as this user's own session is exactly the moment a
+    // 409 stops meaning anything: held entries owned by userId go back to
+    // pending so this drain (and the ones after it) sends them again,
+    // rather than waiting forever for a "held" state that already resolved
+    // the instant this session became userId's own (design doc, "Held
+    // entries").
+    unholdOwnEntries(userId);
     // flushOutbox, not drainOutbox: a drain declined because another is in
     // flight would otherwise leave this caller's write unsent.
     void flushOutbox(dispatchQueued, (entry) => entry.userId === userId);

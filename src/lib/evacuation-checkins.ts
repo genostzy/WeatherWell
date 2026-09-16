@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { onDelivered, PermanentFailure } from "./outbox/drain";
+import { onDelivered } from "./outbox/drain";
 import { enqueue, useOutbox, visibleToCurrentUser } from "./outbox/outbox";
 import { payloadOf } from "./outbox/dispatchers";
 import { drainForCurrentSession } from "./outbox/session-drain";
@@ -31,9 +31,10 @@ export interface EvacuationCheckIn {
 
 /**
  * The userId a queued-but-not-yet-delivered check-in carries. Attribution
- * happens at replay (see dispatchQueuedCheckIn below), not at queue time — a
- * resident with no signal has no uid yet — so there is genuinely nothing to
- * put here. It is never displayed; getOwnCheckInForZone is its only reader.
+ * happens at replay, through the route-checked `/api/outbox/recordCheckIn`
+ * endpoint (see dispatchers.ts / send.ts), not at queue time — a resident
+ * with no signal has no uid yet — so there is genuinely nothing to put
+ * here. It is never displayed; getOwnCheckInForZone is its only reader.
  */
 const PENDING_USER_ID = "pending";
 
@@ -237,9 +238,10 @@ export function getOwnCheckInForZone(
  * see their answer reach the server. Signing in only happens here because
  * there is now something queued to attribute.
  *
- * Drains through dispatchQueued, not dispatchQueuedCheckIn directly: one
- * queue, one dispatcher — a resident with a queued pin and no signal who
- * then checks in must not flush only the check-in.
+ * Drains through dispatchQueued (dispatchers.ts), which sends every
+ * operation through the one route-checked endpoint: one queue, one
+ * dispatcher — a resident with a queued pin and no signal who then checks
+ * in must not flush only the check-in.
  */
 function triggerDrain(): void {
   // Sends only this session's own writes, and signs in only for a write
@@ -266,28 +268,3 @@ export function recordCheckIn(zoneId: string, status: CheckInStatus): void {
   triggerDrain();
 }
 
-/**
- * Replays one queued check-in. Thrown errors are what tell drainOutbox
- * whether to retry.
- *
- * Imported dynamically, not at module scope, for the same reason every other
- * dispatcher in this app is: the Server Action pulls in user-server.ts's
- * `import "server-only"` transitively, and this file is imported by every
- * component that only READS check-ins (CheckInPanel, CheckInSummaryPanel). A
- * static import would make evaluating this module fail server-only's guard
- * for both of them.
- */
-export async function dispatchQueuedCheckIn(entry: OutboxEntry): Promise<void> {
-  const payload = payloadOf(entry, "recordCheckIn");
-  if (!payload) {
-    // dispatchers.ts routes exactly one operation here. An entry that is not
-    // a check-in reaching this function is a routing bug, and it must fail
-    // loudly rather than silently drop the write.
-    throw new Error(`Check-in dispatcher received an entry it does not handle (${entry.operation})`);
-  }
-
-  const { recordCheckIn: recordCheckInAction } = await import("@/app/actions/record-check-in");
-  const result = await recordCheckInAction({ id: entry.id, zoneId: payload.zoneId, status: payload.status });
-  if (result.ok) return;
-  throw result.permanent ? new PermanentFailure(result.error) : new Error(result.error);
-}

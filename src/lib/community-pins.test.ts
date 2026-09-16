@@ -10,27 +10,7 @@ vi.mock("@/lib/auth/anonymous-session", () => ({
   useSessionUserId: () => null,
 }));
 
-// Regression coverage for final-review.md F1/F5: dispatchQueuedPinWrite and
-// dispatchQueuedVote dynamically import the pins/vote Server Actions, which
-// transitively import "@/lib/supabase/user-server" (server-only). Faking
-// that module, and only that module, lets the tests below exercise the REAL
-// drainOutbox, dispatchQueued and dispatchQueuedPinWrite/dispatchQueuedVote —
-// the actual reproduction the reviewer used — rather than a synthetic
-// approximation of the bug.
-const getClaims = vi.fn();
-const insert = vi.fn();
-const update = vi.fn();
-const upsert = vi.fn();
-vi.mock("@/lib/supabase/user-server", () => ({
-  createSupabaseUserClient: async () => ({
-    auth: { getClaims },
-    from: () => ({ insert, update, upsert }),
-  }),
-}));
-
 import { enqueue, markFailed, readOutbox } from "@/lib/outbox/outbox";
-import { drainOutbox } from "@/lib/outbox/drain";
-import { dispatchQueued } from "@/lib/outbox/dispatchers";
 import {
   mergePins,
   isOwnPin,
@@ -302,12 +282,11 @@ describe("queued writes", () => {
   });
 
   it("does not queue a second vote once the first permanently failed", () => {
-    // Ruling 3: dispatchQueuedVote can now raise PermanentFailure (the
-    // placeholder it replaced never could), and a permanently-failed entry
-    // will never be delivered — drainOutbox skips it forever. Without this
-    // exclusion, that dead entry would satisfy the "already queued" guard
-    // above forever, locking the resident out of ever voting on this pin
-    // again.
+    // Ruling 3: a vote's route call can answer 422 permanent, and a
+    // permanently-failed entry will never be delivered — drainOutbox skips
+    // it forever. Without this exclusion, that dead entry would satisfy the
+    // "already queued" guard above forever, locking the resident out of
+    // ever voting on this pin again.
     voteOnPin("pin-1", 1);
     markFailed(readOutbox()[0].id, "rejected", true);
 
@@ -356,81 +335,17 @@ describe("mergePins with a queued vote", () => {
 });
 
 // final-review.md F1/F5: a write that references a pin must not race that
-// pin's own still-queued createPin. Both tests drive the REAL drainOutbox,
-// dispatchQueued and dispatchQueuedPinWrite/dispatchQueuedVote — only the
-// Supabase client is faked — which is what makes them a reproduction of the
-// bug rather than a test of a synthetic stand-in for it.
-describe("a pin-referencing write waits for its own pin's create (F1, F5)", () => {
-  beforeEach(() => {
-    getClaims.mockReset();
-    insert.mockReset();
-    update.mockReset();
-    upsert.mockReset();
-    getClaims.mockResolvedValue({ data: { claims: { sub: "user-1" } } });
-  });
-
-  it("F1: a delete queued behind a transiently-failing create for the SAME pin stays queued, not binned, and never reaches the server", async () => {
-    // The create fails with a transient error (a statement timeout, not an
-    // RLS/CHECK/FK rejection) — classify() in pins.ts correctly calls this
-    // TRANSIENT. drainOutbox does not stop on that failure (by design — one
-    // bad entry must not strand the ones behind it), so the delete for the
-    // SAME pin is dispatched in this same drain, before the pin has ever
-    // existed on the server.
-    insert.mockResolvedValueOnce({ error: { code: "57014", message: "statement timeout" } });
-    // If the delete reaches the server anyway (the bug), the UPDATE affects
-    // zero rows — this is what that looks like over the wire.
-    update.mockReturnValue({ eq: () => ({ select: () => Promise.resolve({ data: [], error: null }) }) });
-
-    const create = enqueue("createPin", {
-      zoneId: "zone-1",
-      statusTag: "flooded",
-      caption: "Knee-deep",
-      lat: 16.06,
-      lng: 120.4,
-    });
-    // The pin id a delete targets is the SAME id its own createPin entry
-    // carries — see CreatePinInput.id / dispatchQueuedPinWrite's create branch.
-    enqueue("deleteOwnPin", { pinId: create.id });
-
-    await drainOutbox(dispatchQueued);
-
-    // The delete's own server call — the zero-row UPDATE above — must never
-    // have happened at all.
-    expect(update).not.toHaveBeenCalled();
-
-    const after = readOutbox();
-    const deleteEntry = after.find((entry) => entry.operation === "deleteOwnPin");
-    expect(deleteEntry).toBeDefined();
-    expect(deleteEntry?.status).toBe("pending");
-
-    // The create itself is still queued too (transient failure), for the
-    // next drain to retry.
-    const createEntry = after.find((entry) => entry.operation === "createPin");
-    expect(createEntry?.status).toBe("pending");
-  });
-
-  it("F5: a vote on a pin whose create has PERMANENTLY failed is itself permanently failed, not retried forever", async () => {
-    upsert.mockResolvedValue({ error: { code: "23503", message: "fk violation" } });
-
-    const create = enqueue("createPin", {
-      zoneId: "zone-1",
-      statusTag: "flooded",
-      caption: "Knee-deep",
-      lat: 16.06,
-      lng: 120.4,
-    });
-    // Simulates an earlier drain having already permanently failed this
-    // create (e.g. an RLS denial) — the pin will never exist.
-    markFailed(create.id, "denied", true);
-    enqueue("voteOnPin", { pinId: create.id, direction: 1 });
-
-    await drainOutbox(dispatchQueued);
-
-    // The vote's own server call must never have happened.
-    expect(upsert).not.toHaveBeenCalled();
-
-    const voteEntry = readOutbox().find((entry) => entry.operation === "voteOnPin");
-    expect(voteEntry).toBeDefined();
-    expect(voteEntry?.status).toBe("stuck");
-  });
-});
+// pin's own still-queued createPin. Both cases used to be proved here by
+// driving the REAL drainOutbox, dispatchQueued and dispatchQueuedPinWrite/
+// dispatchQueuedVote against a faked Supabase client — the dispatch chain
+// Task 4 replaced with one route-checked endpoint per operation
+// (src/app/api/outbox/[operation]/route.ts), so there is no longer a
+// same-process Server Action call for a test here to fake. The same two
+// rules are proved directly against drainOutbox now, in
+// src/lib/outbox/drain.test.ts's "drainOutbox respects schedule.ts" describe
+// block: F1 by "leaves a pin-dependent entry queued and untouched while its
+// create is still pending" (isBlockedByPendingCreate), and F5 by "F5:
+// settles a vote on a pin whose create has permanently failed, without ever
+// dispatching it" (isOrphanedByFailedCreate) — both exercising the exact
+// predicates schedule.ts documents as the two branches of
+// assertPinIsNotAwaitingCreate's original rule (see Task 2's report).

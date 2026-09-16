@@ -236,6 +236,31 @@ export function claimUnattributed(userId: string): void {
   commit(next, changed);
 }
 
+/**
+ * Held entries owned by `userId` return to `pending` (design doc, "Held
+ * entries": "When a drain runs as the entry's owner again, held entries
+ * owned by that user return to pending"). `session-drain.ts` calls this
+ * before every drain, right alongside `claimUnattributed` — a 409 only ever
+ * means "not this session, right now"; once the rightful owner is signed in
+ * again there is nothing left to wait for. Entries held for a DIFFERENT
+ * user are left exactly as they are — this must never be the shared-phone
+ * seam it closes turning back into one.
+ */
+export function unholdOwnEntries(userId: string): void {
+  const all = readOutbox();
+  if (!all.some((entry) => entry.userId === userId && entry.status === "held")) return;
+
+  const updatedAt = new Date().toISOString();
+  const changed: OutboxEntry[] = [];
+  const next = all.map((entry) => {
+    if (entry.userId !== userId || entry.status !== "held") return entry;
+    const released: OutboxEntry = { ...entry, status: "pending", nextAttemptAt: null, updatedAt };
+    changed.push(released);
+    return released;
+  });
+  commit(next, changed);
+}
+
 /** The write landed. Drop it — the server row is the record now. */
 export function markDelivered(id: string): void {
   const all = readOutbox();

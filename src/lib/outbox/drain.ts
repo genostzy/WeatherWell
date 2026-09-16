@@ -1,15 +1,21 @@
 "use client";
 
 import { applyEntryOutcome, readOutbox } from "./outbox";
-import { isDue, isBlockedByPendingCreate } from "./schedule";
+import { isDue, isBlockedByPendingCreate, isOrphanedByFailedCreate } from "./schedule";
 import type { SendOutcome } from "./schedule";
 import type { OutboxEntry } from "./types";
 
 /**
- * Thrown by a dispatcher when retrying cannot help — an RLS denial, a
- * validation rejection. Anything else is treated as transient and retried.
+ * Reason recorded on a dependent write (`editPin`, `deleteOwnPin`,
+ * `setPinRemoved`, `voteOnPin`) whose own pin's `createPin` has permanently
+ * failed — the pin will never exist, so retrying cannot help. Matches what
+ * `assertPinIsNotAwaitingCreate` used to throw a `PermanentFailure` for
+ * (see Task 2's report, "Fix round 1"), now applied without ever reaching
+ * the server: `isOrphanedByFailedCreate` already knows the create is
+ * `stuck`, so there is nothing a request could learn that isn't already
+ * known here.
  */
-export class PermanentFailure extends Error {}
+const PIN_NEVER_CREATED: SendOutcome = { result: "permanent", reason: "pin was never created" };
 
 export interface DrainResult {
   delivered: number;
@@ -76,20 +82,21 @@ type EntryFilter = (entry: OutboxEntry) => boolean;
 const EVERY_ENTRY: EntryFilter = () => true;
 
 async function runDrain(
-  dispatch: (entry: OutboxEntry) => Promise<void>,
+  dispatch: (entry: OutboxEntry) => Promise<SendOutcome>,
   delivered: OutboxEntry[],
   accept: EntryFilter
 ): Promise<DrainResult> {
   const result: DrainResult = { delivered: 0, failed: 0, skipped: false };
 
-  // Every entry this call has already taken a turn on. Two jobs:
+  // Every entry this call has already taken a turn on (dispatched, or
+  // settled without dispatch — see the orphaned branch below). Two jobs:
   //
   // 1. The loop below re-reads the outbox after each pass, so a report filed
   //    while this drain was awaiting a round trip is picked up by the same
   //    drain instead of waiting for a reload or an "online" event. Without
   //    this set, an entry that fails transiently would be re-read and
   //    re-dispatched on every pass and the loop would never terminate.
-  // 2. It bounds the call: the queue is finite and each entry is dispatched at
+  // 2. It bounds the call: the queue is finite and each entry is settled at
   //    most once here, so the loop always ends. A transient failure is left
   //    for the NEXT drain, which is what "transient" already meant.
   const attempted = new Set<string>();
@@ -97,11 +104,36 @@ async function runDrain(
   for (;;) {
     const now = new Date();
     // The full queue, not just what passed `accept`: isBlockedByPendingCreate
-    // needs to see a dependency's createPin entry even when that create
-    // itself belongs to a different accept-filtered subset (drainForCurrentSession
-    // filters by userId, but a pin and its dependent edit/delete/vote always
-    // share one queuer, so this is never a cross-session lookup in practice).
+    // and isOrphanedByFailedCreate need to see a dependency's createPin entry
+    // even when that create itself belongs to a different accept-filtered
+    // subset (drainForCurrentSession filters by userId, but a pin and its
+    // dependent edit/delete/vote always share one queuer, so this is never a
+    // cross-session lookup in practice).
     const queue = readOutbox();
+
+    // A dependent write (editPin/deleteOwnPin/setPinRemoved/voteOnPin) whose
+    // own pin's createPin has already given up for good: the pin will never
+    // exist, so this is settled as permanent WITHOUT ever calling dispatch
+    // — there is no request worth making (Task 2's report, "What Task 4
+    // must now call"). Settled before the due/blocked filter below, in the
+    // same pass, so it never also shows up there: isBlockedByPendingCreate
+    // and isOrphanedByFailedCreate are mutually exclusive by construction
+    // (see schedule.ts), but `queue` here is a stale snapshot for the rest
+    // of this pass, so each orphaned id is added to `attempted` immediately
+    // to keep it out of `pending` below.
+    const orphaned = queue.filter(
+      (entry) =>
+        entry.status === "pending" &&
+        !attempted.has(entry.id) &&
+        accept(entry) &&
+        isOrphanedByFailedCreate(entry, queue)
+    );
+    for (const entry of orphaned) {
+      attempted.add(entry.id);
+      applyEntryOutcome(entry.id, PIN_NEVER_CREATED);
+      result.failed += 1;
+    }
+
     const pending = queue.filter(
       (entry) =>
         // status !== "pending" (stuck, held) is never due — see isDue.
@@ -115,22 +147,31 @@ async function runDrain(
         !attempted.has(entry.id) &&
         accept(entry)
     );
-    if (pending.length === 0) break;
+    if (pending.length === 0) {
+      // Orphaned entries were settled above even with nothing due; loop
+      // again so the next pass re-reads the queue (now missing them) rather
+      // than stopping mid-pass.
+      if (orphaned.length === 0) break;
+      continue;
+    }
 
     for (const entry of pending) {
       attempted.add(entry.id);
-      try {
-        await dispatch(entry);
-        applyEntryOutcome(entry.id, { result: "delivered" });
+      // dispatchQueued (and the sendEntry it wraps) never throws — a
+      // network failure already maps to `{ result: "retry" }` — but one
+      // misbehaving dispatcher (a test double, a future caller) must still
+      // not strand every entry behind it in the queue.
+      const outcome = await dispatch(entry).catch(
+        (error): SendOutcome => ({
+          result: "retry",
+          error: error instanceof Error ? error.message : String(error),
+        })
+      );
+      applyEntryOutcome(entry.id, outcome);
+      if (outcome.result === "delivered") {
         delivered.push(entry);
         result.delivered += 1;
-      } catch (error) {
-        // One entry failing must not strand the ones behind it.
-        const outcome: SendOutcome =
-          error instanceof PermanentFailure
-            ? { result: "permanent", reason: error.message }
-            : { result: "retry", error: error instanceof Error ? error.message : String(error) };
-        applyEntryOutcome(entry.id, outcome);
+      } else {
         result.failed += 1;
       }
     }
@@ -140,7 +181,7 @@ async function runDrain(
 }
 
 export function drainOutbox(
-  dispatch: (entry: OutboxEntry) => Promise<void>,
+  dispatch: (entry: OutboxEntry) => Promise<SendOutcome>,
   accept: EntryFilter = EVERY_ENTRY
 ): Promise<DrainResult> {
   if (draining) return Promise.resolve({ delivered: 0, failed: 0, skipped: true });
@@ -186,7 +227,7 @@ export function drainOutbox(
  * itself subject to this same rule.
  */
 export async function flushOutbox(
-  dispatch: (entry: OutboxEntry) => Promise<void>,
+  dispatch: (entry: OutboxEntry) => Promise<SendOutcome>,
   accept: EntryFilter = EVERY_ENTRY
 ): Promise<DrainResult> {
   const result = await drainOutbox(dispatch, accept);

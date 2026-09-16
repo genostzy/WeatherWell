@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { onDelivered, PermanentFailure } from "./outbox/drain";
+import { onDelivered } from "./outbox/drain";
 import { enqueue, useOutbox, visibleToCurrentUser } from "./outbox/outbox";
 import { drainForCurrentSession } from "./outbox/session-drain";
 import type { OutboxEntry, OutboxPayloads } from "./outbox/types";
@@ -221,36 +221,17 @@ export function getRecentReportsForZoneLive(
 }
 
 /**
- * Replays one queued write. Thrown errors are what tell drainOutbox whether
- * to retry.
- *
- * The Server Action is imported dynamically, not at module scope: it pulls
- * in user-server.ts's `import "server-only"` transitively, and water-level-
- * reports.ts is imported by every component that only reads the report list
- * (TimeAgo, RecentReportsPanel, FloodMonitoringPanel). A static import would
- * make evaluating this module fail server-only's guard for every one of
- * them; a dynamic import here means that code only ever loads at the moment
- * a queued write is actually being dispatched.
- */
-export async function dispatchQueuedReport(entry: OutboxEntry): Promise<void> {
-  const { submitWaterLevelReport } = await import("@/app/actions/submit-water-level-report");
-  const payload = entry.payload as OutboxPayloads["submitWaterLevelReport"];
-  const result = await submitWaterLevelReport({ id: entry.id, ...payload });
-  if (result.ok) return;
-  throw result.permanent ? new PermanentFailure(result.error) : new Error(result.error);
-}
-
-/**
  * Fire-and-forget attempt to flush the outbox right after a fresh
  * submission, so a resident who is online does not wait for a reload or an
  * "online" event (useOutboxDrain's job) to see their own report reach the
  * server. Signing in only happens here because there is something queued to
  * attribute — see Task 2 Step 6 / useOutboxDrain's own guard.
  *
- * Drains through dispatchQueued, not dispatchQueuedReport directly: a
- * resident with a queued pin and no signal who then files a report would
- * otherwise flush only the report and leave the pin sitting there. One
- * queue, one dispatcher.
+ * Drains through dispatchQueued (dispatchers.ts), which now sends every
+ * operation through one route-checked endpoint rather than dynamically
+ * importing this file's own Server Action: a resident with a queued pin and
+ * no signal who then files a report would otherwise flush only the report
+ * and leave the pin sitting there. One queue, one dispatcher.
  */
 function triggerDrain(): void {
   // Sends only this session's own writes, and signs in only for a write

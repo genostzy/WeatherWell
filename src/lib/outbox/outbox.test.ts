@@ -10,6 +10,7 @@ import {
   retryEntry,
   discardEntry,
   reconcileWithMirror,
+  unholdOwnEntries,
   OutboxWriteFailed,
 } from "./outbox";
 import { idbGetAll, idbPut, idbDelete, OUTBOX_DB, OUTBOX_CHANNEL } from "./idb";
@@ -364,6 +365,45 @@ describe("applyEntryOutcome / retryEntry / discardEntry", () => {
 
     expect(readOutbox()).toHaveLength(0);
     expect(await idbGetAll()).toHaveLength(0);
+  });
+});
+
+describe("unholdOwnEntries", () => {
+  /** Writes a held entry straight to storage, owned by a chosen userId. */
+  function seedHeld(id: string, userId: string) {
+    const entry = enqueue("submitWaterLevelReport", { zoneId: "zone-1", depthLevel: "knee" });
+    localStorage.setItem(
+      "weatherwell.outbox",
+      JSON.stringify(
+        readOutbox().map((e) => (e.id === entry.id ? { ...e, id, userId, status: "held" } : e))
+      )
+    );
+  }
+
+  it("returns a held entry owned by userId to pending, ready to be sent again", () => {
+    seedHeld("e1", "user-1");
+    expect(readOutbox()[0].status).toBe("held");
+
+    unholdOwnEntries("user-1");
+
+    const [released] = readOutbox();
+    expect(released.status).toBe("pending");
+    expect(released.nextAttemptAt).toBeNull();
+  });
+
+  it("leaves a held entry owned by someone else untouched — the shared-phone seam this closes", () => {
+    seedHeld("e1", "user-a");
+
+    unholdOwnEntries("user-b");
+
+    expect(readOutbox()[0]).toMatchObject({ userId: "user-a", status: "held" });
+  });
+
+  it("does nothing, and does not write, when there is no held entry for userId", () => {
+    enqueue("submitWaterLevelReport", { zoneId: "zone-1", depthLevel: "knee" });
+
+    expect(() => unholdOwnEntries("user-1")).not.toThrow();
+    expect(readOutbox()[0].status).toBe("pending");
   });
 });
 

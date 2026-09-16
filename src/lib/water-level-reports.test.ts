@@ -1,19 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 
-const submitWaterLevelReport = vi.fn().mockResolvedValue({ ok: true });
 const ensureAnonymousSession = vi.fn().mockResolvedValue(null);
 
-// Both real modules sit behind boundaries this file must not cross:
 // submit-water-level-report.ts pulls in user-server.ts, which does
 // `import "server-only"` — that throws unconditionally outside a real
-// server bundler. water-level-reports.ts only ever reaches it through a
-// dynamic import inside dispatchQueuedReport, so most tests below (which
-// stub ensureAnonymousSession to resolve null, i.e. offline) never load it
-// at all; this mock exists for the one test that does drain for real.
-vi.mock("@/app/actions/submit-water-level-report", () => ({
-  submitWaterLevelReport: (...args: unknown[]) => submitWaterLevelReport(...args),
-}));
+// server bundler. water-level-reports.ts no longer reaches it at all: every
+// write now drains through dispatchQueued (dispatchers.ts), which sends
+// operations through /api/outbox/<operation> (Task 4) rather than a
+// dynamically imported Server Action, so nothing here needs to stub that
+// module any more — only `fetch`, for the one test that drains for real.
 vi.mock("@/lib/auth/anonymous-session", () => ({
   ensureAnonymousSession: () => ensureAnonymousSession(),
 }));
@@ -50,7 +46,6 @@ function currentReports() {
 describe("water-level-reports", () => {
   beforeEach(() => {
     localStorage.clear();
-    submitWaterLevelReport.mockClear();
     ensureAnonymousSession.mockClear();
   });
 
@@ -176,15 +171,23 @@ describe("water-level-reports", () => {
   it("drains and delivers a queued report once a session exists", async () => {
     // The end-to-end wiring: a session appearing is what turns "queued"
     // into "delivered" without waiting for a reload or an "online" event.
+    // Goes through the real dispatchQueued → sendEntry → fetch chain now
+    // (Task 4); only the wire itself is stubbed.
     ensureAnonymousSession.mockResolvedValueOnce("user-1");
-    submitWaterLevelReport.mockResolvedValueOnce({ ok: true });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ status: 200, json: () => Promise.resolve({ result: "delivered" }) });
+    vi.stubGlobal("fetch", fetchMock);
 
     addWaterLevelReport("zone-1", "knee");
 
     await vi.waitFor(() => expect(readOutbox()).toHaveLength(0));
-    expect(submitWaterLevelReport).toHaveBeenCalledWith(
-      expect.objectContaining({ zoneId: "zone-1", depthLevel: "knee" })
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/outbox/submitWaterLevelReport",
+      expect.objectContaining({ method: "POST" })
     );
+    const [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse(init.body as string).payload).toEqual({ zoneId: "zone-1", depthLevel: "knee" });
   });
 
   it("still shows a queued report, and lets nothing throw, when /api/reports fails to fetch", async () => {
@@ -253,7 +256,7 @@ describe("water-level-reports", () => {
     expect(result.current[0].reporterId).toBe("pending");
 
     await act(async () => {
-      await drainOutbox(async () => {});
+      await drainOutbox(async () => ({ result: "delivered" }));
     });
 
     // Delivered: out of the outbox, refetch on the wire — and still on screen.
@@ -281,9 +284,7 @@ describe("water-level-reports", () => {
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
 
     await act(async () => {
-      await drainOutbox(async () => {
-        throw new Error("offline");
-      });
+      await drainOutbox(async () => ({ result: "retry", error: "offline" }));
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -310,7 +311,7 @@ describe("water-level-reports", () => {
 
     await act(async () => {
       // Resolves for every entry, so the queued pin write is "delivered".
-      await drainOutbox(async () => {});
+      await drainOutbox(async () => ({ result: "delivered" }));
     });
 
     // Give any microtask this delivery might have queued a turn to run.
@@ -335,7 +336,7 @@ describe("water-level-reports", () => {
 
     renderHook(() => useWaterLevelReports());
     await act(async () => {
-      await drainOutbox(async () => {});
+      await drainOutbox(async () => ({ result: "delivered" }));
     });
     await vi.waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(2));
 
