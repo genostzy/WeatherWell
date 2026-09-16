@@ -81,9 +81,9 @@ describe("water-level-reports", () => {
 
   it("does not display or count a permanently-failed report", () => {
     // A report the server permanently rejected (RLS denial, CHECK/FK
-    // violation) must stop voting: drainOutbox skips a permanentlyFailed
-    // entry forever, so if mergeReports kept rendering it, it would count
-    // toward the agreeing-report consensus threshold forever too.
+    // violation) must stop voting: drainOutbox skips a stuck entry forever
+    // (without an explicit retry), so if mergeReports kept rendering it, it
+    // would count toward the agreeing-report consensus threshold forever too.
     const entry = enqueue("submitWaterLevelReport", { zoneId: "zone-1", depthLevel: "knee" });
     markFailed(entry.id, "new row violates row-level security policy", true);
 

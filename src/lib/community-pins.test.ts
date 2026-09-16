@@ -401,12 +401,12 @@ describe("a pin-referencing write waits for its own pin's create (F1, F5)", () =
     const after = readOutbox();
     const deleteEntry = after.find((entry) => entry.operation === "deleteOwnPin");
     expect(deleteEntry).toBeDefined();
-    expect(deleteEntry?.permanentlyFailed).toBe(false);
+    expect(deleteEntry?.status).toBe("pending");
 
     // The create itself is still queued too (transient failure), for the
     // next drain to retry.
     const createEntry = after.find((entry) => entry.operation === "createPin");
-    expect(createEntry?.permanentlyFailed).toBe(false);
+    expect(createEntry?.status).toBe("pending");
   });
 
   it("F5: a vote on a pin whose create has PERMANENTLY failed is itself permanently failed, not retried forever", async () => {
@@ -431,6 +431,6 @@ describe("a pin-referencing write waits for its own pin's create (F1, F5)", () =
 
     const voteEntry = readOutbox().find((entry) => entry.operation === "voteOnPin");
     expect(voteEntry).toBeDefined();
-    expect(voteEntry?.permanentlyFailed).toBe(true);
+    expect(voteEntry?.status).toBe("stuck");
   });
 });

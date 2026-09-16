@@ -1,6 +1,8 @@
 "use client";
 
-import { markDelivered, markFailed, readOutbox } from "./outbox";
+import { applyEntryOutcome, readOutbox } from "./outbox";
+import { isDue, isBlockedByPendingCreate } from "./schedule";
+import type { SendOutcome } from "./schedule";
 import type { OutboxEntry } from "./types";
 
 /**
@@ -93,10 +95,25 @@ async function runDrain(
   const attempted = new Set<string>();
 
   for (;;) {
-    const pending = readOutbox().filter(
-      // A permanent failure is never retried — an RLS denial or a CHECK
-      // violation cannot become true later.
-      (entry) => !entry.permanentlyFailed && !attempted.has(entry.id) && accept(entry)
+    const now = new Date();
+    // The full queue, not just what passed `accept`: isBlockedByPendingCreate
+    // needs to see a dependency's createPin entry even when that create
+    // itself belongs to a different accept-filtered subset (drainForCurrentSession
+    // filters by userId, but a pin and its dependent edit/delete/vote always
+    // share one queuer, so this is never a cross-session lookup in practice).
+    const queue = readOutbox();
+    const pending = queue.filter(
+      (entry) =>
+        // status !== "pending" (stuck, held) is never due — see isDue.
+        isDue(entry, now) &&
+        // Wait behind a still-live createPin for the same pin rather than
+        // attempting a write the server can only refuse (design doc,
+        // "Queue order is respected"). Left exactly as it is: not attempted,
+        // not marked, so a later drain — once the create has landed or
+        // given up — can pick it up.
+        !isBlockedByPendingCreate(entry, queue) &&
+        !attempted.has(entry.id) &&
+        accept(entry)
     );
     if (pending.length === 0) break;
 
@@ -104,16 +121,16 @@ async function runDrain(
       attempted.add(entry.id);
       try {
         await dispatch(entry);
-        markDelivered(entry.id);
+        applyEntryOutcome(entry.id, { result: "delivered" });
         delivered.push(entry);
         result.delivered += 1;
       } catch (error) {
         // One entry failing must not strand the ones behind it.
-        markFailed(
-          entry.id,
-          error instanceof Error ? error.message : String(error),
+        const outcome: SendOutcome =
           error instanceof PermanentFailure
-        );
+            ? { result: "permanent", reason: error.message }
+            : { result: "retry", error: error instanceof Error ? error.message : String(error) };
+        applyEntryOutcome(entry.id, outcome);
         result.failed += 1;
       }
     }

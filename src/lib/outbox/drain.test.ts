@@ -27,7 +27,9 @@ describe("drainOutbox", () => {
     });
 
     expect(result.delivered).toBe(0);
-    expect(readOutbox()[0].permanentlyFailed).toBe(false);
+    // A transient failure does not give up — status stays "pending" so a
+    // later due drain retries it (see schedule.ts's applyOutcome).
+    expect(readOutbox()[0].status).toBe("pending");
   });
 
   // "keeps the entry" is deliberately not "keeps it visible": nothing in the
@@ -42,7 +44,7 @@ describe("drainOutbox", () => {
     });
 
     const [stored] = readOutbox();
-    expect(stored.permanentlyFailed).toBe(true);
+    expect(stored.status).toBe("stuck");
 
     // A second drain must not touch it again — retrying an RLS denial burns a
     // degraded connection for a result that cannot change.
@@ -191,6 +193,56 @@ describe("drainOutbox", () => {
     }
 
     expect(listener).not.toHaveBeenCalled();
+  });
+});
+
+describe("drainOutbox respects schedule.ts", () => {
+  it("does not dispatch an entry before its backoff window has passed", async () => {
+    // Simulates a prior transient failure that backed this entry off into
+    // the future — the shape applyOutcome's retry branch actually produces.
+    const entry = enqueue("submitWaterLevelReport", { zoneId: "zone-1", depthLevel: "knee" });
+    const future = new Date(Date.now() + 60_000).toISOString();
+    localStorage.setItem(
+      "weatherwell.outbox",
+      JSON.stringify([{ ...entry, attempts: 1, nextAttemptAt: future }])
+    );
+
+    const dispatch = vi.fn();
+    const result = await drainOutbox(dispatch);
+
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(result.delivered).toBe(0);
+    expect(result.failed).toBe(0);
+    expect(readOutbox()).toHaveLength(1);
+  });
+
+  it("leaves a pin-dependent entry queued and untouched while its create is still pending", async () => {
+    // Queue order (design doc): an editPin/deleteOwnPin/setPinRemoved/
+    // voteOnPin entry must not race its own pin's still-queued createPin.
+    // This exercises drainOutbox's own isBlockedByPendingCreate filter
+    // directly, without going through community-pins.ts's dispatcher stack.
+    const create = enqueue("createPin", {
+      zoneId: "zone-1",
+      statusTag: "flooded",
+      caption: "Market",
+      lat: 16.06,
+      lng: 120.4,
+    });
+    const edit = enqueue("editPin", { pinId: create.id, statusTag: "receding", caption: "Going down" });
+
+    const dispatch = vi.fn(async (entry: OutboxEntry) => {
+      if (entry.id === create.id) throw new Error("offline");
+      throw new Error(`unexpected dispatch of blocked entry ${entry.id}`);
+    });
+
+    const result = await drainOutbox(dispatch);
+
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ id: create.id }));
+    expect(result.delivered).toBe(0);
+
+    const stillQueuedEdit = readOutbox().find((e) => e.id === edit.id);
+    expect(stillQueuedEdit).toMatchObject({ status: "pending", attempts: 0 });
   });
 });
 

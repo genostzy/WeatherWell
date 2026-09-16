@@ -32,7 +32,7 @@ import { currentSessionUserId, rememberSessionUserId } from "@/lib/auth/session-
  * identity and replay them under it.
  */
 export function drainForCurrentSession(): void {
-  const pending = readOutbox().filter((entry) => !entry.permanentlyFailed);
+  const pending = readOutbox().filter((entry) => entry.status !== "stuck");
   // Nothing queued means nothing to attribute, so do not even look.
   if (pending.length === 0) return;
 

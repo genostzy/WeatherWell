@@ -286,7 +286,9 @@ function CommunityPinActions({
 }) {
   const [pendingEntryId, setPendingEntryId] = useState<string | null>(null);
   const outbox = useOutbox();
-  const failed = pendingEntryId !== null && outbox.some((entry) => entry.id === pendingEntryId && entry.permanentlyFailed);
+  const failed =
+    pendingEntryId !== null &&
+    outbox.some((entry) => entry.id === pendingEntryId && entry.status === "stuck");
 
   function handleClick() {
     const entry = pin.removed ? restoreCommunityPin(pin.id) : removePinByAdmin(pin.id);

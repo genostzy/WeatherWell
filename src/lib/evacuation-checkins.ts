@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { onDelivered, PermanentFailure } from "./outbox/drain";
-import { enqueue, useOutbox } from "./outbox/outbox";
+import { enqueue, useOutbox, visibleToCurrentUser } from "./outbox/outbox";
 import { payloadOf } from "./outbox/dispatchers";
 import { drainForCurrentSession } from "./outbox/session-drain";
 import { useSessionUserId } from "./auth/anonymous-session";
@@ -149,10 +149,11 @@ export function mergeCheckIns(
   >();
 
   for (const entry of queued) {
-    // A permanently-failed entry (RLS denial, CHECK violation) will never be
-    // delivered — drainOutbox skips it forever. Showing it as an ordinary
-    // check-in would tell a resident their refused answer went through.
-    if (entry.permanentlyFailed) continue;
+    // A stuck entry (RLS denial, CHECK violation) will never be delivered
+    // without a resident's explicit retry — drainOutbox skips it forever.
+    // Showing it as an ordinary check-in would tell a resident their refused
+    // answer went through.
+    if (entry.status === "stuck") continue;
     const payload = payloadOf(entry, "recordCheckIn");
     if (!payload) continue;
     // Map insertion order is queue order, so the last write for a zone wins.
@@ -199,7 +200,11 @@ export function useEvacuationCheckIns(): EvacuationCheckIn[] {
   const { rows, delivered } = useServerCheckIns();
   const queued = useOutbox();
   const callerUserId = useSessionUserId();
-  return mergeCheckIns(rows, [...queued, ...delivered], callerUserId);
+  // A held entry left behind by a different person on a shared phone (M13)
+  // must not be drawn as this person's own optimistic check-in. `delivered`
+  // needs no such filter: it only ever holds entries this session's own
+  // drain just sent.
+  return mergeCheckIns(rows, [...queued.filter(visibleToCurrentUser), ...delivered], callerUserId);
 }
 
 export function getCheckInsForZone(checkIns: EvacuationCheckIn[], zoneId: string): EvacuationCheckIn[] {

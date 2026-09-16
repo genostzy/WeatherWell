@@ -135,9 +135,9 @@ describe("mergeCheckIns", () => {
     expect(merged.find((c) => c.zoneId === "zone-2")).toEqual(zone2);
   });
 
-  it("drops a permanently-failed check-in instead of showing it as answered", () => {
+  it("drops a stuck check-in instead of showing it as answered", () => {
     const entry = enqueue("recordCheckIn", { zoneId: "zone-1", status: "needs_help" });
-    const failed = { ...entry, permanentlyFailed: true };
+    const failed = { ...entry, status: "stuck" as const, stuckReason: "permanent" as const };
 
     expect(mergeCheckIns([], [failed], "user-1")).toHaveLength(0);
   });

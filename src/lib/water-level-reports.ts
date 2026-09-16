@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { onDelivered, PermanentFailure } from "./outbox/drain";
-import { enqueue, useOutbox } from "./outbox/outbox";
+import { enqueue, useOutbox, visibleToCurrentUser } from "./outbox/outbox";
 import { drainForCurrentSession } from "./outbox/session-drain";
 import type { OutboxEntry, OutboxPayloads } from "./outbox/types";
 import type { DepthLevel } from "./depth";
@@ -156,12 +156,13 @@ export function mergeReports(
       (entry) =>
         entry.operation === "submitWaterLevelReport" &&
         !serverIds.has(entry.id) &&
-        // A permanently-failed entry (RLS denial, CHECK/FK violation) will
-        // never be delivered — drainOutbox skips it forever. Rendering it as
-        // an ordinary live row would show it as sent when it was rejected,
-        // and would silently and permanently inflate the agreeing-report
-        // consensus count that gates a zone's flood signal.
-        !entry.permanentlyFailed
+        // A stuck entry (RLS denial, CHECK/FK violation) will never be
+        // delivered without a resident's explicit retry — drainOutbox skips
+        // it forever. Rendering it as an ordinary live row would show it as
+        // sent when it was rejected, and would silently and permanently
+        // inflate the agreeing-report consensus count that gates a zone's
+        // flood signal.
+        entry.status !== "stuck"
     )
     .filter((entry) => {
       // Second pass rather than part of the predicate above: `seen` must only
@@ -202,7 +203,11 @@ export function mergeReports(
 export function useWaterLevelReports(): LiveWaterLevelReport[] {
   const { rows, delivered } = useServerReports();
   const queued = useOutbox();
-  return mergeReports(rows, [...queued, ...delivered]);
+  // A held entry left behind by a different person on a shared phone (M13)
+  // must not be drawn as this person's own optimistic report. `delivered`
+  // needs no such filter: it only ever holds entries this session's own
+  // drain just sent.
+  return mergeReports(rows, [...queued.filter(visibleToCurrentUser), ...delivered]);
 }
 
 /** Newest first, matching the previous mock-data helper's ordering contract. */

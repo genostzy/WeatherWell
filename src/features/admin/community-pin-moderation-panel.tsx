@@ -98,7 +98,7 @@ export function CommunityPinModerationPanel({ zones, zoneId }: { zones: Zone[]; 
   // reversal legible instead of a silent undo.
   function failedFor(pinId: string): boolean {
     const entryId = pendingByPin[pinId];
-    return entryId !== undefined && outbox.some((entry) => entry.id === entryId && entry.permanentlyFailed);
+    return entryId !== undefined && outbox.some((entry) => entry.id === entryId && entry.status === "stuck");
   }
 
   return (

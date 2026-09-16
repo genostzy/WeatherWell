@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook } from "@testing-library/react";
 
 /**
@@ -23,7 +23,8 @@ vi.mock("@/lib/water-level-reports", () => ({
 }));
 
 import { useOutboxDrain } from "./use-outbox-drain";
-import { enqueue, readOutbox } from "./outbox";
+import { enqueue, readOutbox, visibleToCurrentUser } from "./outbox";
+import { rememberSessionUserId } from "@/lib/auth/session-user";
 import type { OutboxEntry } from "./types";
 
 function sessionFor(id: string | null, isAnonymous = false) {
@@ -43,7 +44,9 @@ function seed(entries: Array<Partial<OutboxEntry> & { id: string }>) {
         payload: { zoneId: "zone-1", depthLevel: "knee" },
         queuedAt: "2026-09-15T00:00:00.000Z",
         attempts: 0,
-        permanentlyFailed: false,
+        status: "pending",
+        nextAttemptAt: null,
+        updatedAt: "2026-09-15T00:00:00.000Z",
         ...entry,
       }))
     )
@@ -88,7 +91,7 @@ describe("outbox identity binding (I2)", () => {
 
     expect(dispatchQueuedReport).not.toHaveBeenCalled();
     expect(readOutbox()).toHaveLength(1);
-    expect(readOutbox()[0]).toMatchObject({ id: "from-a", userId: "user-a", attempts: 0, permanentlyFailed: false });
+    expect(readOutbox()[0]).toMatchObject({ id: "from-a", userId: "user-a", attempts: 0, status: "pending" });
   });
 
   it("never signs in anonymously just to send a signed-out user's entry", async () => {
@@ -153,5 +156,54 @@ describe("outbox identity binding (I2)", () => {
     expect(signInAnonymously).toHaveBeenCalledTimes(1);
     expect(dispatchQueuedReport).toHaveBeenCalledTimes(1);
     expect(readOutbox().map((entry) => entry.id)).toEqual(["from-a"]);
+  });
+});
+
+describe("M13: a held entry from a different person on a shared phone stays invisible to this one", () => {
+  afterEach(() => {
+    // Module-level state in session-user.ts — reset so this test's identity
+    // does not leak into a later test file's first read of it.
+    rememberSessionUserId(null);
+  });
+
+  it("excludes another user's entry, but includes this device's own and any unowned entry", () => {
+    rememberSessionUserId("user-b");
+
+    const base: OutboxEntry = {
+      id: "x",
+      operation: "submitWaterLevelReport",
+      payload: { zoneId: "zone-1", depthLevel: "knee" },
+      queuedAt: "2026-09-15T00:00:00.000Z",
+      attempts: 0,
+      status: "pending",
+      nextAttemptAt: null,
+      updatedAt: "2026-09-15T00:00:00.000Z",
+    };
+
+    // Person A queued this, then held it (a 409) before person B is now
+    // signed in on the same phone — the shared-phone seam this closes.
+    const heldFromA: OutboxEntry = { ...base, id: "from-a", userId: "user-a", status: "held" };
+    // This device's own current session.
+    const ownEntry: OutboxEntry = { ...base, id: "from-b", userId: "user-b" };
+    // Queued before any identity existed on this device.
+    const unowned: OutboxEntry = { ...base, id: "no-identity-yet", userId: null };
+
+    expect(visibleToCurrentUser(heldFromA)).toBe(false);
+    expect(visibleToCurrentUser(ownEntry)).toBe(true);
+    expect(visibleToCurrentUser(unowned)).toBe(true);
+  });
+
+  it("is what keeps a held entry out of the current person's optimistic merge", () => {
+    // The concrete failure M13 names: without this filter, `readOutbox()`
+    // returns every entry regardless of owner (drainForCurrentSession only
+    // decides what to SEND, not what a merge may DRAW), so a merge that read
+    // the raw queue would show person A's held pin/report as person B's own
+    // just-made write.
+    rememberSessionUserId("user-b");
+    seed([{ id: "from-a", userId: "user-a", status: "held" }]);
+
+    const visible = readOutbox().filter(visibleToCurrentUser);
+
+    expect(visible).toHaveLength(0);
   });
 });

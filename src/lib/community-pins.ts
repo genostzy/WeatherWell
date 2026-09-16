@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { onDelivered, PermanentFailure } from "./outbox/drain";
-import { enqueue, readOutbox, useOutbox } from "./outbox/outbox";
+import { enqueue, readOutbox, useOutbox, visibleToCurrentUser } from "./outbox/outbox";
 import { payloadOf } from "./outbox/dispatchers";
 import { drainForCurrentSession } from "./outbox/session-drain";
 import type { PinStatusTag, PinRemovalReason } from "./community-pin";
@@ -188,11 +188,12 @@ export function mergePins(serverRows: CommunityPin[], queued: OutboxEntry[]): Co
   const pins = new Map<string, CommunityPin>();
   for (const row of serverRows) pins.set(row.id, row);
 
-  // A permanently-failed entry (RLS denial, CHECK/FK violation, a rejected
-  // caption) will never be delivered — drainOutbox skips it forever. Drawing
-  // it as an ordinary pin would show a rejected report as posted, on a map
-  // whose entire purpose is telling people which roads are passable.
-  const live = queued.filter((entry) => !entry.permanentlyFailed);
+  // A stuck entry (RLS denial, CHECK/FK violation, a rejected caption) will
+  // never be delivered without a resident's explicit retry — drainOutbox
+  // skips it forever. Drawing it as an ordinary pin would show a rejected
+  // report as posted, on a map whose entire purpose is telling people which
+  // roads are passable.
+  const live = queued.filter((entry) => entry.status !== "stuck");
 
   for (const entry of live) {
     const payload = payloadOf(entry, "createPin");
@@ -280,7 +281,11 @@ export function mergePins(serverRows: CommunityPin[], queued: OutboxEntry[]): Co
 export function useAllCommunityPins(): CommunityPin[] {
   const { rows, delivered } = useServerPins();
   const queued = useOutbox();
-  return mergePins(rows, [...queued, ...delivered]);
+  // A held entry left behind by a different person on a shared phone (M13)
+  // must not be drawn as this person's own optimistic pin. `delivered`
+  // needs no such filter: it only ever holds entries this session's own
+  // drain just sent.
+  return mergePins(rows, [...queued.filter(visibleToCurrentUser), ...delivered]);
 }
 
 /** Active pins only — what the public map and KPI counts show. */
@@ -379,10 +384,10 @@ export function deleteOwnPin(pinId: string): void {
  * Reversible via restoreCommunityPin.
  *
  * Returns the queued entry (not void) so a caller can watch it for
- * `permanentlyFailed` — an out-of-area official's write is refused by RLS,
- * and `mergePins` silently drops a permanently-failed entry from the
- * optimistic view once that happens, reverting the pin back to "active"
- * with no explanation unless something is watching this entry's id.
+ * `status === "stuck"` — an out-of-area official's write is refused by RLS,
+ * and `mergePins` silently drops a stuck entry from the optimistic view once
+ * that happens, reverting the pin back to "active" with no explanation
+ * unless something is watching this entry's id.
  */
 export function removePinByAdmin(pinId: string): OutboxEntry {
   const entry = enqueue("setPinRemoved", { pinId, removed: true, reason: "admin" });
@@ -438,16 +443,16 @@ export function voteOnPin(pinId: string, direction: 1 | -1): void {
   // this is the belt to that braces: a second queued vote for one pin is a
   // duplicate the server refuses and the outbox then carries forever.
   //
-  // Excludes permanently-failed entries, deliberately. dispatchQueuedVote can
-  // now raise PermanentFailure (the placeholder it replaced never could), and
-  // without this exclusion a resident whose vote was permanently refused —
-  // say, a rejected direction from a stale client build — would have that
-  // dead entry sit in the outbox forever satisfying this guard, locking them
-  // out of ever voting on the pin again. A permanently-failed entry cannot be
-  // "already queued" in any sense that should block a fresh attempt: it is
-  // never going to be delivered.
+  // Excludes stuck entries, deliberately. dispatchQueuedVote can raise
+  // PermanentFailure (the placeholder it replaced never could), and without
+  // this exclusion a resident whose vote was permanently refused — say, a
+  // rejected direction from a stale client build — would have that dead
+  // entry sit in the outbox forever satisfying this guard, locking them out
+  // of ever voting on the pin again. A stuck entry cannot be "already
+  // queued" in any sense that should block a fresh attempt: it is never
+  // going to be delivered without an explicit retry.
   const alreadyQueued = readOutbox().some(
-    (entry) => !entry.permanentlyFailed && payloadOf(entry, "voteOnPin")?.pinId === pinId
+    (entry) => entry.status !== "stuck" && payloadOf(entry, "voteOnPin")?.pinId === pinId
   );
   if (alreadyQueued) return;
 
@@ -496,7 +501,7 @@ function findQueuedCreateForPin(pinId: string): OutboxEntry | undefined {
 function assertPinIsNotAwaitingCreate(pinId: string): void {
   const create = findQueuedCreateForPin(pinId);
   if (!create) return;
-  if (create.permanentlyFailed) {
+  if (create.status === "stuck") {
     throw new PermanentFailure(
       `Pin ${pinId} will never exist — its create permanently failed.`
     );

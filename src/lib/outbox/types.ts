@@ -65,12 +65,4 @@ export interface OutboxEntry {
   updatedAt: string;
   lastError?: string;
   stuckReason?: StuckReason;
-  /**
-   * @deprecated Removed in Task 3, which replaces every read of this with
-   * `status === "stuck"`. Kept here, optional, only so this commit's
-   * `permanentlyFailed`-reading call sites (see the Task 2 report for the
-   * full list) keep typechecking; nothing in this commit writes it as part
-   * of `OutboxEntry`'s required shape.
-   */
-  permanentlyFailed?: boolean;
 }
