@@ -38,19 +38,37 @@ export const GIVE_UP_AFTER_MS = 3 * 24 * 60 * 60 * 1000;
 export const PRUNE_STUCK_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
- * Operations that must not be sent while their pin's `createPin` is still
- * queued (design doc, "Queue order is respected"). `voteOnPin` is
- * deliberately excluded: a vote against a pin whose create has not landed
- * yet is a separate concern from Task 4's call-site migration, not this
- * module's — see the Task 2 report for how the pre-existing
- * `assertPinIsNotAwaitingCreate` differed here. `createPin` itself is never
- * blocked; nothing can be queued ahead of its own create.
+ * Operations that reference an existing pin by id and so must not race their
+ * pin's own `createPin` (design doc, "Queue order is respected", and — for
+ * `voteOnPin` specifically — R4: today's `assertPinIsNotAwaitingCreate` in
+ * `src/lib/community-pins.ts` guards votes exactly like edit/delete/
+ * moderation, so the new rule keeps doing the same). `createPin` itself is
+ * never one of these; nothing can be queued ahead of its own create.
  */
-const BLOCKED_BY_PENDING_CREATE = new Set<OutboxEntry["operation"]>([
+const DEPENDS_ON_PIN_CREATE = new Set<OutboxEntry["operation"]>([
   "editPin",
   "deleteOwnPin",
   "setPinRemoved",
+  "voteOnPin",
 ]);
+
+/**
+ * The queued `createPin` entry `entry` depends on, if any. A createPin
+ * entry's own outbox id IS the pin's row id (see `dispatchQueuedPinWrite`'s
+ * create branch in `community-pins.ts`), so this is an exact id match, not a
+ * heuristic — mirroring `findQueuedCreateForPin`. Like that function, this
+ * searches the whole `queue` the caller passes in; it is the caller's job
+ * (Task 4) to pass the queue that actually matters (the page's outbox, or
+ * the worker's IndexedDB copy).
+ */
+function findDependencyCreate(
+  entry: OutboxEntry,
+  queue: readonly OutboxEntry[]
+): OutboxEntry | undefined {
+  if (!DEPENDS_ON_PIN_CREATE.has(entry.operation)) return undefined;
+  const pinId = (entry.payload as { pinId?: string }).pinId;
+  return queue.find((other) => other.operation === "createPin" && other.id === pinId);
+}
 
 /**
  * True when a `pending` entry's wait is over and it may be sent. A `stuck`
@@ -155,17 +173,28 @@ export function shouldPrune(entry: OutboxEntry, now: Date): boolean {
 }
 
 /**
- * True when `entry` must wait behind a still-queued `createPin` for the same
- * pin. Mirrors `assertPinIsNotAwaitingCreate` (see `src/lib/community-pins.ts`):
- * a createPin entry's own outbox id IS the pin's row id, so "the same pin" is
- * an exact id match, not a heuristic. A create that has already given up
- * (`status === "stuck"`) no longer blocks anything — the pin will never
- * exist, so the dependent write should be failed rather than held forever;
- * turning that into a permanent failure is the caller's job, not this
- * predicate's.
+ * True when `entry` must wait behind a still-queued, still-live `createPin`
+ * for the same pin — the "wait" branch of `assertPinIsNotAwaitingCreate`
+ * (see `src/lib/community-pins.ts`): its create was found and has not
+ * (yet) permanently failed. False once that create is `stuck` — see
+ * `isOrphanedByFailedCreate` for that branch instead, so the two never
+ * overlap: blocked means "wait", orphaned means "give up".
  */
 export function isBlockedByPendingCreate(entry: OutboxEntry, queue: readonly OutboxEntry[]): boolean {
-  if (!BLOCKED_BY_PENDING_CREATE.has(entry.operation)) return false;
-  const pinId = (entry.payload as { pinId?: string }).pinId;
-  return queue.some((other) => other.operation === "createPin" && other.id === pinId && other.status !== "stuck");
+  const create = findDependencyCreate(entry, queue);
+  return create !== undefined && create.status !== "stuck";
+}
+
+/**
+ * True when `entry` depends on a pin whose `createPin` has already given up
+ * (`status === "stuck"`) — the "permanent failure" branch of
+ * `assertPinIsNotAwaitingCreate`: the pin will never exist, so the dependent
+ * write should fail permanently rather than wait forever or be sent to a
+ * server that can only refuse it. Task 4's drain applies
+ * `{ result: "permanent", reason: "pin was never created" }` (or similar) to
+ * an entry this returns true for, in place of sending it.
+ */
+export function isOrphanedByFailedCreate(entry: OutboxEntry, queue: readonly OutboxEntry[]): boolean {
+  const create = findDependencyCreate(entry, queue);
+  return create !== undefined && create.status === "stuck";
 }

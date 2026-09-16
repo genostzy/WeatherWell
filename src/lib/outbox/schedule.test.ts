@@ -4,6 +4,7 @@ import {
   isDue,
   shouldPrune,
   isBlockedByPendingCreate,
+  isOrphanedByFailedCreate,
   retryStuck,
   BACKOFF_MINUTES,
   MAX_ATTEMPTS,
@@ -60,6 +61,22 @@ describe("schedule: isBlockedByPendingCreate", () => {
       expect(
         isBlockedByPendingCreate(testCase.entry as OutboxEntry, testCase.queue as OutboxEntry[])
       ).toBe(testCase.expect);
+    });
+  }
+});
+
+describe("schedule: isOrphanedByFailedCreate", () => {
+  for (const testCase of cases.isOrphanedByFailedCreate) {
+    it(testCase.name, () => {
+      const entry = testCase.entry as OutboxEntry;
+      const queue = testCase.queue as OutboxEntry[];
+      expect(isOrphanedByFailedCreate(entry, queue)).toBe(testCase.expect);
+      // Fix round 1 (R4): the two predicates must never agree — blocked
+      // means "wait", orphaned means "give up". Every row in this table
+      // carries the expected isBlockedByPendingCreate result for the exact
+      // same fixture, so that non-overlap is asserted here rather than
+      // trusted.
+      expect(isBlockedByPendingCreate(entry, queue)).toBe(testCase.expectBlocked);
     });
   }
 });

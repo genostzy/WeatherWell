@@ -594,7 +594,7 @@
       "expect": true
     },
     {
-      "name": "voteOnPin is never blocked by a pending create",
+      "name": "voteOnPin whose pinId equals a queued createPin id is blocked, same as edit/delete/moderation",
       "entry": {
         "id": "vote-1",
         "operation": "voteOnPin",
@@ -622,6 +622,34 @@
           "id": "vote-1",
           "operation": "voteOnPin",
           "payload": { "pinId": "pin-4", "direction": 1 },
+          "queuedAt": "2026-09-16T11:00:00.000Z",
+          "attempts": 0,
+          "userId": "user-1",
+          "status": "pending",
+          "nextAttemptAt": null,
+          "updatedAt": "2026-09-16T11:00:00.000Z"
+        }
+      ],
+      "expect": true
+    },
+    {
+      "name": "a voteOnPin for a pin with no queued create is not blocked",
+      "entry": {
+        "id": "vote-2",
+        "operation": "voteOnPin",
+        "payload": { "pinId": "pin-8", "direction": -1 },
+        "queuedAt": "2026-09-16T11:00:00.000Z",
+        "attempts": 0,
+        "userId": "user-1",
+        "status": "pending",
+        "nextAttemptAt": null,
+        "updatedAt": "2026-09-16T11:00:00.000Z"
+      },
+      "queue": [
+        {
+          "id": "vote-2",
+          "operation": "voteOnPin",
+          "payload": { "pinId": "pin-8", "direction": -1 },
           "queuedAt": "2026-09-16T11:00:00.000Z",
           "attempts": 0,
           "userId": "user-1",
@@ -728,6 +756,161 @@
         }
       ],
       "expect": false
+    }
+  ],
+  "isOrphanedByFailedCreate": [
+    {
+      "name": "a dependent whose create is stuck is orphaned, and not blocked (the two never overlap)",
+      "entry": {
+        "id": "edit-orphan",
+        "operation": "editPin",
+        "payload": { "pinId": "pin-orphan", "statusTag": "impassable", "caption": "flooded" },
+        "queuedAt": "2026-09-16T11:00:00.000Z",
+        "attempts": 0,
+        "userId": "user-1",
+        "status": "pending",
+        "nextAttemptAt": null,
+        "updatedAt": "2026-09-16T11:00:00.000Z"
+      },
+      "queue": [
+        {
+          "id": "pin-orphan",
+          "operation": "createPin",
+          "payload": { "zoneId": "zone-1", "statusTag": "impassable", "caption": "flooded", "lat": 14.5, "lng": 121.0 },
+          "queuedAt": "2026-09-16T09:00:00.000Z",
+          "attempts": 10,
+          "userId": "user-1",
+          "status": "stuck",
+          "stuckReason": "permanent",
+          "lastError": "row-level security",
+          "nextAttemptAt": null,
+          "updatedAt": "2026-09-16T09:05:00.000Z"
+        },
+        {
+          "id": "edit-orphan",
+          "operation": "editPin",
+          "payload": { "pinId": "pin-orphan", "statusTag": "impassable", "caption": "flooded" },
+          "queuedAt": "2026-09-16T11:00:00.000Z",
+          "attempts": 0,
+          "userId": "user-1",
+          "status": "pending",
+          "nextAttemptAt": null,
+          "updatedAt": "2026-09-16T11:00:00.000Z"
+        }
+      ],
+      "expect": true,
+      "expectBlocked": false
+    },
+    {
+      "name": "a dependent whose create is still pending is not orphaned, it is blocked instead",
+      "entry": {
+        "id": "vote-blocked-not-orphaned",
+        "operation": "voteOnPin",
+        "payload": { "pinId": "pin-pending-create", "direction": 1 },
+        "queuedAt": "2026-09-16T11:00:00.000Z",
+        "attempts": 0,
+        "userId": "user-1",
+        "status": "pending",
+        "nextAttemptAt": null,
+        "updatedAt": "2026-09-16T11:00:00.000Z"
+      },
+      "queue": [
+        {
+          "id": "pin-pending-create",
+          "operation": "createPin",
+          "payload": { "zoneId": "zone-1", "statusTag": "impassable", "caption": "flooded", "lat": 14.5, "lng": 121.0 },
+          "queuedAt": "2026-09-16T10:00:00.000Z",
+          "attempts": 0,
+          "userId": "user-1",
+          "status": "pending",
+          "nextAttemptAt": null,
+          "updatedAt": "2026-09-16T10:00:00.000Z"
+        },
+        {
+          "id": "vote-blocked-not-orphaned",
+          "operation": "voteOnPin",
+          "payload": { "pinId": "pin-pending-create", "direction": 1 },
+          "queuedAt": "2026-09-16T11:00:00.000Z",
+          "attempts": 0,
+          "userId": "user-1",
+          "status": "pending",
+          "nextAttemptAt": null,
+          "updatedAt": "2026-09-16T11:00:00.000Z"
+        }
+      ],
+      "expect": false,
+      "expectBlocked": true
+    },
+    {
+      "name": "a dependent with no queued create is neither orphaned nor blocked",
+      "entry": {
+        "id": "delete-no-create",
+        "operation": "deleteOwnPin",
+        "payload": { "pinId": "pin-no-create" },
+        "queuedAt": "2026-09-16T11:00:00.000Z",
+        "attempts": 0,
+        "userId": "user-1",
+        "status": "pending",
+        "nextAttemptAt": null,
+        "updatedAt": "2026-09-16T11:00:00.000Z"
+      },
+      "queue": [
+        {
+          "id": "delete-no-create",
+          "operation": "deleteOwnPin",
+          "payload": { "pinId": "pin-no-create" },
+          "queuedAt": "2026-09-16T11:00:00.000Z",
+          "attempts": 0,
+          "userId": "user-1",
+          "status": "pending",
+          "nextAttemptAt": null,
+          "updatedAt": "2026-09-16T11:00:00.000Z"
+        }
+      ],
+      "expect": false,
+      "expectBlocked": false
+    },
+    {
+      "name": "createPin itself is never orphaned, even alongside a stuck createPin for a different pin",
+      "entry": {
+        "id": "pin-new",
+        "operation": "createPin",
+        "payload": { "zoneId": "zone-1", "statusTag": "impassable", "caption": "flooded", "lat": 14.5, "lng": 121.0 },
+        "queuedAt": "2026-09-16T11:00:00.000Z",
+        "attempts": 0,
+        "userId": "user-1",
+        "status": "pending",
+        "nextAttemptAt": null,
+        "updatedAt": "2026-09-16T11:00:00.000Z"
+      },
+      "queue": [
+        {
+          "id": "pin-old-stuck",
+          "operation": "createPin",
+          "payload": { "zoneId": "zone-1", "statusTag": "impassable", "caption": "flooded", "lat": 14.6, "lng": 121.1 },
+          "queuedAt": "2026-09-16T09:00:00.000Z",
+          "attempts": 10,
+          "userId": "user-1",
+          "status": "stuck",
+          "stuckReason": "permanent",
+          "lastError": "row-level security",
+          "nextAttemptAt": null,
+          "updatedAt": "2026-09-16T09:05:00.000Z"
+        },
+        {
+          "id": "pin-new",
+          "operation": "createPin",
+          "payload": { "zoneId": "zone-1", "statusTag": "impassable", "caption": "flooded", "lat": 14.5, "lng": 121.0 },
+          "queuedAt": "2026-09-16T11:00:00.000Z",
+          "attempts": 0,
+          "userId": "user-1",
+          "status": "pending",
+          "nextAttemptAt": null,
+          "updatedAt": "2026-09-16T11:00:00.000Z"
+        }
+      ],
+      "expect": false,
+      "expectBlocked": false
     }
   ]
 }
