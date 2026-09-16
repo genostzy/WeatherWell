@@ -20,7 +20,7 @@
  * CURRENT_CACHES, so a bump is what evicts a bad build from installed devices.
  * Leaving it unchanged is what pins users to a stale app forever.
  */
-const VERSION = "v10";
+const VERSION = "v11";
 
 const SHELL_CACHE = `weatherwell-shell-${VERSION}`;
 const ASSET_CACHE = `weatherwell-assets-${VERSION}`;
@@ -431,6 +431,347 @@ self.addEventListener("fetch", (event) => {
 
   // Icons, manifest, everything else same-origin.
   event.respondWith(staleWhileRevalidate(request, ASSET_CACHE));
+});
+
+/**
+ * ---------------------------------------------------------------------------
+ * Outbox drain (design doc, "Service worker").
+ *
+ * Sends the IndexedDB-mirrored write queue (src/lib/outbox/idb.ts,
+ * OUTBOX_DB/OUTBOX_STORE below) through the same server-checked endpoint the
+ * page uses (POST /api/outbox/<operation> — src/lib/outbox/send.ts), so page
+ * and worker behave identically. This file is plain JavaScript the app build
+ * does not compile, so it cannot import src/lib/outbox/*; everything in this
+ * section is a restated copy, kept honest by running the SAME case table,
+ * src/lib/outbox/schedule-cases.json, against both copies —
+ * service-worker.test.ts runs every row here exactly as schedule.test.ts
+ * does against the real module.
+ *
+ * Hard rules (see the plan's global constraints and task-5-brief.md):
+ *   - never calls Supabase directly, never creates/refreshes/reads a session
+ *     (the route handler's own Supabase client does that from the request's
+ *     cookies — `credentials: "same-origin"` below is what carries them);
+ *   - never sends an entry with a null (or missing) userId;
+ *   - never deletes a held entry;
+ *   - never caches /api/outbox/* (already true: a POST never reaches the
+ *     fetch handler at all, and a GET to that path falls through the
+ *     existing /api/ allowlist below, uncached — see PUBLIC_API_PATHS).
+ * ---------------------------------------------------------------------------
+ */
+
+const OUTBOX_DB = "weatherwell";
+const OUTBOX_STORE = "outbox";
+const OUTBOX_CHANNEL = "weatherwell-outbox";
+
+/** Mirrors src/lib/outbox/idb.ts's openOutboxDb, minus its best-effort catch — a failure here is exactly what should make waitUntil reject. */
+function openOutboxDb() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(OUTBOX_DB, 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(OUTBOX_STORE)) {
+        db.createObjectStore(OUTBOX_STORE, { keyPath: "id" });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error("openOutboxDb: request failed"));
+    request.onblocked = () => reject(new Error("openOutboxDb: blocked by another open connection"));
+  });
+}
+
+function outboxGetAll() {
+  return openOutboxDb().then(
+    (db) =>
+      new Promise((resolve, reject) => {
+        const tx = db.transaction(OUTBOX_STORE, "readonly");
+        const request = tx.objectStore(OUTBOX_STORE).getAll();
+        request.onsuccess = () => {
+          db.close();
+          resolve(request.result || []);
+        };
+        request.onerror = () => {
+          db.close();
+          reject(request.error || new Error("outboxGetAll: request failed"));
+        };
+      })
+  );
+}
+
+function outboxPut(entry) {
+  return openOutboxDb().then(
+    (db) =>
+      new Promise((resolve, reject) => {
+        const tx = db.transaction(OUTBOX_STORE, "readwrite");
+        tx.objectStore(OUTBOX_STORE).put(entry);
+        tx.oncomplete = () => {
+          db.close();
+          resolve();
+        };
+        tx.onerror = () => {
+          db.close();
+          reject(tx.error || new Error("outboxPut: transaction failed"));
+        };
+        tx.onabort = () => {
+          db.close();
+          reject(tx.error || new Error("outboxPut: transaction aborted"));
+        };
+      })
+  );
+}
+
+function outboxDelete(id) {
+  return openOutboxDb().then(
+    (db) =>
+      new Promise((resolve, reject) => {
+        const tx = db.transaction(OUTBOX_STORE, "readwrite");
+        tx.objectStore(OUTBOX_STORE).delete(id);
+        tx.oncomplete = () => {
+          db.close();
+          resolve();
+        };
+        tx.onerror = () => {
+          db.close();
+          reject(tx.error || new Error("outboxDelete: transaction failed"));
+        };
+        tx.onabort = () => {
+          db.close();
+          reject(tx.error || new Error("outboxDelete: transaction aborted"));
+        };
+      })
+  );
+}
+
+/**
+ * The retry rules below are a line-for-line restatement of
+ * src/lib/outbox/schedule.ts. Any behavioural change there must be copied
+ * here too — see the section doc above for how that is enforced.
+ */
+const OUTBOX_BACKOFF_MINUTES = [0, 1, 5, 15, 60];
+const OUTBOX_MAX_ATTEMPTS = 10;
+const OUTBOX_GIVE_UP_AFTER_MS = 3 * 24 * 60 * 60 * 1000;
+const OUTBOX_PRUNE_STUCK_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
+const OUTBOX_DEPENDS_ON_PIN_CREATE = new Set(["editPin", "deleteOwnPin", "setPinRemoved", "voteOnPin"]);
+
+function outboxFindDependencyCreate(entry, queue) {
+  if (!OUTBOX_DEPENDS_ON_PIN_CREATE.has(entry.operation)) return undefined;
+  const pinId = entry.payload && entry.payload.pinId;
+  return queue.find((other) => other.operation === "createPin" && other.id === pinId);
+}
+
+function isDue(entry, now) {
+  if (entry.status !== "pending") return false;
+  return entry.nextAttemptAt === null || Date.parse(entry.nextAttemptAt) <= now.getTime();
+}
+
+function applyOutcome(entry, outcome, now) {
+  const updatedAt = now.toISOString();
+
+  switch (outcome.result) {
+    case "delivered":
+      return null;
+
+    case "held":
+      return Object.assign({}, entry, { status: "held", nextAttemptAt: null, updatedAt });
+
+    // Left for the page: the worker never creates or refreshes a session, so
+    // it cannot tell a genuinely signed-out resident from one whose cookies
+    // just have not reached it yet.
+    case "signed_out":
+      return Object.assign({}, entry, { updatedAt });
+
+    case "permanent": {
+      const stuckReason = outcome.reason === "too_old" ? "too_old" : "permanent";
+      return Object.assign({}, entry, {
+        status: "stuck",
+        stuckReason,
+        lastError: outcome.reason == null ? "permanent" : outcome.reason,
+        nextAttemptAt: null,
+        updatedAt,
+      });
+    }
+
+    case "retry": {
+      const attempts = entry.attempts + 1;
+      const age = now.getTime() - Date.parse(entry.queuedAt);
+      if (attempts >= OUTBOX_MAX_ATTEMPTS || age > OUTBOX_GIVE_UP_AFTER_MS) {
+        return Object.assign({}, entry, {
+          attempts,
+          status: "stuck",
+          stuckReason: "gave_up",
+          lastError: outcome.error,
+          nextAttemptAt: null,
+          updatedAt,
+        });
+      }
+      const minutes = OUTBOX_BACKOFF_MINUTES[Math.min(attempts - 1, OUTBOX_BACKOFF_MINUTES.length - 1)];
+      return Object.assign({}, entry, {
+        attempts,
+        status: "pending",
+        lastError: outcome.error,
+        nextAttemptAt: new Date(now.getTime() + minutes * 60000).toISOString(),
+        updatedAt,
+      });
+    }
+
+    default:
+      return entry;
+  }
+}
+
+function shouldPrune(entry, now) {
+  return entry.status === "stuck" && now.getTime() - Date.parse(entry.queuedAt) > OUTBOX_PRUNE_STUCK_AFTER_MS;
+}
+
+function isBlockedByPendingCreate(entry, queue) {
+  const create = outboxFindDependencyCreate(entry, queue);
+  return create !== undefined && create.status !== "stuck";
+}
+
+function isOrphanedByFailedCreate(entry, queue) {
+  const create = outboxFindDependencyCreate(entry, queue);
+  return create !== undefined && create.status === "stuck";
+}
+
+/** Mirrors src/lib/outbox/send.ts's response mapping exactly. */
+function outboxOutcomeFromResponse(response) {
+  switch (response.status) {
+    case 200:
+      return Promise.resolve({ result: "delivered" });
+    case 409:
+      return Promise.resolve({ result: "held" });
+    case 401:
+      return Promise.resolve({ result: "signed_out" });
+    case 404:
+      return Promise.resolve({ result: "permanent", reason: "unknown_operation" });
+    case 422:
+      return response
+        .json()
+        .catch(() => ({}))
+        .then((body) => ({
+          result: "permanent",
+          reason: typeof body.reason === "string" ? body.reason : undefined,
+        }));
+    default:
+      return Promise.resolve({ result: "retry" });
+  }
+}
+
+function outboxSend(entry) {
+  return fetch(`/api/outbox/${entry.operation}`, {
+    method: "POST",
+    credentials: "same-origin",
+    cache: "no-store",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      id: entry.id,
+      userId: entry.userId == null ? null : entry.userId,
+      queuedAt: entry.queuedAt,
+      payload: entry.payload,
+    }),
+  })
+    .then((response) => outboxOutcomeFromResponse(response))
+    .catch(() => ({ result: "retry" }));
+}
+
+/**
+ * Reason recorded on a dependent write (editPin/deleteOwnPin/setPinRemoved/
+ * voteOnPin) whose own pin's createPin has permanently failed — matches
+ * src/lib/outbox/drain.ts's PIN_NEVER_CREATED, applied the same way here:
+ * without ever sending the request, because isOrphanedByFailedCreate already
+ * knows the create is stuck and there is nothing a request could learn.
+ */
+const OUTBOX_PIN_NEVER_CREATED = { result: "permanent", reason: "pin was never created" };
+
+/**
+ * Runs one drain pass: prune, settle orphaned dependents, send everything
+ * else that is due, unblocked and owned, oldest first. Broadcasts a change
+ * (if anything changed) and — this is what lets Background Sync reschedule
+ * — throws when a `retry` outcome left an entry due again right now.
+ *
+ * A single `now`, captured once, is used for every decision in the pass
+ * (pruning, due-ness, and every applyOutcome call): the worker sees the
+ * queue once per drain rather than re-reading it mid-pass the way the page's
+ * drain.ts loop does, so one steady clock reading is both simpler and
+ * sufficient here.
+ */
+function drainOutboxInWorker() {
+  const now = new Date();
+
+  return outboxGetAll().then((all) => {
+    const toPrune = all.filter((entry) => shouldPrune(entry, now));
+    const pruneIds = new Set(toPrune.map((entry) => entry.id));
+    const remaining = all.filter((entry) => !pruneIds.has(entry.id));
+
+    // A dependent write whose createPin has already given up for good: the
+    // pin will never exist, so it is settled as permanent WITHOUT a network
+    // call, exactly like the page's drain.ts (R4).
+    const orphaned = remaining.filter(
+      (entry) => entry.status === "pending" && isOrphanedByFailedCreate(entry, remaining)
+    );
+    const orphanedIds = new Set(orphaned.map((entry) => entry.id));
+
+    // Never a null/missing userId (I2 — an unowned entry is the page's job to
+    // claim before it ever reaches this worker), never blocked behind a
+    // still-live createPin, oldest first.
+    const due = remaining
+      .filter(
+        (entry) =>
+          entry.userId != null &&
+          !orphanedIds.has(entry.id) &&
+          isDue(entry, now) &&
+          !isBlockedByPendingCreate(entry, remaining)
+      )
+      .sort((a, b) => Date.parse(a.queuedAt) - Date.parse(b.queuedAt));
+
+    let changed = toPrune.length > 0;
+    let stillDue = false;
+
+    function settle(entry, outcomePromise) {
+      return Promise.resolve(outcomePromise).then((outcome) => {
+        changed = true;
+        const next = applyOutcome(entry, outcome, now);
+        if (next === null) return outboxDelete(entry.id);
+        return outboxPut(next).then(() => {
+          if (outcome.result === "retry" && isDue(next, now)) stillDue = true;
+        });
+      });
+    }
+
+    let chain = Promise.all(toPrune.map((entry) => outboxDelete(entry.id)));
+
+    for (const entry of orphaned) {
+      chain = chain.then(() => settle(entry, OUTBOX_PIN_NEVER_CREATED));
+    }
+    for (const entry of due) {
+      chain = chain.then(() => settle(entry, outboxSend(entry)));
+    }
+
+    return chain.then(() => {
+      if (changed) {
+        const channel = new BroadcastChannel(OUTBOX_CHANNEL);
+        channel.postMessage({ type: "changed" });
+        channel.close();
+      }
+      if (stillDue) {
+        throw new Error("outbox: an entry is still due after this drain — requesting a reschedule");
+      }
+    });
+  });
+}
+
+self.addEventListener("sync", (event) => {
+  if (event.tag === "outbox") {
+    event.waitUntil(drainOutboxInWorker());
+  }
+});
+
+// Fallback trigger for when Background Sync is unavailable but the worker is
+// alive (design doc, "Message { type: 'outbox-drain' }") — sync.ts posts this
+// after every enqueue when registration.sync does not exist.
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "outbox-drain") {
+    event.waitUntil(drainOutboxInWorker());
+  }
 });
 
 self.addEventListener("push", (event) => {

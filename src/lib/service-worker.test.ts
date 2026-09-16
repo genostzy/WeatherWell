@@ -1,8 +1,19 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import vm from "node:vm";
 import { isAdminPath } from "@/lib/auth/admin-path";
+import { idbGetAll, idbPut, OUTBOX_DB, OUTBOX_CHANNEL } from "@/lib/outbox/idb";
+import {
+  applyOutcome as scheduleApplyOutcome,
+  isDue as scheduleIsDue,
+  shouldPrune as scheduleShouldPrune,
+  isBlockedByPendingCreate as scheduleIsBlockedByPendingCreate,
+  isOrphanedByFailedCreate as scheduleIsOrphanedByFailedCreate,
+  type SendOutcome,
+} from "@/lib/outbox/schedule";
+import type { OutboxEntry } from "@/lib/outbox/types";
+import scheduleCases from "@/lib/outbox/schedule-cases.json";
 
 /**
  * public/sw.js runs in a worker, never imported by the app, so it cannot be
@@ -39,17 +50,24 @@ interface FakeResponse {
   status: number;
   ok: boolean;
   clone(): FakeResponse;
+  json(): Promise<unknown>;
 }
 
 function response(body: string, status = 200): FakeResponse {
   // Mirrors the real Response: `.ok` is derived from status, not a separate
   // field a caller can forget to set — networkFirst's C1 branch reads it.
-  return { body, status, ok: status >= 200 && status < 300, clone: () => response(body, status) };
+  return {
+    body,
+    status,
+    ok: status >= 200 && status < 300,
+    clone: () => response(body, status),
+    json: () => Promise.resolve().then(() => JSON.parse(body) as unknown),
+  };
 }
 
 function loadServiceWorker(options: {
   caches?: Record<string, Record<string, string>>;
-  fetch?: (url: string) => Promise<FakeResponse>;
+  fetch?: (url: string, init?: Record<string, unknown>) => Promise<FakeResponse>;
 }) {
   const store = new Map<string, Map<string, string>>();
   for (const [name, entries] of Object.entries(options.caches ?? {})) {
@@ -112,12 +130,23 @@ function loadServiceWorker(options: {
       registration: { showNotification: () => {} },
     },
     caches: cacheStorage,
-    fetch: (req: { url: string } | string) => fetchImpl(urlOf(req)),
+    fetch: (req: { url: string } | string, init?: Record<string, unknown>) =>
+      fetchImpl(urlOf(req), init),
     Response: { error: () => response("", 0) },
     URL,
     setTimeout,
     clearTimeout,
     clients: { matchAll: async () => [], openWindow: async () => {} },
+    // Forwarded from the outer (jsdom/Node) realm rather than left for the vm
+    // context to make its own copies, exactly like setTimeout/clearTimeout
+    // above: fake-indexeddb keeps one process-wide database regardless of
+    // realm, BroadcastChannel instances of the same name talk to each other
+    // across realms within one Node process either way, and Date must be the
+    // SAME constructor `vi.useFakeTimers()`/`vi.setSystemTime()` patches, or
+    // the worker's `new Date()` would silently ignore fake time.
+    indexedDB,
+    BroadcastChannel,
+    Date,
   };
 
   vm.createContext(sandbox);
@@ -139,6 +168,48 @@ async function handleFetch(
     },
   });
   return responded ? await responded : undefined;
+}
+
+/**
+ * fake-indexeddb keeps its databases in a process-wide singleton for the
+ * whole test file (see idb.test.ts's own comment on this) — every test that
+ * touches the outbox store needs a truly empty one, or an earlier test's
+ * rows leak in via the SAME `indexedDB` instance this file hands the vm
+ * sandbox.
+ */
+async function resetOutboxDb(): Promise<void> {
+  await new Promise<void>((resolve) => {
+    const request = indexedDB.deleteDatabase(OUTBOX_DB);
+    request.onsuccess = () => resolve();
+    request.onerror = () => resolve();
+    request.onblocked = () => resolve();
+  });
+}
+
+function outboxEntry(id: string, overrides: Partial<OutboxEntry> = {}): OutboxEntry {
+  return {
+    id,
+    operation: "submitWaterLevelReport",
+    payload: { zoneId: "zone-1", depthLevel: "knee" },
+    queuedAt: "2026-09-16T10:00:00.000Z",
+    attempts: 0,
+    userId: "user-1",
+    status: "pending",
+    nextAttemptAt: null,
+    updatedAt: "2026-09-16T10:00:00.000Z",
+    ...overrides,
+  };
+}
+
+async function seedOutbox(entries: OutboxEntry[]): Promise<void> {
+  for (const entry of entries) await idbPut(entry);
+}
+
+/** Drives the sync listener for tag "outbox" and returns the waitUntil promise it was given. */
+function fireOutboxSync(listeners: Record<string, (event: unknown) => void>): Promise<unknown> {
+  let waited: Promise<unknown> = Promise.resolve();
+  listeners.sync({ tag: "outbox", waitUntil: (p: Promise<unknown>) => (waited = p) });
+  return waited;
 }
 
 describe("service worker request routing", () => {
@@ -827,4 +898,408 @@ describe("service worker and admin-scoped responses (I1)", () => {
     expect(store.has("weatherwell-shell-v9")).toBe(false);
     expect(store.has("weatherwell-assets-v9")).toBe(false);
   });
+});
+
+describe("service worker outbox drain", () => {
+  // Background Sync's whole point (design doc, "Service worker"): the worker
+  // reads the IndexedDB-mirrored queue and sends it even with every page
+  // closed. These drive the SAME vm-sandboxed sw.js the routing tests above
+  // do, but seed and read the queue through the real idb.ts helpers against
+  // the real (fake-indexeddb) `indexedDB` this file hands into the sandbox —
+  // see loadServiceWorker's indexedDB/BroadcastChannel/Date forwarding.
+
+  beforeEach(async () => {
+    await resetOutboxDb();
+    // Only Date is faked, not the timer functions: fake-indexeddb schedules
+    // its own callbacks via setImmediate (see its lib/scheduling.js), which
+    // must keep running on the real event loop or every IndexedDB operation
+    // here would hang forever waiting for a timer that is never advanced.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-09-16T12:00:00.000Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("sends only due, pending entries with a non-null userId, oldest first, and leaves everything else alone", async () => {
+    const due1 = outboxEntry("due-1", { queuedAt: "2026-09-16T10:01:00.000Z" });
+    const due2 = outboxEntry("due-2", { queuedAt: "2026-09-16T10:02:00.000Z" });
+    const future = outboxEntry("future", {
+      queuedAt: "2026-09-16T10:00:00.000Z",
+      nextAttemptAt: "2026-09-16T12:05:00.000Z",
+    });
+    const held = outboxEntry("held", { status: "held", nextAttemptAt: null });
+    const stuck = outboxEntry("stuck", { status: "stuck", stuckReason: "gave_up", nextAttemptAt: null });
+    const nullOwner = outboxEntry("null-owner", { userId: null });
+    const noUserField: OutboxEntry = {
+      id: "no-user-field",
+      operation: "submitWaterLevelReport",
+      payload: { zoneId: "zone-1", depthLevel: "knee" },
+      queuedAt: "2026-09-16T09:00:00.000Z",
+      attempts: 0,
+      status: "pending",
+      nextAttemptAt: null,
+      updatedAt: "2026-09-16T09:00:00.000Z",
+    };
+    await seedOutbox([due1, due2, future, held, stuck, nullOwner, noUserField]);
+
+    const calls: { url: string; id: string }[] = [];
+    const { listeners } = loadServiceWorker({
+      fetch: async (url, init) => {
+        const body = JSON.parse((init?.body as string) ?? "{}") as { id: string };
+        calls.push({ url, id: body.id });
+        return response(JSON.stringify({ result: "delivered" }), 200);
+      },
+    });
+
+    await fireOutboxSync(listeners);
+
+    expect(calls.map((call) => call.id)).toEqual(["due-1", "due-2"]);
+    expect(calls.every((call) => call.url === "/api/outbox/submitWaterLevelReport")).toBe(true);
+
+    const remaining = await idbGetAll();
+    const remainingIds = remaining.map((entry) => entry.id).sort();
+    // due-1 and due-2 were delivered (200) and removed; every other seeded
+    // entry survives untouched — including the null/missing-userId ones,
+    // which must never even be attempted.
+    expect(remainingIds).toEqual(["future", "held", "no-user-field", "null-owner", "stuck"]);
+  });
+
+  it("does not send an editPin whose matching createPin is still queued", async () => {
+    const create = outboxEntry("pin-1", {
+      operation: "createPin",
+      payload: { zoneId: "zone-1", statusTag: "impassable", caption: "flooded", lat: 14.5, lng: 121.0 },
+      queuedAt: "2026-09-16T10:00:00.000Z",
+    });
+    const edit = outboxEntry("edit-1", {
+      operation: "editPin",
+      payload: { pinId: "pin-1", statusTag: "impassable", caption: "still flooded" },
+      queuedAt: "2026-09-16T10:01:00.000Z",
+    });
+    await seedOutbox([create, edit]);
+
+    const calls: string[] = [];
+    const { listeners } = loadServiceWorker({
+      fetch: async (url) => {
+        calls.push(url);
+        return response(JSON.stringify({ result: "delivered" }), 200);
+      },
+    });
+
+    await fireOutboxSync(listeners);
+
+    expect(calls).toEqual(["/api/outbox/createPin"]);
+    const [remainingEdit] = (await idbGetAll()).filter((entry) => entry.id === "edit-1");
+    expect(remainingEdit).toMatchObject({ status: "pending", attempts: 0 });
+  });
+
+  it("settles a dependent write as permanent, with no network call, once its createPin has given up (R4)", async () => {
+    const stuckCreate = outboxEntry("pin-orphan", {
+      operation: "createPin",
+      payload: { zoneId: "zone-1", statusTag: "impassable", caption: "flooded", lat: 14.5, lng: 121.0 },
+      queuedAt: "2026-09-16T09:00:00.000Z",
+      attempts: 10,
+      status: "stuck",
+      stuckReason: "gave_up",
+      nextAttemptAt: null,
+    });
+    const orphanedVote = outboxEntry("vote-orphan", {
+      operation: "voteOnPin",
+      payload: { pinId: "pin-orphan", direction: 1 },
+      queuedAt: "2026-09-16T10:00:00.000Z",
+    });
+    await seedOutbox([stuckCreate, orphanedVote]);
+
+    const calls: string[] = [];
+    const { listeners } = loadServiceWorker({
+      fetch: async (url) => {
+        calls.push(url);
+        return response("", 500);
+      },
+    });
+
+    await fireOutboxSync(listeners);
+
+    expect(calls).toEqual([]);
+    const [settled] = (await idbGetAll()).filter((entry) => entry.id === "vote-orphan");
+    expect(settled).toMatchObject({
+      status: "stuck",
+      stuckReason: "permanent",
+      lastError: "pin was never created",
+    });
+  });
+
+  it("maps 200/409/422/503/401 exactly as send.ts does", async () => {
+    const delivered = outboxEntry("e-200", { operation: "submitWaterLevelReport", queuedAt: "2026-09-16T10:00:00.000Z" });
+    const heldEntry = outboxEntry("e-409", { operation: "recordCheckIn", payload: { zoneId: "zone-1", status: "safe" }, queuedAt: "2026-09-16T10:01:00.000Z" });
+    const tooOld = outboxEntry("e-422", { operation: "voteOnPin", payload: { pinId: "pin-x", direction: 1 }, queuedAt: "2026-09-16T10:02:00.000Z" });
+    const retrying = outboxEntry("e-503", {
+      operation: "deleteOwnPin",
+      payload: { pinId: "pin-y" },
+      queuedAt: "2026-09-16T10:03:00.000Z",
+      attempts: 2,
+    });
+    const signedOut = outboxEntry("e-401", {
+      operation: "setPinRemoved",
+      payload: { pinId: "pin-z", removed: true, reason: "admin" },
+      queuedAt: "2026-09-16T10:04:00.000Z",
+      attempts: 1,
+    });
+    await seedOutbox([delivered, heldEntry, tooOld, retrying, signedOut]);
+
+    const { listeners } = loadServiceWorker({
+      fetch: async (url) => {
+        if (url === "/api/outbox/submitWaterLevelReport") return response(JSON.stringify({ result: "delivered" }), 200);
+        if (url === "/api/outbox/recordCheckIn") return response(JSON.stringify({ result: "held" }), 409);
+        if (url === "/api/outbox/voteOnPin") return response(JSON.stringify({ result: "permanent", reason: "too_old" }), 422);
+        if (url === "/api/outbox/deleteOwnPin") return response(JSON.stringify({ result: "retry" }), 503);
+        if (url === "/api/outbox/setPinRemoved") return response(JSON.stringify({ result: "signed_out" }), 401);
+        throw new Error(`unexpected request to ${url}`);
+      },
+    });
+
+    await fireOutboxSync(listeners);
+
+    const all = await idbGetAll();
+    const byId = new Map(all.map((entry) => [entry.id, entry]));
+
+    expect(byId.has("e-200")).toBe(false);
+    expect(byId.get("e-409")).toMatchObject({ status: "held", nextAttemptAt: null });
+    expect(byId.get("e-422")).toMatchObject({ status: "stuck", stuckReason: "too_old" });
+    expect(byId.get("e-503")).toMatchObject({
+      status: "pending",
+      attempts: 3,
+      nextAttemptAt: "2026-09-16T12:05:00.000Z",
+    });
+    expect(byId.get("e-401")).toMatchObject({ status: "pending", attempts: 1 });
+  });
+
+  it("never sends a request to any URL other than /api/outbox/* — no Supabase, no auth", async () => {
+    await seedOutbox([outboxEntry("only-entry")]);
+
+    const calls: string[] = [];
+    const { listeners } = loadServiceWorker({
+      fetch: async (url) => {
+        calls.push(url);
+        return response(JSON.stringify({ result: "delivered" }), 200);
+      },
+    });
+
+    await fireOutboxSync(listeners);
+
+    expect(calls.length).toBeGreaterThan(0);
+    expect(calls.every((url) => url.startsWith("/api/outbox/"))).toBe(true);
+  });
+
+  it("rejects the sync handler's waitUntil promise when a retried entry is still due, so the browser reschedules", async () => {
+    // attempts starts at 0, so the backoff table's first entry (0 minutes)
+    // leaves the retried copy due again at the exact same "now".
+    await seedOutbox([outboxEntry("e-still-due", { operation: "createPin", payload: { zoneId: "zone-1", statusTag: "impassable", caption: "flooded", lat: 14.5, lng: 121.0 } })]);
+
+    const { listeners } = loadServiceWorker({
+      fetch: async () => response("", 503),
+    });
+
+    await expect(fireOutboxSync(listeners)).rejects.toThrow();
+  });
+
+  it("deletes stuck entries older than 7 days on the next drain", async () => {
+    const old = outboxEntry("old-stuck", {
+      status: "stuck",
+      stuckReason: "gave_up",
+      nextAttemptAt: null,
+      queuedAt: "2026-09-09T11:59:00.000Z", // 7 days and 1 minute before the fake "now" above
+    });
+    const recent = outboxEntry("recent-stuck", {
+      status: "stuck",
+      stuckReason: "gave_up",
+      nextAttemptAt: null,
+      queuedAt: "2026-09-10T12:00:00.000Z", // 6 days before "now"
+    });
+    await seedOutbox([old, recent]);
+
+    const { listeners } = loadServiceWorker({ fetch: async () => response("", 200) });
+    await fireOutboxSync(listeners);
+
+    const remainingIds = (await idbGetAll()).map((entry) => entry.id);
+    expect(remainingIds).not.toContain("old-stuck");
+    expect(remainingIds).toContain("recent-stuck");
+  });
+
+  it('posts a { type: "changed" } message on weatherwell-outbox after a drain that changed something', async () => {
+    await seedOutbox([outboxEntry("e-changed")]);
+
+    const received: unknown[] = [];
+    const listenerChannel = new BroadcastChannel(OUTBOX_CHANNEL);
+    listenerChannel.onmessage = (event) => received.push(event.data);
+
+    const { listeners } = loadServiceWorker({
+      fetch: async () => response(JSON.stringify({ result: "delivered" }), 200),
+    });
+
+    await fireOutboxSync(listeners);
+    // BroadcastChannel delivery to other channels is asynchronous.
+    await vi.waitFor(() => expect(received).toEqual([{ type: "changed" }]));
+
+    listenerChannel.close();
+  });
+
+  it("never deletes, and never sends, a held entry", async () => {
+    const held = outboxEntry("stays-held", { status: "held", nextAttemptAt: null, attempts: 4 });
+    await seedOutbox([held]);
+
+    const calls: string[] = [];
+    const { listeners } = loadServiceWorker({
+      fetch: async (url) => {
+        calls.push(url);
+        return response(JSON.stringify({ result: "delivered" }), 200);
+      },
+    });
+
+    await fireOutboxSync(listeners);
+
+    expect(calls).toEqual([]);
+    const all = await idbGetAll();
+    expect(all.map((entry) => entry.id)).toEqual(["stays-held"]);
+    expect(all[0]).toMatchObject({ status: "held", attempts: 4 });
+  });
+
+  it('runs the same drain when the page posts { type: "outbox-drain" }, the fallback for when Background Sync is unavailable', async () => {
+    await seedOutbox([outboxEntry("via-message")]);
+
+    const calls: string[] = [];
+    const { listeners } = loadServiceWorker({
+      fetch: async (url) => {
+        calls.push(url);
+        return response(JSON.stringify({ result: "delivered" }), 200);
+      },
+    });
+
+    const waits: Promise<unknown>[] = [];
+    listeners.message({
+      data: { type: "outbox-drain" },
+      waitUntil: (p: Promise<unknown>) => waits.push(p),
+    });
+    await Promise.all(waits);
+
+    expect(calls).toEqual(["/api/outbox/submitWaterLevelReport"]);
+    expect(await idbGetAll()).toEqual([]);
+  });
+
+  it("ignores a message whose type is not outbox-drain", async () => {
+    await seedOutbox([outboxEntry("untouched")]);
+    const { listeners } = loadServiceWorker({ fetch: async () => response("", 200) });
+
+    const waits: Promise<unknown>[] = [];
+    listeners.message({
+      data: { type: "something-else" },
+      waitUntil: (p: Promise<unknown>) => waits.push(p),
+    });
+    await Promise.all(waits);
+
+    expect(waits).toHaveLength(0);
+    expect((await idbGetAll()).map((entry) => entry.id)).toEqual(["untouched"]);
+  });
+
+  it("never writes a GET or POST to /api/outbox/* to any cache", async () => {
+    const { listeners, store } = loadServiceWorker({
+      fetch: async () => response(JSON.stringify({ result: "delivered" }), 200),
+    });
+
+    const getResult = await handleFetch(listeners, { url: `${ORIGIN}/api/outbox/submitWaterLevelReport` });
+    expect(getResult?.status).toBe(200);
+    expect(store.size).toBe(0);
+
+    const postResult = await handleFetch(listeners, {
+      url: `${ORIGIN}/api/outbox/submitWaterLevelReport`,
+      method: "POST",
+    });
+    // POST never even reaches the fetch handler's respondWith — see "ignores
+    // non-GET requests" above — so there is nothing here that could cache it.
+    expect(postResult).toBeUndefined();
+    expect(store.size).toBe(0);
+  });
+});
+
+describe("service worker outbox schedule parity (public/sw.js mirrors schedule.ts)", () => {
+  // sw.js cannot import src/lib/outbox/schedule.ts — it is plain JavaScript
+  // the app build does not compile — so it restates applyOutcome, isDue,
+  // shouldPrune, isBlockedByPendingCreate and isOrphanedByFailedCreate. Every
+  // row of the shared case table, schedule-cases.json, is run through BOTH
+  // copies here: against each other (so a drift between them fails loudly)
+  // and against the row's own `expect` (so a drift in BOTH copies together,
+  // away from the documented rule, still fails).
+  const { context } = loadServiceWorker({});
+  const workerApplyOutcome = context.applyOutcome as (
+    entry: OutboxEntry,
+    outcome: SendOutcome,
+    now: Date
+  ) => OutboxEntry | null;
+  const workerIsDue = context.isDue as (entry: OutboxEntry, now: Date) => boolean;
+  const workerShouldPrune = context.shouldPrune as (entry: OutboxEntry, now: Date) => boolean;
+  const workerIsBlockedByPendingCreate = context.isBlockedByPendingCreate as (
+    entry: OutboxEntry,
+    queue: OutboxEntry[]
+  ) => boolean;
+  const workerIsOrphanedByFailedCreate = context.isOrphanedByFailedCreate as (
+    entry: OutboxEntry,
+    queue: OutboxEntry[]
+  ) => boolean;
+
+  for (const testCase of scheduleCases.applyOutcome) {
+    it(`applyOutcome: ${testCase.name}`, () => {
+      const now = new Date(testCase.now);
+      const entry = testCase.entry as OutboxEntry;
+      const outcome = testCase.outcome as SendOutcome;
+      const workerResult = workerApplyOutcome(entry, outcome, now);
+      expect(workerResult).toEqual(scheduleApplyOutcome(entry, outcome, now));
+      if (testCase.expect === null) {
+        expect(workerResult).toBeNull();
+      } else {
+        expect(workerResult).toMatchObject(testCase.expect as Record<string, unknown>);
+      }
+    });
+  }
+
+  for (const testCase of scheduleCases.isDue) {
+    it(`isDue: ${testCase.name}`, () => {
+      const now = new Date(testCase.now);
+      const entry = testCase.entry as OutboxEntry;
+      expect(workerIsDue(entry, now)).toBe(scheduleIsDue(entry, now));
+      expect(workerIsDue(entry, now)).toBe(testCase.expect);
+    });
+  }
+
+  for (const testCase of scheduleCases.shouldPrune) {
+    it(`shouldPrune: ${testCase.name}`, () => {
+      const now = new Date(testCase.now);
+      const entry = testCase.entry as OutboxEntry;
+      expect(workerShouldPrune(entry, now)).toBe(scheduleShouldPrune(entry, now));
+      expect(workerShouldPrune(entry, now)).toBe(testCase.expect);
+    });
+  }
+
+  for (const testCase of scheduleCases.isBlockedByPendingCreate) {
+    it(`isBlockedByPendingCreate: ${testCase.name}`, () => {
+      const entry = testCase.entry as OutboxEntry;
+      const queue = testCase.queue as OutboxEntry[];
+      expect(workerIsBlockedByPendingCreate(entry, queue)).toBe(
+        scheduleIsBlockedByPendingCreate(entry, queue)
+      );
+      expect(workerIsBlockedByPendingCreate(entry, queue)).toBe(testCase.expect);
+    });
+  }
+
+  for (const testCase of scheduleCases.isOrphanedByFailedCreate) {
+    it(`isOrphanedByFailedCreate: ${testCase.name}`, () => {
+      const entry = testCase.entry as OutboxEntry;
+      const queue = testCase.queue as OutboxEntry[];
+      expect(workerIsOrphanedByFailedCreate(entry, queue)).toBe(
+        scheduleIsOrphanedByFailedCreate(entry, queue)
+      );
+      expect(workerIsOrphanedByFailedCreate(entry, queue)).toBe(testCase.expect);
+      expect(workerIsBlockedByPendingCreate(entry, queue)).toBe(testCase.expectBlocked);
+    });
+  }
 });

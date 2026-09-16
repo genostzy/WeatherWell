@@ -4,6 +4,7 @@ import { useSyncExternalStore } from "react";
 import { createLocalStorageStore } from "@/lib/local-storage-store";
 import { knownSessionUserId } from "@/lib/auth/session-user";
 import { idbGetAll, idbPut, idbDelete, OUTBOX_CHANNEL } from "./idb";
+import { requestBackgroundSend } from "./sync";
 import { applyOutcome, retryStuck, shouldPrune } from "./schedule";
 import type { SendOutcome } from "./schedule";
 import type { OutboxEntry, OutboxOperation, OutboxPayloads, OutboxStatus } from "./types";
@@ -212,6 +213,11 @@ export function enqueue<K extends OutboxOperation>(
   if (!persisted) {
     throw new OutboxWriteFailed(entry.id);
   }
+
+  // Wakes the service worker so this entry can still be sent if the app
+  // closes before the page-open send path (session-drain.ts) gets to it.
+  // Best-effort and browser-only by construction — see sync.ts's own doc.
+  requestBackgroundSend();
 
   return entry;
 }
