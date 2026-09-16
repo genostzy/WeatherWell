@@ -497,28 +497,6 @@ function outboxGetAll() {
   );
 }
 
-function outboxPut(entry) {
-  return openOutboxDb().then(
-    (db) =>
-      new Promise((resolve, reject) => {
-        const tx = db.transaction(OUTBOX_STORE, "readwrite");
-        tx.objectStore(OUTBOX_STORE).put(entry);
-        tx.oncomplete = () => {
-          db.close();
-          resolve();
-        };
-        tx.onerror = () => {
-          db.close();
-          reject(tx.error || new Error("outboxPut: transaction failed"));
-        };
-        tx.onabort = () => {
-          db.close();
-          reject(tx.error || new Error("outboxPut: transaction aborted"));
-        };
-      })
-  );
-}
-
 function outboxDelete(id) {
   return openOutboxDb().then(
     (db) =>
@@ -536,6 +514,107 @@ function outboxDelete(id) {
         tx.onabort = () => {
           db.close();
           reject(tx.error || new Error("outboxDelete: transaction aborted"));
+        };
+      })
+  );
+}
+
+/**
+ * Applies one send outcome to the entry named by `snapshot.id`, but reads
+ * the CURRENT row and writes the result in the SAME `readwrite` transaction
+ * — no other operation on this store can be interleaved between that read
+ * and that write, because a transaction's requests all execute against one
+ * consistent snapshot and its effects only become visible to any other
+ * transaction (this worker's next drain, or the page's own IndexedDB
+ * connection) atomically at `oncomplete`. That is what closes the window a
+ * plain "read, await a fetch, write" sequence leaves open: `outboxGetAll`'s
+ * snapshot is taken long before the network round trip in `outboxSend`
+ * finishes, and without re-reading inside the write's own transaction, a
+ * page write landing in that gap (a `discardEntry` delete, a `retryEntry`
+ * put) would simply be clobbered by this function writing back a value
+ * derived from the stale pre-fetch copy.
+ *
+ * Three outcomes, in order (see task-5-review.md's "Fix round 1" finding):
+ *  1. The row is gone — the page discarded it, or an earlier settle already
+ *     delivered/removed it. Nothing is written, for ANY outcome, including a
+ *     late `delivered`: there is nothing left to confirm or retry against.
+ *  2. The row's `updatedAt` has moved past `snapshot.updatedAt` — the page
+ *     changed it while the POST was in flight (a Retry, a Discard-then-
+ *     re-enqueue under a new id would not collide, a hold release, ...).
+ *     Its version wins and this write is skipped, UNLESS the outcome is
+ *     `delivered`: the write reached the server regardless of what the page
+ *     did locally in the meantime, so the row is deleted either way — a
+ *     later local edit to an entry that no longer needs sending has nothing
+ *     left to apply to.
+ *  3. Otherwise (unchanged since the snapshot): apply the outcome exactly as
+ *     before.
+ *
+ * Resolves `{ wrote, deleted, next }`: `wrote` is false for case 1 and for a
+ * skipped case 2, so the drain's `changed`/`stillDue` bookkeeping only
+ * reacts to a write THIS call actually made — a skipped write already had
+ * its own `changed` broadcast from whatever page commit produced the newer
+ * `updatedAt`.
+ */
+function outboxSettleEntry(snapshot, outcome, now) {
+  return openOutboxDb().then(
+    (db) =>
+      new Promise((resolve, reject) => {
+        const tx = db.transaction(OUTBOX_STORE, "readwrite");
+        const store = tx.objectStore(OUTBOX_STORE);
+        const getRequest = store.get(snapshot.id);
+
+        let result = { wrote: false, deleted: false, next: null };
+
+        getRequest.onsuccess = () => {
+          const current = getRequest.result;
+
+          // Case 1: gone. Never write it back into existence.
+          if (current === undefined) return;
+
+          const movedOn = Date.parse(current.updatedAt) > Date.parse(snapshot.updatedAt);
+
+          // Case 2, non-delivered: the page's version wins.
+          if (movedOn && outcome.result !== "delivered") return;
+
+          // Delivered always deletes — case 2's one exception — and it is
+          // also the ordinary case-3 "delivered" outcome, since applyOutcome
+          // returns null for it either way.
+          if (outcome.result === "delivered") {
+            store.delete(snapshot.id);
+            result = { wrote: true, deleted: true, next: null };
+            return;
+          }
+
+          // Case 3: unchanged since the snapshot — apply as today, against
+          // the freshly-read row (identical to `snapshot` when truly
+          // unchanged, but reading `current` costs nothing extra and is the
+          // more honest source of truth).
+          const next = applyOutcome(current, outcome, now);
+          if (next === null) {
+            store.delete(snapshot.id);
+            result = { wrote: true, deleted: true, next: null };
+          } else {
+            store.put(next);
+            result = { wrote: true, deleted: false, next };
+          }
+        };
+        getRequest.onerror = () => {
+          // Left unhandled on purpose: an unhandled request error aborts the
+          // transaction per the IndexedDB spec, and tx.onabort below is what
+          // turns that into a rejection.
+        };
+
+        tx.oncomplete = () => {
+          db.close();
+          resolve(result);
+        };
+        tx.onerror = () => {
+          db.close();
+          reject(tx.error || new Error("outboxSettleEntry: transaction failed"));
+        };
+        tx.onabort = () => {
+          db.close();
+          reject(tx.error || new Error("outboxSettleEntry: transaction aborted"));
         };
       })
   );
@@ -727,14 +806,18 @@ function drainOutboxInWorker() {
     let stillDue = false;
 
     function settle(entry, outcomePromise) {
-      return Promise.resolve(outcomePromise).then((outcome) => {
-        changed = true;
-        const next = applyOutcome(entry, outcome, now);
-        if (next === null) return outboxDelete(entry.id);
-        return outboxPut(next).then(() => {
-          if (outcome.result === "retry" && isDue(next, now)) stillDue = true;
-        });
-      });
+      return Promise.resolve(outcomePromise).then((outcome) =>
+        outboxSettleEntry(entry, outcome, now).then((result) => {
+          // A skipped write (the row is gone, or the page moved it on) makes
+          // no change of THIS call's own — see outboxSettleEntry's doc — so
+          // it must not flip `changed`/`stillDue` on the page's behalf.
+          if (!result.wrote) return;
+          changed = true;
+          if (!result.deleted && outcome.result === "retry" && isDue(result.next, now)) {
+            stillDue = true;
+          }
+        })
+      );
     }
 
     let chain = Promise.all(toPrune.map((entry) => outboxDelete(entry.id)));

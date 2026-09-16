@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import vm from "node:vm";
 import { isAdminPath } from "@/lib/auth/admin-path";
-import { idbGetAll, idbPut, OUTBOX_DB, OUTBOX_CHANNEL } from "@/lib/outbox/idb";
+import { idbGetAll, idbPut, idbDelete, OUTBOX_DB, OUTBOX_CHANNEL } from "@/lib/outbox/idb";
 import {
   applyOutcome as scheduleApplyOutcome,
   isDue as scheduleIsDue,
@@ -210,6 +210,20 @@ function fireOutboxSync(listeners: Record<string, (event: unknown) => void>): Pr
   let waited: Promise<unknown> = Promise.resolve();
   listeners.sync({ tag: "outbox", waitUntil: (p: Promise<unknown>) => (waited = p) });
   return waited;
+}
+
+/**
+ * A promise plus its own externally-callable `resolve`, for pinning down a
+ * race: a test can hold the mocked `fetch` open until it has confirmed some
+ * other event (a concurrent page write) has already landed, rather than
+ * guessing how many microtask/macrotask hops separate them.
+ */
+function createDeferred<T = void>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
 }
 
 describe("service worker request routing", () => {
@@ -1219,6 +1233,123 @@ describe("service worker outbox drain", () => {
     // non-GET requests" above — so there is nothing here that could cache it.
     expect(postResult).toBeUndefined();
     expect(store.size).toBe(0);
+  });
+
+  describe("racing a page write against an in-flight POST (Fix round 1)", () => {
+    // task-5-review.md's load-bearing finding: settle() used to write back a
+    // pre-fetch snapshot with no re-read and no updatedAt comparison, so a
+    // page write landing while the worker's POST was in flight (a
+    // discardEntry delete, a retryEntry put) was silently undone by the
+    // worker's own later write. Every test below holds the mocked `fetch`
+    // open with a `createDeferred` gate until the page-side write has
+    // actually committed to the SAME (fake-indexeddb) store the worker
+    // reads, so the interleaving is real rather than assumed.
+
+    it.each([
+      { status: 503, body: JSON.stringify({ result: "retry" }) },
+      { status: 409, body: JSON.stringify({ result: "held" }) },
+      { status: 422, body: JSON.stringify({ result: "permanent", reason: "row-level security" }) },
+    ])(
+      "does not resurrect an entry the page discarded while its $status POST was in flight",
+      async ({ status, body }) => {
+        await seedOutbox([outboxEntry("discard-race")]);
+
+        const started = createDeferred<void>();
+        const gate = createDeferred<void>();
+        const { listeners } = loadServiceWorker({
+          fetch: async () => {
+            started.resolve();
+            await gate.promise;
+            return response(body, status);
+          },
+        });
+
+        const waited = fireOutboxSync(listeners);
+        await started.promise; // the POST has actually gone out
+        await idbDelete("discard-race"); // ...and now the page discards it
+        gate.resolve();
+        await waited;
+
+        expect(await idbGetAll()).toEqual([]);
+      }
+    );
+
+    it("does not overwrite a page write (e.g. a Retry) that landed while a 503 POST was in flight", async () => {
+      await seedOutbox([
+        outboxEntry("retry-race", {
+          queuedAt: "2026-09-16T09:00:00.000Z",
+          updatedAt: "2026-09-16T09:00:00.000Z",
+          attempts: 5,
+        }),
+      ]);
+
+      const started = createDeferred<void>();
+      const gate = createDeferred<void>();
+      const { listeners } = loadServiceWorker({
+        fetch: async () => {
+          started.resolve();
+          await gate.promise;
+          return response(JSON.stringify({ result: "retry" }), 503);
+        },
+      });
+
+      const waited = fireOutboxSync(listeners);
+      await started.promise;
+
+      // What retryStuck (src/lib/outbox/schedule.ts) does to a stuck entry,
+      // written directly the way a page commit() would: newer updatedAt,
+      // attempts reset, due again right now.
+      const pageVersion = outboxEntry("retry-race", {
+        queuedAt: "2026-09-16T09:00:00.000Z",
+        updatedAt: "2026-09-16T11:00:00.000Z",
+        attempts: 0,
+        nextAttemptAt: "2026-09-16T11:00:00.000Z",
+      });
+      await idbPut(pageVersion);
+
+      gate.resolve();
+      await waited;
+
+      expect(await idbGetAll()).toEqual([pageVersion]);
+    });
+
+    it("still deletes on a 200, even though the page changed the entry while the POST was in flight", async () => {
+      await seedOutbox([
+        outboxEntry("deliver-race", {
+          queuedAt: "2026-09-16T09:00:00.000Z",
+          updatedAt: "2026-09-16T09:00:00.000Z",
+        }),
+      ]);
+
+      const started = createDeferred<void>();
+      const gate = createDeferred<void>();
+      const { listeners } = loadServiceWorker({
+        fetch: async () => {
+          started.resolve();
+          await gate.promise;
+          return response(JSON.stringify({ result: "delivered" }), 200);
+        },
+      });
+
+      const waited = fireOutboxSync(listeners);
+      await started.promise;
+
+      await idbPut(
+        outboxEntry("deliver-race", {
+          queuedAt: "2026-09-16T09:00:00.000Z",
+          updatedAt: "2026-09-16T11:00:00.000Z",
+          attempts: 0,
+          nextAttemptAt: "2026-09-16T11:00:00.000Z",
+        })
+      );
+
+      gate.resolve();
+      await waited;
+
+      // The write reached the server regardless of the page's own concurrent
+      // edit — there is nothing left for that edit to apply to.
+      expect(await idbGetAll()).toEqual([]);
+    });
   });
 });
 
