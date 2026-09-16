@@ -126,4 +126,19 @@ describe("recordCheckIn", () => {
     const payload = upsert.mock.calls[0][0];
     expect(payload).not.toHaveProperty("checked_in_at");
   });
+
+  it("treats a 22023 refusal as permanent, without the report-specific too_old reason", async () => {
+    // private.honest_check_in_time() refuses a check-in claiming to be more
+    // than 3 days old. Retrying cannot help, so the queue must stop — but the
+    // "report again if it is still flooded" copy that reason "too_old" carries
+    // is about water-level reports, not check-ins.
+    const upsert = vi.fn().mockResolvedValue({ error: { code: "22023", message: "check-in too old" } });
+    from.mockReturnValue({ upsert });
+    const { recordCheckIn } = await import("./record-check-in");
+
+    const result = await recordCheckIn({ id: "id-1", zoneId: "zone-1", status: "safe", madeAt: "2020-01-01T00:00:00.000Z" });
+
+    expect(result).toMatchObject({ ok: false, permanent: true, error: "check-in too old" });
+    expect(result).not.toHaveProperty("reason");
+  });
 });

@@ -758,24 +758,33 @@ select tests.expect_denied(
 
 -- checked_in_at is the one exception to assertion 12's "server clock, not
 -- client input" rule, and deliberately so as of offline-sending Task 1 (see
--- the H1-H9 block at the end of this file): a queued check-in must keep the
+-- the H1-H11 block at the end of this file): a queued check-in must keep the
 -- time it was actually made, which can legitimately be hours in the past.
--- private.honest_check_in_time() (20260915103000_honest_write_times.sql)
--- is what still refuses a check-in's clock to be trusted blindly -- it
--- clamps a future timestamp to now() and, on the upsert conflict path, never
--- lets an older write regress a newer one -- but a plain past timestamp on
--- a fresh row, like this 30-day-old one, is honoured exactly as sent.
+-- private.honest_check_in_time() (20260915103000_honest_write_times.sql,
+-- bound added by 20260915120000_check_in_age_limit.sql) is what still
+-- refuses a check-in's clock to be trusted blindly -- it clamps a future
+-- timestamp to now(), refuses one more than 3 days old (raise exception
+-- 'check-in too old' using errcode = '22023' -- fix round 1, task-1-review.md
+-- finding 1: an unbounded backdate let a resident make their own live
+-- needs_help check-in display as arbitrarily stale to officials), and, on
+-- the upsert conflict path, never lets an older write regress a newer one.
 -- Own zone (tests-fixture-zone-2, not tests-fixture-zone) so this fresh
 -- (zone_id, user_id) pair cannot collide with the "check in when
 -- checked_in_at is left to its default" assertion below, which inserts
 -- (tests-fixture-zone, 11111111...) -- evacuation_check_ins is unique on
 -- (zone_id, user_id).
+--
+-- Two cases, not a bare ALLOW that would pass for any value: within the
+-- 3-day bound is honoured as sent; beyond it is refused. (H10/H11, in the
+-- H-block below, cover the same bound from the offline-sending fixture's own
+-- zone/user -- this pairing keeps assertion 12's original zone/user and
+-- column-grant framing intact.)
 select tests.as_user('11111111-1111-1111-1111-111111111111');
 select tests.expect_allowed(
-  'a resident CAN backdate a check-in''s checked_in_at (offline-sending Task 1: the outbox keeps the time it was made)',
+  'a resident CAN backdate a check-in''s checked_in_at within the 3-day bound (offline-sending Task 1: the outbox keeps the time it was made)',
   $$insert into public.evacuation_check_ins (zone_id, user_id, status, checked_in_at)
     values ('tests-fixture-zone-2', '11111111-1111-1111-1111-111111111111', 'needs_help',
-            now() - interval '30 days')$$);
+            now() - interval '2 days')$$);
 
 select tests.as_user('11111111-1111-1111-1111-111111111111');
 select tests.expect_row_count(
@@ -783,8 +792,55 @@ select tests.expect_row_count(
   $$select * from public.evacuation_check_ins
     where zone_id = 'tests-fixture-zone-2' and user_id = '11111111-1111-1111-1111-111111111111'
       and status = 'needs_help'
-      and checked_in_at between now() - interval '30 days 1 minute' and now() - interval '29 days 23 hours 59 minutes'$$,
+      and checked_in_at between now() - interval '2 days 1 minute' and now() - interval '1 day 23 hours 59 minutes'$$,
   1);
+
+-- Beyond the bound is refused, not silently honoured. Own zone
+-- (tests-fixture-zone-3) so this attempted (and refused, hence never
+-- landing) insert cannot be confused with the successful one just above.
+-- tests.expect_denied only catches insufficient_privilege, so this is a
+-- do-block in H4's style, catching sqlstate '22023' specifically.
+insert into public.zones
+  (id, psgc_barangay_code, name, evacuation_route_text, lat, lng, evacuation_route_path, hotline_number)
+values
+  ('tests-fixture-zone-3', '000000004', 'Test Zone 3', '{"en":"x","fil":"x"}'::jsonb, 14.2, 121.2, '[]'::jsonb, '000');
+
+do $$
+declare
+  v_sqlstate text;
+  v_message text;
+  v_raised boolean := false;
+begin
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', '11111111-1111-1111-1111-111111111111', 'role', 'authenticated')::text, true);
+
+  begin
+    insert into public.evacuation_check_ins (zone_id, user_id, status, checked_in_at)
+      values ('tests-fixture-zone-3', '11111111-1111-1111-1111-111111111111', 'needs_help',
+              now() - interval '30 days');
+  exception
+    when others then
+      v_raised := true;
+      get stacked diagnostics v_sqlstate = returned_sqlstate, v_message = message_text;
+  end;
+
+  reset role;
+
+  if not v_raised then
+    raise exception using errcode = 'TSTFL',
+      message = 'a resident backdating a check-in 30 days was accepted instead of refused';
+  end if;
+  if v_sqlstate is distinct from '22023' then
+    raise exception using errcode = 'TSTFL',
+      message = format('expected SQLSTATE 22023 for an over-old check-in, got %s (%s)', v_sqlstate, v_message);
+  end if;
+  if v_message !~ 'check-in too old' then
+    raise exception using errcode = 'TSTFL',
+      message = format('wrong error message for an over-old check-in: %s', v_message);
+  end if;
+  raise notice 'ok: a resident cannot backdate a check-in''s checked_in_at beyond the 3-day bound (22023, check-in too old)';
+end $$;
 
 -- The pairing half for assertion 12: the pin and vote inserts, minus their
 -- backdated column, must still succeed -- otherwise the two denials above

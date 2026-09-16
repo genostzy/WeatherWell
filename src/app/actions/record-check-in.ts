@@ -8,6 +8,7 @@ import type { ActionResult } from "./action-result";
 const INSUFFICIENT_PRIVILEGE = "42501";
 const CHECK_VIOLATION = "23514";
 const FOREIGN_KEY_VIOLATION = "23503";
+const TIME_OUT_OF_RANGE = "22023";
 
 /**
  * TRANSIENT, deliberately — the same argument every other action in this app
@@ -57,6 +58,14 @@ async function callerId(
  * or giving up.
  */
 function classify(error: { code?: string; message?: string }): ActionResult {
+  // private.honest_check_in_time() refuses a check-in claiming to be more
+  // than 3 days old (ruling R3). Retrying cannot make it younger, so it is
+  // permanent — but deliberately WITHOUT reason "too_old", whose badge copy
+  // tells the resident to report the flood again. That sentence is about
+  // water-level reports, not check-ins.
+  if (error.code === TIME_OUT_OF_RANGE) {
+    return { ok: false, permanent: true, error: error.message ?? "check-in too old" };
+  }
   const permanent =
     error.code === INSUFFICIENT_PRIVILEGE ||
     error.code === CHECK_VIOLATION ||

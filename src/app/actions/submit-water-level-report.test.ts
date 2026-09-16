@@ -93,6 +93,8 @@ describe("submitWaterLevelReport", () => {
     });
 
     expect(result).toMatchObject({ ok: false, permanent: true });
+    // Only a 22023 refusal carries reason "too_old"; nothing else may.
+    expect(result).not.toHaveProperty("reason");
   });
 
   it("reports an unknown database error as transient", async () => {
@@ -107,6 +109,8 @@ describe("submitWaterLevelReport", () => {
     });
 
     expect(result).toMatchObject({ ok: false, permanent: false });
+    // Only a 22023 refusal carries reason "too_old"; nothing else may.
+    expect(result).not.toHaveProperty("reason");
   });
 
   it("sends reported_at when madeAt is given, so a queued report keeps the time it was made", async () => {
