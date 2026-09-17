@@ -41,7 +41,6 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             <ServiceWorkerRegistration />
             <OutboxDrain />
             <RetiredStorageSweep />
-            <TilePrecacher />
             <ReferenceDataProvider
               chrome={
                 <header className="flex items-center justify-center gap-4 p-3">
@@ -55,6 +54,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             >
               {children}
               <SelectedZoneHotlineButton />
+              <TilePrecacher />
             </ReferenceDataProvider>
           </LanguageProvider>
         </TooltipProvider>
