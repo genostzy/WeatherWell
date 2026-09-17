@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { getZoneStatus, type ZoneStatus } from "@/lib/zone-status";
 import { useAlerts } from "@/lib/alerts-store";
 import { routeCrossesHazard } from "./route-hazard";
@@ -24,13 +24,55 @@ const NO_SAFE_ROUTE_FOUND: LocalizedText = {
 /** A destination a resident should not be sent to, whatever the path there looks like. */
 const HAZARDOUS_DESTINATION_STATUSES = new Set<ZoneStatus>(["dangerous", "hazardous"]);
 
+export interface RealRoute {
+  polyline: [number, number][];
+  distanceMeters: number | null;
+  durationSeconds: number | null;
+  fallback: boolean;
+}
+
+/**
+ * Fetches a real road-network route from the OSRM-backed API.
+ * Falls back to a straight line if the API is unavailable.
+ */
+async function fetchRealRoute(
+  fromLat: number,
+  fromLng: number,
+  toLat: number,
+  toLng: number
+): Promise<RealRoute> {
+  try {
+    const res = await fetch(
+      `/api/route?from=${fromLat},${fromLng}&to=${toLat},${toLng}`,
+      { signal: AbortSignal.timeout(8_000) }
+    );
+    if (!res.ok) throw new Error("Route fetch failed");
+    return await res.json();
+  } catch {
+    // Fallback: straight line
+    return {
+      polyline: [
+        [fromLat, fromLng],
+        [toLat, toLng],
+      ],
+      distanceMeters: null,
+      durationSeconds: null,
+      fallback: true,
+    };
+  }
+}
+
 /**
  * Manages route-finding state: which zone the user is navigating to,
  * whether the route crosses a hazard, and the "find safe" actions.
+ *
+ * When a route zone is selected, fetches a real OSRM route in the background.
+ * Falls back to the zone's static evacuationRoutePath if OSRM is unavailable.
  */
 export function useRouteFinding(zones: Zone[]) {
   const [routeZoneId, setRouteZoneId] = useState<string | null>(zones[0]?.id ?? null);
   const [notice, setNotice] = useState<LocalizedText | null>(null);
+  const [realRoute, setRealRoute] = useState<RealRoute | null>(null);
   const alerts = useAlerts();
 
   /**
@@ -45,9 +87,42 @@ export function useRouteFinding(zones: Zone[]) {
   const routeZone = zones.find((z) => z.id === routeZoneId) ?? null;
   const routeHazard = routeZone ? routeCrossesHazard(routeZone, zones, zoneStatusOf) : false;
 
+  // Fetch real route when zone changes — the effect only calls setState in
+  // an async callback (the .then), never synchronously in the effect body.
+  useEffect(() => {
+    if (!routeZone) return;
+
+    let cancelled = false;
+
+    fetchRealRoute(
+      routeZone.lat,
+      routeZone.lng,
+      routeZone.evacuationCenterLat,
+      routeZone.evacuationCenterLng
+    ).then((route) => {
+      if (!cancelled) {
+        setRealRoute(route);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [routeZone]);
+
+  /**
+   * The effective route polyline: real OSRM route if available,
+   * otherwise the zone's static evacuationRoutePath.
+   */
+  const effectiveRoutePolyline: [number, number][] = useMemo(
+    () => realRoute?.polyline ?? routeZone?.evacuationRoutePath ?? [],
+    [realRoute, routeZone]
+  );
+
   function handleSelectZone(zoneId: string) {
     setRouteZoneId(zoneId);
     setNotice(null);
+    setRealRoute(null);
   }
 
   function handleFindSafeArea() {
@@ -55,6 +130,7 @@ export function useRouteFinding(zones: Zone[]) {
     if (safeZone) {
       setRouteZoneId(safeZone.id);
       setNotice(null);
+      setRealRoute(null);
     } else {
       setNotice(NO_SAFE_AREA_FOUND);
     }
@@ -72,6 +148,7 @@ export function useRouteFinding(zones: Zone[]) {
     if (safeRouteZone) {
       setRouteZoneId(safeRouteZone.id);
       setNotice(null);
+      setRealRoute(null);
     } else {
       setNotice(NO_SAFE_ROUTE_FOUND);
     }
@@ -81,6 +158,8 @@ export function useRouteFinding(zones: Zone[]) {
     routeZone,
     routeHazard,
     notice,
+    realRoute,
+    effectiveRoutePolyline,
     handleSelectZone,
     handleFindSafeArea,
     handleFindSafeEvacuationCenter,

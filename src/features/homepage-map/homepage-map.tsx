@@ -66,6 +66,7 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
     routeZone,
     routeHazard,
     notice,
+    effectiveRoutePolyline,
     handleSelectZone,
     handleFindSafeArea,
     handleFindSafeEvacuationCenter,
@@ -113,6 +114,7 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
           onHazardTypeChange={setHazardType}
           routeZone={routeZone}
           routeHazard={routeHazard}
+          effectiveRoutePolyline={effectiveRoutePolyline}
           onSelectZone={handleSelectZone}
           isPlacingPin={isPlacingPin}
           onMapClickForPin={handleMapClickForPin}

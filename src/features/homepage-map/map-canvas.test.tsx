@@ -34,6 +34,7 @@ describe("MapCanvas", () => {
     onHazardTypeChange: () => {},
     routeZone: null,
     routeHazard: false,
+    effectiveRoutePolyline: [] as [number, number][],
     onSelectZone: () => {},
   };
 
@@ -145,6 +146,7 @@ describe("MapCanvas with no hazard data (I3)", () => {
           onHazardTypeChange={() => {}}
           routeZone={null}
           routeHazard={false}
+          effectiveRoutePolyline={[]}
           onSelectZone={() => {}}
         />,
         { data: { hazards: {} } }

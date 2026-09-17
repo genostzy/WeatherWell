@@ -67,6 +67,7 @@ export function MapCanvas({
   onHazardTypeChange,
   routeZone,
   routeHazard,
+  effectiveRoutePolyline,
   onSelectZone,
   isPlacingPin = false,
   onMapClickForPin,
@@ -79,6 +80,7 @@ export function MapCanvas({
   onHazardTypeChange: (type: HazardType) => void;
   routeZone: Zone | null;
   routeHazard: boolean;
+  effectiveRoutePolyline: [number, number][];
   onSelectZone: (zoneId: string) => void;
   isPlacingPin?: boolean;
   onMapClickForPin?: (lat: number, lng: number) => void;
@@ -156,9 +158,9 @@ export function MapCanvas({
 
         <PoiMarkerLayer zones={zones} />
 
-        {routeZone && (
+        {routeZone && effectiveRoutePolyline.length > 0 && (
           <Polyline
-            positions={routeZone.evacuationRoutePath}
+            positions={effectiveRoutePolyline}
             pathOptions={{
               color: routeHazard ? "#7f1d1d" : "#0f766e",
               weight: 4,
