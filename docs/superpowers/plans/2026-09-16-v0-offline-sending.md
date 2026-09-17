@@ -617,3 +617,9 @@ Match the route handler's second-argument type to what this Next version documen
 ## Found during execution
 
 - **Late reports count toward flood consensus** (final review, Minor 10). The agreeing-report count (`flood-monitoring-panel.tsx` and the recent-reports panel) is not time-windowed. Honest times make that visible: a report delivered 5 hours late now counts as "agreeing" beside current ones. This predates the branch; it belongs with V1's threshold engine, which should window the count by `reported_at`. Not fixed here.
+- **Closed-app sending not yet seen on a real phone.** The live test (17 September 2026) ran in a browser with Background Sync switched off, so the worker was woken by the page's drain message, which runs the same routine. Confirm once on an Android phone: queue a report in airplane mode, close the app, turn airplane mode off, and check the report arrives without reopening it.
+- **The unowned first write stays accepted.** A resident's first write on a shared phone is queued before any account exists, so whoever next signs in on that device claims it.
+- **Monitoring's health check points at the V0 preview.** Switch `HEALTH_URL` in `.github/workflows/monitor.yml` (on `main`) to production when V0 is promoted. The watcher's error count covers only the deployment it calls.
+- **The crash log can be flooded to its 300-per-hour cap,** which would hide real crashes for that hour. A per-source limit belongs in V1 if that ever happens.
+- **Officials can forge an alert's previous level** by inserting directly instead of through `set_zone_alert` (carried from the officials plan). Making the function the only writer is a V1 security-model change.
+- **Orphaned community pins** have no in-app path to moderation (carried from the officials plan).
