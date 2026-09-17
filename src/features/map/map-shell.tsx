@@ -32,7 +32,7 @@ export function MapShell({
 }) {
   return (
     <div
-      className={`relative h-[340px] w-full overflow-hidden rounded-md border-2 border-border sm:h-[400px] lg:h-[600px] ${className}`}
+      className={`relative h-[280px] w-full overflow-hidden rounded-xl border-2 border-border sm:h-[400px] lg:h-[600px] ${className}`}
       aria-label={ariaLabel}
     >
       <MapContainer

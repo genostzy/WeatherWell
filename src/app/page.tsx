@@ -1,36 +1,22 @@
 "use client";
 
-import Link from "next/link";
-import { Building2, Droplet, Map, Settings } from "lucide-react";
 import { OnboardingGate } from "@/features/onboarding/onboarding-gate";
 import { PersonalStatusHeadline } from "@/features/homepage-map/personal-status-headline";
 import { HomepageMap } from "@/features/homepage-map/homepage-map";
 import { ZoneAlertListFallback } from "@/features/homepage-map/zone-alert-list-fallback";
 import { useIsOnline } from "@/features/homepage-map/use-tiles-cached";
 import { useSelectedZone } from "@/features/zones/use-selected-zone";
-import { useLanguage } from "@/features/i18n/language-provider";
-import { t } from "@/lib/i18n";
 import { useZones } from "@/lib/reference-data/use-reference-data";
 import { orderZonesWithSelectedFirst } from "@/lib/order-zones";
-import { Button } from "@/components/ui/button";
-import type { LocalizedText } from "@/lib/types";
-
-const NAV_LINKS: { href: string; label: LocalizedText; icon: typeof Building2 }[] = [
-  { href: "/evacuation", label: { en: "Evacuation", fil: "Evacuation" }, icon: Building2 },
-  { href: "/report", label: { en: "Report", fil: "Ulat" }, icon: Droplet },
-  { href: "/map", label: { en: "Zones", fil: "Zones" }, icon: Map },
-  { href: "/admin", label: { en: "Admin", fil: "Admin" }, icon: Settings },
-];
 
 export default function Home() {
   const isOnline = useIsOnline();
   const zones = useZones();
   const selectedZone = useSelectedZone();
   const orderedZones = orderZonesWithSelectedFirst(zones, selectedZone.id);
-  const { lang } = useLanguage();
 
   return (
-    <main className="flex flex-1 flex-col items-center gap-4 p-4 sm:gap-6 sm:p-6 lg:p-8">
+    <main className="flex flex-1 flex-col items-center gap-3 p-4 sm:gap-4 sm:p-6 lg:p-8">
       <OnboardingGate />
       {isOnline ? (
         <HomepageMap zones={orderedZones} />
@@ -40,17 +26,6 @@ export default function Home() {
           <ZoneAlertListFallback zones={orderedZones} />
         </>
       )}
-
-      <div className="flex w-full max-w-2xl flex-wrap justify-center gap-2 lg:max-w-5xl">
-        {NAV_LINKS.map(({ href, label, icon: Icon }) => (
-          <Button key={href} asChild variant="ghost" size="sm">
-            <Link href={href}>
-              <Icon aria-hidden="true" />
-              {t(label, lang)}
-            </Link>
-          </Button>
-        ))}
-      </div>
     </main>
   );
 }

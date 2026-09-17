@@ -11,12 +11,11 @@ import { getFriendlyWeatherRead } from "@/lib/mock-data";
 import type { Zone } from "@/lib/types";
 
 /**
- * The resident's own zone status, shown at the top of the homepage. Reuses
- * the same safe/cautionary/dangerous/hazardous scale (and exact severity
- * color) already driving the map markers and legend — this is a presentation
- * of that existing data, not a new status model. Also reflects an operator's
- * own edit to the zone's alert (see set-zone-alert.ts) immediately, not just
- * on the dashboards, since both read the same Postgres row.
+ * The resident's own zone status, shown at the top of the homepage.
+ * Redesigned as a prominent hero card with a severity-colored accent bar,
+ * larger icon, and clear visual hierarchy. Reuses the same
+ * safe/cautionary/dangerous/hazardous scale (and exact severity color)
+ * already driving the map markers and legend.
  */
 export function PersonalStatusHeadline({ zone }: { zone: Zone }) {
   const { lang } = useLanguage();
@@ -26,37 +25,48 @@ export function PersonalStatusHeadline({ zone }: { zone: Zone }) {
   const status = getZoneStatus(alert);
   const color = getZoneStatusColor(alert);
   const Icon = status === "safe" ? ShieldCheck : TriangleAlert;
-  // Safe: a friendly weather read from Current Conditions data. Otherwise: the
-  // zone's actual active alert message — urgency is never diluted with
-  // weather trivia. Per PRD Core Feature #9.
+  // Safe: a friendly weather read. Otherwise: the zone's actual alert message.
   const followUp = status === "safe" ? getFriendlyWeatherRead(zone.id) : alert?.message;
 
   return (
     <div className="w-full space-y-2">
       <div
-        className="flex w-full max-w-2xl items-center gap-3 rounded-md border-2 p-3 lg:max-w-5xl"
-        style={{ borderColor: color, backgroundColor: `${color}1a` }}
+        className="relative w-full overflow-hidden rounded-xl border-2 border-border"
+        style={{ borderColor: color }}
       >
-        <Icon aria-hidden="true" className="h-8 w-8 shrink-0" style={{ color }} />
-        <div>
-          <p className="text-xs text-muted-foreground">{zone.name}</p>
-          <h1 lang={lang} className="text-lg font-semibold md:text-xl" style={{ color }}>
-            {t(ZONE_STATUS_LABEL[status], lang)}
-          </h1>
-          {followUp && (
-            <p lang={lang} className="text-sm text-muted-foreground">
-              {t(followUp, lang)}
-            </p>
-          )}
+        {/* Severity accent bar — left edge */}
+        <div
+          className="absolute top-0 left-0 h-full w-1"
+          style={{ backgroundColor: color }}
+          aria-hidden="true"
+        />
+
+        <div className="flex items-start gap-3 p-4 pl-5">
+          <div
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
+            style={{ backgroundColor: `${color}1a` }}
+          >
+            <Icon aria-hidden="true" className="h-6 w-6" style={{ color }} />
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-medium text-muted-foreground">{zone.name}</p>
+            <h1
+              lang={lang}
+              className="text-lg font-bold leading-tight md:text-xl"
+              style={{ color }}
+            >
+              {t(ZONE_STATUS_LABEL[status], lang)}
+            </h1>
+            {followUp && (
+              <p lang={lang} className="mt-1 text-sm text-muted-foreground">
+                {t(followUp, lang)}
+              </p>
+            )}
+          </div>
         </div>
       </div>
 
-      {/*
-        Sits directly under the status it explains. When an operator clears an
-        alert this headline flips to "Safe" with a weather blurb — a change
-        indistinguishable from nothing ever having been wrong, unless the
-        withdrawal is stated (PRD Anti-Abuse layer 9).
-      */}
       {downgrade && <AlertDowngradeNotice notice={downgrade} />}
     </div>
   );

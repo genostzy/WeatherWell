@@ -12,6 +12,7 @@ import { useRouteFinding } from "./use-route-finding";
 import { usePinFlow } from "./use-pin-flow";
 import { PersonalStatusHeadline } from "./personal-status-headline";
 import { CurrentConditionsPanel } from "./current-conditions-panel";
+import { ActionGrid } from "./action-grid";
 import { CommunityPinForm } from "./community-pin-form";
 import { PhotoLightbox } from "./photo-lightbox";
 import { OverlayDialog } from "@/components/overlay-dialog";
@@ -20,7 +21,7 @@ import type { HazardType, LocalizedText, Zone } from "@/lib/types";
 
 const MapCanvas = dynamic(() => import("./map-canvas").then((m) => m.MapCanvas), {
   ssr: false,
-  loading: () => <Skeleton className="h-[340px] w-full rounded-md sm:h-[400px] lg:h-[600px]" />,
+  loading: () => <Skeleton className="h-[280px] w-full rounded-xl sm:h-[400px] lg:h-[600px]" />,
 });
 
 const TO: LocalizedText = { en: "to", fil: "papunta sa" };
@@ -45,7 +46,7 @@ const DELETE_PIN_BODY: LocalizedText = {
 const DELETE: LocalizedText = { en: "Delete", fil: "Burahin" };
 const CANCEL: LocalizedText = { en: "Cancel", fil: "Kanselahin" };
 
-/** Compass codes returned by `getBearingAndDistance` — Filipino uses distinct words, not abbreviations of the English letters. */
+/** Compass codes returned by `getBearingAndDistance` */
 const COMPASS_LABEL: Record<string, LocalizedText> = {
   N: { en: "N", fil: "Hilaga" },
   NE: { en: "NE", fil: "Hilagang-Silangan" },
@@ -98,15 +99,54 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
       : null;
 
   return (
-    <div className="grid w-full max-w-2xl gap-3 sm:gap-4 lg:max-w-5xl lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start lg:gap-6">
-      <div className="lg:col-start-2 lg:row-start-1">
+    <div className="grid w-full gap-3 sm:gap-4 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start lg:gap-6">
+      {/* Mobile: status + actions + map + conditions. Desktop: map left, sidebar right. */}
+
+      {/* Sidebar — desktop: right column. Mobile: above map. */}
+      <div className="flex flex-col gap-3 sm:gap-4 lg:col-start-2 lg:row-span-4 lg:gap-5">
         <PersonalStatusHeadline zone={zones[0]} />
-      </div>
-
-      <div className="lg:col-start-2 lg:row-start-2">
+        <ActionGrid />
         <CurrentConditionsPanel zone={zones[0]} />
+
+        {/* Route info */}
+        {(routeZone || notice) && (
+          <div className="rounded-xl border-2 border-border p-3 text-sm">
+            {routeZone && directionToSafety && (
+              <p className="font-medium">
+                {Math.round(directionToSafety.distanceMeters)}m{" "}
+                {t(COMPASS_LABEL[directionToSafety.compassLabel], lang)} {t(TO, lang)}{" "}
+                {routeZone.evacuationCenterName}
+              </p>
+            )}
+            {routeZone && routeHazard && (
+              <p className="mt-1 rounded bg-severity-evacuate/20 px-2 py-0.5 font-medium text-severity-evacuate">
+                {t(PASSES_THROUGH_HAZARD, lang)}
+              </p>
+            )}
+            {notice && <p className="mt-1 text-muted-foreground">{t(notice, lang)}</p>}
+          </div>
+        )}
+
+        {/* Route action buttons */}
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={handleFindSafeArea}>
+            {t(FIND_SAFE_AREA, lang)}
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={handleFindSafeEvacuationCenter}>
+            {t(FIND_SAFE_EVACUATION_CENTER, lang)}
+          </Button>
+          <Button
+            type="button"
+            variant={isPlacingPin ? "default" : "outline"}
+            size="sm"
+            onClick={() => setIsPlacingPin((v) => !v)}
+          >
+            {t(isPlacingPin ? CANCEL_ADD_PIN : ADD_FLOOD_PIN, lang)}
+          </Button>
+        </div>
       </div>
 
+      {/* Map — desktop: left column. Mobile: below actions. */}
       <div className="lg:col-start-1 lg:row-span-4">
         <MapCanvas
           zones={zones}
@@ -124,43 +164,7 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
         />
       </div>
 
-      <div className="flex flex-wrap gap-2 lg:col-start-2 lg:row-start-3">
-        <Button type="button" variant="outline" size="sm" onClick={handleFindSafeArea}>
-          {t(FIND_SAFE_AREA, lang)}
-        </Button>
-        <Button type="button" variant="outline" size="sm" onClick={handleFindSafeEvacuationCenter}>
-          {t(FIND_SAFE_EVACUATION_CENTER, lang)}
-        </Button>
-        <Button
-          type="button"
-          variant={isPlacingPin ? "default" : "outline"}
-          size="sm"
-          onClick={() => setIsPlacingPin((v) => !v)}
-        >
-          {t(isPlacingPin ? CANCEL_ADD_PIN : ADD_FLOOD_PIN, lang)}
-        </Button>
-      </div>
-
-      {(routeZone || notice) && (
-        <p lang={lang} className="text-sm lg:col-start-2 lg:row-start-4">
-          {routeZone && directionToSafety && (
-            <span className="font-medium">
-              {Math.round(directionToSafety.distanceMeters)}m{" "}
-              {t(COMPASS_LABEL[directionToSafety.compassLabel], lang)} {t(TO, lang)}{" "}
-              {routeZone.evacuationCenterName}
-            </span>
-          )}{" "}
-          {routeZone && routeHazard && (
-            <span className="rounded bg-severity-evacuate px-2 py-0.5 font-medium text-white">
-              {t(PASSES_THROUGH_HAZARD, lang)}
-            </span>
-          )}
-          {notice && <span className="text-muted-foreground">{t(notice, lang)}</span>}
-        </p>
-      )}
-
-      {/* Both of these open over the map rather than below it — a form or photo
-          rendered inline would land off-screen behind a full-height map. */}
+      {/* Dialogs — both open over the map */}
       {pendingPinLocation && (
         <OverlayDialog
           onClose={handlePinFormCancel}

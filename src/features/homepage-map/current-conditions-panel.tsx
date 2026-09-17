@@ -2,8 +2,6 @@
 
 import { useState } from "react";
 import { ChevronDown, ChevronUp, CloudRain } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import {
@@ -31,8 +29,8 @@ const THUNDERSTORM_WATCH: LocalizedText = {
 };
 const HEAT_INDEX: LocalizedText = { en: "Heat index", fil: "Heat Index" };
 const DROUGHT_OUTLOOK: LocalizedText = { en: "Drought / dry-spell outlook", fil: "Outlook sa Tagtuyot" };
-const UPDATED_RECENTLY: LocalizedText = { en: "Rainfall, wind, typhoon & thunderstorm: updated minutes ago", fil: "Ulan, hangin, bagyo at thunderstorm: na-update ilang minuto ang nakaraan" };
-const UPDATED_WEEKLY: LocalizedText = { en: "Heat index & drought outlook: updated weekly", fil: "Heat index at drought outlook: lingguhang na-a-update" };
+const UPDATED_RECENTLY: LocalizedText = { en: "Updated minutes ago", fil: "Na-update ilang minuto ang nakaraan" };
+const UPDATED_WEEKLY: LocalizedText = { en: "Heat & drought: updated weekly", fil: "Heat at drought: lingguhang na-a-update" };
 const LANDSLIDE_CAUTION: LocalizedText = {
   en: "Caution: heavy rain on landslide-prone ground nearby.",
   fil: "Pag-ingat: malakas na ulan sa lupaing madaling maguho.",
@@ -48,10 +46,9 @@ const HEAT_CATEGORY_LABEL: Record<HeatIndexCategory, LocalizedText> = {
 };
 
 /**
- * Collapsed-by-default per PRD's progressive-disclosure principle — sits
- * between the personal status headline and the map (see HomepageMap), read-only
- * and purely informational (no severity scale, no alert, no crowd reports
- * attached to any reading here, per Core Feature #10).
+ * Collapsed-by-default per PRD's progressive-disclosure principle.
+ * Enhanced with severity-colored icon when conditions are concerning,
+ * and a more compact, data-forward layout.
  */
 export function CurrentConditionsPanel({ zone }: { zone: Zone }) {
   const { lang } = useLanguage();
@@ -66,17 +63,20 @@ export function CurrentConditionsPanel({ zone }: { zone: Zone }) {
   const landslideCaution = hasElevatedLandslideRisk(landslideSusceptibility, rainfall);
   const ChevronIcon = expanded ? ChevronUp : ChevronDown;
 
+  const hasConcern = thunderstorm || landslideCaution || heatCategory === "danger" || heatCategory === "extreme_danger";
+  const iconColor = hasConcern ? "text-severity-orange" : "text-muted-foreground";
+
   return (
-    <Card className="w-full max-w-2xl gap-0 lg:max-w-5xl">
+    <div className="w-full overflow-hidden rounded-xl border-2 border-border">
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
         aria-controls="current-conditions-detail"
-        className="flex w-full items-center justify-between gap-2 px-(--card-spacing) text-left"
+        className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left"
       >
         <span className="flex min-w-0 items-center gap-2 text-sm font-medium">
-          <CloudRain aria-hidden="true" className="h-4 w-4 shrink-0" />
+          <CloudRain aria-hidden="true" className={`h-4 w-4 shrink-0 ${iconColor}`} />
           <span lang={lang}>{t(TITLE, lang)}</span>
           <span className="truncate font-normal text-muted-foreground">
             · {rainfall}mm/hr · {wind}km/h
@@ -89,17 +89,17 @@ export function CurrentConditionsPanel({ zone }: { zone: Zone }) {
       </button>
 
       {expanded && (
-        <CardContent id="current-conditions-detail" className="space-y-3 pt-3 text-sm">
+        <div id="current-conditions-detail" className="space-y-2 border-t border-border px-4 pb-4 pt-3 text-sm">
           <div className="flex items-center justify-between gap-2">
-            <span>{t(RAINFALL, lang)}</span>
-            <span className="font-medium">{rainfall} mm/hr</span>
+            <span className="text-muted-foreground">{t(RAINFALL, lang)}</span>
+            <span className="font-medium tabular-nums">{rainfall} mm/hr</span>
           </div>
           <div className="flex items-center justify-between gap-2">
-            <span>{t(WIND, lang)}</span>
-            <span className="font-medium">{wind} km/h</span>
+            <span className="text-muted-foreground">{t(WIND, lang)}</span>
+            <span className="font-medium tabular-nums">{wind} km/h</span>
           </div>
           <div className="flex items-center justify-between gap-2">
-            <span>{t(TYPHOON_TRACK, lang)}</span>
+            <span className="text-muted-foreground">{t(TYPHOON_TRACK, lang)}</span>
             <span className="text-right font-medium">
               {MOCK_TYPHOON
                 ? `${MOCK_TYPHOON.name} — ${MOCK_TYPHOON.distanceKm}km ${MOCK_TYPHOON.bearing}`
@@ -112,16 +112,16 @@ export function CurrentConditionsPanel({ zone }: { zone: Zone }) {
             </p>
           )}
 
-          <Separator />
+          <div className="my-2 h-px bg-border" />
 
           <div className="flex items-center justify-between gap-2">
-            <span>{t(HEAT_INDEX, lang)}</span>
-            <span className="font-medium">
+            <span className="text-muted-foreground">{t(HEAT_INDEX, lang)}</span>
+            <span className="font-medium tabular-nums">
               {heatIndex}°C · {t(HEAT_CATEGORY_LABEL[heatCategory], lang)}
             </span>
           </div>
           <div className="flex items-center justify-between gap-2">
-            <span>{t(DROUGHT_OUTLOOK, lang)}</span>
+            <span className="text-muted-foreground">{t(DROUGHT_OUTLOOK, lang)}</span>
             <span lang={lang} className="text-right font-medium">
               {t(MOCK_DROUGHT_OUTLOOK, lang)}
             </span>
@@ -133,11 +133,11 @@ export function CurrentConditionsPanel({ zone }: { zone: Zone }) {
             </p>
           )}
 
-          <p lang={lang} className="text-xs text-muted-foreground">
+          <p lang={lang} className="pt-1 text-xs text-muted-foreground">
             {t(UPDATED_RECENTLY, lang)}. {t(UPDATED_WEEKLY, lang)}.
           </p>
-        </CardContent>
+        </div>
       )}
-    </Card>
+    </div>
   );
 }

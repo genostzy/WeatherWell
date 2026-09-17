@@ -43,12 +43,14 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             <RetiredStorageSweep />
             <ReferenceDataProvider
               chrome={
-                <header className="flex items-center justify-center gap-4 p-3">
-                  <span className="font-semibold">WeatherWell</span>
-                  <LanguageToggle />
-                  <OutboxBadge />
-                  <AccountLink />
-                  <ErrorReporter />
+                <header className="flex items-center justify-between gap-4 border-b border-border px-4 py-3">
+                  <span className="text-base font-bold tracking-tight">WeatherWell</span>
+                  <div className="flex items-center gap-2">
+                    <LanguageToggle />
+                    <OutboxBadge />
+                    <AccountLink />
+                    <ErrorReporter />
+                  </div>
                 </header>
               }
             >
