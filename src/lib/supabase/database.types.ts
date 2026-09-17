@@ -1,4 +1,4 @@
-/**
+﻿/**
  * GENERATED FILE — do not hand-edit.
  *
  * Produced by the Supabase MCP server's `generate_typescript_types` tool
@@ -281,6 +281,83 @@ export type Database = {
           name?: string
         }
         Relationships: []
+      weather_readings: {
+        Row: {
+          created_at: string
+          fetched_at: string
+          humidity_pct: number
+          id: string
+          rainfall_mm: number
+          temperature_c: number
+          weather_code: number
+          wind_kph: number
+          zone_id: string
+        }
+        Insert: {
+          created_at?: string
+          fetched_at?: string
+          humidity_pct?: number
+          id?: string
+          rainfall_mm?: number
+          temperature_c?: number
+          weather_code?: number
+          wind_kph?: number
+          zone_id: string
+        }
+        Update: {
+          created_at?: string
+          fetched_at?: string
+          humidity_pct?: number
+          id?: string
+          rainfall_mm?: number
+          temperature_c?: number
+          weather_code?: number
+          wind_kph?: number
+          zone_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "weather_readings_zone_id_fkey"
+            columns: ["zone_id"]
+            isOneToOne: false
+            referencedRelation: "zones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      typhoon_tracks: {
+        Row: {
+          category: Json
+          created_at: string
+          fetched_at: string
+          id: string
+          international_name: string | null
+          is_active: boolean
+          name: string
+          positions: Json
+        }
+        Insert: {
+          category?: Json
+          created_at?: string
+          fetched_at?: string
+          id?: string
+          international_name?: string | null
+          is_active?: boolean
+          name: string
+          positions?: Json
+        }
+        Update: {
+          category?: Json
+          created_at?: string
+          fetched_at?: string
+          id?: string
+          international_name?: string | null
+          is_active?: boolean
+          name?: string
+          positions?: Json
+        }
+        Relationships: []
+      }
       }
       official_actions: {
         Row: {
@@ -664,3 +741,4 @@ export type CompositeTypes<
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
+

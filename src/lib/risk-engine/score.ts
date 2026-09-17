@@ -9,6 +9,13 @@ import { hazardsForZone, type HazardsByZone } from "../hazards";
 import type { Zone } from "../types";
 import type { Factor, TrendDirection, ZoneInput, ZoneState } from "./types";
 
+/** Optional real weather data overrides. When provided, these take precedence over mock functions. */
+export interface WeatherOverrides {
+  rainfallMmPerHour?: number;
+  rainfallHistory?: number[];
+  thunderstormWatch?: boolean;
+}
+
 const WEIGHTS = {
   rainfall: 0.4,
   crowdReports: 0.3,
@@ -124,21 +131,27 @@ export function computeZoneState(input: ZoneInput): ZoneState {
  * future call site silently fall back to stale or empty data instead of
  * wiring the hook up correctly. A zone missing from `hazards`, or missing a
  * hazard type, reads "unknown" for it via hazardsForZone (I3).
+ *
+ * `weatherOverrides` is optional. When provided (from real DB readings), these
+ * values take precedence over the mock functions. This allows a gradual
+ * migration: existing callers pass nothing and get mocks; new callers pass
+ * real data from the weather API.
  */
 export function buildZoneInputForZone(
   zone: Zone,
   allZones: Zone[],
   upstreamHasActiveAlert: (zoneId: string) => boolean,
-  hazards: HazardsByZone
+  hazards: HazardsByZone,
+  weatherOverrides?: WeatherOverrides
 ): ZoneInput {
   const upstreamZone = allZones.find((z) => z.downstreamZoneId === zone.id);
   const cascadeFromUpstream = upstreamZone ? upstreamHasActiveAlert(upstreamZone.id) : false;
 
   return {
     zoneId: zone.id,
-    rainfallMmPerHour: getRainfallForZone(zone.id),
-    rainfallHistory: getRainfallHistoryForZone(zone.id),
-    thunderstormWatch: hasThunderstormWatch(zone.id),
+    rainfallMmPerHour: weatherOverrides?.rainfallMmPerHour ?? getRainfallForZone(zone.id),
+    rainfallHistory: weatherOverrides?.rainfallHistory ?? getRainfallHistoryForZone(zone.id),
+    thunderstormWatch: weatherOverrides?.thunderstormWatch ?? hasThunderstormWatch(zone.id),
     hazardSusceptibility: hazardsForZone(hazards, zone.id),
     reportCount24h: getReportsTodayForZone(zone.id),
     cascadeFromUpstream,
