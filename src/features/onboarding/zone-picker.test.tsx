@@ -21,8 +21,14 @@ function stubFix(latitude: number, longitude: number, accuracy = 30) {
   return getCurrentPosition;
 }
 
-function radioFor(zoneId: string) {
-  return screen.getByRole("radio", { name: ZONES.find((z) => z.id === zoneId)!.name });
+async function searchAndSelect(query: string, zoneName: string) {
+  const input = screen.getByRole("textbox", { name: /search barangay/i });
+  await userEvent.clear(input);
+  await userEvent.type(input, query);
+  // Wait for results to render
+  const result = await screen.findByRole("option", { name: zoneName });
+  // Prevent blur from hiding results before click
+  fireEvent.mouseDown(result);
 }
 
 describe("ZonePicker", () => {
@@ -30,27 +36,44 @@ describe("ZonePicker", () => {
     stubGeolocation(undefined);
   });
 
-  it("lists every zone by name", () => {
-    renderWithData(<ZonePicker zones={ZONES} onSelect={() => {}} />);
-    for (const zone of ZONES) {
-      expect(screen.getByText(zone.name)).toBeInTheDocument();
-    }
-  });
-
-  it("disables confirm until a zone is chosen", () => {
+  it("starts with confirm disabled and no selected zone", () => {
     renderWithData(<ZonePicker zones={ZONES} onSelect={() => {}} />);
     expect(screen.getByRole("button", { name: /confirm/i })).toBeDisabled();
+    expect(screen.queryByText(/Selected:/)).not.toBeInTheDocument();
   });
 
-  it("calls onSelect with a non-default zone the user picked", async () => {
+  it("searches and selects a zone by name", async () => {
     const onSelect = vi.fn();
     renderWithData(<ZonePicker zones={ZONES} onSelect={onSelect} />);
 
-    // Deliberately the second zone: proves the choice is read, not defaulted.
-    await userEvent.click(screen.getByText(ZONES[1].name));
-    await userEvent.click(screen.getByRole("button", { name: /confirm/i }));
+    await searchAndSelect("Nilombot", "Barangay Nilombot, Mapandan");
 
-    expect(onSelect).toHaveBeenCalledWith(ZONES[1].id);
+    // Zone should now be shown as selected
+    expect(screen.getByText("Barangay Nilombot, Mapandan")).toBeInTheDocument();
+    expect(screen.getByText(/Selected:/)).toBeInTheDocument();
+
+    // Confirm should be enabled
+    await userEvent.click(screen.getByRole("button", { name: /confirm/i }));
+    expect(onSelect).toHaveBeenCalledWith(ZONES[0].id);
+  });
+
+  it("searches by municipality name", async () => {
+    renderWithData(<ZonePicker zones={ZONES} onSelect={() => {}} />);
+
+    const input = screen.getByRole("textbox", { name: /search barangay/i });
+    await userEvent.type(input, "Mangaldan");
+
+    // Should show zones in Mangaldan
+    expect(await screen.findByRole("option", { name: "Barangay Poblacion, Mangaldan" })).toBeInTheDocument();
+  });
+
+  it("shows no-results message for unmatched search", async () => {
+    renderWithData(<ZonePicker zones={ZONES} onSelect={() => {}} />);
+
+    const input = screen.getByRole("textbox", { name: /search barangay/i });
+    await userEvent.type(input, "zzzznonexistent");
+
+    expect(await screen.findByText(/No barangays match/)).toBeInTheDocument();
   });
 
   it("offers the CLOSEST covered barangay with its distance, not the first in the list, and waits for confirmation", async () => {
@@ -65,8 +88,8 @@ describe("ZonePicker", () => {
     expect(
       await screen.findByText(/Closest barangay we cover: Barangay Poblacion, Mangaldan, about 1\.1 km away/)
     ).toBeInTheDocument();
-    expect(radioFor("zone-2")).toBeChecked();
-    expect(radioFor("zone-1")).not.toBeChecked();
+    // Zone is shown as selected
+    expect(screen.getByText("Barangay Poblacion, Mangaldan")).toBeInTheDocument();
     // Offered, never assumed: nothing is saved until the resident confirms.
     expect(onSelect).not.toHaveBeenCalled();
     expect(screen.queryByText(/approximate/i)).not.toBeInTheDocument();
@@ -81,7 +104,7 @@ describe("ZonePicker", () => {
     expect(
       await screen.findByText(/You're about \d+ km from the nearest barangay WeatherWell covers\. We don't cover your area yet/)
     ).toBeInTheDocument();
-    for (const zone of ZONES) expect(radioFor(zone.id)).not.toBeChecked();
+    expect(screen.queryByText(/Selected:/)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /confirm/i })).toBeDisabled();
     expect(screen.queryByText(/Closest barangay we cover/)).not.toBeInTheDocument();
   });
@@ -91,23 +114,26 @@ describe("ZonePicker", () => {
     renderWithData(<ZonePicker zones={ZONES} onSelect={() => {}} />);
     await userEvent.click(screen.getByRole("button", { name: /use my location/i }));
     await screen.findByText(/Closest barangay we cover/);
-    expect(radioFor("zone-2")).toBeChecked();
+    expect(screen.getByText("Barangay Poblacion, Mangaldan")).toBeInTheDocument();
 
     stubFix(7.19, 125.45); // Davao
     await userEvent.click(screen.getByRole("button", { name: /use my location/i }));
     await screen.findByText(/We don't cover your area yet/);
-    for (const zone of ZONES) expect(radioFor(zone.id)).not.toBeChecked();
+    expect(screen.queryByText(/Selected:/)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /confirm/i })).toBeDisabled();
   });
 
   it("keeps a barangay the resident picked by hand when a fix is outside coverage", async () => {
     renderWithData(<ZonePicker zones={ZONES} onSelect={() => {}} />);
-    await userEvent.click(screen.getByText(ZONES[2].name));
+
+    // Search and select zone-2 manually
+    await searchAndSelect("Poblacion, Mangaldan", "Barangay Poblacion, Mangaldan");
 
     stubFix(7.19, 125.45); // Davao
     await userEvent.click(screen.getByRole("button", { name: /use my location/i }));
     await screen.findByText(/We don't cover your area yet/);
-    expect(radioFor(ZONES[2].id)).toBeChecked();
+    // Manual selection should persist
+    expect(screen.getByText("Barangay Poblacion, Mangaldan")).toBeInTheDocument();
   });
 
   it("labels an imprecise fix as approximate", async () => {
@@ -131,7 +157,7 @@ describe("ZonePicker", () => {
     await userEvent.click(screen.getByRole("button", { name: /use my location/i }));
 
     expect(await screen.findByText(/Couldn't get your location/)).toBeInTheDocument();
-    for (const zone of ZONES) expect(radioFor(zone.id)).not.toBeChecked();
+    expect(screen.queryByText(/Selected:/)).not.toBeInTheDocument();
   });
 
   describe("a location read that never answers (Minor 7)", () => {
@@ -179,7 +205,7 @@ describe("ZonePicker", () => {
 
       expect(screen.getByText(/Couldn't get your location/)).toBeInTheDocument();
       expect(button).toBeEnabled();
-      for (const zone of ZONES) expect(radioFor(zone.id)).not.toBeChecked();
+      expect(screen.queryByText(/Selected:/)).not.toBeInTheDocument();
 
       // And it can be tried again.
       fireEvent.click(button);
@@ -204,7 +230,7 @@ describe("ZonePicker", () => {
       });
 
       expect(screen.getByText(/Couldn't get your location/)).toBeInTheDocument();
-      for (const zone of ZONES) expect(radioFor(zone.id)).not.toBeChecked();
+      expect(screen.queryByText(/Selected:/)).not.toBeInTheDocument();
     });
   });
 

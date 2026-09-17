@@ -1,5 +1,5 @@
-import type { HazardRiskLevel, HazardType, PointOfInterest, Zone } from "@/lib/types";
-import type { HazardsByZone } from "@/lib/hazards";
+import type { HazardType, PointOfInterest, Zone } from "@/lib/types";
+import type { HazardLevel, HazardsByZone } from "@/lib/hazards";
 
 /**
  * Everything the app needs before it can render anything, in one response.
@@ -46,7 +46,7 @@ interface PoiRow {
 interface HazardRow {
   zone_id: string;
   hazard_type: HazardType;
-  risk_level: HazardRiskLevel;
+  risk_level: HazardLevel;
 }
 
 /**
@@ -103,7 +103,7 @@ export function toReferenceData(
     lng: row.lng,
   }));
 
-  const hazards: Record<string, Partial<Record<HazardType, HazardRiskLevel>>> = {};
+  const hazards: Record<string, Partial<Record<HazardType, HazardLevel>>> = {};
   for (const row of hazardRows) {
     hazards[row.zone_id] ??= {};
     hazards[row.zone_id][row.hazard_type] = row.risk_level;

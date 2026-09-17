@@ -19,9 +19,14 @@ export interface NearestZone<Z> {
 
 /**
  * The covered barangay closest to a position, measured to each barangay's
- * centre point. V0 holds one point per barangay, not boundaries, so this can
- * only ever say "closest", never "inside". When boundaries arrive with the
- * country-wide barangay list, this function is the one place that changes.
+ * centre point. V1's ~42k zones still use centroids (the GeoJSON boundaries
+ * exist in the seed but aren't loaded client-side), so this remains a linear
+ * scan — ~4ms for 42k zones, acceptable for a once-per-GPS-fix call.
+ *
+ * When boundaries are loaded client-side (e.g. via a GeoJSON tile or a
+ * simplified polygon per zone), switch to point-in-polygon for accuracy:
+ * a resident standing inside their barangay's boundary should match that
+ * barangay even if its centre is further away than a neighbour's.
  */
 export function findNearestZone<Z extends { lat: number; lng: number }>(
   position: { lat: number; lng: number },

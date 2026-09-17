@@ -29,7 +29,7 @@ export type CheckInStatus = "safe" | "needs_help";
 
 type AlertSource = "manual" | "auto_crowdsourced" | "predicted" | "cascade";
 
-export type CenterStatus = "space_available" | "limited" | "full";
+export type CenterStatus = "space_available" | "limited" | "full" | "unknown";
 
 export interface Zone {
   id: string;

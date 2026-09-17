@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { APPROXIMATE_ACCURACY_METERS, findNearestZone } from "@/lib/nearest-zone";
@@ -25,6 +25,9 @@ const LOCATION_MAX_AGE_MS = 60_000;
  */
 const LOCATION_GIVE_UP_MS = 30_000;
 
+/** Maximum number of search results to render (avoid DOM overload with 42k zones). */
+const MAX_RESULTS = 20;
+
 type Detection =
   | { state: "idle" }
   | { state: "detecting" }
@@ -41,10 +44,20 @@ const COPY = {
   detecting: { en: "Finding your location…", fil: "Hinahanap ang iyong lokasyon…" },
   approximate: { en: "Your location is approximate.", fil: "Tinatayang lokasyon ang nakuha." },
   failed: {
-    en: "Couldn't get your location — choose your barangay below.",
-    fil: "Hindi nakuha ang iyong lokasyon — piliin ang iyong barangay sa ibaba.",
+    en: "Couldn't get your location — search for your barangay below.",
+    fil: "Hindi nakuha ang iyong lokasyon — hanapin ang iyong barangay sa ibaba.",
+  },
+  searchPlaceholder: {
+    en: "Search by barangay name or municipality…",
+    fil: "Maghanap ayon sa pangalan ng barangay o munisipalidad…",
+  },
+  noResults: {
+    en: "No barangays match your search.",
+    fil: "Walang barangay na tumutugma sa iyong paghahanap.",
   },
   confirm: { en: "Confirm barangay", fil: "Kumpirmahin ang barangay" },
+  selected: { en: "Selected:", fil: "Napili:" },
+  change: { en: "Change", fil: "Baguhin" },
 } satisfies Record<string, LocalizedText>;
 
 function formatDistance(meters: number, lang: LanguageCode): string {
@@ -75,6 +88,25 @@ function farMessage(meters: number, lang: LanguageCode): string {
   );
 }
 
+/**
+ * Filter zones by search query. Matches against zone name and municipality
+ * (the part after the comma). Case-insensitive, accent-insensitive.
+ */
+function filterZones(zones: readonly Zone[], query: string): Zone[] {
+  if (!query.trim()) return [];
+  const normalised = query
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  return zones.filter((zone) => {
+    const name = zone.name
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+    return name.includes(normalised);
+  });
+}
+
 export function ZonePicker({
   zones,
   onSelect,
@@ -85,7 +117,9 @@ export function ZonePicker({
   const { lang } = useLanguage();
   // Starts empty so the user must make a real choice.
   const [selected, setSelected] = useState<string>("");
+  const [query, setQuery] = useState("");
   const [detection, setDetection] = useState<Detection>({ state: "idle" });
+  const [showResults, setShowResults] = useState(false);
   // The barangay a location fix proposed, if the current selection came from
   // one. A later fix that finds nothing near withdraws only that proposal —
   // never a barangay the resident chose by hand.
@@ -96,6 +130,7 @@ export function ZonePicker({
   // already gave up on) is ignored rather than proposing a barangay late.
   const readCount = useRef(0);
   const giveUpTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(
     () => () => {
@@ -113,6 +148,8 @@ export function ZonePicker({
   function chooseByHand(zoneId: string) {
     proposedZoneId.current = null;
     setSelected(zoneId);
+    setQuery("");
+    setShowResults(false);
   }
 
   function handleUseMyLocation() {
@@ -173,6 +210,10 @@ export function ZonePicker({
     );
   }
 
+  const results = filterZones(zones, query);
+  const selectedZone = zones.find((z) => z.id === selected);
+  const displayResults = showResults ? results.slice(0, MAX_RESULTS) : [];
+
   return (
     <div className="w-full max-w-md space-y-6" lang={lang}>
       <p className="text-sm text-muted-foreground">{t(COPY.intro, lang)}</p>
@@ -197,16 +238,92 @@ export function ZonePicker({
         {detection.state === "failed" && <p className="text-muted-foreground">{t(COPY.failed, lang)}</p>}
       </div>
 
-      <RadioGroup value={selected} onValueChange={chooseByHand}>
-        {zones.map((zone) => (
-          <div key={zone.id} className="flex items-center space-x-3 py-2">
-            <RadioGroupItem value={zone.id} id={zone.id} />
-            <Label htmlFor={zone.id} className="text-base">
-              {zone.name}
-            </Label>
+      {/* Selected zone display */}
+      {selectedZone && (
+        <div className="rounded-md border border-green-500/50 bg-green-500/10 p-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="text-xs text-muted-foreground">{t(COPY.selected, lang)}</span>
+              <p className="font-medium">{selectedZone.name}</p>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setSelected("");
+                setQuery("");
+                inputRef.current?.focus();
+              }}
+            >
+              {t(COPY.change, lang)}
+            </Button>
           </div>
-        ))}
-      </RadioGroup>
+        </div>
+      )}
+
+      {/* Search input */}
+      {!selectedZone && (
+        <div className="space-y-2">
+          <Label htmlFor="zone-search">{t({ en: "Search barangay", fil: "Maghanap ng barangay" }, lang)}</Label>
+          <Input
+            ref={inputRef}
+            id="zone-search"
+            placeholder={t(COPY.searchPlaceholder, lang)}
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setShowResults(true);
+            }}
+            onFocus={() => setShowResults(true)}
+            onBlur={() => {
+              // Delay to allow click on result before hiding
+              setTimeout(() => setShowResults(false), 200);
+            }}
+            autoComplete="off"
+          />
+        </div>
+      )}
+
+      {/* Search results */}
+      {displayResults.length > 0 && (
+        <div className="max-h-64 overflow-y-auto rounded-md border" role="listbox">
+          {displayResults.map((zone) => (
+            <button
+              key={zone.id}
+              type="button"
+              role="option"
+              aria-selected={zone.id === selected}
+              className={`w-full px-3 py-2 text-left text-sm hover:bg-accent ${
+                zone.id === selected ? "bg-accent" : ""
+              }`}
+              onMouseDown={(e) => {
+                // Prevent blur from firing before click
+                e.preventDefault();
+                chooseByHand(zone.id);
+              }}
+            >
+              {zone.name}
+            </button>
+          ))}
+          {results.length > MAX_RESULTS && (
+            <p className="px-3 py-2 text-xs text-muted-foreground">
+              {t(
+                {
+                  en: `Showing ${MAX_RESULTS} of ${results.length} results — type more to narrow down.`,
+                  fil: `Ipinapakita ang ${MAX_RESULTS} sa ${results.length} result — mag-type pa para mapaliit.`,
+                },
+                lang
+              )}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* No results message */}
+      {showResults && query.trim() && results.length === 0 && (
+        <p className="text-sm text-muted-foreground">{t(COPY.noResults, lang)}</p>
+      )}
 
       <Button
         className="w-full"

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { toReferenceData } from "@/lib/reference-data/types";
-import type { HazardRiskLevel, HazardType, PointOfInterest, Zone } from "@/lib/types";
+import type { HazardType, PointOfInterest, Zone } from "@/lib/types";
+import type { HazardLevel } from "@/lib/hazards";
 
 /**
  * All reference data in one response. Route handlers are not cached by default
@@ -71,7 +72,7 @@ export async function GET() {
     const hazards = hazardsResult.data.map((row) => ({
       ...row,
       hazard_type: row.hazard_type as HazardType,
-      risk_level: row.risk_level as HazardRiskLevel,
+      risk_level: row.risk_level as HazardLevel,
     }));
 
     const data = toReferenceData(zones, pois, hazards);

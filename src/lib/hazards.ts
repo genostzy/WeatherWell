@@ -20,8 +20,12 @@ export type ZoneHazards = Record<HazardType, HazardLevel>;
  * zone with no rows, or with only some hazard types, is the normal case. The
  * type makes reading `hazards[zoneId].flood` directly a compile error, so
  * every reader goes through `hazardsForZone`.
+ *
+ * V1's nationwide seed inserts `risk_level = 'unknown'` for every zone until
+ * real DENR-MGB data is ingested, so the row type accepts "unknown" alongside
+ * the three real levels.
  */
-export type HazardsByZone = Partial<Record<string, Partial<Record<HazardType, HazardRiskLevel>>>>;
+export type HazardsByZone = Partial<Record<string, Partial<Record<HazardType, HazardLevel>>>>;
 
 /** The one place a missing hazard level becomes "unknown". */
 export function hazardsForZone(hazards: HazardsByZone, zoneId: string): ZoneHazards {

@@ -52,6 +52,7 @@ const CENTER_STATUS_COLOR: Record<CenterStatus, string> = {
   space_available: "#22c55e",
   limited: "#eab308",
   full: "#dc2626",
+  unknown: "#6b7280",
 };
 
 export function EvacuationManagementPanel({ zones }: { zones: Zone[] }) {

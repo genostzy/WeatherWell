@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import OnboardingPage from "@/app/onboarding/page";
 import Home from "@/app/page";
@@ -25,7 +25,14 @@ describe("onboarding → home zone threading", () => {
   async function completeOnboardingWith(zoneName: string) {
     const { unmount } = renderWithData(<OnboardingPage />);
     await userEvent.click(screen.getByRole("button", { name: /i understand/i }));
-    await userEvent.click(screen.getByText(zoneName));
+    // Search for the zone by name (extract the searchable part before the comma)
+    const searchTerm = zoneName.split(",")[0].replace("Barangay ", "").trim();
+    const input = screen.getByRole("textbox", { name: /search barangay/i });
+    await userEvent.type(input, searchTerm);
+    // Wait for the result to appear in the listbox and click it
+    const result = await screen.findByRole("option", { name: zoneName });
+    fireEvent.mouseDown(result);
+    // Now the zone should be selected — click confirm
     await userEvent.click(screen.getByRole("button", { name: /confirm barangay/i }));
     // Onboarding ends on the install step, not the zone picker. jsdom exposes
     // no beforeinstallprompt, so it renders its manual-instructions form and

@@ -5,15 +5,17 @@ export const CENTER_STATUS_LABEL: Record<CenterStatus, LocalizedText> = {
   space_available: { en: "Space available", fil: "May espasyo" },
   limited: { en: "Limited space", fil: "Kakaunting espasyo" },
   full: { en: "Full", fil: "Puno na" },
+  unknown: { en: "Status unknown", fil: "Hindi alam ang status" },
 };
 
 export const CENTER_STATUS_CLASS: Record<CenterStatus, string> = {
   space_available: "bg-green-500/20 text-green-400",
   limited: "bg-yellow-500/20 text-yellow-400",
   full: "bg-red-500/20 text-red-400",
+  unknown: "bg-gray-500/20 text-gray-400",
 };
 
-export const CENTER_STATUS_ORDER: CenterStatus[] = ["space_available", "limited", "full"];
+export const CENTER_STATUS_ORDER: CenterStatus[] = ["space_available", "limited", "full", "unknown"];
 
 /** Full-capacity threshold before "limited"/"full" band boundaries, per PRD Gap B. Kept low ("limited" well before literally full) since a shelter approaching capacity needs advance notice, not a last-minute one. */
 const LIMITED_AT_RATIO = 0.7;
