@@ -13,6 +13,7 @@ import { DEPTH_LABEL } from "@/lib/depth";
 // pulls in user-server.ts's `import "server-only"`) never loads either.
 vi.mock("@/lib/auth/anonymous-session", () => ({
   ensureAnonymousSession: vi.fn().mockResolvedValue(null),
+  useSessionUserId: () => null,
 }));
 
 /** What /api/reports would return for the seeded mock reports. */

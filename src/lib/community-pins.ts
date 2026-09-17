@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { onDelivered } from "./outbox/drain";
 import { enqueue, readOutbox, useOutbox, visibleToCurrentUser } from "./outbox/outbox";
+import { useSessionUserId } from "./auth/anonymous-session";
 import { payloadOf } from "./outbox/dispatchers";
 import { drainForCurrentSession } from "./outbox/session-drain";
 import type { PinStatusTag, PinRemovalReason } from "./community-pin";
@@ -281,11 +282,15 @@ export function mergePins(serverRows: CommunityPin[], queued: OutboxEntry[]): Co
 export function useAllCommunityPins(): CommunityPin[] {
   const { rows, delivered } = useServerPins();
   const queued = useOutbox();
+  const currentUserId = useSessionUserId();
   // A held entry left behind by a different person on a shared phone (M13)
   // must not be drawn as this person's own optimistic pin. `delivered`
   // needs no such filter: it only ever holds entries this session's own
   // drain just sent.
-  return mergePins(rows, [...queued.filter(visibleToCurrentUser), ...delivered]);
+  return mergePins(rows, [
+    ...queued.filter((entry) => visibleToCurrentUser(entry, currentUserId)),
+    ...delivered,
+  ]);
 }
 
 /** Active pins only — what the public map and KPI counts show. */

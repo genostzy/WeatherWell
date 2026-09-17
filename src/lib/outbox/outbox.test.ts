@@ -121,6 +121,53 @@ describe("outbox", () => {
     expect(readOutbox()).toHaveLength(0);
   });
 
+  it("sends nothing the resident was told couldn't be saved: no IndexedDB copy, no background send (I-4)", async () => {
+    // The worker sends whatever the mirror holds, and reconcile copies a
+    // mirror-only row back into the page. A row that reached IndexedDB
+    // after OutboxWriteFailed would be sent later anyway, and the resident,
+    // told it failed, files it a second time.
+    const syncSpy = vi.spyOn(sync, "requestBackgroundSend").mockImplementation(() => {});
+    const setItemSpy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("The quota has been exceeded.", "QuotaExceededError");
+    });
+
+    try {
+      expect(() =>
+        enqueue("submitWaterLevelReport", { zoneId: "zone-1", depthLevel: "knee" })
+      ).toThrow(OutboxWriteFailed);
+    } finally {
+      setItemSpy.mockRestore();
+    }
+
+    try {
+      await tick();
+      expect(await idbGetAll()).toEqual([]);
+      expect(syncSpy).not.toHaveBeenCalled();
+    } finally {
+      syncSpy.mockRestore();
+    }
+  });
+
+  it("wakes the service worker only after the new entry is in the mirror it reads", async () => {
+    const events: string[] = [];
+    const realPut = idb.idbPut;
+    const putSpy = vi.spyOn(idb, "idbPut").mockImplementation(async (written) => {
+      await realPut(written);
+      events.push(`mirrored ${written.id}`);
+    });
+    const syncSpy = vi.spyOn(sync, "requestBackgroundSend").mockImplementation(() => {
+      events.push("background send requested");
+    });
+    try {
+      const entry = enqueue("submitWaterLevelReport", { zoneId: "zone-1", depthLevel: "knee" });
+      await vi.waitFor(() => expect(syncSpy).toHaveBeenCalledTimes(1));
+      expect(events).toEqual([`mirrored ${entry.id}`, "background send requested"]);
+    } finally {
+      putSpy.mockRestore();
+      syncSpy.mockRestore();
+    }
+  });
+
   it("stamps a fresh entry pending, due immediately, and mirrors it to IndexedDB", async () => {
     const entry = enqueue("submitWaterLevelReport", { zoneId: "zone-1", depthLevel: "knee" });
 
@@ -380,6 +427,117 @@ describe("applyEntryOutcome / retryEntry / discardEntry", () => {
     }
   });
 
+  describe("retrying a stuck createPin re-releases the dependents it orphaned (Minor 3)", () => {
+    function stored(entry: Partial<OutboxEntry> & { id: string }): OutboxEntry {
+      return {
+        operation: "submitWaterLevelReport",
+        payload: { zoneId: "zone-1", depthLevel: "knee" },
+        queuedAt: "2026-09-16T00:00:00.000Z",
+        attempts: 0,
+        userId: "user-1",
+        status: "pending",
+        nextAttemptAt: null,
+        updatedAt: "2026-09-16T00:00:00.000Z",
+        ...entry,
+      } as OutboxEntry;
+    }
+
+    const create = stored({
+      id: "pin-a",
+      operation: "createPin",
+      payload: { zoneId: "zone-1", statusTag: "flooded", caption: "x", lat: 1, lng: 2 },
+      attempts: 10,
+      status: "stuck",
+      stuckReason: "gave_up",
+      lastError: "network",
+    });
+    const orphanedDelete = stored({
+      id: "delete-a",
+      operation: "deleteOwnPin",
+      payload: { pinId: "pin-a" },
+      status: "stuck",
+      stuckReason: "permanent",
+      lastError: "pin was never created",
+    });
+    const orphanedVote = stored({
+      id: "vote-a",
+      operation: "voteOnPin",
+      payload: { pinId: "pin-a", direction: 1 },
+      status: "stuck",
+      stuckReason: "permanent",
+      lastError: "pin was never created",
+    });
+    // Same pin, but refused by the server for its own reason: not an orphan.
+    const refusedEdit = stored({
+      id: "edit-a",
+      operation: "editPin",
+      payload: { pinId: "pin-a", statusTag: "flooded", caption: "y" },
+      status: "stuck",
+      stuckReason: "permanent",
+      lastError: "invalid",
+    });
+    // Orphaned by a DIFFERENT create, which nobody retried.
+    const otherOrphan = stored({
+      id: "delete-b",
+      operation: "deleteOwnPin",
+      payload: { pinId: "pin-b" },
+      status: "stuck",
+      stuckReason: "permanent",
+      lastError: "pin was never created",
+    });
+
+    it("returns the create and its orphaned dependents to pending, and leaves everything else stuck", async () => {
+      localStorage.setItem(
+        "weatherwell.outbox",
+        JSON.stringify([create, orphanedDelete, orphanedVote, refusedEdit, otherOrphan])
+      );
+
+      retryEntry("pin-a");
+
+      const byId = new Map(readOutbox().map((entry) => [entry.id, entry]));
+      for (const id of ["pin-a", "delete-a", "vote-a"]) {
+        expect(byId.get(id)).toMatchObject({ status: "pending", attempts: 0 });
+        expect(byId.get(id)?.stuckReason).toBeUndefined();
+        expect(byId.get(id)?.lastError).toBeUndefined();
+      }
+      expect(byId.get("edit-a")).toMatchObject({ status: "stuck", stuckReason: "permanent", lastError: "invalid" });
+      expect(byId.get("delete-b")).toMatchObject({ status: "stuck", lastError: "pin was never created" });
+
+      // The worker reads the mirror, so the re-released rows must reach it too.
+      await tick();
+      const mirrored = new Map((await idbGetAll()).map((entry) => [entry.id, entry]));
+      expect(mirrored.get("delete-a")).toMatchObject({ status: "pending" });
+      expect(mirrored.get("vote-a")).toMatchObject({ status: "pending" });
+    });
+
+    it("sends the released delete after its create lands, so the deleted pin does not come back", async () => {
+      localStorage.setItem("weatherwell.outbox", JSON.stringify([create, orphanedDelete]));
+
+      retryEntry("pin-a");
+
+      const sent: string[] = [];
+      const { drainOutbox } = await import("./drain");
+      await drainOutbox(async (entry) => {
+        sent.push(entry.id);
+        return { result: "delivered" };
+      });
+
+      expect(sent).toEqual(["pin-a", "delete-a"]);
+      expect(readOutbox()).toEqual([]);
+    });
+
+    it("retrying an orphaned dependent on its own does not touch its siblings", () => {
+      localStorage.setItem("weatherwell.outbox", JSON.stringify([create, orphanedDelete, orphanedVote]));
+
+      retryEntry("delete-a");
+
+      const byId = new Map(readOutbox().map((entry) => [entry.id, entry]));
+      expect(byId.get("delete-a")).toMatchObject({ status: "pending" });
+      expect(byId.get("vote-a")).toMatchObject({ status: "stuck" });
+      expect(byId.get("pin-a")).toMatchObject({ status: "stuck" });
+    });
+  });
+
   it("discardEntry removes a stuck entry from both the page and the mirror", async () => {
     const entry = enqueue("submitWaterLevelReport", { zoneId: "zone-1", depthLevel: "knee" });
     markFailed(entry.id, "denied", true);
@@ -516,6 +674,60 @@ describe("reconcileWithMirror does not race a concurrent local write", () => {
       spy.mockRestore();
     }
   });
+});
+
+describe("a second tab never resurrects a row this tab removed (Minor 2)", () => {
+  it.each([
+    ["discarded", (id: string) => discardEntry(id)],
+    ["delivered", (id: string) => applyEntryOutcome(id, { result: "delivered" })],
+  ] as const)(
+    "keeps a %s row gone when another tab reconciles the moment it hears the change",
+    async (_label, remove) => {
+      const entry = enqueue("submitWaterLevelReport", { zoneId: "zone-1", depthLevel: "knee" });
+      applyEntryOutcome(entry.id, { result: "permanent", reason: "denied" });
+      await tick();
+      expect((await idbGetAll()).map((e) => e.id)).toEqual([entry.id]);
+
+      // Tab B: same origin, so the same localStorage and IndexedDB, with its
+      // own BroadcastChannel. It reconciles on every "changed", exactly as
+      // this module does in a real second tab.
+      const tabB = new BroadcastChannel(OUTBOX_CHANNEL);
+      const reconciles: Promise<void>[] = [];
+      tabB.onmessage = () => {
+        reconciles.push(reconcileWithMirror());
+      };
+
+      // Holds this tab's IndexedDB delete open, the way a slow disk would.
+      let releaseDelete!: () => void;
+      const deleteGate = new Promise<void>((resolve) => {
+        releaseDelete = resolve;
+      });
+      const realDelete = idb.idbDelete;
+      const deleteSpy = vi.spyOn(idb, "idbDelete").mockImplementation(async (id) => {
+        await deleteGate;
+        await realDelete(id);
+      });
+
+      try {
+        remove(entry.id);
+        expect(readOutbox()).toEqual([]);
+
+        // Give an early broadcast every chance to reach tab B while the
+        // delete is still held.
+        await tick();
+        releaseDelete();
+        await vi.waitFor(() => expect(reconciles.length).toBeGreaterThan(0));
+        await Promise.all(reconciles);
+        await tick();
+
+        expect(readOutbox()).toEqual([]);
+        expect(await idbGetAll()).toEqual([]);
+      } finally {
+        deleteSpy.mockRestore();
+        tabB.close();
+      }
+    }
+  );
 });
 
 describe("normalize degrades rather than crashes on malformed stored data", () => {

@@ -12,6 +12,8 @@ const ensureAnonymousSession = vi.fn().mockResolvedValue(null);
 // module any more — only `fetch`, for the one test that drains for real.
 vi.mock("@/lib/auth/anonymous-session", () => ({
   ensureAnonymousSession: () => ensureAnonymousSession(),
+  // No session: every entry in this file is queued with userId null.
+  useSessionUserId: () => null,
 }));
 
 import {
@@ -23,6 +25,7 @@ import {
 } from "./water-level-reports";
 import { readOutbox, enqueue, markFailed, OutboxWriteFailed } from "@/lib/outbox/outbox";
 import { drainOutbox } from "@/lib/outbox/drain";
+import { rememberSessionUserId } from "@/lib/auth/session-user";
 
 function serverRowFor(id: string) {
   return {
@@ -47,6 +50,9 @@ describe("water-level-reports", () => {
   beforeEach(() => {
     localStorage.clear();
     ensureAnonymousSession.mockClear();
+    // session-user.ts keeps the last identity a drain saw in module state; a
+    // test that signs in must not stamp the next test's writes with its id.
+    rememberSessionUserId(null);
   });
 
   afterEach(() => {

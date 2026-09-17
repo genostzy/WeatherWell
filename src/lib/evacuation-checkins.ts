@@ -205,7 +205,11 @@ export function useEvacuationCheckIns(): EvacuationCheckIn[] {
   // must not be drawn as this person's own optimistic check-in. `delivered`
   // needs no such filter: it only ever holds entries this session's own
   // drain just sent.
-  return mergeCheckIns(rows, [...queued.filter(visibleToCurrentUser), ...delivered], callerUserId);
+  return mergeCheckIns(
+    rows,
+    [...queued.filter((entry) => visibleToCurrentUser(entry, callerUserId)), ...delivered],
+    callerUserId
+  );
 }
 
 export function getCheckInsForZone(checkIns: EvacuationCheckIn[], zoneId: string): EvacuationCheckIn[] {

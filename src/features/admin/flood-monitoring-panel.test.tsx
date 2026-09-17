@@ -7,6 +7,7 @@ import type { Official } from "@/lib/auth/official";
 
 vi.mock("@/lib/auth/anonymous-session", () => ({
   ensureAnonymousSession: vi.fn().mockResolvedValue(null),
+  useSessionUserId: () => null,
 }));
 
 /** What /api/reports would return for the seeded mock reports. */

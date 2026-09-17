@@ -802,6 +802,34 @@
         }
       ],
       "expect": false
+    },
+    {
+      "name": "an editPin with a null payload is not blocked, and does not crash",
+      "entry": {
+        "id": "edit-null-payload",
+        "operation": "editPin",
+        "payload": null,
+        "queuedAt": "2026-09-16T11:00:00.000Z",
+        "attempts": 0,
+        "userId": "user-1",
+        "status": "pending",
+        "nextAttemptAt": null,
+        "updatedAt": "2026-09-16T11:00:00.000Z"
+      },
+      "queue": [
+        {
+          "id": "pin-1",
+          "operation": "createPin",
+          "payload": { "zoneId": "zone-1", "statusTag": "flooded", "caption": "x", "lat": 1, "lng": 2 },
+          "queuedAt": "2026-09-16T10:00:00.000Z",
+          "attempts": 0,
+          "userId": "user-1",
+          "status": "pending",
+          "nextAttemptAt": null,
+          "updatedAt": "2026-09-16T10:00:00.000Z"
+        }
+      ],
+      "expect": false
     }
   ],
   "isOrphanedByFailedCreate": [
@@ -953,6 +981,35 @@
           "status": "pending",
           "nextAttemptAt": null,
           "updatedAt": "2026-09-16T11:00:00.000Z"
+        }
+      ],
+      "expect": false,
+      "expectBlocked": false
+    },
+    {
+      "name": "a deleteOwnPin with no payload at all is neither orphaned nor blocked, and does not crash",
+      "entry": {
+        "id": "delete-no-payload",
+        "operation": "deleteOwnPin",
+        "queuedAt": "2026-09-16T11:00:00.000Z",
+        "attempts": 0,
+        "userId": "user-1",
+        "status": "pending",
+        "nextAttemptAt": null,
+        "updatedAt": "2026-09-16T11:00:00.000Z"
+      },
+      "queue": [
+        {
+          "id": "pin-1",
+          "operation": "createPin",
+          "payload": { "zoneId": "zone-1", "statusTag": "flooded", "caption": "x", "lat": 1, "lng": 2 },
+          "queuedAt": "2026-09-16T10:00:00.000Z",
+          "attempts": 10,
+          "userId": "user-1",
+          "status": "stuck",
+          "stuckReason": "gave_up",
+          "nextAttemptAt": null,
+          "updatedAt": "2026-09-16T10:00:00.000Z"
         }
       ],
       "expect": false,

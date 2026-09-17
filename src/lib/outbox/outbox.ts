@@ -5,7 +5,7 @@ import { createLocalStorageStore } from "@/lib/local-storage-store";
 import { knownSessionUserId } from "@/lib/auth/session-user";
 import { idbGetAll, idbPut, idbDelete, OUTBOX_CHANNEL } from "./idb";
 import { requestBackgroundSend } from "./sync";
-import { applyOutcome, retryStuck, shouldPrune } from "./schedule";
+import { applyOutcome, retryStuck, shouldPrune, wasOrphanedBy } from "./schedule";
 import type { SendOutcome } from "./schedule";
 import type { OutboxEntry, OutboxOperation, OutboxPayloads, OutboxStatus } from "./types";
 
@@ -128,9 +128,18 @@ export function readOutbox(): OutboxEntry[] {
  * not be drawn as the current person's own pending write — the resident
  * looking at the map right now did not make it, and may never even see it
  * sent, since a held entry only replays for the session that owns it.
+ *
+ * `currentUserId` is the REACTIVE session id from `useSessionUserId()` — the
+ * same source `OutboxBadge` counts with — never `knownSessionUserId()`'s
+ * per-page-load snapshot. A sign-out or an account switch on a shared phone
+ * changes who is signed in without a reload, and the lists must re-filter
+ * the moment the badge does. On a fresh mount that hook reads null until
+ * the session lookup answers, so for that first render only unowned entries
+ * are drawn: the lag can briefly hide the resident's own queued writes,
+ * never show anyone else's.
  */
-export function visibleToCurrentUser(entry: OutboxEntry): boolean {
-  return entry.userId === knownSessionUserId() || entry.userId === null;
+export function visibleToCurrentUser(entry: OutboxEntry, currentUserId: string | null): boolean {
+  return entry.userId === null || entry.userId === currentUserId;
 }
 
 /**
@@ -169,25 +178,41 @@ function broadcastChanged(): void {
 }
 
 /**
- * The one path every write in this module goes through.
+ * Copies `changed` into the IndexedDB mirror and removes `deletedIds` from
+ * it, then — only once every one of those writes has settled — tells every
+ * other tab (and nothing else) to reconcile.
  *
- * Writes `localStorage` synchronously, exactly as before this file mirrored
- * anything — `OutboxWriteFailed` detection depends on that write having
- * already happened by the time this function returns. IndexedDB and the
- * broadcast come after, and neither can fail this call: `idbPut`/`idbDelete`
- * resolve rather than reject in every case (see idb.ts), and nothing here
- * waits for them, so a slow or unavailable IndexedDB never makes a
- * synchronous caller (enqueue, markDelivered, …) wait on it.
+ * The order matters. Another tab's `reconcileWithMirror` adds any id it
+ * finds only in the mirror back into the page copy. Broadcasting before a
+ * delete had landed let that tab read the row still in IndexedDB and write
+ * it straight back into the shared `localStorage`: a discarded report
+ * reappeared as stuck, a delivered one was sent again.
  *
- * Returns a promise that resolves once the mirror writes have settled. A
- * caller that wakes the service worker waits for it, because the worker can
- * only send what the mirror already holds.
+ * Never rejects: `idbPut`/`idbDelete` resolve in every case (see idb.ts).
+ * The returned promise resolves after the broadcast, so a caller that wakes
+ * the service worker can wait for it — the worker can only send what the
+ * mirror already holds.
+ */
+function mirror(changed: OutboxEntry[], deletedIds: string[]): Promise<void> {
+  return Promise.all([
+    ...changed.map((entry) => idbPut(entry)),
+    ...deletedIds.map((id) => idbDelete(id)),
+  ]).then(broadcastChanged);
+}
+
+/**
+ * The one path every write in this module goes through (`enqueue` inlines
+ * the same two steps, with its persistence check between them).
+ *
+ * Writes `localStorage` synchronously and first, exactly as before this file
+ * mirrored anything, so every synchronous caller (markDelivered, retryEntry,
+ * …) sees its own write the moment it returns. The mirror and the broadcast
+ * follow without being awaited — a slow or unavailable IndexedDB never makes
+ * a caller wait — and the returned promise resolves once they are done.
  */
 function commit(next: OutboxEntry[], changed: OutboxEntry[] = [], deletedIds: string[] = []): Promise<void> {
   store.write(next);
-  const mirrored = Promise.all([...changed.map((entry) => idbPut(entry)), ...deletedIds.map((id) => idbDelete(id))]);
-  broadcastChanged();
-  return mirrored.then(() => undefined);
+  return mirror(changed, deletedIds);
 }
 
 export function enqueue<K extends OutboxOperation>(
@@ -207,21 +232,25 @@ export function enqueue<K extends OutboxOperation>(
     updatedAt: queuedAt,
   };
 
-  commit([...readOutbox(), entry], [entry]);
+  store.write([...readOutbox(), entry]);
 
   // store.write() swallows every localStorage error (quota exceeded,
-  // private-mode, blocked storage) in a bare catch, so a call above can
-  // return having persisted nothing. Verify the entry actually landed
-  // before handing it back as if it had.
+  // private-mode, blocked storage), so the call above can return having
+  // persisted nothing. Verify the entry actually landed before handing it
+  // back as if it had — and before anything else can see it: a copy in
+  // IndexedDB would be sent by the service worker, and pulled back into the
+  // page by reconcile, after the resident was told it could not be saved.
   const persisted = store.getSnapshot().some((stored) => stored.id === entry.id);
   if (!persisted) {
     throw new OutboxWriteFailed(entry.id);
   }
 
-  // Wakes the service worker so this entry can still be sent if the app
-  // closes before the page-open send path (session-drain.ts) gets to it.
-  // Best-effort and browser-only by construction — see sync.ts's own doc.
-  requestBackgroundSend();
+  // Once mirrored, wakes the service worker so this entry can still be sent
+  // if the app closes before the page-open send path (session-drain.ts) gets
+  // to it. Waiting for the mirror matters: a worker woken first finds
+  // nothing to send and reports the sync as done. Best-effort and
+  // browser-only by construction — see sync.ts's own doc.
+  void mirror([entry], []).then(requestBackgroundSend);
 
   return entry;
 }
@@ -324,7 +353,11 @@ export function markFailed(id: string, error: string, permanent: boolean): void 
  * A resident (or an admin, via the badge) asking to retry a stuck entry:
  * attempts and the stuck reason clear, and it is due again immediately.
  *
- * Wakes the service worker once the retried row is mirrored, exactly as
+ * Retrying a `createPin` also returns to pending every dependent write that
+ * was stuck only because this create had given up (`wasOrphanedBy`). They
+ * wait behind the create again, and are sent once it lands.
+ *
+ * Wakes the service worker once the retried rows are mirrored, exactly as
  * `enqueue` does for a new write, so a Retry is sent even if the app closes
  * straight after the tap. Sending from the page is the caller's half — see
  * `OutboxBadge`, which starts `drainForCurrentSession()` right after this.
@@ -334,11 +367,15 @@ export function retryEntry(id: string): void {
   const current = all.find((entry) => entry.id === id);
   if (!current) return;
 
-  const retried = retryStuck(current, new Date());
-  void commit(
-    all.map((entry) => (entry.id === id ? retried : entry)),
-    [retried]
-  ).then(requestBackgroundSend);
+  const now = new Date();
+  const changed: OutboxEntry[] = [];
+  const next = all.map((entry) => {
+    if (entry.id !== id && !wasOrphanedBy(entry, current)) return entry;
+    const retried = retryStuck(entry, now);
+    changed.push(retried);
+    return retried;
+  });
+  void commit(next, changed).then(requestBackgroundSend);
 }
 
 /** A stuck entry the resident chose not to send after all. Gone for good. */

@@ -8,6 +8,7 @@ import { renderWithData } from "@/test-utils/render-with-data";
 // not about the wire.
 vi.mock("@/lib/auth/anonymous-session", () => ({
   ensureAnonymousSession: async () => null,
+  useSessionUserId: () => null,
 }));
 
 import ReportPage from "./page";

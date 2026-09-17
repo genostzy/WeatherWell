@@ -13,6 +13,34 @@ beforeEach(() => {
 const DELIVERED: SendOutcome = { result: "delivered" };
 
 describe("drainOutbox", () => {
+  it.each([
+    ["a null payload", null],
+    ["no payload at all", undefined],
+  ])("does not crash on a dependent write with %s, and still sends the rest (Minor 1)", async (_label, payload) => {
+    const malformed: Record<string, unknown> = {
+      id: "malformed-edit",
+      operation: "editPin",
+      queuedAt: "2026-09-16T00:00:00.000Z",
+      attempts: 0,
+      userId: null,
+      status: "pending",
+      nextAttemptAt: null,
+      updatedAt: "2026-09-16T00:00:00.000Z",
+    };
+    if (payload !== undefined) malformed.payload = payload;
+    localStorage.setItem("weatherwell.outbox", JSON.stringify([malformed]));
+    const good = enqueue("submitWaterLevelReport", { zoneId: "zone-1", depthLevel: "knee" });
+
+    const sent: string[] = [];
+    const result = await drainOutbox(async (entry) => {
+      sent.push(entry.id);
+      return DELIVERED;
+    });
+
+    expect(sent).toContain(good.id);
+    expect(result.delivered).toBeGreaterThanOrEqual(1);
+  });
+
   it("delivers every queued entry and empties the queue", async () => {
     enqueue("submitWaterLevelReport", { zoneId: "zone-1", depthLevel: "knee" });
     enqueue("submitWaterLevelReport", { zoneId: "zone-2", depthLevel: "waist" });

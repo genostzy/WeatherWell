@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { renderHook } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 
 /**
  * I2: a queued write belongs to the identity that queued it.
@@ -17,13 +17,24 @@ const getSession = vi.fn();
 const signInAnonymously = vi.fn();
 const fetchMock = vi.fn();
 
+/**
+ * Auth-state listeners, so a test can switch who is signed in without a
+ * reload, the way Supabase's onAuthStateChange does.
+ */
+const authListeners = new Set<(event: string, session: { user: { id: string } } | null) => void>();
+function onAuthStateChange(listener: (event: string, session: { user: { id: string } } | null) => void) {
+  authListeners.add(listener);
+  return { data: { subscription: { unsubscribe: () => authListeners.delete(listener) } } };
+}
+
 vi.mock("@/lib/supabase/browser", () => ({
-  getBrowserClient: () => ({ auth: { getSession, signInAnonymously } }),
+  getBrowserClient: () => ({ auth: { getSession, signInAnonymously, onAuthStateChange } }),
 }));
 
 import { useOutboxDrain } from "./use-outbox-drain";
 import { enqueue, readOutbox, visibleToCurrentUser } from "./outbox";
-import { rememberSessionUserId } from "@/lib/auth/session-user";
+import { rememberSessionUserId, knownSessionUserId } from "@/lib/auth/session-user";
+import { useWaterLevelReports } from "@/lib/water-level-reports";
 import type { OutboxEntry } from "./types";
 
 function sessionFor(id: string | null, isAnonymous = false) {
@@ -227,9 +238,9 @@ describe("M13: a held entry from a different person on a shared phone stays invi
     // Queued before any identity existed on this device.
     const unowned: OutboxEntry = { ...base, id: "no-identity-yet", userId: null };
 
-    expect(visibleToCurrentUser(heldFromA)).toBe(false);
-    expect(visibleToCurrentUser(ownEntry)).toBe(true);
-    expect(visibleToCurrentUser(unowned)).toBe(true);
+    expect(visibleToCurrentUser(heldFromA, "user-b")).toBe(false);
+    expect(visibleToCurrentUser(ownEntry, "user-b")).toBe(true);
+    expect(visibleToCurrentUser(unowned, "user-b")).toBe(true);
   });
 
   it("is what keeps a held entry out of the current person's optimistic merge", () => {
@@ -241,8 +252,32 @@ describe("M13: a held entry from a different person on a shared phone stays invi
     rememberSessionUserId("user-b");
     seed([{ id: "from-a", userId: "user-a", status: "held" }]);
 
-    const visible = readOutbox().filter(visibleToCurrentUser);
+    const visible = readOutbox().filter((entry) => visibleToCurrentUser(entry, "user-b"));
 
     expect(visible).toHaveLength(0);
+  });
+
+  it("follows the same reactive identity as the badge: an account switch without a reload re-filters the optimistic list (Minor 5)", async () => {
+    // This page load last remembered user-a (the non-reactive snapshot the
+    // store used to read), and user-a's queued report is on the device.
+    rememberSessionUserId("user-a");
+    sessionFor("user-a");
+    seed([{ id: "report-from-a", userId: "user-a" }]);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, json: async () => [] })
+    );
+
+    const { result } = renderHook(() => useWaterLevelReports());
+    await vi.waitFor(() => expect(result.current.map((report) => report.id)).toEqual(["report-from-a"]));
+
+    // In place, with no reload: user-b is now signed in on this phone.
+    act(() => {
+      for (const listener of authListeners) listener("SIGNED_IN", { user: { id: "user-b" } });
+    });
+
+    await vi.waitFor(() => expect(result.current).toEqual([]));
+    // The non-reactive snapshot still says user-a; the list must not follow it.
+    expect(knownSessionUserId()).toBe("user-a");
   });
 });

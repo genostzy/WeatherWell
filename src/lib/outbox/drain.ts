@@ -1,7 +1,7 @@
 "use client";
 
 import { applyEntryOutcome, readOutbox } from "./outbox";
-import { isDue, isBlockedByPendingCreate, isOrphanedByFailedCreate } from "./schedule";
+import { isDue, isBlockedByPendingCreate, isOrphanedByFailedCreate, PIN_NEVER_CREATED_REASON } from "./schedule";
 import type { SendOutcome } from "./schedule";
 import type { OutboxEntry } from "./types";
 
@@ -15,7 +15,7 @@ import type { OutboxEntry } from "./types";
  * `stuck`, so there is nothing a request could learn that isn't already
  * known here.
  */
-const PIN_NEVER_CREATED: SendOutcome = { result: "permanent", reason: "pin was never created" };
+const PIN_NEVER_CREATED: SendOutcome = { result: "permanent", reason: PIN_NEVER_CREATED_REASON };
 
 export interface DrainResult {
   delivered: number;

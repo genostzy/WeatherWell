@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { onDelivered } from "./outbox/drain";
 import { enqueue, useOutbox, visibleToCurrentUser } from "./outbox/outbox";
+import { useSessionUserId } from "./auth/anonymous-session";
 import { drainForCurrentSession } from "./outbox/session-drain";
 import type { OutboxEntry, OutboxPayloads } from "./outbox/types";
 import type { DepthLevel } from "./depth";
@@ -203,11 +204,15 @@ export function mergeReports(
 export function useWaterLevelReports(): LiveWaterLevelReport[] {
   const { rows, delivered } = useServerReports();
   const queued = useOutbox();
+  const currentUserId = useSessionUserId();
   // A held entry left behind by a different person on a shared phone (M13)
   // must not be drawn as this person's own optimistic report. `delivered`
   // needs no such filter: it only ever holds entries this session's own
   // drain just sent.
-  return mergeReports(rows, [...queued.filter(visibleToCurrentUser), ...delivered]);
+  return mergeReports(rows, [
+    ...queued.filter((entry) => visibleToCurrentUser(entry, currentUserId)),
+    ...delivered,
+  ]);
 }
 
 /** Newest first, matching the previous mock-data helper's ordering contract. */

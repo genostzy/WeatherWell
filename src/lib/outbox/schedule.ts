@@ -53,6 +53,13 @@ const DEPENDS_ON_PIN_CREATE = new Set<OutboxEntry["operation"]>([
 ]);
 
 /**
+ * The reason recorded on a dependent write whose `createPin` gave up: the pin
+ * will never exist, so the dependent is settled as permanent without being
+ * sent. `public/sw.js` restates it as OUTBOX_PIN_NEVER_CREATED.
+ */
+export const PIN_NEVER_CREATED_REASON = "pin was never created";
+
+/**
  * The queued `createPin` entry `entry` depends on, if any. A createPin
  * entry's own outbox id IS the pin's row id (see `dispatchQueuedPinWrite`'s
  * create branch in `community-pins.ts`), so this is an exact id match, not a
@@ -66,7 +73,11 @@ function findDependencyCreate(
   queue: readonly OutboxEntry[]
 ): OutboxEntry | undefined {
   if (!DEPENDS_ON_PIN_CREATE.has(entry.operation)) return undefined;
-  const pinId = (entry.payload as { pinId?: string }).pinId;
+  // Guarded exactly as the worker's copy is: `normalize` does not validate
+  // `payload`, and a malformed or legacy entry with none must not throw
+  // inside every drain.
+  const payload = entry.payload as { pinId?: unknown } | null | undefined;
+  const pinId = payload ? payload.pinId : undefined;
   return queue.find((other) => other.operation === "createPin" && other.id === pinId);
 }
 
@@ -214,4 +225,22 @@ export function isBlockedByPendingCreate(entry: OutboxEntry, queue: readonly Out
 export function isOrphanedByFailedCreate(entry: OutboxEntry, queue: readonly OutboxEntry[]): boolean {
   const create = findDependencyCreate(entry, queue);
   return create !== undefined && create.status === "stuck";
+}
+
+/**
+ * True when `entry` is a dependent write that was settled as stuck ONLY
+ * because `create` had given up — see `isOrphanedByFailedCreate` and
+ * `PIN_NEVER_CREATED_REASON`. When the resident retries that create, these
+ * go back to pending with it: otherwise a create that then lands leaves, for
+ * example, a stuck delete behind, and the pin the resident deleted comes
+ * back. A dependent the server itself refused keeps its own stuck state.
+ */
+export function wasOrphanedBy(entry: OutboxEntry, create: OutboxEntry): boolean {
+  return (
+    create.operation === "createPin" &&
+    entry.status === "stuck" &&
+    entry.stuckReason === "permanent" &&
+    entry.lastError === PIN_NEVER_CREATED_REASON &&
+    findDependencyCreate(entry, [create]) !== undefined
+  );
 }
