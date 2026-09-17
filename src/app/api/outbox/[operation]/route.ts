@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createSupabaseUserClient } from "@/lib/supabase/user-server";
 import type { ActionResult } from "@/app/actions/action-result";
+import { reportError } from "@/lib/monitoring/report";
 
 const HEADERS = { "Cache-Control": "no-store" };
 
@@ -140,7 +141,19 @@ export async function POST(
     if (result.ok) return reply(200, { result: "delivered" });
     if (result.permanent) return reply(422, { result: "permanent", reason: result.reason ?? result.error });
     return reply(503, { result: "retry" });
-  } catch {
+  } catch (error) {
+    // Every resident write comes through here, and this catch turns any
+    // throw into a retry, so without a report a crash on the write path
+    // would only ever surface as "tried many times" ten attempts later.
+    // Awaited, so the report is not cut off once the response is sent.
+    // Only the route is passed — never anything from the body — and
+    // reportError scrubs the message and swallows its own failures; the
+    // extra catch keeps even a broken monitor from changing this answer.
+    try {
+      await reportError(error, { source: "server", kind: "request", route: `/api/outbox/${operation}` });
+    } catch {
+      // Monitoring failing must not change what the queue is told.
+    }
     // Never surfaces the caught error's text: a stray exception (a network
     // blip talking to Postgres, an unexpected throw inside an action) is
     // always transient from this route's point of view, and its message is

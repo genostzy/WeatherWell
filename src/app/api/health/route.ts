@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { monitoringEnvironment } from "@/lib/monitoring/report";
 
 const HEADERS = { "Cache-Control": "no-store" };
 const TIMEOUT_MS = 5000;
@@ -32,7 +33,13 @@ export async function GET() {
 
     let recentErrors = 0;
     try {
-      const count = await withTimeout(supabase.rpc("recent_app_error_count"));
+      // Only this deployment's own errors: a crash on a preview must never
+      // fail the production watcher. Where the environment is unknown, every
+      // environment is counted.
+      const environment = monitoringEnvironment();
+      const count = await withTimeout(
+        supabase.rpc("recent_app_error_count", environment ? { p_environment: environment } : {})
+      );
       if (!count.error && typeof count.data === "number") recentErrors = count.data;
     } catch {
       // A missing count is not an outage.

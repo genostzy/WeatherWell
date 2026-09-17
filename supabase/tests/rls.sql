@@ -758,10 +758,10 @@ select tests.expect_denied(
 
 -- checked_in_at is the one exception to assertion 12's "server clock, not
 -- client input" rule, and deliberately so as of offline-sending Task 1 (see
--- the H1-H11 block at the end of this file): a queued check-in must keep the
+-- the H-block near the end of this file): a queued check-in must keep the
 -- time it was actually made, which can legitimately be hours in the past.
--- private.honest_check_in_time() (20260915103000_honest_write_times.sql,
--- bound added by 20260915120000_check_in_age_limit.sql) is what still
+-- private.honest_check_in_time() (20260915143824_honest_write_times.sql,
+-- bound added by 20260915150539_check_in_age_limit.sql) is what still
 -- refuses a check-in's clock to be trusted blindly -- it clamps a future
 -- timestamp to now(), refuses one more than 3 days old (raise exception
 -- 'check-in too old' using errcode = '22023' -- fix round 1, task-1-review.md
@@ -775,10 +775,9 @@ select tests.expect_denied(
 -- (zone_id, user_id).
 --
 -- Two cases, not a bare ALLOW that would pass for any value: within the
--- 3-day bound is honoured as sent; beyond it is refused. (H10/H11, in the
--- H-block below, cover the same bound from the offline-sending fixture's own
--- zone/user -- this pairing keeps assertion 12's original zone/user and
--- column-grant framing intact.)
+-- 3-day bound is honoured as sent; beyond it is refused. This pair is the
+-- suite's coverage of that bound; the H-block below covers the check-in
+-- trigger's other rules (future clamp, older-never-overwrites).
 select tests.as_user('11111111-1111-1111-1111-111111111111');
 select tests.expect_allowed(
   'a resident CAN backdate a check-in''s checked_in_at within the 3-day bound (offline-sending Task 1: the outbox keeps the time it was made)',
@@ -1941,6 +1940,22 @@ select tests.as_anon();
 select tests.expect_row_count('M10: recent_app_error_count counts the last 15 minutes',
   $$select 1 where public.recent_app_error_count() >= 303$$, 1);
 
+-- M11-M15 (final review, Minor 11): an optional environment filter, so a
+-- preview crash never fails the production health check. The rows above are
+-- fp-m7 (production) plus preview rows; >= rather than = because the live
+-- database is shared with deployed previews that may report meanwhile.
+select tests.expect_row_count('M11: recent_app_error_count(''production'') counts production rows',
+  $$select 1 where public.recent_app_error_count('production') >= 1$$, 1);
+select tests.expect_row_count('M12: recent_app_error_count(''preview'') counts preview rows',
+  $$select 1 where public.recent_app_error_count('preview') >= 302$$, 1);
+select tests.expect_row_count('M13: the two environments add up to the unfiltered count, so neither counts the other',
+  $$select 1 where public.recent_app_error_count('production') + public.recent_app_error_count('preview')
+                 = public.recent_app_error_count()$$, 1);
+select tests.expect_row_count('M14: a null filter counts every environment, exactly like the zero-argument call',
+  $$select 1 where public.recent_app_error_count(null) = public.recent_app_error_count()$$, 1);
+select tests.expect_row_count('M15: an environment with no rows counts zero',
+  $$select 1 where public.recent_app_error_count('staging') = 0$$, 1);
+
 -- ===========================================================================
 -- Task 1 (offline-sending): honest write times. A queued write keeps the
 -- time it was made, not the time it arrives at the server. Reuses fixture
@@ -2219,6 +2234,78 @@ begin
         'H8: a newer check-in did not overwrite the older stored one -- status %s, checked_in_at %s', v_status, v_checked_in_at);
   end if;
   raise notice 'ok, H8: an upsert carrying a newer checked_in_at updates the stored row (status included)';
+end $$;
+
+-- ===========================================================================
+-- Final review, Minor 8: the honest-time trigger functions keep no default
+-- PUBLIC EXECUTE, matching this repository's other private trigger
+-- functions. A trigger fires without EXECUTE on its function, so H1-H9 above
+-- already ran against the revoked functions; H15 re-checks both on fresh
+-- rows. has_function_privilege is the assertion that bites: `private` grants
+-- no USAGE to client roles, so a direct call (H13/H14) is refused at the
+-- schema whether or not EXECUTE was revoked.
+-- ===========================================================================
+do $$
+begin
+  if has_function_privilege('anon', 'private.honest_report_time()', 'execute')
+     or has_function_privilege('authenticated', 'private.honest_report_time()', 'execute')
+     or has_function_privilege('anon', 'private.honest_check_in_time()', 'execute')
+     or has_function_privilege('authenticated', 'private.honest_check_in_time()', 'execute') then
+    raise exception using errcode = 'TSTFL',
+      message = 'H12: anon or authenticated can still execute a private honest-time trigger function';
+  end if;
+  if exists (
+    select 1
+      from pg_proc p,
+           aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+     where p.oid in ('private.honest_report_time()'::regprocedure,
+                     'private.honest_check_in_time()'::regprocedure)
+       and a.grantee = 0
+       and a.privilege_type = 'EXECUTE'
+  ) then
+    raise exception using errcode = 'TSTFL',
+      message = 'H12: PUBLIC still has EXECUTE on a private honest-time trigger function';
+  end if;
+  raise notice 'ok, H12: no client role and not PUBLIC can execute the honest-time trigger functions';
+end $$;
+
+select tests.as_user('66666666-6666-6666-6666-666666666666');
+select tests.expect_denied('H13: authenticated cannot call private.honest_report_time() directly',
+  $$select private.honest_report_time()$$);
+select tests.expect_denied('H14: authenticated cannot call private.honest_check_in_time() directly',
+  $$select private.honest_check_in_time()$$);
+
+-- H15: both triggers still fire for a client insert after the revoke: a
+-- future reported_at and a future checked_in_at are each clamped to now().
+do $$
+declare
+  v_reported_at timestamptz;
+  v_checked_in_at timestamptz;
+begin
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', '66666666-6666-6666-6666-666666666666', 'role', 'authenticated')::text, true);
+
+  insert into public.water_level_reports (id, zone_id, depth_level, reporter_id, reported_at)
+    values ('a0000000-0000-4000-8000-000000000005', 'tests-area-a1', 'ankle',
+            '66666666-6666-6666-6666-666666666666', now() + interval '1 day');
+  insert into public.evacuation_check_ins (id, zone_id, user_id, status, checked_in_at)
+    values ('b0000000-0000-4000-8000-000000000006', 'tests-fixture-zone-3',
+            '66666666-6666-6666-6666-666666666666', 'safe', now() + interval '1 day');
+
+  reset role;
+
+  select reported_at into v_reported_at from public.water_level_reports
+    where id = 'a0000000-0000-4000-8000-000000000005';
+  select checked_in_at into v_checked_in_at from public.evacuation_check_ins
+    where id = 'b0000000-0000-4000-8000-000000000006';
+
+  if v_reported_at is distinct from now() or v_checked_in_at is distinct from now() then
+    raise exception using errcode = 'TSTFL',
+      message = format('H15: a trigger did not fire after the revoke -- reported_at %s, checked_in_at %s',
+                       v_reported_at, v_checked_in_at);
+  end if;
+  raise notice 'ok, H15: both honest-time triggers still fire after the EXECUTE revoke';
 end $$;
 
 rollback;

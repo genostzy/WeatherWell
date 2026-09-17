@@ -85,10 +85,11 @@ export interface RecordCheckInInput {
    * queued the write, never from the device's own absolute time. Omitted for an
    * ordinary, non-queued check-in, so the column keeps its database-clock
    * default. private.honest_check_in_time() (see
-   * supabase/migrations/20260915103000_honest_write_times.sql) is what
-   * actually enforces honesty server-side: it clamps a future time to now()
-   * and, on the upsert conflict path below, never lets an older write
-   * regress a newer one already stored.
+   * supabase/migrations/20260915143824_honest_write_times.sql, bounded by
+   * 20260915150539_check_in_age_limit.sql) is what actually enforces
+   * honesty server-side: it clamps a future time to now(), refuses one more
+   * than 3 days old, and, on the upsert conflict path below, never lets an
+   * older write regress a newer one already stored.
    */
   madeAt?: string;
 }

@@ -512,7 +512,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      recent_app_error_count: { Args: never; Returns: number }
+      recent_app_error_count: {
+        Args: { p_environment?: string }
+        Returns: number
+      }
       report_app_error: {
         Args: {
           p_environment: string

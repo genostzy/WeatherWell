@@ -42,6 +42,11 @@ vi.mock("@/app/actions/vote-on-pin", () => ({
   voteOnPin: (...args: unknown[]) => voteOnPin(...args),
 }));
 
+const reportError = vi.fn();
+vi.mock("@/lib/monitoring/report", () => ({
+  reportError: (...args: unknown[]) => reportError(...args),
+}));
+
 beforeEach(() => {
   vi.clearAllMocks();
   getClaims.mockResolvedValue({ data: { claims: { sub: "user-1" } } });
@@ -420,6 +425,91 @@ describe("POST /api/outbox/[operation]", () => {
     const body = await response.json();
     expect(body).toEqual({ result: "retry" });
     expect(JSON.stringify(body)).not.toContain("hunter2");
+  });
+
+  describe("a server crash on the write path is reported to monitoring (I-5)", () => {
+    // Distinctive values, so any leak into the report is unmistakable.
+    const secretBody = {
+      id: "entry-id-5f1c",
+      userId: "user-1",
+      queuedAt: "2026-09-16T00:00:00.000Z",
+      sentAt: "2026-09-16T00:00:00.000Z",
+      payload: { zoneId: "zone-secret-7731", depthLevel: "knee", caption: "near 14.5995,120.9842" },
+    };
+
+    it("reports the thrown error with only the route, before answering 503", async () => {
+      const crash = new TypeError("Cannot read properties of undefined (reading 'from')");
+      submitWaterLevelReport.mockRejectedValue(crash);
+      let finishReport!: () => void;
+      reportError.mockReturnValue(
+        new Promise<void>((resolve) => {
+          finishReport = resolve;
+        })
+      );
+
+      let settled = false;
+      const pending = post("submitWaterLevelReport", secretBody).then((response) => {
+        settled = true;
+        return response;
+      });
+
+      await vi.waitFor(() => expect(reportError).toHaveBeenCalledTimes(1));
+      expect(reportError).toHaveBeenCalledWith(crash, {
+        source: "server",
+        kind: "request",
+        route: "/api/outbox/submitWaterLevelReport",
+      });
+      // The report is awaited: on a serverless platform, work left running
+      // after the response is sent can be cut off.
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(settled).toBe(false);
+
+      finishReport();
+      const response = await pending;
+      expect(response.status).toBe(503);
+      expect(await response.json()).toEqual({ result: "retry" });
+    });
+
+    it("never passes anything from the request body to the report", async () => {
+      submitWaterLevelReport.mockRejectedValue(new Error("db connection reset"));
+      reportError.mockResolvedValue(undefined);
+
+      await post("submitWaterLevelReport", secretBody);
+
+      expect(reportError).toHaveBeenCalledTimes(1);
+      const [error, options] = reportError.mock.calls[0] as [Error, Record<string, unknown>];
+      const everything = [String(error), error.message, error.stack ?? "", JSON.stringify(options)].join(" | ");
+      for (const value of [
+        secretBody.id,
+        secretBody.queuedAt,
+        secretBody.payload.zoneId,
+        secretBody.payload.caption,
+        "14.5995",
+      ]) {
+        expect(everything).not.toContain(value);
+      }
+      expect(Object.keys(options).sort()).toEqual(["kind", "route", "source"]);
+    });
+
+    it("does not report an ordinary refusal: only a throw is a crash", async () => {
+      submitWaterLevelReport.mockResolvedValue({ ok: false, permanent: false, error: "no session yet" });
+      recordCheckIn.mockResolvedValue({ ok: false, permanent: true, error: "check-in too old" });
+
+      await post("submitWaterLevelReport", secretBody);
+      await post("recordCheckIn", { ...secretBody, payload: { zoneId: "zone-1", status: "safe" } });
+
+      expect(reportError).not.toHaveBeenCalled();
+    });
+
+    it("still answers 503 when reporting itself fails", async () => {
+      submitWaterLevelReport.mockRejectedValue(new Error("boom"));
+      reportError.mockRejectedValue(new Error("monitoring is down"));
+
+      const response = await post("submitWaterLevelReport", secretBody);
+
+      expect(response.status).toBe(503);
+      expect(await response.json()).toEqual({ result: "retry" });
+    });
   });
 
   it("carries Cache-Control: no-store on every response, success or failure", async () => {

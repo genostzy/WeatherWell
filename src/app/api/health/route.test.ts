@@ -30,6 +30,39 @@ afterEach(() => {
 });
 
 describe("GET /api/health", () => {
+  describe("counts only its own environment's recent errors (Minor 11)", () => {
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it.each([
+      ["production", "production"],
+      ["preview", "preview"],
+    ])("asks for %s errors only on a %s deployment", async (_label, environment) => {
+      vi.stubEnv("NEXT_PUBLIC_VERCEL_ENV", environment);
+      from.mockReturnValue(makeBuilder({ data: [{ id: "zone-1" }], error: null }));
+      rpc.mockResolvedValue({ data: 1, error: null });
+      const { GET } = await import("./route");
+
+      const response = await GET();
+
+      expect(rpc).toHaveBeenCalledWith("recent_app_error_count", { p_environment: environment });
+      expect(await response.json()).toEqual({ status: "ok", database: "ok", recentErrors: 1 });
+    });
+
+    it("counts every environment when it cannot tell which one it is", async () => {
+      vi.stubEnv("NEXT_PUBLIC_VERCEL_ENV", "");
+      vi.stubEnv("VERCEL_ENV", "");
+      from.mockReturnValue(makeBuilder({ data: [{ id: "zone-1" }], error: null }));
+      rpc.mockResolvedValue({ data: 4, error: null });
+      const { GET } = await import("./route");
+
+      await GET();
+
+      expect(rpc).toHaveBeenCalledWith("recent_app_error_count", {});
+    });
+  });
+
   it("reports ok with the recent error count when both checks succeed", async () => {
     from.mockReturnValue(makeBuilder({ data: [{ id: "zone-1" }], error: null }));
     rpc.mockResolvedValue({ data: 2, error: null });

@@ -16,7 +16,7 @@ export interface SubmitReportInput {
    * queued the write, never from the device's own absolute time. Omitted
    * for an ordinary, non-queued submission, so the column keeps its
    * database-clock default. private.honest_report_time() (see
-   * supabase/migrations/20260915103000_honest_write_times.sql) is what
+   * supabase/migrations/20260915143824_honest_write_times.sql) is what
    * actually enforces honesty on the server side: it clamps a future time to
    * now() and refuses one more than 6 hours old.
    */
