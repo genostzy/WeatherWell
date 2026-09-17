@@ -57,25 +57,70 @@ export async function ensureAnonymousSession(): Promise<string | null> {
  * itself still goes to a Server Action that reads the verified claim, and to
  * an RLS policy that reads auth.uid(). Authorisation never moves here.
  */
+/** Where this device remembers whose session it last had (display only). */
+export const LAST_SESSION_USER_KEY = "weatherwell.lastSessionUserId";
+
+function readRemembered(): string | null {
+  try {
+    return typeof window === "undefined" ? null : window.localStorage.getItem(LAST_SESSION_USER_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function remember(userId: string | null): void {
+  try {
+    if (userId) window.localStorage.setItem(LAST_SESSION_USER_KEY, userId);
+    else window.localStorage.removeItem(LAST_SESSION_USER_KEY);
+  } catch {
+    // Storage blocked: the hook still works for this page load.
+  }
+}
+
 export function useSessionUserId(): string | null {
-  const [userId, setUserId] = useState<string | null>(null);
+  // Start from the id this device last had, so a fresh page does not briefly
+  // hide the resident's own queued writes while the session lookup runs.
+  const [userId, setUserId] = useState<string | null>(readRemembered);
 
   useEffect(() => {
     let active = true;
     const supabase = getBrowserClient();
 
-    void supabase.auth.getSession().then(({ data }) => {
-      if (active) setUserId(data.session?.user.id ?? null);
+    // An hour offline expires the access token, and supabase-js then answers
+    // "no session" with a retryable error it could not refresh past. That is
+    // not a sign-out: clearing the id would hide the resident's own unsent
+    // reports and invite a duplicate. Keep the last known id unless the
+    // session is genuinely absent while online with no error.
+    void supabase.auth.getSession().then(({ data, error }) => {
+      if (!active) return;
+      const id = data.session?.user.id ?? null;
+      if (id) {
+        remember(id);
+        setUserId(id);
+        return;
+      }
+      const offline = typeof navigator !== "undefined" && navigator.onLine === false;
+      if (error || offline) return;
+      remember(null);
+      setUserId(null);
     });
 
     // The read above answers for the session that exists at mount. Sign-in
     // happens on the first WRITE, which is after that — so without this a
     // resident who drops their first pin keeps `null` for the rest of the
-    // session, and the moment their optimistic pin is replaced by its real
-    // server row, Edit and Delete vanish from their own pin until they
-    // reload. Subscribing signs nobody in; it only listens.
-    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (active) setUserId(session?.user.id ?? null);
+    // session. Subscribing signs nobody in; it only listens. Only an explicit
+    // SIGNED_OUT clears the id; any other session-less event is a refresh
+    // hiccup, not a change of person.
+    const { data: subscription } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!active) return;
+      const id = session?.user.id ?? null;
+      if (id) {
+        remember(id);
+        setUserId(id);
+      } else if (event === "SIGNED_OUT") {
+        remember(null);
+        setUserId(null);
+      }
     });
 
     return () => {
