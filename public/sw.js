@@ -20,7 +20,7 @@
  * CURRENT_CACHES, so a bump is what evicts a bad build from installed devices.
  * Leaving it unchanged is what pins users to a stale app forever.
  */
-const VERSION = "v11";
+const VERSION = "v12";
 
 const SHELL_CACHE = `weatherwell-shell-${VERSION}`;
 const ASSET_CACHE = `weatherwell-assets-${VERSION}`;
@@ -34,7 +34,16 @@ const API_CACHE = `weatherwell-api-${VERSION}`;
  */
 const ZONE_CACHE = "weatherwell-zones";
 
-const CURRENT_CACHES = [SHELL_CACHE, ASSET_CACHE, API_CACHE, ZONE_CACHE];
+/**
+ * Map tile cache. Deliberately NOT versioned — tiles are content-addressed
+ * (the URL encodes zoom/x/y) and the same tile is valid forever. Wiping on
+ * deploy would force every device to re-download ~10MB of tiles. Entries are
+ * managed by the LRU eviction policy in evictOldestTiles.
+ */
+const TILE_CACHE = "weatherwell-tiles";
+const TILE_CACHE_MAX_ENTRIES = 600; // ~10MB at ~17KB per tile
+
+const CURRENT_CACHES = [SHELL_CACHE, ASSET_CACHE, API_CACHE, ZONE_CACHE, TILE_CACHE];
 
 /** How long a navigation waits for the network before falling back to cache. */
 const NETWORK_TIMEOUT_MS = 3000;
@@ -331,6 +340,120 @@ function revalidatePlainEntry(request, plainUrl, cacheName) {
     .catch(() => caches.match(plainUrl).then((cached) => cached || Response.error()));
 }
 
+// --- Tile cache functions ---
+
+/**
+ * Evict oldest tiles when cache exceeds TILE_CACHE_MAX_ENTRIES.
+ * Uses the Cache API's entries() which returns them in insertion order.
+ */
+async function evictOldestTiles() {
+  const cache = await caches.open(TILE_CACHE);
+  const keys = await cache.keys();
+  if (keys.length <= TILE_CACHE_MAX_ENTRIES) return;
+  const toDelete = keys.length - TILE_CACHE_MAX_ENTRIES;
+  for (let i = 0; i < toDelete; i++) {
+    await cache.delete(keys[i]);
+  }
+}
+
+/**
+ * Cache-first tile fetch. Serves from cache if available (offline works).
+ * On miss, fetches from network and stores. Triggers LRU eviction after store.
+ */
+async function cacheTile(request) {
+  const cached = await caches.match(request);
+  if (cached) return cached;
+
+  try {
+    const response = await fetch(request);
+    if (response && response.status === 200) {
+      const cache = await caches.open(TILE_CACHE);
+      await cache.put(request, response.clone());
+      // Evict in background — don't block the response
+      evictOldestTiles().catch(() => {});
+    }
+    return response;
+  } catch {
+    // Tile not in cache and offline — return a transparent 1x1 pixel PNG
+    // so Leaflet doesn't show a broken image icon
+    return new Response(
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQI12NgAAIABQABNjN9GQAAAAlwSFlzAAAWJQAAFiUBSVIk8AAAABl0RVh0U29mdHdhcmUAcGFpbnQubmV0IDQuMC41ZYUyZQAAAA1JREFUGFdjYPj/nwEABQAB/VjLQQAAAABJRU5ErkJggg==",
+      { headers: { "Content-Type": "image/png" } }
+    );
+  }
+}
+
+/**
+ * Precache tiles for a zone. Called from the client via postMessage.
+ * Downloads tiles at zoom levels 12-15 within a ~2km radius of the center.
+ */
+async function precacheTilesForZone(lat, lng, radiusKm = 2) {
+  const cache = await caches.open(TILE_CACHE);
+  const tiles = [];
+
+  for (let zoom = 12; zoom <= 15; zoom++) {
+    const tilesAtZoom = getTileUrlsForZoom(lat, lng, zoom, radiusKm);
+    tiles.push(...tilesAtZoom);
+  }
+
+  let cached = 0;
+  const CONCURRENT = 4;
+  for (let i = 0; i < tiles.length; i += CONCURRENT) {
+    const batch = tiles.slice(i, i + CONCURRENT);
+    await Promise.allSettled(
+      batch.map(async (url) => {
+        const response = await fetch(url);
+        if (response && response.status === 200) {
+          await cache.put(url, response.clone());
+          cached++;
+        }
+      })
+    );
+  }
+
+  await evictOldestTiles();
+  return { total: tiles.length, cached };
+}
+
+/**
+ * Convert lat/lng to tile x/y at a given zoom level.
+ */
+function latLngToTile(lat, lng, zoom) {
+  const n = Math.pow(2, zoom);
+  const x = Math.floor(((lng + 180) / 360) * n);
+  const y = Math.floor(
+    ((1 - Math.log(Math.tan((lat * Math.PI) / 180) + 1 / Math.cos((lat * Math.PI) / 180)) / Math.PI) /
+      2) *
+      n
+  );
+  return { x, y };
+}
+
+/**
+ * Get tile URLs within radiusKm of a point at a given zoom level.
+ */
+function getTileUrlsForZoom(lat, lng, zoom, radiusKm) {
+  const center = latLngToTile(lat, lng, zoom);
+  // Approximate tiles per km at this zoom
+  const metersPerTile = (40075016.686 * Math.cos((lat * Math.PI) / 180)) / Math.pow(2, zoom);
+  const tileRadius = Math.ceil((radiusKm * 1000) / metersPerTile);
+
+  const urls = [];
+  for (let dx = -tileRadius; dx <= tileRadius; dx++) {
+    for (let dy = -tileRadius; dy <= tileRadius; dy++) {
+      const x = center.x + dx;
+      const y = center.y + dy;
+      // Skip tiles outside valid range
+      if (x < 0 || y < 0 || x >= Math.pow(2, zoom) || y >= Math.pow(2, zoom)) continue;
+      // Skip tiles too far from center (circular mask)
+      if (Math.sqrt(dx * dx + dy * dy) > tileRadius) continue;
+      const s = ["a", "b", "c"][Math.abs(x + y) % 3];
+      urls.push(`https://${s}.tile.openstreetmap.org/${zoom}/${x}/${y}.png`);
+    }
+  }
+  return urls;
+}
+
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
@@ -350,6 +473,15 @@ self.addEventListener("fetch", (event) => {
   // Never interfere with mutations, and leave cross-origin traffic (map tiles,
   // any future third-party call) to the network untouched.
   if (request.method !== "GET") return;
+
+  // --- Tile cache: intercept OSM tile requests ---
+  // Tiles are content-addressed (URL encodes zoom/x/y) and valid forever.
+  // Cache-first with LRU eviction: serve from cache if available, otherwise
+  // fetch and store. This lets the map work offline after a single visit.
+  if (url.hostname.endsWith(".tile.openstreetmap.org")) {
+    event.respondWith(cacheTile(request));
+    return;
+  }
 
   if (url.origin !== self.location.origin) return;
 
@@ -888,6 +1020,31 @@ self.addEventListener("sync", (event) => {
 self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "outbox-drain") {
     event.waitUntil(drainOutboxInWorker());
+  }
+
+  // Tile pre-cache: client asks the SW to download tiles for a zone.
+  // Returns { total, cached } via the message port.
+  if (event.data && event.data.type === "precache-tiles") {
+    const { lat, lng, radiusKm } = event.data;
+    event.waitUntil(
+      precacheTilesForZone(lat, lng, radiusKm).then((result) => {
+        if (event.ports && event.ports[0]) {
+          event.ports[0].postMessage(result);
+        }
+      })
+    );
+  }
+
+  // Tile cache status: client asks how many tiles are cached.
+  if (event.data && event.data.type === "tile-cache-status") {
+    event.waitUntil(
+      caches.open(TILE_CACHE).then(async (cache) => {
+        const keys = await cache.keys();
+        if (event.ports && event.ports[0]) {
+          event.ports[0].postMessage({ count: keys.length });
+        }
+      })
+    );
   }
 });
 
