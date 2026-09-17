@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { useInstallMethod, promptInstall } from "@/lib/install-prompt";
+import { PushPrompt } from "@/features/onboarding/push-prompt";
 import type { LocalizedText } from "@/lib/types";
 
 const TITLE: LocalizedText = {
@@ -68,6 +69,16 @@ const INSTALLED_NOTE: LocalizedText = {
 const SKIP_NOTE: LocalizedText = {
   en: "You can install any time from your browser's menu. The app works either way — installing is what makes it work with no signal.",
   fil: "Maaari kang mag-install anumang oras mula sa menu ng browser. Gumagana ang app kahit alin — ang pag-install ang dahilan kung bakit gumagana ito nang walang signal.",
+};
+
+const ENABLE_NOTIFICATIONS: LocalizedText = {
+  en: "Stay Alert",
+  fil: "Manatiling Nag-aabiso",
+};
+
+const NOTIFICATIONS_DETAIL: LocalizedText = {
+  en: "Get notified when your zone has a flood warning.",
+  fil: "Makatanggap ng abiso kapag may flood warning sa iyong zone.",
 };
 
 function Benefit({
@@ -176,6 +187,16 @@ export function InstallStep({ onContinue }: { onContinue: () => void }) {
             {t(SKIP_NOTE, lang)}
           </p>
         )}
+
+        <div className="rounded-md border-2 border-border p-3">
+          <p lang={lang} className="mb-2 text-sm font-medium">
+            {t(ENABLE_NOTIFICATIONS, lang)}
+          </p>
+          <p lang={lang} className="mb-3 text-xs text-muted-foreground">
+            {t(NOTIFICATIONS_DETAIL, lang)}
+          </p>
+          <PushPrompt />
+        </div>
       </CardContent>
     </Card>
   );
