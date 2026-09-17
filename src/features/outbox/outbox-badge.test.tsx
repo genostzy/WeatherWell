@@ -339,6 +339,51 @@ describe("OutboxBadge", () => {
     expect(JSON.parse(localStorage.getItem(OUTBOX_KEY)!)).toEqual([]);
   });
 
+  it("closes its dialog when the list empties, and the next write shows the badge with the dialog still closed (I-3)", async () => {
+    const user = userEvent.setup();
+    auth.set("user-a");
+    const pending = entry({ userId: "user-a", status: "pending" });
+    seed(pending);
+    renderWithData(<OutboxBadge />);
+    await user.click(screen.getByRole("button", { name: "1 waiting to send" }));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    // Delivered while the resident is looking at the list.
+    await act(async () => {
+      seed();
+      window.dispatchEvent(new Event("weatherwell:outbox-changed"));
+    });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("button", { name: /waiting to send/ })).toBeNull();
+
+    // The next write brings the badge back, and nothing pops up over the
+    // screen the resident is using.
+    await act(async () => {
+      seed(entry({ userId: "user-a", status: "pending" }));
+      window.dispatchEvent(new Event("weatherwell:outbox-changed"));
+    });
+    expect(screen.getByRole("button", { name: "1 waiting to send" })).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("closes its dialog when the last stuck entry is discarded, and the next write keeps it closed (I-3)", async () => {
+    const user = userEvent.setup();
+    auth.set("user-a");
+    seed(entry({ userId: "user-a", status: "stuck", stuckReason: "gave_up" }));
+    renderWithData(<OutboxBadge />);
+    await user.click(screen.getByRole("button", { name: "1 couldn't send" }));
+    await user.click(screen.getByRole("button", { name: "Discard" }));
+    await user.click(screen.getByRole("button", { name: "Discard" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+
+    await act(async () => {
+      seed(entry({ userId: "user-a", status: "pending" }));
+      window.dispatchEvent(new Event("weatherwell:outbox-changed"));
+    });
+    expect(screen.getByRole("button", { name: "1 waiting to send" })).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
   describe("Discard", () => {
     it("asks for confirmation inline, in the same dialog, and only removes the entry when confirmed", async () => {
       const user = userEvent.setup();

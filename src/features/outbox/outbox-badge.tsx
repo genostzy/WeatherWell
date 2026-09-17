@@ -115,6 +115,23 @@ export function OutboxBadge() {
 
   const counted = outbox.filter((entry) => isCountedForThisSession(entry, currentUserId));
   const summary = badgeState(counted);
+  const showing = summary !== null;
+
+  // The component stays mounted while it renders nothing, so its state
+  // survives an empty list. Once the list empties (everything delivered or
+  // discarded), the dialog closes for good: the next write must bring back
+  // the badge alone, not a modal trapping focus over the screen the
+  // resident is using. Adjusted during render, React's pattern for state
+  // that follows a change in what is being rendered, so no render ever
+  // shows the stale open dialog.
+  const [wasShowing, setWasShowing] = useState(showing);
+  if (wasShowing !== showing) {
+    setWasShowing(showing);
+    if (!showing) {
+      setDialogOpen(false);
+      setDiscardingId(null);
+    }
+  }
 
   if (!summary) return null;
 

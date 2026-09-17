@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { screen } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { act, fireEvent, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ZonePicker } from "./zone-picker";
 import { FIXTURE_REFERENCE_DATA, renderWithData } from "@/test-utils/render-with-data";
@@ -132,6 +132,80 @@ describe("ZonePicker", () => {
 
     expect(await screen.findByText(/Couldn't get your location/)).toBeInTheDocument();
     for (const zone of ZONES) expect(radioFor(zone.id)).not.toBeChecked();
+  });
+
+  describe("a location read that never answers (Minor 7)", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("asks the device for a bounded read: a timeout, and a recent cached fix is fine", () => {
+      const getCurrentPosition = vi.fn();
+      stubGeolocation({ getCurrentPosition });
+      renderWithData(<ZonePicker zones={ZONES} onSelect={() => {}} />);
+
+      fireEvent.click(screen.getByRole("button", { name: /use my location/i }));
+
+      expect(getCurrentPosition).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.any(Function),
+        expect.objectContaining({ timeout: 15_000, maximumAge: 60_000 })
+      );
+    });
+
+    it("ends in the couldn't-get-your-location state and re-enables the button, even if the device never calls back", () => {
+      vi.useFakeTimers();
+      // Some devices never settle the call at all (indoors, no GPS), timeout
+      // option or not.
+      const getCurrentPosition = vi.fn();
+      stubGeolocation({ getCurrentPosition });
+      renderWithData(<ZonePicker zones={ZONES} onSelect={() => {}} />);
+      const button = screen.getByRole("button", { name: /use my location/i });
+
+      fireEvent.click(button);
+      expect(screen.getByText(/Finding your location/)).toBeInTheDocument();
+      expect(button).toBeDisabled();
+
+      // The device's own 15-second timeout only starts once the permission
+      // prompt is answered, so the screen allows longer before giving up.
+      act(() => {
+        vi.advanceTimersByTime(29_999);
+      });
+      expect(button).toBeDisabled();
+
+      act(() => {
+        vi.advanceTimersByTime(1);
+      });
+
+      expect(screen.getByText(/Couldn't get your location/)).toBeInTheDocument();
+      expect(button).toBeEnabled();
+      for (const zone of ZONES) expect(radioFor(zone.id)).not.toBeChecked();
+
+      // And it can be tried again.
+      fireEvent.click(button);
+      expect(getCurrentPosition).toHaveBeenCalledTimes(2);
+    });
+
+    it("ignores a fix that finally arrives after the read was given up on", () => {
+      vi.useFakeTimers();
+      let lateSuccess: PositionCallback | undefined;
+      const getCurrentPosition = vi.fn((success: PositionCallback) => {
+        lateSuccess = success;
+      });
+      stubGeolocation({ getCurrentPosition });
+      renderWithData(<ZonePicker zones={ZONES} onSelect={() => {}} />);
+
+      fireEvent.click(screen.getByRole("button", { name: /use my location/i }));
+      act(() => {
+        vi.advanceTimersByTime(30_000);
+      });
+      act(() => {
+        lateSuccess?.({ coords: { latitude: 16.08, longitude: 120.4038, accuracy: 30 } } as GeolocationPosition);
+      });
+
+      expect(screen.getByText(/Couldn't get your location/)).toBeInTheDocument();
+      for (const zone of ZONES) expect(radioFor(zone.id)).not.toBeChecked();
+    });
   });
 
   it("reports failure when the device has no geolocation API at all", async () => {

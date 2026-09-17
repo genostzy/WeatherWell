@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -8,6 +8,22 @@ import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { APPROXIMATE_ACCURACY_METERS, findNearestZone } from "@/lib/nearest-zone";
 import type { LanguageCode, LocalizedText, Zone } from "@/lib/types";
+
+/**
+ * How long the device may spend on one location read, and how old a fix it
+ * may hand back from its own cache. A resident indoors with no GPS would
+ * otherwise wait on a call that never settles.
+ */
+const LOCATION_TIMEOUT_MS = 15_000;
+const LOCATION_MAX_AGE_MS = 60_000;
+
+/**
+ * When this screen gives up on a read itself. Some devices never call back
+ * at all, timeout option or not, and the button stays disabled while a read
+ * is in flight. Longer than LOCATION_TIMEOUT_MS because the device only
+ * starts that clock once the permission prompt has been answered.
+ */
+const LOCATION_GIVE_UP_MS = 30_000;
 
 type Detection =
   | { state: "idle" }
@@ -76,6 +92,17 @@ export function ZonePicker({
   // A ref, because the fix arrives in a callback after the tap: it must see
   // the selection as it is then, not as it was when the button was pressed.
   const proposedZoneId = useRef<string | null>(null);
+  // Which read is current. A callback from an earlier read (one this screen
+  // already gave up on) is ignored rather than proposing a barangay late.
+  const readCount = useRef(0);
+  const giveUpTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (giveUpTimer.current !== null) clearTimeout(giveUpTimer.current);
+    },
+    []
+  );
 
   function withdrawProposal() {
     const proposed = proposedZoneId.current;
@@ -96,10 +123,33 @@ export function ZonePicker({
     }
 
     setDetection({ state: "detecting" });
+
+    const thisRead = ++readCount.current;
+    // True exactly once, for the current read: the first of success, error
+    // or the give-up timer wins, and everything after it is ignored.
+    const settle = (): boolean => {
+      if (readCount.current !== thisRead) return false;
+      readCount.current += 1;
+      if (giveUpTimer.current !== null) {
+        clearTimeout(giveUpTimer.current);
+        giveUpTimer.current = null;
+      }
+      return true;
+    };
+    const fail = () => {
+      if (!settle()) return;
+      withdrawProposal();
+      setDetection({ state: "failed" });
+    };
+
+    if (giveUpTimer.current !== null) clearTimeout(giveUpTimer.current);
+    giveUpTimer.current = setTimeout(fail, LOCATION_GIVE_UP_MS);
+
     // One read, not a watch, and nothing is stored — the consent notice's
     // promise. The fix only ever proposes; the resident still confirms.
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
+        if (!settle()) return;
         const match = findNearestZone({ lat: coords.latitude, lng: coords.longitude }, zones);
         if (!match) {
           withdrawProposal();
@@ -118,10 +168,8 @@ export function ZonePicker({
           setDetection({ state: "far", distanceMeters: match.distanceMeters, approximate });
         }
       },
-      () => {
-        withdrawProposal();
-        setDetection({ state: "failed" });
-      }
+      fail,
+      { timeout: LOCATION_TIMEOUT_MS, maximumAge: LOCATION_MAX_AGE_MS }
     );
   }
 
