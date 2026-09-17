@@ -757,6 +757,8 @@ function outboxSend(entry) {
       id: entry.id,
       userId: entry.userId == null ? null : entry.userId,
       queuedAt: entry.queuedAt,
+      // This device's clock now; see src/lib/outbox/send.ts.
+      sentAt: new Date().toISOString(),
       payload: entry.payload,
     }),
   })

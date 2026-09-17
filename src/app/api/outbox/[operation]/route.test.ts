@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { NextRequest } from "next/server";
@@ -169,41 +169,160 @@ describe("POST /api/outbox/[operation]", () => {
     expect(submitWaterLevelReport).not.toHaveBeenCalled();
   });
 
-  it("delivers a report, calling the action with the payload plus madeAt: queuedAt", async () => {
-    submitWaterLevelReport.mockResolvedValue({ ok: true });
+  describe("made-at time: only the elapsed interval on the device's clock is trusted (R6)", () => {
+    // The server's own clock at arrival. Every case below reads madeAt as
+    // serverNow - max(0, sentAt - queuedAt), so the device's absolute clock
+    // never reaches the database.
+    const SERVER_NOW = "2026-09-16T12:00:00.000Z";
+    const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
 
-    const response = await post("submitWaterLevelReport", {
-      id: "e1",
-      userId: "user-1",
-      queuedAt: "2026-09-16T00:00:00.000Z",
-      payload: reportPayload,
+    /** What the database trigger does with a report over 6 hours old. */
+    async function likeTheReportTrigger({ madeAt }: { madeAt: string }) {
+      return Date.parse(madeAt) < Date.parse(SERVER_NOW) - SIX_HOURS_MS
+        ? { ok: false, permanent: true, reason: "too_old", error: "report too old" }
+        : { ok: true };
+    }
+
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date(SERVER_NOW));
     });
 
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ result: "delivered" });
-    expect(submitWaterLevelReport).toHaveBeenCalledWith({
-      id: "e1",
-      zoneId: "zone-1",
-      depthLevel: "knee",
-      madeAt: "2026-09-16T00:00:00.000Z",
-    });
-  });
-
-  it("calls recordCheckIn with madeAt: queuedAt", async () => {
-    recordCheckIn.mockResolvedValue({ ok: true });
-
-    await post("recordCheckIn", {
-      id: "c1",
-      userId: "user-1",
-      queuedAt: "2026-09-16T00:00:00.000Z",
-      payload: { zoneId: "zone-1", status: "safe" },
+    afterEach(() => {
+      vi.useRealTimers();
     });
 
-    expect(recordCheckIn).toHaveBeenCalledWith({
-      id: "c1",
-      zoneId: "zone-1",
-      status: "safe",
-      madeAt: "2026-09-16T00:00:00.000Z",
+    it("delivers a report, calling the action with the payload plus madeAt translated to server time", async () => {
+      submitWaterLevelReport.mockResolvedValue({ ok: true });
+
+      // Queued 5 minutes before it was sent, on a device clock that happens
+      // to be 3 hours behind the server's.
+      const response = await post("submitWaterLevelReport", {
+        id: "e1",
+        userId: "user-1",
+        queuedAt: "2026-09-16T08:55:00.000Z",
+        sentAt: "2026-09-16T09:00:00.000Z",
+        payload: reportPayload,
+      });
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ result: "delivered" });
+      expect(submitWaterLevelReport).toHaveBeenCalledWith({
+        id: "e1",
+        zoneId: "zone-1",
+        depthLevel: "knee",
+        madeAt: "2026-09-16T11:55:00.000Z",
+      });
+    });
+
+    it("calls recordCheckIn with madeAt translated to server time", async () => {
+      recordCheckIn.mockResolvedValue({ ok: true });
+
+      await post("recordCheckIn", {
+        id: "c1",
+        userId: "user-1",
+        queuedAt: "2026-09-16T00:00:00.000Z",
+        sentAt: "2026-09-16T02:00:00.000Z",
+        payload: { zoneId: "zone-1", status: "safe" },
+      });
+
+      expect(recordCheckIn).toHaveBeenCalledWith({
+        id: "c1",
+        zoneId: "zone-1",
+        status: "safe",
+        madeAt: "2026-09-16T10:00:00.000Z",
+      });
+    });
+
+    it("accepts a report from a phone whose clock is 10 hours slow, sent immediately: madeAt is server now", async () => {
+      submitWaterLevelReport.mockImplementation(likeTheReportTrigger);
+
+      const response = await post("submitWaterLevelReport", {
+        id: "e-slow-clock",
+        userId: "user-1",
+        queuedAt: "2026-09-16T02:00:00.000Z",
+        sentAt: "2026-09-16T02:00:00.000Z",
+        payload: reportPayload,
+      });
+
+      expect(submitWaterLevelReport).toHaveBeenCalledWith(expect.objectContaining({ madeAt: SERVER_NOW }));
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ result: "delivered" });
+    });
+
+    it("dates a report queued 7 real hours ago 7 hours before server now, so it is refused as too old", async () => {
+      submitWaterLevelReport.mockImplementation(likeTheReportTrigger);
+
+      // A device clock 2 hours FAST: the absolute values are wrong, the
+      // 7-hour interval between them is not.
+      const response = await post("submitWaterLevelReport", {
+        id: "e-seven-hours",
+        userId: "user-1",
+        queuedAt: "2026-09-16T07:00:00.000Z",
+        sentAt: "2026-09-16T14:00:00.000Z",
+        payload: reportPayload,
+      });
+
+      expect(submitWaterLevelReport).toHaveBeenCalledWith(
+        expect.objectContaining({ madeAt: "2026-09-16T05:00:00.000Z" })
+      );
+      expect(response.status).toBe(422);
+      expect(await response.json()).toEqual({ result: "permanent", reason: "too_old" });
+    });
+
+    it.each([
+      ["missing", undefined],
+      ["not a date", "yesterday"],
+      ["a number", 1726444800000],
+      ["null", null],
+    ])("falls back to arrival time when sentAt is %s", async (_label, sentAt) => {
+      recordCheckIn.mockResolvedValue({ ok: true });
+
+      const response = await post("recordCheckIn", {
+        id: "c1",
+        userId: "user-1",
+        queuedAt: "2026-09-15T00:00:00.000Z",
+        ...(sentAt === undefined ? {} : { sentAt }),
+        payload: { zoneId: "zone-1", status: "safe" },
+      });
+
+      expect(response.status).toBe(200);
+      expect(recordCheckIn).toHaveBeenCalledWith(expect.objectContaining({ madeAt: SERVER_NOW }));
+    });
+
+    it("clamps a negative interval (sentAt before queuedAt: the device clock was set back) to zero", async () => {
+      submitWaterLevelReport.mockResolvedValue({ ok: true });
+
+      await post("submitWaterLevelReport", {
+        id: "e1",
+        userId: "user-1",
+        queuedAt: "2026-09-16T09:00:00.000Z",
+        sentAt: "2026-09-16T08:00:00.000Z",
+        payload: reportPayload,
+      });
+
+      expect(submitWaterLevelReport).toHaveBeenCalledWith(expect.objectContaining({ madeAt: SERVER_NOW }));
+    });
+
+    it("never passes a made-at time to the pin, vote or moderation actions", async () => {
+      createPin.mockResolvedValue({ ok: true });
+
+      await post("createPin", {
+        id: "pin-1",
+        userId: "user-1",
+        queuedAt: "2026-09-16T00:00:00.000Z",
+        sentAt: "2026-09-16T05:00:00.000Z",
+        payload: { zoneId: "zone-1", statusTag: "flooded", caption: "x", lat: 1, lng: 2 },
+      });
+
+      expect(createPin).toHaveBeenCalledWith({
+        id: "pin-1",
+        zoneId: "zone-1",
+        statusTag: "flooded",
+        caption: "x",
+        lat: 1,
+        lng: 2,
+      });
     });
   });
 

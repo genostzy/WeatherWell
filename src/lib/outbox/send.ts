@@ -28,6 +28,11 @@ export async function sendEntry(entry: OutboxEntry): Promise<SendOutcome> {
         // malformed request.
         userId: entry.userId ?? null,
         queuedAt: entry.queuedAt,
+        // This device's clock now. The route trusts only sentAt - queuedAt,
+        // an interval measured on one clock, and never either absolute
+        // value: a phone whose clock is hours wrong still dates its writes
+        // correctly on the server.
+        sentAt: new Date().toISOString(),
         payload: entry.payload,
       }),
     });

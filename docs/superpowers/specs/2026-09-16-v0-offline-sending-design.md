@@ -41,7 +41,7 @@ The third seam, the unowned first write, stays accepted.
   3. **No Background Sync** (iOS Safari, Firefox): sending happens when the app is next opened. The badge makes that visible.
 - **Worker endpoints:**
   - `POST /api/outbox/<operation>`, one per operation: `submitWaterLevelReport`, `createPin`, `editPin`, `deleteOwnPin`, `setPinRemoved`, `voteOnPin`, `recordCheckIn`.
-  - **Request body:** `{ id, userId, queuedAt, payload }`.
+  - **Request body:** `{ id, userId, queuedAt, sentAt, payload }`. *(`sentAt` added by the section 2 amendment below.)*
   - **Behaviour:** each route authenticates with `createSupabaseUserClient()` + `getClaims()` (never `getSession()`) and then imports and calls the existing Server Action function directly (an ordinary async function on the server). There is still one implementation of every rule. *(Amended during planning: no separate shared modules are needed.)*
   - **Responses:**
 
@@ -73,6 +73,13 @@ The third seam, the unowned first write, stays accepted.
   - The existing upsert on `(zone_id, user_id)` must never let an older check-in overwrite a newer one. An update whose incoming `checked_in_at` is earlier than the stored one keeps the stored row unchanged and is treated as delivered.
 - **Unchanged:** pins, votes and moderation keep arrival time.
 - **Server functions** pass `queuedAt` as `reported_at` / `checked_in_at`. The `22023 report too old` error maps to `422 { result: "permanent", reason: "too_old" }`.
+
+> **Amendment (final review, ruling R6).** `queuedAt` is the device's own clock, and a cheap phone's clock can be hours or days wrong after a flat battery. Passed straight through, a phone more than 6 hours slow could never file a report, and a slow clock could let a stale check-in be treated as older than a fresher one and silently kept out. So the device's absolute clock is no longer trusted:
+> - Page and worker both add `sentAt` (the device's clock at the moment of sending) to the request body.
+> - The route passes `madeAt = serverNow − max(0, sentAt − queuedAt)` as `reported_at` / `checked_in_at`. Only the elapsed interval, measured on one clock, is trusted. A negative interval counts as zero.
+> - A missing or invalid `sentAt` falls back to arrival time (server now), which is how writes were dated before this feature.
+> - An invalid `queuedAt` is refused as `422 { result: "permanent", reason: "invalid" }` rather than retried.
+> - The triggers are unchanged. Pins, votes and moderation still keep arrival time.
 
 **Retries, in one pure module (`src/lib/outbox/schedule.ts`):**
 - **Backoff:** after a temporary failure, `nextAttemptAt` = now + 0, 1, 5, 15, 60 minutes for attempts 1–5, then 60 minutes.

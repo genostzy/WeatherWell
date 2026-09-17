@@ -30,11 +30,17 @@ afterEach(() => {
 });
 
 describe("sendEntry", () => {
-  it("POSTs to /api/outbox/<operation> with the entry's own fields", async () => {
+  it("POSTs to /api/outbox/<operation> with the entry's own fields, plus the device clock at send as sentAt", async () => {
     const fetchMock = fetchResolving(200);
     vi.stubGlobal("fetch", fetchMock);
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-09-16T00:07:00.000Z"));
 
-    await sendEntry(entry);
+    try {
+      await sendEntry(entry);
+    } finally {
+      vi.useRealTimers();
+    }
 
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/outbox/submitWaterLevelReport",
@@ -49,6 +55,9 @@ describe("sendEntry", () => {
       id: "e1",
       userId: "user-1",
       queuedAt: "2026-09-16T00:00:00.000Z",
+      // The device's own clock, read at send time: the route trusts only the
+      // interval sentAt - queuedAt, both measured on this one clock (R6).
+      sentAt: "2026-09-16T00:07:00.000Z",
       payload: { zoneId: "zone-1", depthLevel: "knee" },
     });
   });

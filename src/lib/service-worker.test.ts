@@ -1095,6 +1095,30 @@ describe("service worker outbox drain", () => {
     expect(byId.get("e-401")).toMatchObject({ status: "pending", attempts: 1 });
   });
 
+  it("sends the device's clock at send time as sentAt, next to the entry's own queuedAt (R6)", async () => {
+    await seedOutbox([outboxEntry("e-sent-at", { queuedAt: "2026-09-16T11:20:00.000Z" })]);
+
+    const bodies: Record<string, unknown>[] = [];
+    const { listeners } = loadServiceWorker({
+      fetch: async (_url, init) => {
+        bodies.push(JSON.parse(init?.body as string) as Record<string, unknown>);
+        return response(JSON.stringify({ result: "delivered" }), 200);
+      },
+    });
+
+    await fireOutboxSync(listeners);
+
+    expect(bodies).toEqual([
+      {
+        id: "e-sent-at",
+        userId: "user-1",
+        queuedAt: "2026-09-16T11:20:00.000Z",
+        sentAt: "2026-09-16T12:00:00.000Z",
+        payload: { zoneId: "zone-1", depthLevel: "knee" },
+      },
+    ]);
+  });
+
   it("never sends a request to any URL other than /api/outbox/* — no Supabase, no auth", async () => {
     await seedOutbox([outboxEntry("only-entry")]);
 

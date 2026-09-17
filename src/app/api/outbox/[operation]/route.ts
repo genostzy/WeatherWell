@@ -22,7 +22,28 @@ function parseIsoTime(value: unknown): number | null {
   return Number.isFinite(ms) ? ms : null;
 }
 
-type Runner =(id: string, payload: Record<string, unknown>, queuedAt: string) => Promise<ActionResult>;
+type Runner = (id: string, payload: Record<string, unknown>, madeAt: string) => Promise<ActionResult>;
+
+/**
+ * When the write was made, on the SERVER's clock (design doc section 2, as
+ * amended by ruling R6): `serverNow - max(0, sentAt - queuedAt)`.
+ *
+ * `queuedAt` and `sentAt` both come from the device's clock, which on a
+ * cheap phone can be hours or days wrong after a flat battery. Their
+ * difference is still right — both were read from that one clock — so only
+ * the elapsed interval is trusted, and it is applied to this server's own
+ * time. A negative interval (the clock was set back between queueing and
+ * sending) counts as zero. A missing or unusable `sentAt` (an older client)
+ * falls back to arrival time, which is how every write was dated before
+ * the queue kept made-at times at all.
+ */
+function madeAtOnServer(queuedAtMs: number, sentAt: unknown): string {
+  const serverNow = Date.now();
+  const sentAtMs = parseIsoTime(sentAt);
+  if (sentAtMs === null) return new Date(serverNow).toISOString();
+  const elapsed = Math.max(0, sentAtMs - queuedAtMs);
+  return new Date(serverNow - elapsed).toISOString();
+}
 
 /**
  * One runner per operation, each importing and calling the exact Server
@@ -36,7 +57,7 @@ type Runner =(id: string, payload: Record<string, unknown>, queuedAt: string) =>
  * `madeAt` is only threaded through for the two operations whose tables
  * enforce honest write times (`submitWaterLevelReport`, `recordCheckIn`) —
  * see the design doc's section 2. Pins, votes and moderation keep arrival
- * time, so their runners ignore `queuedAt` entirely.
+ * time, so their runners ignore it entirely.
  */
 const RUNNERS: Record<string, Runner> = {
   submitWaterLevelReport: async (id, payload, madeAt) =>
@@ -88,7 +109,7 @@ export async function POST(
   const run = Object.hasOwn(RUNNERS, operation) ? RUNNERS[operation] : undefined;
   if (!run) return reply(404, { result: "permanent", reason: "unknown_operation" });
 
-  let body: { id?: unknown; userId?: unknown; queuedAt?: unknown; payload?: unknown };
+  let body: { id?: unknown; userId?: unknown; queuedAt?: unknown; sentAt?: unknown; payload?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -114,7 +135,8 @@ export async function POST(
   if (body.userId !== sub) return reply(409, { result: "held" });
 
   try {
-    const result = await run(body.id, body.payload as Record<string, unknown>, new Date(queuedAt).toISOString());
+    const madeAt = madeAtOnServer(queuedAt, body.sentAt);
+    const result = await run(body.id, body.payload as Record<string, unknown>, madeAt);
     if (result.ok) return reply(200, { result: "delivered" });
     if (result.permanent) return reply(422, { result: "permanent", reason: result.reason ?? result.error });
     return reply(503, { result: "retry" });

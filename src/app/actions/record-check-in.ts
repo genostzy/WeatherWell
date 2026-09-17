@@ -80,7 +80,9 @@ export interface RecordCheckInInput {
   status: CheckInStatus;
   /**
    * ISO timestamp of when the resident actually checked in, carried through
-   * by the outbox for a write sent later than it was made. Omitted for an
+   * by the outbox for a write sent later than it was made. Already on the
+   * server's clock: /api/outbox derives it from how long ago the device
+   * queued the write, never from the device's own absolute time. Omitted for an
    * ordinary, non-queued check-in, so the column keeps its database-clock
    * default. private.honest_check_in_time() (see
    * supabase/migrations/20260915103000_honest_write_times.sql) is what
