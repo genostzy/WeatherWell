@@ -23,7 +23,7 @@ export function payloadOf<K extends OutboxOperation>(
 /**
  * Sends one queued entry through the server-checked route
  * (`POST /api/outbox/<operation>`) — the one way into the queue's writes,
- * for the page and (Task 5) the service worker alike. There is no longer a
+ * for the page and the service worker alike. There is no longer a
  * per-operation branch here: every operation shares this one wire, and an
  * operation with no runner behind it is refused by the route itself (404 →
  * `{ result: "permanent", reason: "unknown_operation" }`, see

@@ -613,3 +613,7 @@ Match the route handler's second-argument type to what this Next version documen
 - [ ] **Step 6: Check held entries.** Seed an entry with a different `userId` and confirm it is sent as held (409), not counted in the badge, and not deleted.
 - [ ] **Step 7: Clean up.** Delete the test zone and its centre, hazards, reports and check-ins, and the anonymous user, then confirm the baseline counts.
 - [ ] **Step 8: Report** every step's outcome. A failing step is the finding; do not retry it until it passes.
+
+## Found during execution
+
+- **Late reports count toward flood consensus** (final review, Minor 10). The agreeing-report count (`flood-monitoring-panel.tsx` and the recent-reports panel) is not time-windowed. Honest times make that visible: a report delivered 5 hours late now counts as "agreeing" beside current ones. This predates the branch; it belongs with V1's threshold engine, which should window the count by `reported_at`. Not fixed here.

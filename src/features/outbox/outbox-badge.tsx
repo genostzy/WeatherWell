@@ -30,9 +30,9 @@ import {
  * it is — it is waiting on its owner signing back in, not on a send.
  *
  * `currentUserId` must be the REACTIVE session id (`useSessionUserId()`),
- * not `knownSessionUserId()`'s one-shot snapshot — fix round 1, finding 1.
- * On a shared phone, a sign-out or a different Google account changes who
- * `auth.uid()` is without a reload, and this component must stop showing
+ * not `knownSessionUserId()`'s one-shot snapshot. On a shared phone, a
+ * sign-out or a different Google account changes who `auth.uid()` is
+ * without a reload, and this component must stop showing
  * the previous person's entries the instant that happens, not just on the
  * next drain or page load.
  */
@@ -79,10 +79,10 @@ function confirmButtonId(entryId: string): string {
  * window; an empty zone list just means `entryDescription` falls back to
  * showing the raw zone id until the real data arrives.
  *
- * Discard's confirmation is INLINE in the same list dialog (fix round 1,
- * finding 3) rather than a second stacked `OverlayDialog` — two nested
- * modals meant two focus traps and two controls both named "Discard". Only
- * one `role="dialog"` ever exists here.
+ * Discard's confirmation is INLINE in the same list dialog rather than a
+ * second stacked `OverlayDialog` — two nested modals meant two focus traps
+ * and two controls both named "Discard". Only one `role="dialog"` ever
+ * exists here.
  *
  * Hidden entirely at zero — see `badgeState`.
  */

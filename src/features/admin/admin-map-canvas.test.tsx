@@ -25,7 +25,7 @@ vi.mock("@/app/actions/set-center", () => ({
 
 import { AdminMapCanvas } from "./admin-map-canvas";
 import { renderWithData, FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
-import { readOutbox, markFailed } from "@/lib/outbox/outbox";
+import { readOutbox, applyEntryOutcome } from "@/lib/outbox/outbox";
 import type { CommunityPin } from "@/lib/community-pins";
 import type { OutboxPayloads } from "@/lib/outbox/types";
 import type { Official } from "@/lib/auth/official";
@@ -353,7 +353,7 @@ describe("AdminMapCanvas", () => {
     // Simulates what a real RLS-refused write looks like once the drain
     // classifies it (see setPinRemoved in app/actions/pins.ts) — the entry
     // this row is tracking becomes permanently failed.
-    markFailed(entry.id, "That pin is not yours to remove, or no longer exists.", true);
+    applyEntryOutcome(entry.id, { result: "permanent", reason: "That pin is not yours to remove, or no longer exists." });
 
     expect(await screen.findByText(/could not save/i)).toBeInTheDocument();
   });

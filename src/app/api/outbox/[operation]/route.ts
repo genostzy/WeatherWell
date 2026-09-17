@@ -27,7 +27,7 @@ type Runner = (id: string, payload: Record<string, unknown>, madeAt: string) => 
 
 /**
  * When the write was made, on the SERVER's clock (design doc section 2, as
- * amended by ruling R6): `serverNow - max(0, sentAt - queuedAt)`.
+ * amended): `serverNow - max(0, sentAt - queuedAt)`.
  *
  * `queuedAt` and `sentAt` both come from the device's clock, which on a
  * cheap phone can be hours or days wrong after a flat battery. Their

@@ -16,10 +16,10 @@ import type { OutboxEntry } from "@/lib/outbox/types";
  * promise, but both are module-private (never exported), track the WHOLE
  * drain rather than one entry, and are not observable through any hook —
  * there is nothing here for `useOutbox()` (or any other store) to re-render
- * on. Inventing a flag to satisfy this string would be exactly the kind of
- * state this module must not invent (see Task 6 brief). Every entry this
- * component can see is therefore described as "Will send when online" while
- * pending, or its stuck reason while stuck — never "Sending…".
+ * on. Inventing a flag to satisfy this string would mean state that no
+ * drain actually reports. Every entry this component can see is therefore
+ * described as "Will send when online" while pending, or its stuck reason
+ * while stuck — never "Sending…".
  */
 const WAITING: LocalizedText = { en: "{n} waiting to send", fil: "{n} naghihintay na maipadala" };
 const COULD_NOT_SEND: LocalizedText = { en: "{n} couldn't send", fil: "{n} hindi naipadala" };
@@ -52,8 +52,8 @@ const GAVE_UP_REASON: LocalizedText = {
 };
 
 /**
- * Not from the spec table (fix round 1, finding 2). `stuckReason: "permanent"`
- * (design doc section 2, "a 422 becomes stuck ... with ... the reason text")
+ * Not from the spec table. `stuckReason: "permanent"` (design doc
+ * section 2, "a 422 becomes stuck ... with ... the reason text")
  * carries whatever text the server actually sent back in `lastError` — a raw
  * database message, "invalid", "unknown_operation", "pin was never created"
  * (`drain.ts`'s `PIN_NEVER_CREATED`), sometimes only in English. A resident

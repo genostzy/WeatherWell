@@ -5,7 +5,6 @@ import {
   readOutbox,
   useOutbox,
   markDelivered,
-  markFailed,
   applyEntryOutcome,
   retryEntry,
   discardEntry,
@@ -67,7 +66,7 @@ describe("outbox", () => {
     // The spec is explicit: never drop silently. A resident's report is the
     // only evidence that a street is flooding.
     const entry = enqueue("submitWaterLevelReport", { zoneId: "zone-1", depthLevel: "knee" });
-    markFailed(entry.id, "network", false);
+    applyEntryOutcome(entry.id, { result: "retry", error: "network" });
 
     const [stored] = readOutbox();
     expect(stored.attempts).toBe(1);
@@ -81,7 +80,7 @@ describe("outbox", () => {
     // An RLS denial will never succeed on retry. Hammering it wastes a
     // degraded connection, but deleting it hides that something went wrong.
     const entry = enqueue("submitWaterLevelReport", { zoneId: "zone-1", depthLevel: "knee" });
-    markFailed(entry.id, "row-level security", true);
+    applyEntryOutcome(entry.id, { result: "permanent", reason: "row-level security" });
 
     const [stored] = readOutbox();
     expect(stored.status).toBe("stuck");
@@ -392,7 +391,7 @@ describe("applyEntryOutcome / retryEntry / discardEntry", () => {
 
   it("retryEntry clears a stuck entry back to pending with a fresh attempt count", () => {
     const entry = enqueue("submitWaterLevelReport", { zoneId: "zone-1", depthLevel: "knee" });
-    markFailed(entry.id, "denied", true);
+    applyEntryOutcome(entry.id, { result: "permanent", reason: "denied" });
     expect(readOutbox()[0].status).toBe("stuck");
 
     retryEntry(entry.id);
@@ -540,7 +539,7 @@ describe("applyEntryOutcome / retryEntry / discardEntry", () => {
 
   it("discardEntry removes a stuck entry from both the page and the mirror", async () => {
     const entry = enqueue("submitWaterLevelReport", { zoneId: "zone-1", depthLevel: "knee" });
-    markFailed(entry.id, "denied", true);
+    applyEntryOutcome(entry.id, { result: "permanent", reason: "denied" });
     await tick();
 
     discardEntry(entry.id);

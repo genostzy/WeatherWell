@@ -8,12 +8,10 @@ import type { OutboxEntry } from "./types";
 /**
  * Reason recorded on a dependent write (`editPin`, `deleteOwnPin`,
  * `setPinRemoved`, `voteOnPin`) whose own pin's `createPin` has permanently
- * failed — the pin will never exist, so retrying cannot help. Matches what
- * `assertPinIsNotAwaitingCreate` used to throw a `PermanentFailure` for
- * (see Task 2's report, "Fix round 1"), now applied without ever reaching
- * the server: `isOrphanedByFailedCreate` already knows the create is
- * `stuck`, so there is nothing a request could learn that isn't already
- * known here.
+ * failed — the pin will never exist, so retrying cannot help. Applied
+ * without ever reaching the server: `isOrphanedByFailedCreate` already knows
+ * the create is `stuck`, so there is nothing a request could learn that
+ * isn't already known here.
  */
 const PIN_NEVER_CREATED: SendOutcome = { result: "permanent", reason: PIN_NEVER_CREATED_REASON };
 
@@ -114,10 +112,10 @@ async function runDrain(
     // A dependent write (editPin/deleteOwnPin/setPinRemoved/voteOnPin) whose
     // own pin's createPin has already given up for good: the pin will never
     // exist, so this is settled as permanent WITHOUT ever calling dispatch
-    // — there is no request worth making (Task 2's report, "What Task 4
-    // must now call"). Settled before the due/blocked filter below, in the
-    // same pass, so it never also shows up there: isBlockedByPendingCreate
-    // and isOrphanedByFailedCreate are mutually exclusive by construction
+    // — there is no request worth making. Settled before the due/blocked
+    // filter below, in the same pass, so it never also shows up there:
+    // isBlockedByPendingCreate and isOrphanedByFailedCreate are mutually
+    // exclusive by construction
     // (see schedule.ts), but `queue` here is a stale snapshot for the rest
     // of this pass, so each orphaned id is added to `attempted` immediately
     // to keep it out of `pending` below.
@@ -191,10 +189,9 @@ export function drainOutbox(
   // first await is `dispatch(entry)` — so a dispatcher that re-enters this
   // function before yielding would find `inFlight` still null and start a
   // second concurrent drain over the same queue. Today's dispatcher awaits a
-  // dynamic import and cannot do that, but Plan 4 adds four more dispatchers
-  // to this module, and a guard that only holds for the current caller is not
-  // a guard. `inFlight` still exists, for flushOutbox to wait on; it is just
-  // no longer what decides.
+  // network round trip before it could, but a guard that only holds for the
+  // current caller is not a guard. `inFlight` still exists, for flushOutbox
+  // to wait on; it is just not what decides.
   draining = true;
 
   const delivered: OutboxEntry[] = [];

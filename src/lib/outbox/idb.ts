@@ -64,8 +64,7 @@ export function openOutboxDb(): Promise<IDBDatabase> {
  * mirror write is always best-effort from the page's perspective: the
  * `localStorage` copy `outbox.ts` writes synchronously is the source of
  * truth callers see immediately, so a mirror failure must never surface as
- * an unhandled rejection or an uncaught throw. See the module doc above and
- * task-3-brief.md.
+ * an unhandled rejection or an uncaught throw. See the module doc above.
  */
 export async function idbGetAll(): Promise<OutboxEntry[]> {
   if (!hasIndexedDb()) return [];

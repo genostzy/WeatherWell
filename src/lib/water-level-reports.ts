@@ -230,7 +230,7 @@ export function getRecentReportsForZoneLive(
  * submission, so a resident who is online does not wait for a reload or an
  * "online" event (useOutboxDrain's job) to see their own report reach the
  * server. Signing in only happens here because there is something queued to
- * attribute — see Task 2 Step 6 / useOutboxDrain's own guard.
+ * attribute — see drainForCurrentSession's own guard.
  *
  * Drains through dispatchQueued (dispatchers.ts), which now sends every
  * operation through one route-checked endpoint rather than dynamically

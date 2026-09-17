@@ -16,17 +16,17 @@ import { currentSessionUserId } from "@/lib/auth/session-user";
  * queued a moment later is stamped with who queued it. Reading the session
  * signs nobody in.
  *
- * dispatchQueued lives in dispatchers.ts and dynamically imports the real
- * Server Action for whichever operation an entry carries (which pulls in
- * user-server.ts's `import "server-only"`) precisely so this file, and every
- * component that only reads a store's list, never pays that cost just from
- * being loaded.
+ * Every queued write is sent through `POST /api/outbox/<operation>`
+ * (dispatchers.ts → send.ts), where the server checks the entry belongs to
+ * the signed-in user before running the Server Action. Nothing here imports
+ * an action, so this file, and every component that only reads a store's
+ * list, pulls in no server code.
  */
 export function useOutboxDrain(): void {
   useEffect(() => {
     // Nothing queued means nothing to attribute, so drainForCurrentSession
     // signs nobody in. That guard is what keeps a visitor who only reads from
-    // becoming a permanent row in auth.users — see Task 2 Step 6.
+    // becoming a permanent row in auth.users.
     const run = () => drainForCurrentSession();
 
     void currentSessionUserId();

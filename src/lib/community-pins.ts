@@ -450,10 +450,10 @@ export function voteOnPin(pinId: string, direction: 1 | -1): void {
   // duplicate the server refuses and the outbox then carries forever.
   //
   // Excludes stuck entries, deliberately. A vote's route call can answer
-  // 422 permanent (a rejected direction from a stale client build, or —
-  // since Task 4 — a pin whose own create gave up: see
-  // isOrphanedByFailedCreate in schedule.ts), and without this exclusion
-  // that dead entry would sit in the outbox forever satisfying this guard,
+  // 422 permanent (a rejected direction from a stale client build), or be
+  // settled as permanent without being sent (a pin whose own create gave
+  // up: see isOrphanedByFailedCreate in schedule.ts), and without this
+  // exclusion that dead entry would sit in the outbox forever satisfying this guard,
   // locking the resident out of ever voting on the pin again. A stuck entry
   // cannot be "already queued" in any sense that should block a fresh
   // attempt: it is never going to be delivered without an explicit retry.

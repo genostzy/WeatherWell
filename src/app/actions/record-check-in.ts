@@ -59,7 +59,8 @@ async function callerId(
  */
 function classify(error: { code?: string; message?: string }): ActionResult {
   // private.honest_check_in_time() refuses a check-in claiming to be more
-  // than 3 days old (ruling R3). Retrying cannot make it younger, so it is
+  // than 3 days old, the same window after which the queue itself gives
+  // up. Retrying cannot make it younger, so it is
   // permanent — but deliberately WITHOUT reason "too_old", whose badge copy
   // tells the resident to report the flood again. That sentence is about
   // water-level reports, not check-ins.

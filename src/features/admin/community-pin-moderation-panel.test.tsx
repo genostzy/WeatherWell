@@ -12,7 +12,7 @@ vi.mock("@/lib/auth/anonymous-session", () => ({
 import { CommunityPinModerationPanel } from "./community-pin-moderation-panel";
 import { renderWithData, FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
 import { addCommunityPin, type CommunityPin } from "@/lib/community-pins";
-import { readOutbox, markFailed } from "@/lib/outbox/outbox";
+import { readOutbox, applyEntryOutcome } from "@/lib/outbox/outbox";
 import type { Official } from "@/lib/auth/official";
 
 /**
@@ -182,7 +182,7 @@ describe("CommunityPinModerationPanel", () => {
     expect(entry).toBeDefined();
     // Simulates what a real RLS-refused write looks like once the drain
     // classifies it (see setPinRemoved in app/actions/pins.ts).
-    markFailed(entry.id, "That pin is not yours to remove, or no longer exists.", true);
+    applyEntryOutcome(entry.id, { result: "permanent", reason: "That pin is not yours to remove, or no longer exists." });
 
     expect(await screen.findByText(/could not save/i)).toBeInTheDocument();
   });

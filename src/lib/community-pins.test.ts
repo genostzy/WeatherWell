@@ -10,7 +10,7 @@ vi.mock("@/lib/auth/anonymous-session", () => ({
   useSessionUserId: () => null,
 }));
 
-import { enqueue, markFailed, readOutbox } from "@/lib/outbox/outbox";
+import { enqueue, applyEntryOutcome, readOutbox } from "@/lib/outbox/outbox";
 import {
   mergePins,
   isOwnPin,
@@ -109,7 +109,7 @@ describe("mergePins", () => {
       lat: 16.06,
       lng: 120.4,
     });
-    markFailed(entry.id, "denied", true);
+    applyEntryOutcome(entry.id, { result: "permanent", reason: "denied" });
 
     const queued = JSON.parse(localStorage.getItem("weatherwell.outbox") ?? "[]");
 
@@ -288,7 +288,7 @@ describe("queued writes", () => {
     // "already queued" guard above forever, locking the resident out of
     // ever voting on this pin again.
     voteOnPin("pin-1", 1);
-    markFailed(readOutbox()[0].id, "rejected", true);
+    applyEntryOutcome(readOutbox()[0].id, { result: "permanent", reason: "rejected" });
 
     voteOnPin("pin-1", -1);
 
@@ -334,18 +334,16 @@ describe("mergePins with a queued vote", () => {
   });
 });
 
-// final-review.md F1/F5: a write that references a pin must not race that
-// pin's own still-queued createPin. Both cases used to be proved here by
-// driving the REAL drainOutbox, dispatchQueued and dispatchQueuedPinWrite/
-// dispatchQueuedVote against a faked Supabase client — the dispatch chain
-// Task 4 replaced with one route-checked endpoint per operation
-// (src/app/api/outbox/[operation]/route.ts), so there is no longer a
-// same-process Server Action call for a test here to fake. The same two
+// F1/F5: a write that references a pin must not race that pin's own
+// still-queued createPin. Every queued write now goes through one
+// route-checked endpoint per operation
+// (src/app/api/outbox/[operation]/route.ts), so there is no same-process
+// Server Action call for a test here to fake. The same two
 // rules are proved directly against drainOutbox now, in
 // src/lib/outbox/drain.test.ts's "drainOutbox respects schedule.ts" describe
 // block: F1 by "leaves a pin-dependent entry queued and untouched while its
 // create is still pending" (isBlockedByPendingCreate), and F5 by "F5:
 // settles a vote on a pin whose create has permanently failed, without ever
 // dispatching it" (isOrphanedByFailedCreate) — both exercising the exact
-// predicates schedule.ts documents as the two branches of
-// assertPinIsNotAwaitingCreate's original rule (see Task 2's report).
+// predicates schedule.ts documents: blocked means wait, orphaned means give
+// up.

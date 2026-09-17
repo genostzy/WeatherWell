@@ -447,7 +447,7 @@ self.addEventListener("fetch", (event) => {
  * service-worker.test.ts runs every row here exactly as schedule.test.ts
  * does against the real module.
  *
- * Hard rules (see the plan's global constraints and task-5-brief.md):
+ * Hard rules:
  *   - never calls Supabase directly, never creates/refreshes/reads a session
  *     (the route handler's own Supabase client does that from the request's
  *     cookies — `credentials: "same-origin"` below is what carries them);
@@ -534,7 +534,7 @@ function outboxDelete(id) {
  * put) would simply be clobbered by this function writing back a value
  * derived from the stale pre-fetch copy.
  *
- * Three outcomes, in order (see task-5-review.md's "Fix round 1" finding):
+ * Three outcomes, in order:
  *  1. The row is gone — the page discarded it, or an earlier settle already
  *     delivered/removed it. Nothing is written, for ANY outcome, including a
  *     late `delivered`: there is nothing left to confirm or retry against.
@@ -816,7 +816,7 @@ function drainOutboxInWorker() {
 
     // A dependent write whose createPin has already given up for good: the
     // pin will never exist, so it is settled as permanent WITHOUT a network
-    // call, exactly like the page's drain.ts (R4).
+    // call, exactly like the page's drain.ts.
     const orphaned = remaining.filter(
       (entry) => entry.status === "pending" && isOrphanedByFailedCreate(entry, remaining)
     );

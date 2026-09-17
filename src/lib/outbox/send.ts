@@ -6,7 +6,7 @@ import type { OutboxEntry } from "./types";
 /**
  * Sends one queued entry through the server-checked route
  * (`POST /api/outbox/<operation>`) — the one way into the queue's writes,
- * shared by the page and (Task 5) the service worker. Maps the response
+ * shared by the page and the service worker (public/sw.js restates it). Maps the response
  * onto `SendOutcome` per the design doc's status table; never throws, since
  * a network failure is exactly the condition this whole module exists to
  * survive, and `drainOutbox` always has a next attempt to give a `retry`.

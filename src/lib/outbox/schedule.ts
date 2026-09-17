@@ -39,10 +39,9 @@ export const PRUNE_STUCK_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
  * Operations that reference an existing pin by id and so must not race their
- * pin's own `createPin` (design doc, "Queue order is respected", and — for
- * `voteOnPin` specifically — R4: today's `assertPinIsNotAwaitingCreate` in
- * `src/lib/community-pins.ts` guards votes exactly like edit/delete/
- * moderation, so the new rule keeps doing the same). `createPin` itself is
+ * pin's own `createPin` (design doc, "Queue order is respected"). A vote is
+ * held back exactly like an edit, a delete or a moderation: a vote on a pin
+ * the server does not have yet can only be refused. `createPin` itself is
  * never one of these; nothing can be queued ahead of its own create.
  */
 const DEPENDS_ON_PIN_CREATE = new Set<OutboxEntry["operation"]>([
@@ -61,12 +60,11 @@ export const PIN_NEVER_CREATED_REASON = "pin was never created";
 
 /**
  * The queued `createPin` entry `entry` depends on, if any. A createPin
- * entry's own outbox id IS the pin's row id (see `dispatchQueuedPinWrite`'s
- * create branch in `community-pins.ts`), so this is an exact id match, not a
- * heuristic — mirroring `findQueuedCreateForPin`. Like that function, this
- * searches the whole `queue` the caller passes in; it is the caller's job
- * (Task 4) to pass the queue that actually matters (the page's outbox, or
- * the worker's IndexedDB copy).
+ * entry's own outbox id IS the pin's row id (the route passes the entry id
+ * to `createPin` as the row's id), so this is an exact id match, not a
+ * heuristic. It searches the whole `queue` the caller passes in; the caller
+ * passes the queue that actually matters (the page's outbox, or the
+ * worker's IndexedDB copy).
  */
 function findDependencyCreate(
   entry: OutboxEntry,
@@ -202,9 +200,8 @@ export function shouldPrune(entry: OutboxEntry, now: Date): boolean {
 
 /**
  * True when `entry` must wait behind a still-queued, still-live `createPin`
- * for the same pin — the "wait" branch of `assertPinIsNotAwaitingCreate`
- * (see `src/lib/community-pins.ts`): its create was found and has not
- * (yet) permanently failed. False once that create is `stuck` — see
+ * for the same pin: its create was found and has not (yet) permanently
+ * failed. False once that create is `stuck` — see
  * `isOrphanedByFailedCreate` for that branch instead, so the two never
  * overlap: blocked means "wait", orphaned means "give up".
  */
@@ -215,12 +212,11 @@ export function isBlockedByPendingCreate(entry: OutboxEntry, queue: readonly Out
 
 /**
  * True when `entry` depends on a pin whose `createPin` has already given up
- * (`status === "stuck"`) — the "permanent failure" branch of
- * `assertPinIsNotAwaitingCreate`: the pin will never exist, so the dependent
- * write should fail permanently rather than wait forever or be sent to a
- * server that can only refuse it. Task 4's drain applies
- * `{ result: "permanent", reason: "pin was never created" }` (or similar) to
- * an entry this returns true for, in place of sending it.
+ * (`status === "stuck"`): the pin will never exist, so the dependent write
+ * should fail permanently rather than wait forever or be sent to a server
+ * that can only refuse it. Both drains (drain.ts and public/sw.js) settle
+ * an entry this returns true for with `PIN_NEVER_CREATED_REASON`, in place
+ * of sending it.
  */
 export function isOrphanedByFailedCreate(entry: OutboxEntry, queue: readonly OutboxEntry[]): boolean {
   const create = findDependencyCreate(entry, queue);

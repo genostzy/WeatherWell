@@ -340,16 +340,6 @@ export function applyEntryOutcome(id: string, outcome: SendOutcome): void {
 }
 
 /**
- * The write did not land. Kept as a thin wrapper over `applyEntryOutcome`
- * for callers (and tests) written against the old two-outcome shape: a
- * resident's report is the only evidence a street is flooding, so it stays
- * queued either way rather than being dropped.
- */
-export function markFailed(id: string, error: string, permanent: boolean): void {
-  applyEntryOutcome(id, permanent ? { result: "permanent", reason: error } : { result: "retry", error });
-}
-
-/**
  * A resident (or an admin, via the badge) asking to retry a stuck entry:
  * attempts and the stuck reason clear, and it is due again immediately.
  *

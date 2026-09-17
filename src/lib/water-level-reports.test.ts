@@ -23,7 +23,7 @@ import {
   mergeReports,
   useWaterLevelReports,
 } from "./water-level-reports";
-import { readOutbox, enqueue, markFailed, OutboxWriteFailed } from "@/lib/outbox/outbox";
+import { readOutbox, enqueue, applyEntryOutcome, OutboxWriteFailed } from "@/lib/outbox/outbox";
 import { drainOutbox } from "@/lib/outbox/drain";
 import { rememberSessionUserId } from "@/lib/auth/session-user";
 
@@ -86,7 +86,7 @@ describe("water-level-reports", () => {
     // (without an explicit retry), so if mergeReports kept rendering it, it
     // would count toward the agreeing-report consensus threshold forever too.
     const entry = enqueue("submitWaterLevelReport", { zoneId: "zone-1", depthLevel: "knee" });
-    markFailed(entry.id, "new row violates row-level security policy", true);
+    applyEntryOutcome(entry.id, { result: "permanent", reason: "new row violates row-level security policy" });
 
     expect(mergeReports([], readOutbox())).toHaveLength(0);
   });
