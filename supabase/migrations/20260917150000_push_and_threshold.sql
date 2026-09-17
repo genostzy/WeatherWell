@@ -130,7 +130,7 @@ begin
     -- Generate localized message
     v_message := jsonb_build_object(
       'en', 'Auto-triggered: ' || v_report_count || ' crowd reports indicate ' || v_severity || ' level flooding.',
-      fil, 'Auto-triggered: ' || v_report_count || ' na ulat ng komunidad ay nagpapahiwatig ng ' || v_severity || ' na pagbaha.'
+      'fil', 'Auto-triggered: ' || v_report_count || ' na ulat ng komunidad ay nagpapahiwatig ng ' || v_severity || ' na pagbaha.'
     );
 
     -- Call set_zone_alert with auto_crowdsourced source
