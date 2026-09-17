@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { useState, useEffect } from "react";
 import { act, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -44,7 +44,28 @@ vi.mock("@/lib/auth/anonymous-session", () => ({
     useEffect(() => auth.subscribe(() => setId(auth.get())), []);
     return id;
   },
+  // Never reached by these tests (every retried entry already has an owner),
+  // but session-drain.ts imports it, so the mock must define it.
+  ensureAnonymousSession: async () => auth.get(),
 }));
+
+/**
+ * The page drain a Retry tap starts reads the session through the browser
+ * client (session-user.ts). Faked here with the same identity the reactive
+ * hook above reports, so the drain sends as whoever the badge shows.
+ */
+vi.mock("@/lib/supabase/browser", () => ({
+  getBrowserClient: () => ({
+    auth: {
+      getSession: async () => {
+        const id = auth.get();
+        return { data: { session: id ? { user: { id } } : null }, error: null };
+      },
+    },
+  }),
+}));
+
+const fetchMock = vi.fn();
 
 /**
  * fake-indexeddb keeps its databases in a process-wide singleton for the
@@ -90,6 +111,20 @@ beforeEach(async () => {
   await resetIdb();
   auth.set(null);
   counter = 0;
+  fetchMock.mockReset();
+  // A transient failure, unless a test says otherwise: a retried entry stays
+  // pending (backing off), and every drain a tap starts runs to completion.
+  // A send that never answered would leave that drain in flight, and the
+  // queue's one-drain-at-a-time gate would then decline every later drain
+  // in this file.
+  fetchMock.mockImplementation(
+    async () => new Response(JSON.stringify({ result: "retry" }), { status: 503 })
+  );
+  vi.stubGlobal("fetch", fetchMock);
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 describe("OutboxBadge", () => {
@@ -262,6 +297,46 @@ describe("OutboxBadge", () => {
     expect(screen.getByRole("button", { name: "1 waiting to send" })).toBeInTheDocument();
     const [stored] = JSON.parse(localStorage.getItem(OUTBOX_KEY)!) as OutboxEntry[];
     expect(stored.status).toBe("pending");
+  });
+
+  it("Retry sends: a tap POSTs the entry to /api/outbox/<operation> without waiting for another write (I-2)", async () => {
+    const user = userEvent.setup();
+    auth.set("user-a");
+    const stuck = entry({
+      userId: "user-a",
+      operation: "recordCheckIn",
+      payload: { zoneId: "zone-1", status: "safe" },
+      status: "stuck",
+      stuckReason: "gave_up",
+    });
+    seed(stuck);
+    renderWithData(<OutboxBadge />);
+    await user.click(screen.getByRole("button", { name: "1 couldn't send" }));
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Retry" }));
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/outbox/recordCheckIn");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toMatchObject({ id: stuck.id, userId: "user-a" });
+  });
+
+  it("Retry that delivers removes the entry, and the badge hides (I-2)", async () => {
+    const user = userEvent.setup();
+    auth.set("user-a");
+    seed(entry({ userId: "user-a", status: "stuck", stuckReason: "gave_up" }));
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ result: "delivered" }), { status: 200 }));
+    renderWithData(<OutboxBadge />);
+    await user.click(screen.getByRole("button", { name: "1 couldn't send" }));
+
+    await user.click(screen.getByRole("button", { name: "Retry" }));
+
+    await vi.waitFor(() =>
+      expect(screen.queryByRole("button", { name: /couldn't send|waiting to send/ })).toBeNull()
+    );
+    expect(JSON.parse(localStorage.getItem(OUTBOX_KEY)!)).toEqual([]);
   });
 
   describe("Discard", () => {

@@ -175,15 +175,19 @@ function broadcastChanged(): void {
  * anything — `OutboxWriteFailed` detection depends on that write having
  * already happened by the time this function returns. IndexedDB and the
  * broadcast come after, and neither can fail this call: `idbPut`/`idbDelete`
- * resolve rather than reject in every case (see idb.ts), and this fires
- * them without awaiting, so a slow or unavailable IndexedDB never makes a
+ * resolve rather than reject in every case (see idb.ts), and nothing here
+ * waits for them, so a slow or unavailable IndexedDB never makes a
  * synchronous caller (enqueue, markDelivered, …) wait on it.
+ *
+ * Returns a promise that resolves once the mirror writes have settled. A
+ * caller that wakes the service worker waits for it, because the worker can
+ * only send what the mirror already holds.
  */
-function commit(next: OutboxEntry[], changed: OutboxEntry[] = [], deletedIds: string[] = []): void {
+function commit(next: OutboxEntry[], changed: OutboxEntry[] = [], deletedIds: string[] = []): Promise<void> {
   store.write(next);
-  for (const entry of changed) void idbPut(entry);
-  for (const id of deletedIds) void idbDelete(id);
+  const mirrored = Promise.all([...changed.map((entry) => idbPut(entry)), ...deletedIds.map((id) => idbDelete(id))]);
   broadcastChanged();
+  return mirrored.then(() => undefined);
 }
 
 export function enqueue<K extends OutboxOperation>(
@@ -319,6 +323,11 @@ export function markFailed(id: string, error: string, permanent: boolean): void 
 /**
  * A resident (or an admin, via the badge) asking to retry a stuck entry:
  * attempts and the stuck reason clear, and it is due again immediately.
+ *
+ * Wakes the service worker once the retried row is mirrored, exactly as
+ * `enqueue` does for a new write, so a Retry is sent even if the app closes
+ * straight after the tap. Sending from the page is the caller's half — see
+ * `OutboxBadge`, which starts `drainForCurrentSession()` right after this.
  */
 export function retryEntry(id: string): void {
   const all = readOutbox();
@@ -326,10 +335,10 @@ export function retryEntry(id: string): void {
   if (!current) return;
 
   const retried = retryStuck(current, new Date());
-  commit(
+  void commit(
     all.map((entry) => (entry.id === id ? retried : entry)),
     [retried]
-  );
+  ).then(requestBackgroundSend);
 }
 
 /** A stuck entry the resident chose not to send after all. Gone for good. */

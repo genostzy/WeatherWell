@@ -306,6 +306,52 @@
         "nextAttemptAt": "2026-09-16T12:00:00.000Z",
         "updatedAt": "2026-09-16T12:00:00.000Z"
       }
+    },
+    {
+      "name": "signed_out never counts toward the attempt cap, even one attempt short of it",
+      "entry": {
+        "id": "e-signed-out-at-9",
+        "operation": "submitWaterLevelReport",
+        "payload": { "zoneId": "zone-1", "depthLevel": "knee" },
+        "queuedAt": "2026-09-16T11:00:00.000Z",
+        "attempts": 9,
+        "userId": "user-1",
+        "status": "pending",
+        "nextAttemptAt": "2026-09-16T12:00:00.000Z",
+        "updatedAt": "2026-09-16T11:00:00.000Z"
+      },
+      "outcome": { "result": "signed_out" },
+      "now": "2026-09-16T12:00:00.000Z",
+      "expect": {
+        "attempts": 9,
+        "status": "pending",
+        "nextAttemptAt": "2026-09-16T12:00:00.000Z",
+        "updatedAt": "2026-09-16T12:00:00.000Z"
+      }
+    },
+    {
+      "name": "signed_out when queuedAt is 3 days and 1 minute before now gives up, without counting an attempt",
+      "entry": {
+        "id": "e-signed-out-old",
+        "operation": "submitWaterLevelReport",
+        "payload": { "zoneId": "zone-1", "depthLevel": "knee" },
+        "queuedAt": "2026-09-13T11:59:00.000Z",
+        "attempts": 2,
+        "userId": "user-1",
+        "status": "pending",
+        "nextAttemptAt": "2026-09-16T12:00:00.000Z",
+        "updatedAt": "2026-09-15T11:00:00.000Z"
+      },
+      "outcome": { "result": "signed_out" },
+      "now": "2026-09-16T12:00:00.000Z",
+      "expect": {
+        "attempts": 2,
+        "status": "stuck",
+        "stuckReason": "gave_up",
+        "lastError": "signed_out",
+        "nextAttemptAt": null,
+        "updatedAt": "2026-09-16T12:00:00.000Z"
+      }
     }
   ],
   "isDue": [

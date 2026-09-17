@@ -6,6 +6,7 @@ import { OverlayDialog } from "@/components/overlay-dialog";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { useOutbox, retryEntry, discardEntry } from "@/lib/outbox/outbox";
+import { drainForCurrentSession } from "@/lib/outbox/session-drain";
 import { useSessionUserId } from "@/lib/auth/anonymous-session";
 import { ReferenceDataContext } from "@/lib/reference-data/provider";
 import { formatActionTime } from "@/lib/official-actions-copy";
@@ -128,6 +129,19 @@ export function OutboxBadge() {
     setDiscardingId(null);
   }
 
+  /**
+   * Retry has to SEND, not just relabel the entry: `retryEntry` makes it due
+   * and wakes the service worker, and this starts the page's own drain, the
+   * same send-now every store starts after a write. The drain lives here
+   * rather than inside `retryEntry` because session-drain.ts imports the
+   * store module; calling it from the store would make the two import each
+   * other.
+   */
+  function retry(entryId: string) {
+    retryEntry(entryId);
+    drainForCurrentSession();
+  }
+
   function confirmDiscard(entryId: string) {
     discardEntry(entryId);
     // The row (and its Discard button) is gone — nothing to return focus to.
@@ -181,7 +195,7 @@ export function OutboxBadge() {
                 )}
                 {entry.status === "stuck" && discardingId !== entry.id && (
                   <div className="flex gap-2 pt-1">
-                    <Button type="button" size="lg" variant="outline" onClick={() => retryEntry(entry.id)}>
+                    <Button type="button" size="lg" variant="outline" onClick={() => retry(entry.id)}>
                       {t(RETRY_LABEL, lang)}
                     </Button>
                     <Button

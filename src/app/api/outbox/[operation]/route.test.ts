@@ -95,6 +95,39 @@ describe("POST /api/outbox/[operation]", () => {
     expect(await response.json()).toEqual({ result: "permanent", reason: "invalid" });
   });
 
+  it.each([
+    ["an unparseable string", "not a date"],
+    ["an empty string", ""],
+    ["a number", 1726444800000],
+    ["null", null],
+  ])(
+    "refuses a queuedAt that is %s as permanent invalid, rather than retrying it ten times (Minor 6)",
+    async (_label, queuedAt) => {
+      const response = await post("submitWaterLevelReport", {
+        id: "e1",
+        userId: "user-1",
+        queuedAt,
+        payload: reportPayload,
+      });
+
+      expect(response.status).toBe(422);
+      expect(await response.json()).toEqual({ result: "permanent", reason: "invalid" });
+      expect(submitWaterLevelReport).not.toHaveBeenCalled();
+    }
+  );
+
+  it("refuses a body with no queuedAt at all as permanent invalid (Minor 6)", async () => {
+    const response = await post("recordCheckIn", {
+      id: "c1",
+      userId: "user-1",
+      payload: { zoneId: "zone-1", status: "safe" },
+    });
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({ result: "permanent", reason: "invalid" });
+    expect(recordCheckIn).not.toHaveBeenCalled();
+  });
+
   it("answers signed_out with no claims, and never calls the action", async () => {
     getClaims.mockResolvedValue({ data: { claims: null } });
 

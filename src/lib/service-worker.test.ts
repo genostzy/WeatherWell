@@ -967,7 +967,9 @@ describe("service worker outbox drain", () => {
       },
     });
 
-    await fireOutboxSync(listeners);
+    // `future` is owned and still pending (backing off), so the handler asks
+    // the browser to run it again (I-1).
+    await expect(fireOutboxSync(listeners)).rejects.toThrow();
 
     expect(calls.map((call) => call.id)).toEqual(["due-1", "due-2"]);
     expect(calls.every((call) => call.url === "/api/outbox/submitWaterLevelReport")).toBe(true);
@@ -1001,7 +1003,9 @@ describe("service worker outbox drain", () => {
       },
     });
 
-    await fireOutboxSync(listeners);
+    // The edit is owned and still pending (it was blocked behind the create for
+    // this pass), so the handler asks the browser to run it again (I-1).
+    await expect(fireOutboxSync(listeners)).rejects.toThrow();
 
     expect(calls).toEqual(["/api/outbox/createPin"]);
     const [remainingEdit] = (await idbGetAll()).filter((entry) => entry.id === "edit-1");
@@ -1073,7 +1077,9 @@ describe("service worker outbox drain", () => {
       },
     });
 
-    await fireOutboxSync(listeners);
+    // e-503 (backing off) and e-401 (left for the page) are owned and still
+    // pending, so the handler asks the browser to run it again (I-1).
+    await expect(fireOutboxSync(listeners)).rejects.toThrow();
 
     const all = await idbGetAll();
     const byId = new Map(all.map((entry) => [entry.id, entry]));
@@ -1116,6 +1122,90 @@ describe("service worker outbox drain", () => {
     });
 
     await expect(fireOutboxSync(listeners)).rejects.toThrow();
+  });
+
+  it("a second failure still reschedules: the retried entry is backing off (1 minute), not due, and the handler still rejects (I-1)", async () => {
+    // attempts 1 -> 2 waits BACKOFF_MINUTES[1] = 1 minute, so the retried
+    // copy is NOT due at this pass's "now". Resolving here would tell the
+    // browser the sync is done, and nothing would ever wake the worker again.
+    await seedOutbox([outboxEntry("e-second-failure", { attempts: 1 })]);
+
+    const calls: string[] = [];
+    const { listeners } = loadServiceWorker({
+      fetch: async (url) => {
+        calls.push(url);
+        return response("", 503);
+      },
+    });
+
+    await expect(fireOutboxSync(listeners)).rejects.toThrow();
+
+    expect(calls).toEqual(["/api/outbox/submitWaterLevelReport"]);
+    const [stored] = await idbGetAll();
+    expect(stored).toMatchObject({
+      status: "pending",
+      attempts: 2,
+      nextAttemptAt: "2026-09-16T12:01:00.000Z",
+    });
+  });
+
+  it("an owned entry that is only backing off still reschedules, without being sent (I-1)", async () => {
+    // The page already failed this entry before the tab closed, so it is
+    // waiting out its backoff. A sync firing now has nothing due to send, but
+    // the entry is still owed a send: the handler must ask to run again.
+    await seedOutbox([
+      outboxEntry("e-backing-off", { attempts: 3, nextAttemptAt: "2026-09-16T12:10:00.000Z" }),
+    ]);
+
+    const calls: string[] = [];
+    const { listeners } = loadServiceWorker({
+      fetch: async (url) => {
+        calls.push(url);
+        return response(JSON.stringify({ result: "delivered" }), 200);
+      },
+    });
+
+    await expect(fireOutboxSync(listeners)).rejects.toThrow();
+
+    expect(calls).toEqual([]);
+    const [stored] = await idbGetAll();
+    expect(stored).toMatchObject({ id: "e-backing-off", status: "pending", attempts: 3 });
+  });
+
+  it("nothing owned and pending means resolve: held, stuck and unowned entries never reschedule", async () => {
+    const noUserField: OutboxEntry = {
+      id: "no-user-field",
+      operation: "submitWaterLevelReport",
+      payload: { zoneId: "zone-1", depthLevel: "knee" },
+      queuedAt: "2026-09-16T09:00:00.000Z",
+      attempts: 0,
+      status: "pending",
+      nextAttemptAt: null,
+      updatedAt: "2026-09-16T09:00:00.000Z",
+    };
+    await seedOutbox([
+      outboxEntry("held", { status: "held" }),
+      outboxEntry("stuck", { status: "stuck", stuckReason: "gave_up" }),
+      outboxEntry("null-owner", { userId: null }),
+      noUserField,
+    ]);
+
+    const { listeners } = loadServiceWorker({
+      fetch: async () => response(JSON.stringify({ result: "delivered" }), 200),
+    });
+
+    await expect(fireOutboxSync(listeners)).resolves.toBeUndefined();
+  });
+
+  it("resolves once every owned entry has been delivered", async () => {
+    await seedOutbox([outboxEntry("e-delivered-1"), outboxEntry("e-delivered-2")]);
+
+    const { listeners } = loadServiceWorker({
+      fetch: async () => response(JSON.stringify({ result: "delivered" }), 200),
+    });
+
+    await expect(fireOutboxSync(listeners)).resolves.toBeUndefined();
+    expect(await idbGetAll()).toEqual([]);
   });
 
   it("deletes stuck entries older than 7 days on the next drain", async () => {
@@ -1308,7 +1398,9 @@ describe("service worker outbox drain", () => {
       await idbPut(pageVersion);
 
       gate.resolve();
-      await waited;
+      // The page's retried copy is owned and pending, so the handler asks the
+      // browser to run again (I-1) — without having overwritten it.
+      await expect(waited).rejects.toThrow();
 
       expect(await idbGetAll()).toEqual([pageVersion]);
     });

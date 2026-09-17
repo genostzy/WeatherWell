@@ -99,9 +99,26 @@ export function applyOutcome(entry: OutboxEntry, outcome: SendOutcome, now: Date
 
     // Left for the page: the worker never creates or refreshes a session, so
     // it cannot tell a genuinely signed-out resident from one whose cookies
-    // just have not reached it yet. Nothing else about the entry changes.
-    case "signed_out":
+    // just have not reached it yet. A brief sign-out must not burn attempts,
+    // so this never counts toward MAX_ATTEMPTS — but it does count toward
+    // the 3-day give-up, or a device whose refresh token has died would show
+    // "Will send when online" forever. Past that, it is stuck like any other
+    // write that has waited too long, and the resident can Retry it.
+    case "signed_out": {
+      const age = now.getTime() - Date.parse(entry.queuedAt);
+      if (age > GIVE_UP_AFTER_MS) {
+        const stuckReason: StuckReason = "gave_up";
+        return {
+          ...entry,
+          status: "stuck",
+          stuckReason,
+          lastError: "signed_out",
+          nextAttemptAt: null,
+          updatedAt,
+        };
+      }
       return { ...entry, updatedAt };
+    }
 
     case "permanent": {
       const stuckReason: StuckReason = outcome.reason === "too_old" ? "too_old" : "permanent";

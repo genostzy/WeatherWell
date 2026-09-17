@@ -8,7 +8,21 @@ function reply(status: number, body: Record<string, unknown>): NextResponse {
   return NextResponse.json(body, { status, headers: HEADERS });
 }
 
-type Runner = (id: string, payload: Record<string, unknown>, queuedAt: string) => Promise<ActionResult>;
+/**
+ * An ISO 8601 date-time with an explicit zone (what `Date#toISOString` writes
+ * on both clients), as epoch milliseconds, or null for anything else.
+ * `Date.parse` alone is not enough: it accepts forms like "Sep 16 2026" that
+ * the queue never writes.
+ */
+const ISO_DATE_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?(Z|[+-]\d{2}:\d{2})$/;
+
+function parseIsoTime(value: unknown): number | null {
+  if (typeof value !== "string" || !ISO_DATE_TIME.test(value)) return null;
+  const ms = Date.parse(value);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+type Runner =(id: string, payload: Record<string, unknown>, queuedAt: string) => Promise<ActionResult>;
 
 /**
  * One runner per operation, each importing and calling the exact Server
@@ -83,6 +97,11 @@ export async function POST(
   if (typeof body.id !== "string" || typeof body.payload !== "object" || body.payload === null) {
     return reply(422, { result: "permanent", reason: "invalid" });
   }
+  // Checked here, before anything runs: an unusable time would otherwise
+  // reach Postgres as 22007, which reads as transient and burns all ten
+  // retries on a write that can never succeed.
+  const queuedAt = parseIsoTime(body.queuedAt);
+  if (queuedAt === null) return reply(422, { result: "permanent", reason: "invalid" });
 
   const supabase = await createSupabaseUserClient();
   const { data } = await supabase.auth.getClaims();
@@ -95,8 +114,7 @@ export async function POST(
   if (body.userId !== sub) return reply(409, { result: "held" });
 
   try {
-    const queuedAt = typeof body.queuedAt === "string" ? body.queuedAt : new Date().toISOString();
-    const result = await run(body.id, body.payload as Record<string, unknown>, queuedAt);
+    const result = await run(body.id, body.payload as Record<string, unknown>, new Date(queuedAt).toISOString());
     if (result.ok) return reply(200, { result: "delivered" });
     if (result.permanent) return reply(422, { result: "permanent", reason: result.reason ?? result.error });
     return reply(503, { result: "retry" });

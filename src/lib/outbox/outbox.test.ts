@@ -15,6 +15,7 @@ import {
 } from "./outbox";
 import { idbGetAll, idbPut, idbDelete, OUTBOX_DB, OUTBOX_CHANNEL } from "./idb";
 import * as idb from "./idb";
+import * as sync from "./sync";
 import type { OutboxEntry } from "./types";
 
 /** Lets a fire-and-forget IndexedDB write actually land before we check it. */
@@ -353,6 +354,30 @@ describe("applyEntryOutcome / retryEntry / discardEntry", () => {
     expect(retried.status).toBe("pending");
     expect(retried.attempts).toBe(0);
     expect(retried.stuckReason).toBeUndefined();
+  });
+
+  it("retryEntry wakes the service worker, but only after the retried row is in the mirror it reads (I-2)", async () => {
+    const entry = enqueue("submitWaterLevelReport", { zoneId: "zone-1", depthLevel: "knee" });
+    applyEntryOutcome(entry.id, { result: "permanent", reason: "denied" });
+    await tick();
+
+    const events: string[] = [];
+    const realPut = idb.idbPut;
+    const putSpy = vi.spyOn(idb, "idbPut").mockImplementation(async (written) => {
+      await realPut(written);
+      events.push(`mirrored ${written.id} as ${written.status}`);
+    });
+    const syncSpy = vi.spyOn(sync, "requestBackgroundSend").mockImplementation(() => {
+      events.push("background send requested");
+    });
+    try {
+      retryEntry(entry.id);
+      await vi.waitFor(() => expect(syncSpy).toHaveBeenCalledTimes(1));
+      expect(events).toEqual([`mirrored ${entry.id} as pending`, "background send requested"]);
+    } finally {
+      putSpy.mockRestore();
+      syncSpy.mockRestore();
+    }
   });
 
   it("discardEntry removes a stuck entry from both the page and the mirror", async () => {

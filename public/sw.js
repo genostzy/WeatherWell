@@ -654,9 +654,21 @@ function applyOutcome(entry, outcome, now) {
 
     // Left for the page: the worker never creates or refreshes a session, so
     // it cannot tell a genuinely signed-out resident from one whose cookies
-    // just have not reached it yet.
-    case "signed_out":
+    // just have not reached it yet. Never counts toward the attempt cap, but
+    // does count toward the 3-day give-up (see schedule.ts).
+    case "signed_out": {
+      const age = now.getTime() - Date.parse(entry.queuedAt);
+      if (age > OUTBOX_GIVE_UP_AFTER_MS) {
+        return Object.assign({}, entry, {
+          status: "stuck",
+          stuckReason: "gave_up",
+          lastError: "signed_out",
+          nextAttemptAt: null,
+          updatedAt,
+        });
+      }
       return Object.assign({}, entry, { updatedAt });
+    }
 
     case "permanent": {
       const stuckReason = outcome.reason === "too_old" ? "too_old" : "permanent";
@@ -762,10 +774,29 @@ function outboxSend(entry) {
 const OUTBOX_PIN_NEVER_CREATED = { result: "permanent", reason: "pin was never created" };
 
 /**
+ * True when `entry` is still owed a send by this worker: it is `pending` and
+ * has an owner. Due now, backing off, blocked behind its createPin, or left
+ * untouched by a 401 all count; held, stuck and unowned entries do not (a
+ * held or unowned entry waits for the page, a stuck one for the resident).
+ */
+function isOwedASend(entry) {
+  return entry.userId != null && entry.status === "pending";
+}
+
+/**
  * Runs one drain pass: prune, settle orphaned dependents, send everything
  * else that is due, unblocked and owned, oldest first. Broadcasts a change
- * (if anything changed) and — this is what lets Background Sync reschedule
- * — throws when a `retry` outcome left an entry due again right now.
+ * (if anything changed) and then — this is what keeps Background Sync
+ * retrying — re-reads the store and throws whenever any owned `pending`
+ * entry remains, whether it is due right now or still backing off.
+ *
+ * Throwing only for an entry due right now is not enough: the backoff table
+ * makes only the FIRST failure due immediately (0 minutes), so a second
+ * failure, or a sync that finds nothing but a backing-off entry the page
+ * already failed, would resolve, the browser would count the sync as done,
+ * and nothing would wake the worker again until the app was reopened. The
+ * browser's own sync backoff paces the retries; this worker's per-entry
+ * `nextAttemptAt` still decides which entries a pass actually sends.
  *
  * A single `now`, captured once, is used for every decision in the pass
  * (pruning, due-ness, and every applyOutcome call): the worker sees the
@@ -803,19 +834,14 @@ function drainOutboxInWorker() {
       .sort((a, b) => Date.parse(a.queuedAt) - Date.parse(b.queuedAt));
 
     let changed = toPrune.length > 0;
-    let stillDue = false;
 
     function settle(entry, outcomePromise) {
       return Promise.resolve(outcomePromise).then((outcome) =>
         outboxSettleEntry(entry, outcome, now).then((result) => {
           // A skipped write (the row is gone, or the page moved it on) makes
           // no change of THIS call's own — see outboxSettleEntry's doc — so
-          // it must not flip `changed`/`stillDue` on the page's behalf.
-          if (!result.wrote) return;
-          changed = true;
-          if (!result.deleted && outcome.result === "retry" && isDue(result.next, now)) {
-            stillDue = true;
-          }
+          // it must not flip `changed` on the page's behalf.
+          if (result.wrote) changed = true;
         })
       );
     }
@@ -829,16 +855,22 @@ function drainOutboxInWorker() {
       chain = chain.then(() => settle(entry, outboxSend(entry)));
     }
 
-    return chain.then(() => {
-      if (changed) {
-        const channel = new BroadcastChannel(OUTBOX_CHANNEL);
-        channel.postMessage({ type: "changed" });
-        channel.close();
-      }
-      if (stillDue) {
-        throw new Error("outbox: an entry is still due after this drain — requesting a reschedule");
-      }
-    });
+    return chain
+      .then(() => {
+        if (changed) {
+          const channel = new BroadcastChannel(OUTBOX_CHANNEL);
+          channel.postMessage({ type: "changed" });
+          channel.close();
+        }
+        // The store as it is NOW, not this pass's snapshot: the page may have
+        // retried, discarded or enqueued something while the pass ran.
+        return outboxGetAll();
+      })
+      .then((after) => {
+        if (after.some(isOwedASend)) {
+          throw new Error("outbox: an owned entry is still pending after this drain — requesting a reschedule");
+        }
+      });
   });
 }
 
