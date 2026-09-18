@@ -103,8 +103,26 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
     <div className="grid w-full gap-3 sm:gap-4 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start lg:gap-6">
       {/* Mobile: status + actions + map + conditions. Desktop: map left, sidebar right. */}
 
+      {/* Map — desktop: left column. Mobile: below actions. */}
+      <div className="order-last lg:order-first lg:col-start-1 lg:row-span-4">
+        <MapCanvas
+          zones={zones}
+          hazardType={hazardType}
+          onHazardTypeChange={setHazardType}
+          routeZone={routeZone}
+          routeHazard={routeHazard}
+          effectiveRoutePolyline={effectiveRoutePolyline}
+          onSelectZone={handleSelectZone}
+          isPlacingPin={isPlacingPin}
+          onMapClickForPin={handleMapClickForPin}
+          onEditPin={setEditingPin}
+          onDeletePin={setDeletingPin}
+          onViewPhoto={setPhotoPin}
+        />
+      </div>
+
       {/* Sidebar — desktop: right column. Mobile: above map. */}
-      <div className="flex flex-col gap-3 sm:gap-4 lg:col-start-2 lg:gap-5">
+      <div className="order-first lg:order-none flex flex-col gap-3 sm:gap-4 lg:col-start-2 lg:row-span-4 lg:gap-5">
         <PersonalStatusHeadline zone={zones[0]} />
         <QuickStats />
         <ActionGrid />
@@ -146,24 +164,6 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
             {t(isPlacingPin ? CANCEL_ADD_PIN : ADD_FLOOD_PIN, lang)}
           </Button>
         </div>
-      </div>
-
-      {/* Map — desktop: left column. Mobile: below actions. */}
-      <div className="lg:col-start-1">
-        <MapCanvas
-          zones={zones}
-          hazardType={hazardType}
-          onHazardTypeChange={setHazardType}
-          routeZone={routeZone}
-          routeHazard={routeHazard}
-          effectiveRoutePolyline={effectiveRoutePolyline}
-          onSelectZone={handleSelectZone}
-          isPlacingPin={isPlacingPin}
-          onMapClickForPin={handleMapClickForPin}
-          onEditPin={setEditingPin}
-          onDeletePin={setDeletingPin}
-          onViewPhoto={setPhotoPin}
-        />
       </div>
 
       {/* Dialogs — both open over the map */}
