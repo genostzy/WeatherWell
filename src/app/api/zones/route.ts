@@ -10,9 +10,11 @@ import type { HazardLevel } from "@/lib/hazards";
  * caching for this URL (stale-while-revalidate into an unversioned cache, so a
  * device that updates and then loses signal keeps its evacuation instructions).
  *
- * With ~42k zones, the PostgREST embed join (zones -> evacuation_centers)
- * is too slow and produces too large a response. Instead, we fetch all four
- * tables as flat parallel queries and merge them in JS.
+ * With ~42k zones, returning full zone details (jsonb evacuation_route_text,
+ * evacuation_route_path, etc.) blows past Vercel's ~4.5 MB response limit.
+ * The initial load fetches only the columns needed for search, map rendering,
+ * and nearest-zone detection. Full details (evacuation routes, hotlines) are
+ * loaded on-demand when a zone is selected.
  */
 export async function GET() {
   const supabase = createSupabaseServerClient();
@@ -21,7 +23,7 @@ export async function GET() {
     supabase
       .from("zones")
       .select(
-        "id, psgc_barangay_code, name, municipality_name, province_name, evacuation_route_text, lat, lng, evacuation_route_path, hotline_number, downstream_zone_id"
+        "id, psgc_barangay_code, name, municipality_name, province_name, lat, lng, downstream_zone_id"
       )
       .order("id")
       .limit(50000),
@@ -59,8 +61,9 @@ export async function GET() {
       const centre = centreByZone.get(row.id) ?? null;
       return {
         ...row,
-        evacuation_route_text: row.evacuation_route_text as Zone["evacuationRouteText"],
-        evacuation_route_path: row.evacuation_route_path as Zone["evacuationRoutePath"],
+        evacuation_route_text: { en: "", fil: "" } as Zone["evacuationRouteText"],
+        evacuation_route_path: [] as Zone["evacuationRoutePath"],
+        hotline_number: "",
         evacuation_centers: centre
           ? { ...centre, status: centre.status as Zone["centerStatus"] }
           : null,
