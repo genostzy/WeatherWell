@@ -40,8 +40,8 @@ const VERSION = /const VERSION = "([^"]+)"/.exec(SW_SOURCE)?.[1] ?? "";
 const SHELL_CACHE = `weatherwell-shell-${VERSION}`;
 const ASSET_CACHE = `weatherwell-assets-${VERSION}`;
 const API_CACHE = `weatherwell-api-${VERSION}`;
-/** Unversioned by design — evacuation data must survive a deploy. */
-const ZONE_CACHE = "weatherwell-zones";
+/** Versioned alongside VERSION — schema changes that add zone fields require a fresh fetch. */
+const ZONE_CACHE = `weatherwell-zones-${VERSION}`;
 /** Read from the worker rather than restated here, same reasoning as VERSION. */
 const ALERTS_TIMEOUT_MS = Number(/const ALERTS_TIMEOUT_MS = (\d+)/.exec(SW_SOURCE)?.[1] ?? "0");
 
@@ -573,13 +573,9 @@ describe("service worker request routing", () => {
     expect(postWriteRefetch?.body).toBe("LAST KNOWN REPORTS");
   });
 
-  it("keeps serving zones from the unversioned zone cache", async () => {
-    // The one cache deliberately exempt from version bumps, so a device that
-    // updates and then loses signal keeps its evacuation instructions. This
-    // is only true if the /api/zones branch is the one that actually serves
-    // the request — store.has(ZONE_CACHE) alone is seeded true before any
-    // fetch runs and proves nothing about which branch handled it, so pin
-    // both the served body and that the generic /api/ branch never ran.
+  it("keeps serving zones from the versioned zone cache", async () => {
+    // Zone cache is now versioned alongside VERSION so schema changes (new
+    // columns like municipality_name/province_name) force a fresh fetch.
     const { listeners, store } = loadServiceWorker({
       caches: { [ZONE_CACHE]: { [`${ORIGIN}/api/zones`]: "CACHED ZONES" } },
     });
@@ -770,17 +766,23 @@ describe("service worker cache lifecycle", () => {
     expect(store.has(SHELL_CACHE)).toBe(true);
   });
 
-  it("keeps zone data across a version bump", async () => {
-    // Zone and evacuation data is content, not code. Wiping it on deploy
-    // would leave a device that updated and then lost signal with nothing.
+  it("evicts old zone cache on a version bump (schema changes need fresh data)", async () => {
+    // Zone cache is now versioned — when schema adds columns like
+    // municipality_name/province_name, old cached responses lack those fields
+    // and search breaks. A version bump forces a fresh fetch.
+    const oldZoneCache = "weatherwell-zones-old";
     const { listeners, store } = loadServiceWorker({
-      caches: { [ZONE_CACHE]: { [`${ORIGIN}/api/zones`]: "ZONES" } },
+      caches: {
+        [oldZoneCache]: { [`${ORIGIN}/api/zones`]: "OLD ZONES" },
+        [ZONE_CACHE]: { [`${ORIGIN}/api/zones`]: "CURRENT ZONES" },
+      },
     });
 
     const waits: Promise<unknown>[] = [];
     listeners.activate({ waitUntil: (p: Promise<unknown>) => waits.push(p) });
     await Promise.all(waits);
 
+    expect(store.has(oldZoneCache)).toBe(false);
     expect(store.has(ZONE_CACHE)).toBe(true);
   });
 });

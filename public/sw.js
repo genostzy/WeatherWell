@@ -20,19 +20,18 @@
  * CURRENT_CACHES, so a bump is what evicts a bad build from installed devices.
  * Leaving it unchanged is what pins users to a stale app forever.
  */
-const VERSION = "v12";
+const VERSION = "v13";
 
 const SHELL_CACHE = `weatherwell-shell-${VERSION}`;
 const ASSET_CACHE = `weatherwell-assets-${VERSION}`;
 const API_CACHE = `weatherwell-api-${VERSION}`;
 
 /**
- * Deliberately NOT versioned. This holds the zone and evacuation data a
- * resident needs during an outage; wiping it on deploy would mean a device
- * that updates and then loses connectivity has nothing to show. Entries are
- * refreshed in the background whenever the device is online.
+ * Versioned alongside VERSION — schema changes that add zone fields (e.g.
+ * municipality_name, province_name) require a fresh fetch, since the old
+ * cached response lacks the new fields and search breaks.
  */
-const ZONE_CACHE = "weatherwell-zones";
+const ZONE_CACHE = `weatherwell-zones-${VERSION}`;
 
 /**
  * Map tile cache. Deliberately NOT versioned — tiles are content-addressed
