@@ -10,7 +10,8 @@
  * Data source: DOST-PAGASA (public domain, Republic Act No. 8293)
  * Parsing approach: Ported from BagyoAPI (MIT, edwardguevarra/bagyo-api)
  */
-import "dotenv/config";
+import { config } from "dotenv";
+config({ path: ".env.local" });
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "../src/lib/supabase/database.types";
 import {
