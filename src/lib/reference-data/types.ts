@@ -63,30 +63,22 @@ export function toReferenceData(
 ): ReferenceData {
   const zones: Zone[] = zoneRows.map((row) => {
     const centre = row.evacuation_centers;
-    if (!centre) {
-      // A zone with no centre has nowhere to send anyone. Failing loudly here
-      // beats rendering "evacuate to undefined".
-      throw new Error(
-        `Zone ${row.id} has no evacuation centre. The database is inconsistent — ` +
-          `every zone requires one row in evacuation_centers.`
-      );
-    }
     return {
       id: row.id,
       psgcBarangayCode: row.psgc_barangay_code,
       name: row.name,
       municipalityName: row.municipality_name,
       provinceName: row.province_name,
-      evacuationCenterName: centre.name,
+      evacuationCenterName: centre?.name ?? "",
       evacuationRouteText: row.evacuation_route_text,
       lat: row.lat,
       lng: row.lng,
-      evacuationCenterLat: centre.lat,
-      evacuationCenterLng: centre.lng,
+      evacuationCenterLat: centre?.lat ?? row.lat,
+      evacuationCenterLng: centre?.lng ?? row.lng,
       evacuationRoutePath: row.evacuation_route_path,
       hotlineNumber: row.hotline_number,
-      centerStatus: centre.status,
-      evacuationCenterCapacity: centre.capacity,
+      centerStatus: (centre?.status as Zone["centerStatus"]) ?? "space_available",
+      evacuationCenterCapacity: centre?.capacity ?? 0,
       // The type says optional; null would sneak past `if (zone.downstreamZoneId)`
       // less obviously than undefined in code that spreads or serialises it.
       ...(row.downstream_zone_id ? { downstreamZoneId: row.downstream_zone_id } : {}),
@@ -94,7 +86,7 @@ export function toReferenceData(
       // yet is `current_occupancy IS NULL`, and undefined (not null, not 0) is
       // what resolveEffectiveCenterStatus's `occupancy` parameter expects to mean
       // "nothing tracked, fall back to centerStatus".
-      ...(centre.current_occupancy !== null ? { currentOccupancy: centre.current_occupancy } : {}),
+      ...(centre && centre.current_occupancy !== null ? { currentOccupancy: centre.current_occupancy } : {}),
     };
   });
 

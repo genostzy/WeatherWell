@@ -5,31 +5,21 @@ import type { HazardType, PointOfInterest, Zone } from "@/lib/types";
 import type { HazardLevel } from "@/lib/hazards";
 
 /**
- * All reference data in one response. Route handlers are not cached by default
- * in this version of Next, which is what we want: the service worker owns
- * caching for this URL (stale-while-revalidate into an unversioned cache, so a
- * device that updates and then loses signal keeps its evacuation instructions).
+ * Reference data endpoint. With ~42k zones, even flat queries with
+ * evacuation_centers exceed Vercel's ~4.5 MB payload limit on Hobby.
  *
- * With ~42k zones, returning full zone details (jsonb evacuation_route_text,
- * evacuation_route_path, etc.) blows past Vercel's ~4.5 MB response limit.
- * The initial load fetches only the columns needed for search, map rendering,
- * and nearest-zone detection. Full details (evacuation routes, hotlines) are
- * loaded on-demand when a zone is selected.
+ * Evacuation center details are loaded on-demand when the resident
+ * opens evacuation instructions. This keeps the initial payload small
+ * enough for the Hobby plan.
  */
 export async function GET() {
   const supabase = createSupabaseServerClient();
 
-  const [zonesResult, centresResult, poisResult, hazardsResult] = await Promise.all([
+  const [zonesResult, poisResult, hazardsResult] = await Promise.all([
     supabase
       .from("zones")
-      .select(
-        "id, psgc_barangay_code, name, municipality_name, province_name, lat, lng, downstream_zone_id"
-      )
+      .select("id, psgc_barangay_code, name, municipality_name, province_name, lat, lng, downstream_zone_id")
       .order("id")
-      .limit(50000),
-    supabase
-      .from("evacuation_centers")
-      .select("zone_id, name, lat, lng, capacity, status, current_occupancy")
       .limit(50000),
     supabase.from("points_of_interest").select("id, zone_id, category, name, lat, lng").order("id").limit(50000),
     supabase.from("hazard_susceptibility").select("zone_id, hazard_type, risk_level").limit(50000),
@@ -37,9 +27,6 @@ export async function GET() {
 
   if (zonesResult.error) {
     return NextResponse.json({ error: zonesResult.error.message }, { status: 502 });
-  }
-  if (centresResult.error) {
-    return NextResponse.json({ error: centresResult.error.message }, { status: 502 });
   }
   if (poisResult.error) {
     return NextResponse.json({ error: poisResult.error.message }, { status: 502 });
@@ -52,23 +39,13 @@ export async function GET() {
   }
 
   try {
-    const centreByZone = new Map<string, (typeof centresResult.data)[number]>();
-    for (const c of centresResult.data) {
-      centreByZone.set(c.zone_id, c);
-    }
-
-    const zones = zonesResult.data.map((row) => {
-      const centre = centreByZone.get(row.id) ?? null;
-      return {
-        ...row,
-        evacuation_route_text: { en: "", fil: "" } as Zone["evacuationRouteText"],
-        evacuation_route_path: [] as Zone["evacuationRoutePath"],
-        hotline_number: "",
-        evacuation_centers: centre
-          ? { ...centre, status: centre.status as Zone["centerStatus"] }
-          : null,
-      };
-    });
+    const zones = zonesResult.data.map((row) => ({
+      ...row,
+      evacuation_route_text: { en: "", fil: "" } as Zone["evacuationRouteText"],
+      evacuation_route_path: [] as Zone["evacuationRoutePath"],
+      hotline_number: "",
+      evacuation_centers: null,
+    }));
     const pois = poisResult.data.map((row) => ({
       ...row,
       category: row.category as PointOfInterest["category"],

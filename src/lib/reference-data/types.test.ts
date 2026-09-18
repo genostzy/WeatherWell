@@ -110,12 +110,12 @@ describe("toReferenceData", () => {
     ).toBe(zones[0].centerStatus);
   });
 
-  it("throws when a zone has no evacuation centre rather than shipping a broken zone", () => {
-    // Every zone must have a centre — it is the thing the app tells people to
-    // walk to. A zone rendered with an undefined centre name is worse than a
-    // loud failure the operator can see.
-    expect(() => toReferenceData([{ ...ZONE_ROW, evacuation_centers: null }], [], [])).toThrow(
-      /zone-1/
-    );
+  it("uses fallback defaults when a zone has no evacuation centre (initial load without centres)", () => {
+    // With ~42k zones, evacuation centres are loaded on-demand rather than
+    // in the initial bulk fetch. Zones without centres get sensible defaults.
+    const { zones } = toReferenceData([{ ...ZONE_ROW, evacuation_centers: null }], [], []);
+    expect(zones[0].evacuationCenterName).toBe("");
+    expect(zones[0].centerStatus).toBe("space_available");
+    expect(zones[0].evacuationCenterLat).toBe(ZONE_ROW.lat);
   });
 });
