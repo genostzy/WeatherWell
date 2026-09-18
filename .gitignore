@@ -47,3 +47,9 @@ next-env.d.ts
 # Agent skills installed via `npx skills add` — reproducible from skills-lock.json
 .agents/
 .claude/skills/
+
+# Local session logs
+.claude-sessions/
+
+# Supabase local temp
+supabase/.temp/
