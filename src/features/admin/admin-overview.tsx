@@ -28,11 +28,11 @@ import { AlertAnalyticsPanel } from "@/features/admin/alert-analytics-panel";
 import { CommunityPinModerationPanel } from "@/features/admin/community-pin-moderation-panel";
 import { NoZonesNotice } from "@/features/admin/no-zones-notice";
 import {
-  MOCK_TYPHOON,
   getRainfallForZone,
   getReportsTodayForZone,
   isHeavyRainfall,
 } from "@/lib/mock-data";
+import { useTyphoon } from "@/lib/use-typhoon";
 import { resolveEffectiveCenterStatus } from "@/lib/center-status";
 import { useAlerts } from "@/lib/alerts-store";
 import { useCommunityPins } from "@/lib/community-pins";
@@ -75,7 +75,6 @@ const COMMUNITY_PINS: LocalizedText = { en: "Community pins", fil: "Community pi
 const UNVERIFIED: LocalizedText = { en: "unverified, resident-reported", fil: "hindi pa na-verify, galing sa residente" };
 const ACTIVE_CYCLONE: LocalizedText = { en: "Tropical cyclone", fil: "Bagyo" };
 const NONE_TRACKED: LocalizedText = { en: "None tracked", fil: "Wala" };
-const AWAY: LocalizedText = { en: "away", fil: "ang layo" };
 const HIGHEST_RISK_SCORE: LocalizedText = { en: "Highest risk score", fil: "Pinakamataas na risk score" };
 const RISK_SCORE_HINT: LocalizedText = {
   en: "computed, advisory only — not the actual alert",
@@ -93,6 +92,7 @@ export function AdminOverview() {
   const zones = allZones.filter((zone) => isInArea(zone.psgcBarangayCode, official.areaCode));
   const hazards = useHazards();
   const alerts = useAlerts();
+  const { track: typhoonTrack } = useTyphoon();
   const baseAlertFor = (zoneId: string) => alerts.find((a) => a.zoneId === zoneId && a.isActive);
 
   // Reachable in production (see NoZonesNotice's doc comment), not just a
@@ -174,10 +174,10 @@ export function AdminOverview() {
             />
             <StatCard
               label={t(ACTIVE_CYCLONE, lang)}
-              value={MOCK_TYPHOON ? MOCK_TYPHOON.name : t(NONE_TRACKED, lang)}
-              hint={MOCK_TYPHOON ? `${MOCK_TYPHOON.distanceKm}km ${MOCK_TYPHOON.bearing} ${t(AWAY, lang)}` : undefined}
+              value={typhoonTrack ? typhoonTrack.name : t(NONE_TRACKED, lang)}
+              hint={typhoonTrack ? (typhoonTrack.wind_signal > 0 ? `Signal ${typhoonTrack.wind_signal}` : undefined) : undefined}
               icon={Wind}
-              accentClass={MOCK_TYPHOON ? "text-severity-orange" : "text-foreground"}
+              accentClass={typhoonTrack ? "text-severity-orange" : "text-foreground"}
             />
             <StatCard
               label={t(HIGHEST_RISK_SCORE, lang)}

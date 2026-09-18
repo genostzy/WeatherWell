@@ -5,6 +5,6 @@
     "src/lib/use-weather-data.ts",
     "src/lib/use-zone-weather.ts"
   ],
-  "ignoreDependencies": [],
+  "ignoreDependencies": ["cheerio"],
   "exclude": ["files", "exports", "types", "nsExports", "nsTypes", "enumMembers"]
 }

@@ -11,10 +11,10 @@ import {
   getHeatIndexForZone,
   getHeatIndexCategory,
   hasElevatedLandslideRisk,
-  MOCK_TYPHOON,
   MOCK_DROUGHT_OUTLOOK,
   type HeatIndexCategory,
 } from "@/lib/mock-data";
+import { useTyphoon } from "@/lib/use-typhoon";
 import { useHazardsForZone } from "@/lib/reference-data/use-reference-data";
 import type { LocalizedText, Zone } from "@/lib/types";
 
@@ -37,6 +37,10 @@ const LANDSLIDE_CAUTION: LocalizedText = {
 };
 const SEE_LESS: LocalizedText = { en: "See less", fil: "Bawasan" };
 const SEE_DETAILS: LocalizedText = { en: "See details", fil: "Tingnan ang detalye" };
+const SIGNAL_WARNING: LocalizedText = {
+  en: "Wind signal in effect",
+  fil: "May wind signal na naka-angat",
+};
 
 const HEAT_CATEGORY_LABEL: Record<HeatIndexCategory, LocalizedText> = {
   caution: { en: "Caution", fil: "Pag-ingat" },
@@ -53,6 +57,7 @@ const HEAT_CATEGORY_LABEL: Record<HeatIndexCategory, LocalizedText> = {
 export function CurrentConditionsPanel({ zone }: { zone: Zone }) {
   const { lang } = useLanguage();
   const [expanded, setExpanded] = useState(false);
+  const { track } = useTyphoon();
 
   const rainfall = getRainfallForZone(zone.id);
   const wind = getWindForZone(zone.id);
@@ -63,7 +68,8 @@ export function CurrentConditionsPanel({ zone }: { zone: Zone }) {
   const landslideCaution = hasElevatedLandslideRisk(landslideSusceptibility, rainfall);
   const ChevronIcon = expanded ? ChevronUp : ChevronDown;
 
-  const hasConcern = thunderstorm || landslideCaution || heatCategory === "danger" || heatCategory === "extreme_danger";
+  const hasSignalWarning = track && track.wind_signal > 0;
+  const hasConcern = thunderstorm || landslideCaution || heatCategory === "danger" || heatCategory === "extreme_danger" || !!hasSignalWarning;
   const iconColor = hasConcern ? "text-severity-orange" : "text-muted-foreground";
 
   return (
@@ -101,11 +107,18 @@ export function CurrentConditionsPanel({ zone }: { zone: Zone }) {
           <div className="flex items-center justify-between gap-2">
             <span className="text-muted-foreground">{t(TYPHOON_TRACK, lang)}</span>
             <span className="text-right font-medium">
-              {MOCK_TYPHOON
-                ? `${MOCK_TYPHOON.name} — ${MOCK_TYPHOON.distanceKm}km ${MOCK_TYPHOON.bearing}`
+              {track
+                ? `${track.name} — ${track.wind_signal > 0 ? `Signal ${track.wind_signal}` : "No signal"}`
                 : t(NO_ACTIVE_SYSTEM, lang)}
             </span>
           </div>
+
+          {hasSignalWarning && (
+            <p lang={lang} className="font-medium text-severity-orange">
+              {t(SIGNAL_WARNING, lang)} — {t(SIGNAL_WARNING, `en` as "en")}: {track!.wind_signal}
+            </p>
+          )}
+
           {thunderstorm && (
             <p lang={lang} className="font-medium text-severity-orange">
               {t(THUNDERSTORM_WATCH, lang)}
