@@ -1,0 +1,10 @@
+{
+  "ignore": [
+    "scripts/**",
+    "src/lib/tile-cache.ts",
+    "src/lib/use-weather-data.ts",
+    "src/lib/use-zone-weather.ts"
+  ],
+  "ignoreDependencies": ["web-push", "swr"],
+  "exclude": ["files", "exports", "types", "nsExports", "nsTypes", "enumMembers"]
+}
