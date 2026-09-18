@@ -104,7 +104,7 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
       {/* Mobile: status + actions + map + conditions. Desktop: map left, sidebar right. */}
 
       {/* Sidebar — desktop: right column. Mobile: above map. */}
-      <div className="flex flex-col gap-3 sm:gap-4 lg:col-start-2 lg:row-span-4 lg:gap-5">
+      <div className="flex flex-col gap-3 sm:gap-4 lg:col-start-2 lg:gap-5">
         <PersonalStatusHeadline zone={zones[0]} />
         <QuickStats />
         <ActionGrid />
@@ -149,7 +149,7 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
       </div>
 
       {/* Map — desktop: left column. Mobile: below actions. */}
-      <div className="lg:col-start-1 lg:row-span-4">
+      <div className="lg:col-start-1">
         <MapCanvas
           zones={zones}
           hazardType={hazardType}
