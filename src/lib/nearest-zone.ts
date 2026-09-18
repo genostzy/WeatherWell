@@ -3,9 +3,10 @@ import { getBearingAndDistance } from "@/features/homepage-map/bearing-distance"
 /**
  * How far a GPS fix may be from a barangay's centre and still be offered as
  * "your barangay". Barangays range from a few city blocks to several square
- * kilometres, so this is generous; the resident always confirms.
+ * kilometres; the PSGC centroid may be far from where someone actually lives
+ * within the barangay. The resident always confirms.
  */
-export const NEAR_ZONE_METERS = 5000;
+export const NEAR_ZONE_METERS = 15000;
 
 /** A fix this imprecise (common indoors) is labelled "approximate". */
 export const APPROXIMATE_ACCURACY_METERS = 1000;
