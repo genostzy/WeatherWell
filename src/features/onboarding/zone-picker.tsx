@@ -48,8 +48,8 @@ const COPY = {
     fil: "Hindi nakuha ang iyong lokasyon — hanapin ang iyong barangay sa ibaba.",
   },
   searchPlaceholder: {
-    en: "Search by barangay name or municipality…",
-    fil: "Maghanap ayon sa pangalan ng barangay o munisipalidad…",
+    en: "Search by barangay, municipality, or province…",
+    fil: "Maghanap ayon sa pangalan ng barangay, munisipalidad, o probinsya…",
   },
   noResults: {
     en: "No barangays match your search.",
@@ -89,8 +89,8 @@ function farMessage(meters: number, lang: LanguageCode): string {
 }
 
 /**
- * Filter zones by search query. Matches against zone name and municipality
- * (the part after the comma). Case-insensitive, accent-insensitive.
+ * Filter zones by search query. Matches against zone name, municipality,
+ * and province. Case-insensitive, accent-insensitive.
  */
 function filterZones(zones: readonly Zone[], query: string): Zone[] {
   if (!query.trim()) return [];
@@ -99,11 +99,11 @@ function filterZones(zones: readonly Zone[], query: string): Zone[] {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
   return zones.filter((zone) => {
-    const name = zone.name
+    const searchable = `${zone.name} ${zone.municipalityName} ${zone.provinceName}`
       .toLowerCase()
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "");
-    return name.includes(normalised);
+    return searchable.includes(normalised);
   });
 }
 
@@ -303,7 +303,10 @@ export function ZonePicker({
                 chooseByHand(zone.id);
               }}
             >
-              {zone.name}
+              <div className="flex flex-col">
+                <span>{zone.name}</span>
+                <span className="text-xs text-muted-foreground">{zone.municipalityName}, {zone.provinceName}</span>
+              </div>
             </button>
           ))}
           {results.length > MAX_RESULTS && (

@@ -549,7 +549,9 @@ export type Database = {
           id: string
           lat: number
           lng: number
+          municipality_name: string
           name: string
+          province_name: string
           psgc_barangay_code: string
         }
         Insert: {
@@ -560,7 +562,9 @@ export type Database = {
           id: string
           lat: number
           lng: number
+          municipality_name?: string
           name: string
+          province_name?: string
           psgc_barangay_code: string
         }
         Update: {
@@ -571,7 +575,9 @@ export type Database = {
           id?: string
           lat?: number
           lng?: number
+          municipality_name?: string
           name?: string
+          province_name?: string
           psgc_barangay_code?: string
         }
         Relationships: [

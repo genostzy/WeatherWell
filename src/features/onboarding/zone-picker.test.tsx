@@ -25,10 +25,12 @@ async function searchAndSelect(query: string, zoneName: string) {
   const input = screen.getByRole("textbox", { name: /search barangay/i });
   await userEvent.clear(input);
   await userEvent.type(input, query);
-  // Wait for results to render
-  const result = await screen.findByRole("option", { name: zoneName });
+  // Wait for results to render — the option now contains zone name + municipality/province,
+  // so use getByText which matches partial text content.
+  const result = await screen.findByText(zoneName);
+  const button = result.closest("[role='option']") as HTMLElement;
   // Prevent blur from hiding results before click
-  fireEvent.mouseDown(result);
+  fireEvent.mouseDown(button);
 }
 
 describe("ZonePicker", () => {
@@ -64,7 +66,8 @@ describe("ZonePicker", () => {
     await userEvent.type(input, "Mangaldan");
 
     // Should show zones in Mangaldan
-    expect(await screen.findByRole("option", { name: "Barangay Poblacion, Mangaldan" })).toBeInTheDocument();
+    const result = await screen.findByText("Barangay Poblacion, Mangaldan");
+    expect(result.closest("[role='option']")).toBeInTheDocument();
   });
 
   it("shows no-results message for unmatched search", async () => {

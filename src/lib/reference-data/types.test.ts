@@ -11,6 +11,8 @@ const ZONE_ROW = {
   id: "zone-1",
   psgc_barangay_code: "0105528012",
   name: "Barangay Nilombot, Mapandan",
+  municipality_name: "Mapandan",
+  province_name: "Pangasinan",
   evacuation_route_text: { en: "Head to the barangay road.", fil: "Dumaan sa barangay road." },
   lat: 16.0288,
   lng: 120.4366,

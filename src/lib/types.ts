@@ -35,6 +35,8 @@ export interface Zone {
   id: string;
   psgcBarangayCode: string;
   name: string;
+  municipalityName: string;
+  provinceName: string;
   evacuationCenterName: string;
   evacuationRouteText: LocalizedText;
   lat: number;

@@ -30,8 +30,9 @@ describe("onboarding → home zone threading", () => {
     const input = screen.getByRole("textbox", { name: /search barangay/i });
     await userEvent.type(input, searchTerm);
     // Wait for the result to appear in the listbox and click it
-    const result = await screen.findByRole("option", { name: zoneName });
-    fireEvent.mouseDown(result);
+    const result = await screen.findByText(zoneName);
+    const button = result.closest("[role='option']") as HTMLElement;
+    fireEvent.mouseDown(button);
     // Now the zone should be selected — click confirm
     await userEvent.click(screen.getByRole("button", { name: /confirm barangay/i }));
     // Onboarding ends on the install step, not the zone picker. jsdom exposes

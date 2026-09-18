@@ -18,6 +18,8 @@ interface ZoneRow {
   id: string;
   psgc_barangay_code: string;
   name: string;
+  municipality_name: string;
+  province_name: string;
   evacuation_route_text: Zone["evacuationRouteText"];
   lat: number;
   lng: number;
@@ -73,6 +75,8 @@ export function toReferenceData(
       id: row.id,
       psgcBarangayCode: row.psgc_barangay_code,
       name: row.name,
+      municipalityName: row.municipality_name,
+      provinceName: row.province_name,
       evacuationCenterName: centre.name,
       evacuationRouteText: row.evacuation_route_text,
       lat: row.lat,

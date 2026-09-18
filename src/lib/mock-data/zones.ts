@@ -6,6 +6,8 @@ export const MOCK_ZONES: Zone[] = [
     // PSGC code for Barangay Nilombot, Mapandan, confirmed against psa.gov.ph (2026-09-15).
     psgcBarangayCode: "0105528012",
     name: "Barangay Nilombot, Mapandan",
+    municipalityName: "Mapandan",
+    provinceName: "Pangasinan",
     evacuationCenterName: "Nilombot Elementary School",
     evacuationRouteText: {
       en: "Head to the barangay road, then straight ahead to the elementary school on your right.",
@@ -30,6 +32,8 @@ export const MOCK_ZONES: Zone[] = [
     // PSGC code for Barangay Poblacion, Mangaldan, confirmed against psa.gov.ph (2026-09-15).
     psgcBarangayCode: "0105526025",
     name: "Barangay Poblacion, Mangaldan",
+    municipalityName: "Mangaldan",
+    provinceName: "Pangasinan",
     evacuationCenterName: "Mangaldan Central School",
     evacuationRouteText: {
       en: "Take the town plaza road north to the central school beside the health center.",
@@ -54,6 +58,8 @@ export const MOCK_ZONES: Zone[] = [
     // PSGC code for Barangay Poblacion, Manaoag, confirmed against psa.gov.ph (2026-09-15).
     psgcBarangayCode: "0105525039",
     name: "Barangay Poblacion, Manaoag",
+    municipalityName: "Manaoag",
+    provinceName: "Pangasinan",
     evacuationCenterName: "Manaoag Municipal Gymnasium",
     evacuationRouteText: {
       en: "Follow the road east past the church, then turn left at the plaza to reach the gymnasium.",
@@ -79,6 +85,8 @@ export const MOCK_ZONES: Zone[] = [
     // (2026-09-15). Santa Barbara has two Poblacions; the demo is Norte (Sur is 0105538022).
     psgcBarangayCode: "0105538021",
     name: "Barangay Poblacion Norte, Santa Barbara",
+    municipalityName: "Santa Barbara",
+    provinceName: "Pangasinan",
     evacuationCenterName: "Santa Barbara Central School",
     evacuationRouteText: {
       en: "Head toward the municipal hall, then straight ahead to the central school on your left.",

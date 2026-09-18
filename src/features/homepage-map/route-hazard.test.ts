@@ -21,6 +21,8 @@ function syntheticZone(evacuationRoutePath: [number, number][]): Zone {
     id: "synthetic-zone",
     psgcBarangayCode: "0000000000",
     name: "Synthetic Zone",
+    municipalityName: "Synthetic Municipality",
+    provinceName: "Synthetic Province",
     evacuationCenterName: "Synthetic Evacuation Center",
     evacuationRouteText: { en: "", fil: "" },
     lat: evacuationRoutePath[0][0],
