@@ -91,13 +91,19 @@ function farMessage(meters: number, lang: LanguageCode): string {
 /**
  * Filter zones by search query. Matches against zone name, municipality,
  * and province. Case-insensitive, accent-insensitive.
+ * Normalizes common abbreviations so "Brgy" matches "Barangay", etc.
  */
 function filterZones(zones: readonly Zone[], query: string): Zone[] {
   if (!query.trim()) return [];
   const normalised = query
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\bbrgy\.?\s*/g, "barangay ")
+    .replace(/\bsta\.?\s+/g, "santa ")
+    .replace(/\bsto\.?\s+/g, "santo ")
+    .replace(/\bmt\.?\s+/g, "mount ")
+    .replace(/\bgen\.?\s+/g, "general ");
   return zones.filter((zone) => {
     const searchable = `${zone.name} ${zone.municipalityName} ${zone.provinceName}`
       .toLowerCase()
