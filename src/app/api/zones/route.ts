@@ -19,7 +19,8 @@ export async function GET() {
       .select(
         "id, psgc_barangay_code, name, municipality_name, province_name, evacuation_route_text, lat, lng, evacuation_route_path, hotline_number, downstream_zone_id, evacuation_centers(name, lat, lng, capacity, status, current_occupancy)"
       )
-      .order("id"),
+      .order("id")
+      .limit(50000),
     supabase.from("points_of_interest").select("id, zone_id, category, name, lat, lng").order("id"),
     supabase.from("hazard_susceptibility").select("zone_id, hazard_type, risk_level"),
   ]);

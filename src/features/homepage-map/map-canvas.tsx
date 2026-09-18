@@ -110,6 +110,14 @@ export function MapCanvas({
   const center: [number, number] = [zones[0].lat, zones[0].lng];
   const [flyTarget, setFlyTarget] = useState<{ lat: number; lng: number } | null>(null);
 
+  /** Only render markers within ~25km of the center to avoid crashing the browser with 41k+ zones. */
+  const MAX_MARKER_DISTANCE_DEG = 0.25;
+  const visibleZones = zones.filter(
+    (z) =>
+      Math.abs(z.lat - center[0]) < MAX_MARKER_DISTANCE_DEG &&
+      Math.abs(z.lng - center[1]) < MAX_MARKER_DISTANCE_DEG
+  );
+
   return (
     <MapShell
       center={center}
@@ -145,9 +153,9 @@ export function MapCanvas({
       {flyTarget && <FlyToUser position={flyTarget} />}
       {isPlacingPin && onMapClickForPin && <PinPlacer onPlace={onMapClickForPin} />}
 
-      <HazardBackdropLayer zones={zones} hazardType={hazardType} />
+      <HazardBackdropLayer zones={visibleZones} hazardType={hazardType} />
 
-        {zones.map((zone) => {
+        {visibleZones.map((zone) => {
           const alert = alerts.find((a) => a.zoneId === zone.id && a.isActive);
           const status = getZoneStatus(alert);
           const color = getZoneStatusColor(alert);
@@ -171,7 +179,7 @@ export function MapCanvas({
           );
         })}
 
-        {zones.map((zone) => (
+        {visibleZones.map((zone) => (
           <Marker
             key={`evac-${zone.id}`}
             position={[zone.evacuationCenterLat, zone.evacuationCenterLng]}
@@ -181,7 +189,7 @@ export function MapCanvas({
           </Marker>
         ))}
 
-        <PoiMarkerLayer zones={zones} />
+        <PoiMarkerLayer zones={visibleZones} />
 
         {routeZone && effectiveRoutePolyline.length > 0 && (
           <Polyline
