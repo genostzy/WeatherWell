@@ -44,19 +44,19 @@ export function ActionGrid() {
   const { lang } = useLanguage();
 
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:gap-3">
+    <div className="grid grid-cols-2 gap-2">
       {ACTIONS.map(({ href, label, icon: Icon, accent }) => (
         <Link
           key={href}
           href={href}
-          className={`flex flex-col items-center gap-1.5 rounded-xl border-2 p-3 text-center transition-colors hover:bg-muted/50 sm:flex-row sm:gap-3 sm:p-4 ${
+          className={`flex items-center gap-2.5 rounded-xl border-2 px-3 py-2.5 text-left transition-colors hover:bg-muted/50 sm:px-4 sm:py-3 ${
             accent
               ? "border-severity-orange/30 bg-severity-orange/5 text-severity-orange hover:bg-severity-orange/10"
               : "border-border"
           }`}
         >
-          <Icon aria-hidden="true" className="h-5 w-5 shrink-0 sm:h-6 sm:w-6" />
-          <span className="text-sm font-medium">{t(label, lang)}</span>
+          <Icon aria-hidden="true" className="h-5 w-5 shrink-0" />
+          <span className="truncate text-sm font-medium">{t(label, lang)}</span>
         </Link>
       ))}
     </div>

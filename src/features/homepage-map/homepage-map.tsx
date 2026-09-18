@@ -13,6 +13,7 @@ import { usePinFlow } from "./use-pin-flow";
 import { PersonalStatusHeadline } from "./personal-status-headline";
 import { CurrentConditionsPanel } from "./current-conditions-panel";
 import { ActionGrid } from "./action-grid";
+import { QuickStats } from "./quick-stats";
 import { CommunityPinForm } from "./community-pin-form";
 import { PhotoLightbox } from "./photo-lightbox";
 import { OverlayDialog } from "@/components/overlay-dialog";
@@ -105,11 +106,12 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
       {/* Sidebar — desktop: right column. Mobile: above map. */}
       <div className="flex flex-col gap-3 sm:gap-4 lg:col-start-2 lg:row-span-4 lg:gap-5">
         <PersonalStatusHeadline zone={zones[0]} />
+        <QuickStats />
         <ActionGrid />
         <CurrentConditionsPanel zone={zones[0]} />
 
-        {/* Route info */}
-        {(routeZone || notice) && (
+        {/* Route info — only render when there's actual content to show */}
+        {routeZone && (directionToSafety || routeHazard || notice) && (
           <div className="rounded-xl border-2 border-border p-3 text-sm">
             {routeZone && directionToSafety && (
               <p className="font-medium">

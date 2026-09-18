@@ -75,9 +75,9 @@ export function CurrentConditionsPanel({ zone }: { zone: Zone }) {
         aria-controls="current-conditions-detail"
         className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left"
       >
-        <span className="flex min-w-0 items-center gap-2 text-sm font-medium">
+        <span className="flex min-w-0 shrink-0 items-center gap-2 text-sm font-medium">
           <CloudRain aria-hidden="true" className={`h-4 w-4 shrink-0 ${iconColor}`} />
-          <span lang={lang}>{t(TITLE, lang)}</span>
+          <span lang={lang} className="whitespace-nowrap">{t(TITLE, lang)}</span>
           <span className="truncate font-normal text-muted-foreground">
             · {rainfall}mm/hr · {wind}km/h
           </span>
