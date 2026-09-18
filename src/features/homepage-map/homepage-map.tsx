@@ -109,7 +109,6 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
     <>
     {geofenceAlert && (
       <GeofenceAlertBanner
-        zoneName={geofenceAlert.zoneName}
         severity={geofenceAlert.severity}
         message={geofenceAlert.message}
         onDismiss={dismissGeofence}

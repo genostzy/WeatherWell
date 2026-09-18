@@ -13,14 +13,12 @@ const GEOFENCE_TITLE: LocalizedText = {
 const DISMISS: LocalizedText = { en: "Dismiss", fil: "Isara" };
 
 interface GeofenceAlertBannerProps {
-  zoneName: string;
   severity: string;
   message: string;
   onDismiss: () => void;
 }
 
 export function GeofenceAlertBanner({
-  zoneName,
   severity,
   message,
   onDismiss,

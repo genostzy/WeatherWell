@@ -28,13 +28,10 @@ export function useZoneWeather(zoneId: string | undefined): WeatherOverrides & {
   current: WeatherReading | null;
 } {
   const [data, setData] = useState<ZoneWeatherResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState<boolean>(!!zoneId);
 
   useEffect(() => {
-    if (!zoneId) {
-      setIsLoading(false);
-      return;
-    }
+    if (!zoneId) return;
 
     let cancelled = false;
     const controller = new AbortController();
@@ -48,7 +45,7 @@ export function useZoneWeather(zoneId: string | undefined): WeatherOverrides & {
         if (!res.ok) throw new Error("Failed to fetch weather");
         const json = await res.json();
         if (!cancelled) setData(json);
-      } catch (err) {
+      } catch {
         // Silent fail — will retry on next interval
       } finally {
         if (!cancelled) setIsLoading(false);

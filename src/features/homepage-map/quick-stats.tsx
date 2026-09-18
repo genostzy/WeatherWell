@@ -11,8 +11,6 @@ import type { LocalizedText } from "@/lib/types";
 
 const ALERTS: LocalizedText = { en: "alerts", fil: "alert" };
 const ZONES: LocalizedText = { en: "zones", fil: "zone" };
-const RAIN: LocalizedText = { en: "rain", fil: "ulan" };
-const WINDY: LocalizedText = { en: "windy", fil: "hangin" };
 const ALL_CLEAR: LocalizedText = { en: "All clear", fil: "Ligtas lahat" };
 
 /**

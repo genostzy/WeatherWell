@@ -1,9 +1,7 @@
 "use client";
 
-import { useRef, useCallback } from "react";
-import { SEVERITY_HEX, SEVERITY_TEXT_HEX, SEVERITY_LABEL } from "@/lib/severity";
+import { SEVERITY_HEX, SEVERITY_TEXT_HEX } from "@/lib/severity";
 import type { Severity } from "@/lib/severity";
-import type { LocalizedText } from "@/lib/types";
 
 const WIDTH = 600;
 const HEIGHT = 315;

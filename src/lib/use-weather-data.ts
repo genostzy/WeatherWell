@@ -28,14 +28,11 @@ export function useWeatherData(zoneId: string | undefined): {
   error: unknown;
 } {
   const [data, setData] = useState<WeatherData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState<boolean>(!!zoneId);
   const [error, setError] = useState<unknown>(null);
 
   useEffect(() => {
-    if (!zoneId) {
-      setIsLoading(false);
-      return;
-    }
+    if (!zoneId) return;
 
     let cancelled = false;
     const controller = new AbortController();
