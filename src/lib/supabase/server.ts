@@ -20,5 +20,9 @@ export function createSupabaseServerClient(): SupabaseClient<Database> {
   const { url, publishableKey } = readSupabaseEnv();
   return createClient<Database>(url, publishableKey, {
     auth: { persistSession: false, autoRefreshToken: false },
+    db: { schema: "public" },
+    // Supabase dashboard has max_rows=1000 by default. Override so all
+    // ~42k zones are returned in one request for the reference data endpoint.
+    global: { headers: { "Prefer": "count=exact,max-rows=50000" } },
   });
 }

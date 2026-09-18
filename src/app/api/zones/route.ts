@@ -9,30 +9,35 @@ import type { HazardLevel } from "@/lib/hazards";
  * in this version of Next, which is what we want: the service worker owns
  * caching for this URL (stale-while-revalidate into an unversioned cache, so a
  * device that updates and then loses signal keeps its evacuation instructions).
+ *
+ * With ~42k zones, the PostgREST embed join (zones -> evacuation_centers)
+ * is too slow and produces too large a response. Instead, we fetch all four
+ * tables as flat parallel queries and merge them in JS.
  */
 export async function GET() {
   const supabase = createSupabaseServerClient();
 
-  const [zonesResult, poisResult, hazardsResult] = await Promise.all([
+  const [zonesResult, centresResult, poisResult, hazardsResult] = await Promise.all([
     supabase
       .from("zones")
       .select(
-        "id, psgc_barangay_code, name, municipality_name, province_name, evacuation_route_text, lat, lng, evacuation_route_path, hotline_number, downstream_zone_id, evacuation_centers(name, lat, lng, capacity, status, current_occupancy)"
+        "id, psgc_barangay_code, name, municipality_name, province_name, evacuation_route_text, lat, lng, evacuation_route_path, hotline_number, downstream_zone_id"
       )
       .order("id")
       .limit(50000),
-    supabase.from("points_of_interest").select("id, zone_id, category, name, lat, lng").order("id"),
-    supabase.from("hazard_susceptibility").select("zone_id, hazard_type, risk_level"),
+    supabase
+      .from("evacuation_centers")
+      .select("zone_id, name, lat, lng, capacity, status, current_occupancy")
+      .limit(50000),
+    supabase.from("points_of_interest").select("id, zone_id, category, name, lat, lng").order("id").limit(50000),
+    supabase.from("hazard_susceptibility").select("zone_id, hazard_type, risk_level").limit(50000),
   ]);
 
-  // Checked and returned individually (rather than combined into one
-  // `a ?? b ?? c` failure value) so TypeScript's discriminated-union
-  // narrowing on each PostgrestResponse actually applies below: after all
-  // three checks, `.data` on each result is known non-null without a `!`.
-  // Never 200 with partial reference data: a zone list missing entries
-  // reads as "that barangay is fine" to whoever is looking at it.
   if (zonesResult.error) {
     return NextResponse.json({ error: zonesResult.error.message }, { status: 502 });
+  }
+  if (centresResult.error) {
+    return NextResponse.json({ error: centresResult.error.message }, { status: 502 });
   }
   if (poisResult.error) {
     return NextResponse.json({ error: poisResult.error.message }, { status: 502 });
@@ -40,32 +45,27 @@ export async function GET() {
   if (hazardsResult.error) {
     return NextResponse.json({ error: hazardsResult.error.message }, { status: 502 });
   }
-  // RLS and grant regressions don't error, they return zero rows — a 200 with
-  // an empty zone list opens the gate in provider.tsx and then crashes every
-  // page that calls useSelectedZone(). Empty pois/hazards stay legitimate (a
-  // barangay may genuinely have neither), so only zones is checked here.
   if (zonesResult.data.length === 0) {
     return NextResponse.json({ error: "zones query returned no rows" }, { status: 502 });
   }
 
   try {
-    // The client is typed with the generated `Database` schema (see
-    // server.ts), so postgrest-js infers the rest of each row correctly,
-    // including evacuation_centers as a one-to-one embed. What's left below
-    // are `text` columns with CHECK constraints rather than Postgres enums
-    // (`evacuation_route_text`/`evacuation_route_path` are `jsonb`, `status`,
-    // `category`, `hazard_type` and `risk_level` are `text`), so the
-    // generated types render them as `Json`/`string`. Each assertion below
-    // narrows exactly one such field to the literal union the CHECK
-    // constraint already guarantees at runtime — no whole-result cast.
-    const zones = zonesResult.data.map((row) => ({
-      ...row,
-      evacuation_route_text: row.evacuation_route_text as Zone["evacuationRouteText"],
-      evacuation_route_path: row.evacuation_route_path as Zone["evacuationRoutePath"],
-      evacuation_centers: row.evacuation_centers
-        ? { ...row.evacuation_centers, status: row.evacuation_centers.status as Zone["centerStatus"] }
-        : null,
-    }));
+    const centreByZone = new Map<string, (typeof centresResult.data)[number]>();
+    for (const c of centresResult.data) {
+      centreByZone.set(c.zone_id, c);
+    }
+
+    const zones = zonesResult.data.map((row) => {
+      const centre = centreByZone.get(row.id) ?? null;
+      return {
+        ...row,
+        evacuation_route_text: row.evacuation_route_text as Zone["evacuationRouteText"],
+        evacuation_route_path: row.evacuation_route_path as Zone["evacuationRoutePath"],
+        evacuation_centers: centre
+          ? { ...centre, status: centre.status as Zone["centerStatus"] }
+          : null,
+      };
+    });
     const pois = poisResult.data.map((row) => ({
       ...row,
       category: row.category as PointOfInterest["category"],
