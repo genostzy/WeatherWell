@@ -103,12 +103,18 @@ function filterZones(zones: readonly Zone[], query: string): Zone[] {
     .replace(/\bsta\.?\s+/g, "santa ")
     .replace(/\bsto\.?\s+/g, "santo ")
     .replace(/\bmt\.?\s+/g, "mount ")
-    .replace(/\bgen\.?\s+/g, "general ");
+    .replace(/\bgen\.?\s+/g, "general ")
+    .replace(/\s*,\s*/g, ",")
+    .replace(/\s+/g, " ")
+    .trim();
   return zones.filter((zone) => {
     const searchable = `${zone.name} ${zone.municipalityName} ${zone.provinceName}`
       .toLowerCase()
       .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "");
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/\s*,\s*/g, ",")
+      .replace(/\s+/g, " ")
+      .trim();
     return searchable.includes(normalised);
   });
 }
