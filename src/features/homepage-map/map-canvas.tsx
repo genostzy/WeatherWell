@@ -1,6 +1,7 @@
 "use client";
 
-import { Marker, Polyline, Popup, useMapEvents } from "react-leaflet";
+import { useEffect, useState } from "react";
+import { Marker, Polyline, Popup, useMapEvents, useMap } from "react-leaflet";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { getZoneStatus, getZoneStatusColor, ZONE_STATUS_LABEL } from "@/lib/zone-status";
@@ -15,6 +16,7 @@ import {
   createStatusMarkerIcon,
   createEvacuationMarkerIcon,
   createCommunityPinMarkerIcon,
+  createUserLocationIcon,
 } from "@/features/map/marker-icons";
 import { MarkerLegend } from "@/features/map/marker-legend";
 import { HazardTypeSelector } from "@/features/map/hazard-type-selector";
@@ -43,6 +45,8 @@ const TAP_MAP_TO_PLACE: LocalizedText = {
   en: "Tap the map to drop your pin",
   fil: "Pindutin ang mapa para ilagay ang pin",
 };
+const LOCATE_ME: LocalizedText = { en: "Locate me", fil: "Hanapin ako" };
+const YOUR_LOCATION: LocalizedText = { en: "Your location", fil: "Iyong lokasyon" };
 
 /** Only mounted while `isPlacingPin` — reports the resident's tap back up without adding a permanent click handler to the whole map. */
 function PinPlacer({ onPlace }: { onPlace: (lat: number, lng: number) => void }) {
@@ -51,6 +55,15 @@ function PinPlacer({ onPlace }: { onPlace: (lat: number, lng: number) => void })
       onPlace(event.latlng.lat, event.latlng.lng);
     },
   });
+  return null;
+}
+
+/** Centers the map on the user's GPS position. */
+function FlyToUser({ position }: { position: { lat: number; lng: number } }) {
+  const map = useMap();
+  useEffect(() => {
+    map.flyTo([position.lat, position.lng], Math.max(map.getZoom(), 15));
+  }, [map, position]);
   return null;
 }
 
@@ -74,6 +87,7 @@ export function MapCanvas({
   onEditPin,
   onDeletePin,
   onViewPhoto,
+  livePosition,
 }: {
   zones: Zone[];
   hazardType: HazardType;
@@ -87,15 +101,14 @@ export function MapCanvas({
   onEditPin?: (pin: CommunityPin) => void;
   onDeletePin?: (pin: CommunityPin) => void;
   onViewPhoto?: (pin: CommunityPin) => void;
+  livePosition?: { lat: number; lng: number } | null;
 }) {
   const { lang } = useLanguage();
   const communityPins = useCommunityPins();
-  // Read once for the whole layer, not per marker: isOwnPin runs inside the
-  // loop below and must not do a session lookup per pin. Null until this
-  // resident has written something — see useSessionUserId.
   const userId = useSessionUserId();
   const alerts = useAlerts();
   const center: [number, number] = [zones[0].lat, zones[0].lng];
+  const [flyTarget, setFlyTarget] = useState<{ lat: number; lng: number } | null>(null);
 
   return (
     <MapShell
@@ -107,6 +120,17 @@ export function MapCanvas({
           <div className="pointer-events-auto absolute top-2 right-2">
             <MarkerLegend />
           </div>
+          {livePosition && (
+            <button
+              type="button"
+              onClick={() => setFlyTarget(livePosition)}
+              className="pointer-events-auto absolute bottom-14 left-2 flex items-center gap-1.5 rounded-lg border-2 border-border bg-background/95 px-2.5 py-1.5 text-xs font-medium shadow-md backdrop-blur transition-colors hover:bg-muted/50"
+              aria-label={t(LOCATE_ME, lang)}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v4m0 12v4M2 12h4m12 0h4"></path></svg>
+              {t(LOCATE_ME, lang)}
+            </button>
+          )}
           <div className="pointer-events-auto absolute bottom-2 left-2">
             <HazardTypeSelector value={hazardType} onChange={onHazardTypeChange} />
           </div>
@@ -118,6 +142,7 @@ export function MapCanvas({
         </>
       }
     >
+      {flyTarget && <FlyToUser position={flyTarget} />}
       {isPlacingPin && onMapClickForPin && <PinPlacer onPlace={onMapClickForPin} />}
 
       <HazardBackdropLayer zones={zones} hazardType={hazardType} />
@@ -250,6 +275,16 @@ export function MapCanvas({
             </Marker>
           );
         })}
+
+        {livePosition && (
+          <Marker
+            position={[livePosition.lat, livePosition.lng]}
+            icon={createUserLocationIcon()}
+            zIndexOffset={1000}
+          >
+            <Popup>{t(YOUR_LOCATION, lang)}</Popup>
+          </Marker>
+        )}
     </MapShell>
   );
 }

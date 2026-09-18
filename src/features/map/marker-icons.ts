@@ -87,6 +87,24 @@ export function createEvacuationMarkerIcon(label: string): L.DivIcon {
   });
 }
 
+/**
+ * A pulsing blue dot for the user's live GPS position — the standard
+ * "you are here" convention (Google Maps, Apple Maps). The outer ring
+ * pulses via CSS animation so it's visually distinct from static markers.
+ */
+export function createUserLocationIcon(): L.DivIcon {
+  return L.divIcon({
+    className: "user-location-marker",
+    html: `<div role="img" aria-label="Your location" style="position:relative;width:20px;height:20px;">
+      <span style="position:absolute;inset:-6px;border-radius:50%;background:rgba(59,130,246,0.25);animation:user-location-pulse 2s ease-out infinite;"></span>
+      <span style="position:absolute;inset:0;border-radius:50%;background:#3b82f6;border:2.5px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.4);"></span>
+    </div>
+    <style>@keyframes user-location-pulse{0%{transform:scale(1);opacity:0.7}100%{transform:scale(2.5);opacity:0}}</style>`,
+    iconSize: [20, 20],
+    iconAnchor: [10, 10],
+  });
+}
+
 const PIN_ICON_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin" aria-hidden="true"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"></path><circle cx="12" cy="10" r="3"></circle></svg>';
 

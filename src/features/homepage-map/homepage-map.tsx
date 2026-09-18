@@ -118,6 +118,7 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
           onEditPin={setEditingPin}
           onDeletePin={setDeletingPin}
           onViewPhoto={setPhotoPin}
+          livePosition={livePosition}
         />
       </div>
 
