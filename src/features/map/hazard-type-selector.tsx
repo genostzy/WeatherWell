@@ -1,6 +1,6 @@
 "use client";
 
-import { Droplet, Mountain, Waves } from "lucide-react";
+import { Droplet, Mountain, Waves, Gauge } from "lucide-react";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { useLanguage } from "@/features/i18n/language-provider";
@@ -11,15 +11,17 @@ const HAZARD_TYPE_LABEL: Record<HazardType, LocalizedText> = {
   flood: { en: "Flood", fil: "Baha" },
   landslide: { en: "Landslide", fil: "Guho" },
   storm_surge: { en: "Storm Surge", fil: "Storm Surge" },
+  dam_release: { en: "Dam Release", fil: "Paglabas ng Dam" },
 };
 
 const HAZARD_TYPE_ICON: Record<HazardType, typeof Droplet> = {
   flood: Droplet,
   landslide: Mountain,
   storm_surge: Waves,
+  dam_release: Gauge,
 };
 
-const HAZARD_TYPE_ORDER: HazardType[] = ["flood", "landslide", "storm_surge"];
+const HAZARD_TYPE_ORDER: HazardType[] = ["flood", "landslide", "storm_surge", "dam_release"];
 
 const HAZARD_TYPE_SELECTOR_LABEL: LocalizedText = {
   en: "Hazard type shown on map",

@@ -10,10 +10,14 @@ import { getBearingAndDistance } from "./bearing-distance";
 import { useLivePosition } from "./use-live-position";
 import { useRouteFinding } from "./use-route-finding";
 import { usePinFlow } from "./use-pin-flow";
+import { useGeofenceAlert } from "./use-geofence-alert";
+import { GeofenceAlertBanner } from "./geofence-alert-banner";
 import { PersonalStatusHeadline } from "./personal-status-headline";
 import { CurrentConditionsPanel } from "./current-conditions-panel";
 import { ActionGrid } from "./action-grid";
 import { QuickStats } from "./quick-stats";
+import { useFloodForecast } from "@/lib/use-flood-forecast";
+import { PredictionTimeline } from "@/features/alerts/prediction-timeline";
 import { CommunityPinForm } from "./community-pin-form";
 import { PhotoLightbox } from "./photo-lightbox";
 import { OverlayDialog } from "@/components/overlay-dialog";
@@ -63,6 +67,8 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
   const { lang } = useLanguage();
   const [hazardType, setHazardType] = useState<HazardType>("flood");
   const livePosition = useLivePosition();
+  const { alert: geofenceAlert, dismiss: dismissGeofence } = useGeofenceAlert(zones, livePosition);
+  const forecast = useFloodForecast(zones[0]?.id);
 
   const {
     routeZone,
@@ -100,6 +106,15 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
       : null;
 
   return (
+    <>
+    {geofenceAlert && (
+      <GeofenceAlertBanner
+        zoneName={geofenceAlert.zoneName}
+        severity={geofenceAlert.severity}
+        message={geofenceAlert.message}
+        onDismiss={dismissGeofence}
+      />
+    )}
     <div className="grid w-full gap-3 sm:gap-4 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start lg:gap-6">
       {/* Mobile: status + actions + map + conditions. Desktop: map left, sidebar right. */}
 
@@ -128,6 +143,10 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
         <QuickStats />
         <ActionGrid />
         <CurrentConditionsPanel zone={zones[0]} />
+
+        {forecast && forecast.steps.length > 0 && (
+          <PredictionTimeline steps={forecast.steps} zoneName={zones[0].name} />
+        )}
 
         {/* Route info — only render when there's actual content to show */}
         {routeZone && (directionToSafety || routeHazard || notice) && (
@@ -217,5 +236,6 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
         />
       )}
     </div>
+    </>
   );
 }

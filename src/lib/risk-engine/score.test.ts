@@ -11,7 +11,7 @@ function baseInput(overrides: Partial<ZoneInput> = {}): ZoneInput {
     rainfallMmPerHour: 0,
     rainfallHistory: FLAT_HISTORY,
     thunderstormWatch: false,
-    hazardSusceptibility: { flood: "low", landslide: "low", storm_surge: "low" },
+    hazardSusceptibility: { flood: "low", landslide: "low", storm_surge: "low", dam_release: "low" },
     reportCount24h: 0,
     cascadeFromUpstream: false,
     ...overrides,
@@ -67,7 +67,7 @@ describe("computeZoneState — hazard baseline factor", () => {
     ["high", 20],
   ] as const)("scores flood susceptibility %s as %i", (level, expected) => {
     const state = computeZoneState(
-      baseInput({ hazardSusceptibility: { flood: level, landslide: "low", storm_surge: "low" } })
+      baseInput({ hazardSusceptibility: { flood: level, landslide: "low", storm_surge: "low", dam_release: "low" } })
     );
     expect(state.riskScore).toBe(expected);
   });
@@ -118,7 +118,7 @@ describe("computeZoneState — overall clamp", () => {
         rainfallMmPerHour: 999,
         thunderstormWatch: true,
         reportCount24h: 999,
-        hazardSusceptibility: { flood: "high", landslide: "high", storm_surge: "high" },
+        hazardSusceptibility: { flood: "high", landslide: "high", storm_surge: "high", dam_release: "high" },
         cascadeFromUpstream: true,
       })
     );
@@ -166,7 +166,7 @@ describe("unknown hazard data (I3)", () => {
     // it would read 40; with the 0.2 hazard weight excluded the remaining
     // 0.8 is the whole, so it reads 50.
     const unknown = computeZoneState(
-      baseInput({ rainfallMmPerHour: 50, hazardSusceptibility: { flood: "unknown", landslide: "unknown", storm_surge: "unknown" } })
+      baseInput({ rainfallMmPerHour: 50, hazardSusceptibility: { flood: "unknown", landslide: "unknown", storm_surge: "unknown", dam_release: "unknown" } })
     );
     const low = computeZoneState(baseInput({ rainfallMmPerHour: 50 }));
 
@@ -177,7 +177,7 @@ describe("unknown hazard data (I3)", () => {
 
   it("marks a score with unknown hazard data as estimated, even with enough reports to validate", () => {
     const state = computeZoneState(
-      baseInput({ reportCount24h: 100, hazardSusceptibility: { flood: "unknown", landslide: "low", storm_surge: "low" } })
+      baseInput({ reportCount24h: 100, hazardSusceptibility: { flood: "unknown", landslide: "low", storm_surge: "low", dam_release: "low" } })
     );
     expect(state.confidence).toBe("estimated");
   });
@@ -186,7 +186,7 @@ describe("unknown hazard data (I3)", () => {
     const zone1 = MOCK_ZONES.find((z) => z.id === "zone-1")!;
     const input = buildZoneInputForZone(zone1, MOCK_ZONES, () => false, {});
 
-    expect(input.hazardSusceptibility).toEqual({ flood: "unknown", landslide: "unknown", storm_surge: "unknown" });
+    expect(input.hazardSusceptibility).toEqual({ flood: "unknown", landslide: "unknown", storm_surge: "unknown", dam_release: "unknown" });
     expect(Number.isFinite(computeZoneState(input).riskScore)).toBe(true);
   });
 
@@ -194,6 +194,6 @@ describe("unknown hazard data (I3)", () => {
     const zone1 = MOCK_ZONES.find((z) => z.id === "zone-1")!;
     const input = buildZoneInputForZone(zone1, MOCK_ZONES, () => false, { "zone-1": { flood: "high" } });
 
-    expect(input.hazardSusceptibility).toEqual({ flood: "high", landslide: "unknown", storm_surge: "unknown" });
+    expect(input.hazardSusceptibility).toEqual({ flood: "high", landslide: "unknown", storm_surge: "unknown", dam_release: "unknown" });
   });
 });

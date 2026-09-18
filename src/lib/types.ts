@@ -105,5 +105,5 @@ export interface PointOfInterest {
   lng: number;
 }
 
-export type HazardType = "flood" | "landslide" | "storm_surge";
+export type HazardType = "flood" | "landslide" | "storm_surge" | "dam_release";
 export type HazardRiskLevel = "low" | "medium" | "high";

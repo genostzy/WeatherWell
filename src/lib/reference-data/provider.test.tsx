@@ -265,7 +265,7 @@ describe("useHazardsForZone", () => {
     // "unknown" rather than being absent (I3).
     await waitFor(() =>
       expect(screen.getByTestId("hazards").textContent).toBe(
-        JSON.stringify({ flood: "high", landslide: "unknown", storm_surge: "unknown" })
+        JSON.stringify({ flood: "high", landslide: "unknown", storm_surge: "unknown", dam_release: "unknown" })
       )
     );
   });
@@ -288,7 +288,7 @@ describe("useHazardsForZone", () => {
     );
     await waitFor(() =>
       expect(screen.getByTestId("hazards").textContent).toBe(
-        JSON.stringify({ flood: "unknown", landslide: "unknown", storm_surge: "unknown" })
+        JSON.stringify({ flood: "unknown", landslide: "unknown", storm_surge: "unknown", dam_release: "unknown" })
       )
     );
   });

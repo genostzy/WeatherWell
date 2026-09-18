@@ -34,6 +34,7 @@ export function hazardsForZone(hazards: HazardsByZone, zoneId: string): ZoneHaza
     flood: known?.flood ?? "unknown",
     landslide: known?.landslide ?? "unknown",
     storm_surge: known?.storm_surge ?? "unknown",
+    dam_release: known?.dam_release ?? "unknown",
   };
 }
 

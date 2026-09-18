@@ -1,6 +1,6 @@
 "use client";
 
-import useSWR from "swr";
+import { useState, useEffect } from "react";
 
 export interface WeatherReading {
   rainfall_mm: number;
@@ -17,15 +17,9 @@ export interface WeatherData {
   rainfallHistory: number[];
 }
 
-const fetcher = async (url: string): Promise<WeatherData> => {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error("Failed to fetch weather");
-  return res.json();
-};
-
 /**
  * Hook to fetch weather data for a zone from the API.
- * Returns mock-like defaults when no real data exists yet.
+ * Polls every 30 minutes. Returns null data when no readings exist yet.
  */
 export function useWeatherData(zoneId: string | undefined): {
   current: WeatherReading | null;
@@ -33,17 +27,48 @@ export function useWeatherData(zoneId: string | undefined): {
   isLoading: boolean;
   error: unknown;
 } {
-  const { data, isLoading, error } = useSWR<WeatherData>(
-    zoneId ? `/api/weather?zoneId=${zoneId}` : null,
-    fetcher,
-    {
-      refreshInterval: 30 * 60 * 1000, // 30 minutes
-      revalidateOnFocus: true,
-      fallbackData: zoneId
-        ? { zoneId, current: null, rainfallHistory: [] }
-        : undefined,
+  const [data, setData] = useState<WeatherData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<unknown>(null);
+
+  useEffect(() => {
+    if (!zoneId) {
+      setIsLoading(false);
+      return;
     }
-  );
+
+    let cancelled = false;
+    const controller = new AbortController();
+
+    async function fetchWeather() {
+      try {
+        setIsLoading(true);
+        const res = await fetch(`/api/weather?zoneId=${zoneId}`, {
+          signal: controller.signal,
+        });
+        if (!res.ok) throw new Error("Failed to fetch weather");
+        const json = await res.json();
+        if (!cancelled) setData(json);
+      } catch (err) {
+        if (!cancelled && err instanceof Error && err.name !== "AbortError") {
+          setError(err);
+        }
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    }
+
+    fetchWeather();
+
+    // Poll every 30 minutes
+    const interval = setInterval(fetchWeather, 30 * 60 * 1000);
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+      clearInterval(interval);
+    };
+  }, [zoneId]);
 
   return {
     current: data?.current ?? null,

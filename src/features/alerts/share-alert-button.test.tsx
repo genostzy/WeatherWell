@@ -24,7 +24,9 @@ function shareTextFrom(lang: LanguageCode): string {
       <ShareAlertButton alert={alert} zone={zone} />
     </LanguageProvider>
   );
-  fireEvent.click(screen.getByRole("button"));
+  // First button is always the Share button (before Download Image)
+  const buttons = screen.getAllByRole("button");
+  fireEvent.click(buttons[0]);
 
   return share.mock.calls[0][0].text as string;
 }

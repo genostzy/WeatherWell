@@ -149,10 +149,10 @@ export const MOCK_HAZARD_SUSCEPTIBILITY: Record<
   string,
   Record<HazardType, HazardRiskLevel>
 > = {
-  "zone-1": { flood: "high", landslide: "low", storm_surge: "low" },
-  "zone-2": { flood: "high", landslide: "low", storm_surge: "low" },
-  "zone-3": { flood: "medium", landslide: "low", storm_surge: "low" },
-  "zone-4": { flood: "medium", landslide: "low", storm_surge: "low" },
+  "zone-1": { flood: "high", landslide: "low", storm_surge: "low", dam_release: "low" },
+  "zone-2": { flood: "high", landslide: "low", storm_surge: "low", dam_release: "low" },
+  "zone-3": { flood: "medium", landslide: "low", storm_surge: "low", dam_release: "low" },
+  "zone-4": { flood: "medium", landslide: "low", storm_surge: "low", dam_release: "low" },
 };
 
 export function getHazardSusceptibilityForZone(

@@ -6,6 +6,7 @@ import {
   Building2,
   CloudRain,
   Droplet,
+  Gauge,
   Mountain,
   Phone,
   Thermometer,
@@ -61,11 +62,13 @@ const HAZARD_LABEL: Record<HazardType, LocalizedText> = {
   flood: { en: "Flood", fil: "Baha" },
   landslide: { en: "Landslide", fil: "Guho" },
   storm_surge: { en: "Storm surge", fil: "Storm surge" },
+  dam_release: { en: "Dam Release", fil: "Paglabas ng Dam" },
 };
 const HAZARD_ICON: Record<HazardType, typeof Droplet> = {
   flood: Droplet,
   landslide: Mountain,
   storm_surge: Waves,
+  dam_release: Gauge,
 };
 const RISK_CLASS: Record<HazardLevel, string> = {
   low: "text-muted-foreground",

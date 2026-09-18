@@ -24,15 +24,19 @@ insert into public.municipalities (code, name) values ('0105538', 'Santa Barbara
 insert into public.hazard_susceptibility (id, zone_id, hazard_type, risk_level) values ('zone-1-flood', 'zone-1', 'flood', 'high') on conflict (id) do update set risk_level = excluded.risk_level;
 insert into public.hazard_susceptibility (id, zone_id, hazard_type, risk_level) values ('zone-1-landslide', 'zone-1', 'landslide', 'low') on conflict (id) do update set risk_level = excluded.risk_level;
 insert into public.hazard_susceptibility (id, zone_id, hazard_type, risk_level) values ('zone-1-storm_surge', 'zone-1', 'storm_surge', 'low') on conflict (id) do update set risk_level = excluded.risk_level;
+insert into public.hazard_susceptibility (id, zone_id, hazard_type, risk_level) values ('zone-1-dam_release', 'zone-1', 'dam_release', 'low') on conflict (id) do update set risk_level = excluded.risk_level;
 insert into public.hazard_susceptibility (id, zone_id, hazard_type, risk_level) values ('zone-2-flood', 'zone-2', 'flood', 'high') on conflict (id) do update set risk_level = excluded.risk_level;
 insert into public.hazard_susceptibility (id, zone_id, hazard_type, risk_level) values ('zone-2-landslide', 'zone-2', 'landslide', 'low') on conflict (id) do update set risk_level = excluded.risk_level;
 insert into public.hazard_susceptibility (id, zone_id, hazard_type, risk_level) values ('zone-2-storm_surge', 'zone-2', 'storm_surge', 'low') on conflict (id) do update set risk_level = excluded.risk_level;
+insert into public.hazard_susceptibility (id, zone_id, hazard_type, risk_level) values ('zone-2-dam_release', 'zone-2', 'dam_release', 'low') on conflict (id) do update set risk_level = excluded.risk_level;
 insert into public.hazard_susceptibility (id, zone_id, hazard_type, risk_level) values ('zone-3-flood', 'zone-3', 'flood', 'medium') on conflict (id) do update set risk_level = excluded.risk_level;
 insert into public.hazard_susceptibility (id, zone_id, hazard_type, risk_level) values ('zone-3-landslide', 'zone-3', 'landslide', 'low') on conflict (id) do update set risk_level = excluded.risk_level;
 insert into public.hazard_susceptibility (id, zone_id, hazard_type, risk_level) values ('zone-3-storm_surge', 'zone-3', 'storm_surge', 'low') on conflict (id) do update set risk_level = excluded.risk_level;
+insert into public.hazard_susceptibility (id, zone_id, hazard_type, risk_level) values ('zone-3-dam_release', 'zone-3', 'dam_release', 'low') on conflict (id) do update set risk_level = excluded.risk_level;
 insert into public.hazard_susceptibility (id, zone_id, hazard_type, risk_level) values ('zone-4-flood', 'zone-4', 'flood', 'medium') on conflict (id) do update set risk_level = excluded.risk_level;
 insert into public.hazard_susceptibility (id, zone_id, hazard_type, risk_level) values ('zone-4-landslide', 'zone-4', 'landslide', 'low') on conflict (id) do update set risk_level = excluded.risk_level;
 insert into public.hazard_susceptibility (id, zone_id, hazard_type, risk_level) values ('zone-4-storm_surge', 'zone-4', 'storm_surge', 'low') on conflict (id) do update set risk_level = excluded.risk_level;
+insert into public.hazard_susceptibility (id, zone_id, hazard_type, risk_level) values ('zone-4-dam_release', 'zone-4', 'dam_release', 'low') on conflict (id) do update set risk_level = excluded.risk_level;
 
 -- SEED ACCOUNT — obviously fake, and not to survive into a pilot.
 -- Removed, with everything attributed to it, by supabase/seed/teardown.sql.
