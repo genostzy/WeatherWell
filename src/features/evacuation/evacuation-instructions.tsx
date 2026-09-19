@@ -17,7 +17,7 @@ const SPOTS_LEFT: LocalizedText = { en: "spots left", fil: "espasyong natitira" 
 export function EvacuationInstructions({ zone }: { zone: Zone }) {
   const { lang } = useLanguage();
   // The live headcount an operator most recently entered, carried through
-  // /api/zones as zone.currentOccupancy — undefined if none was ever
+  // reference data as zone.currentOccupancy — undefined if none was ever
   // recorded, in which case resolveEffectiveCenterStatus falls back to the
   // zone's own centerStatus.
   const occupancy = zone.currentOccupancy;

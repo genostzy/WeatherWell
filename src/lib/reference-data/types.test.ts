@@ -84,7 +84,7 @@ describe("toReferenceData", () => {
   });
 
   it("carries current_occupancy through as currentOccupancy, and a value crossing the full threshold changes the derived status", () => {
-    // PRD Gap B: an operator's headcount write is worthless if /api/zones
+    // PRD Gap B: an operator's headcount write is worthless if reference data
     // never selects it back out. Pin the field actually reaching the Zone,
     // and that it changes the derived status even though the manual
     // centerStatus column still says "space_available" (300 * 0.95 = 285).

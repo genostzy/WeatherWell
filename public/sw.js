@@ -20,7 +20,7 @@
  * CURRENT_CACHES, so a bump is what evicts a bad build from installed devices.
  * Leaving it unchanged is what pins users to a stale app forever.
  */
-const VERSION = "v13";
+const VERSION = "v14";
 
 const SHELL_CACHE = `weatherwell-shell-${VERSION}`;
 const ASSET_CACHE = `weatherwell-assets-${VERSION}`;
@@ -122,7 +122,7 @@ self.addEventListener("install", (event) => {
             )
           )
         ),
-      caches.open(ZONE_CACHE).then((cache) => cache.add("/api/zones").catch(() => undefined)),
+      caches.open(ZONE_CACHE).then((cache) => cache.add("/data/reference-data.json").catch(() => undefined)),
     ])
   );
   self.skipWaiting();
@@ -505,7 +505,7 @@ self.addEventListener("fetch", (event) => {
   }
 
   // Zone and evacuation data: instant from cache, refreshed behind the scenes.
-  if (url.pathname === "/api/zones" || url.pathname.startsWith("/api/zones/")) {
+  if (url.pathname === "/data/reference-data.json") {
     event.respondWith(staleWhileRevalidate(request, ZONE_CACHE));
     return;
   }

@@ -63,7 +63,7 @@ export function EvacuationManagementPanel({ zones }: { zones: Zone[] }) {
   // enforces the real limit; this only decides what's shown here.
   const inAreaZones = zones.filter((zone) => isInArea(zone.psgcBarangayCode, official.areaCode));
 
-  // Reflects each zone's live headcount, carried through /api/zones as
+  // Reflects each zone's live headcount, carried through reference data as
   // zone.currentOccupancy, same as every other read-only surface.
   const effectiveStatuses = inAreaZones.map((zone) =>
     resolveEffectiveCenterStatus(zone.centerStatus, zone.evacuationCenterCapacity, zone.currentOccupancy)
@@ -112,7 +112,7 @@ export function EvacuationManagementPanel({ zones }: { zones: Zone[] }) {
  * called from inside a loop.
  *
  * The typed headcount is seeded from zone.currentOccupancy (the last value
- * carried through /api/zones) and then tracked in this component's own
+ * carried through reference data) and then tracked in this component's own
  * state as the admin edits it — an occupancy write doesn't itself refetch or
  * patch reference data, so this state only reflects the server again after
  * the next fetch/reload. Typing here derives the status shown immediately;

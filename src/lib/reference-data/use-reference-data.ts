@@ -52,7 +52,7 @@ export function useHazards(): HazardsByZone {
  * centre Full by mistake without a reload. Once the database confirms the
  * write, this patches the zone's centerStatus in ReferenceDataProvider's own
  * state (see SetCenterStatusContext), so every screen reading useZones()
- * follows — no refetch, because /api/zones is cached stale-while-revalidate
+ * follows — no refetch, because reference data is cached stale-while-revalidate
  * by the service worker and would hand back the pre-write copy.
  *
  * The dynamic import is for the same reason every caller used one before:

@@ -17,7 +17,7 @@ export const ReferenceDataContext = createContext<ReferenceData | null>(null);
  * patched its own copy would leave every other screen showing the old status.
  *
  * Deliberately a local patch rather than a refetch (unlike
- * AlertsRefreshContext/refreshAlerts above): /api/zones is served
+ * AlertsRefreshContext/refreshAlerts above): reference data is served
  * stale-while-revalidate by the service worker (see public/sw.js), so
  * refetching it after the write would hand back the cached, pre-write copy.
  * Patching locally is safe here because `status` is exactly the value the
@@ -72,7 +72,7 @@ type State =
  * "every barangay is safe" — the single most dangerous wrong answer this
  * system can give.
  *
- * On a repeat visit the service worker answers /api/zones from cache with no
+ * On a repeat visit the service worker answers reference data from cache with no
  * network, so this resolves immediately and the gate is invisible.
  */
 export function ReferenceDataProvider({
@@ -103,7 +103,7 @@ export function ReferenceDataProvider({
   // and a retry re-arms it explicitly (see `retry` below) before calling this.
   const load = useCallback(() => {
     Promise.all([
-      fetchWithTimeout("/api/zones", FETCH_TIMEOUT_MS),
+      fetchWithTimeout("/data/reference-data.json", FETCH_TIMEOUT_MS),
       fetchWithTimeout("/api/alerts", FETCH_TIMEOUT_MS),
     ])
       .then(([zonesResponse, alertsResponse]) => {

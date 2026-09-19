@@ -94,7 +94,7 @@ describe("ReferenceDataProvider", () => {
   });
 
   it("tells the resident it cannot reach the data instead of spinning forever", async () => {
-    // A device that is offline AND has never cached /api/zones. An indefinite
+    // A device that is offline AND has never cached /data/reference-data.json. An indefinite
     // spinner during a flood is the worst possible answer.
     (fetch as ReturnType<typeof vi.fn>).mockRejectedValue(new TypeError("Failed to fetch"));
     renderProvider();
@@ -121,7 +121,7 @@ describe("ReferenceDataProvider", () => {
     // with no alert data reads as "every barangay is safe", so this must not
     // silently fall through to "ready".
     (fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
-      if (url === "/api/zones") return Promise.resolve({ ok: true, json: async () => ONE_ZONE });
+      if (url === "/data/reference-data.json") return Promise.resolve({ ok: true, json: async () => ONE_ZONE });
       return Promise.resolve({ ok: false, status: 502, json: async () => ({}) });
     });
     renderProvider();
@@ -131,7 +131,7 @@ describe("ReferenceDataProvider", () => {
 
   it("shows the failure card when zones succeed but the alerts fetch rejects (I7)", async () => {
     (fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
-      if (url === "/api/zones") return Promise.resolve({ ok: true, json: async () => ONE_ZONE });
+      if (url === "/data/reference-data.json") return Promise.resolve({ ok: true, json: async () => ONE_ZONE });
       return Promise.reject(new TypeError("Failed to fetch"));
     });
     renderProvider();
@@ -143,7 +143,7 @@ describe("ReferenceDataProvider", () => {
     // Changing the provider to pass alerts: [] must fail this test — it did
     // not fail any test before this one existed.
     (fetch as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
-      if (url === "/api/zones") return Promise.resolve({ ok: true, json: async () => ONE_ZONE });
+      if (url === "/data/reference-data.json") return Promise.resolve({ ok: true, json: async () => ONE_ZONE });
       return Promise.resolve({ ok: true, json: async () => [ALERT] });
     });
     render(

@@ -81,7 +81,7 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
   const zone = foundZone;
   const canManage = managesZone(zone);
 
-  // Reflects the live headcount carried through /api/zones as
+  // Reflects the live headcount carried through reference data as
   // zone.currentOccupancy, same as every other read-only surface; falls back
   // to the zone's own centerStatus if no headcount has ever been recorded.
   const centerStatus = resolveEffectiveCenterStatus(zone.centerStatus, zone.evacuationCenterCapacity, zone.currentOccupancy);

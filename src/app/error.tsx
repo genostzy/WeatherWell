@@ -8,7 +8,7 @@ import { reportError } from "@/lib/monitoring/report";
 
 /**
  * Root error boundary. Without this, an unexpected render error (e.g.
- * useSelectedZone() throwing because /api/zones answered 200 with an empty
+ * useSelectedZone() throwing because reference data answered with an empty
  * zone list — see the I5 finding) fell through to Next's untranslated stack
  * trace screen instead of the localised offline card the rest of this app
  * uses. Kept small on purpose: this is a last resort, not a place to add

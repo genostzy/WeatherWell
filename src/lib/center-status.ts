@@ -34,7 +34,7 @@ export function deriveCenterStatusFromOccupancy(capacity: number, occupancy: num
  * The capacity status the rest of the app should display. If a live
  * headcount is being tracked (capacity + occupancy both known), that
  * derives the status directly — otherwise the zone's own centerStatus
- * (evacuation_centers.status, already carried through /api/zones) is the
+ * (evacuation_centers.status, already carried through reference data) is the
  * answer.
  *
  * This used to take a fourth `override` parameter: a manual centerStatus

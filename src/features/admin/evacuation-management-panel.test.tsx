@@ -144,7 +144,7 @@ describe("EvacuationManagementPanel capacity control after a confirmed write (R1
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string) => {
-        if (url === "/api/zones") return { ok: true, json: async () => FIXTURE_REFERENCE_DATA };
+        if (url === "/data/reference-data.json") return { ok: true, json: async () => FIXTURE_REFERENCE_DATA };
         if (url.startsWith("/api/alerts")) return { ok: true, json: async () => [] };
         return { ok: true, json: async () => [] };
       })

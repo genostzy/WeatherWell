@@ -260,11 +260,11 @@ describe("service worker request routing", () => {
 
   it("serves zone data from cache first, so an outage still shows a zone", async () => {
     const { listeners } = loadServiceWorker({
-      caches: { [ZONE_CACHE]: { [`${ORIGIN}/api/zones`]: "CACHED ZONES" } },
+      caches: { [ZONE_CACHE]: { [`${ORIGIN}/data/reference-data.json`]: "CACHED ZONES" } },
       fetch: async () => response("NETWORK ZONES"),
     });
 
-    const result = await handleFetch(listeners, { url: `${ORIGIN}/api/zones` });
+    const result = await handleFetch(listeners, { url: `${ORIGIN}/data/reference-data.json` });
 
     expect(result?.body).toBe("CACHED ZONES");
   });
@@ -577,10 +577,10 @@ describe("service worker request routing", () => {
     // Zone cache is now versioned alongside VERSION so schema changes (new
     // columns like municipality_name/province_name) force a fresh fetch.
     const { listeners, store } = loadServiceWorker({
-      caches: { [ZONE_CACHE]: { [`${ORIGIN}/api/zones`]: "CACHED ZONES" } },
+      caches: { [ZONE_CACHE]: { [`${ORIGIN}/data/reference-data.json`]: "CACHED ZONES" } },
     });
 
-    const result = await handleFetch(listeners, { url: `${ORIGIN}/api/zones` });
+    const result = await handleFetch(listeners, { url: `${ORIGIN}/data/reference-data.json` });
 
     expect(result?.body).toBe("CACHED ZONES");
     expect(store.has(API_CACHE)).toBe(false);
@@ -725,21 +725,21 @@ describe("service worker install", () => {
     listeners.install({ waitUntil: (p: Promise<unknown>) => waits.push(p) });
     await Promise.all(waits);
 
-    expect(store.get(ZONE_CACHE)?.has("/api/zones")).toBe(true);
+    expect(store.get(ZONE_CACHE)?.has("/data/reference-data.json")).toBe(true);
     expect(store.get(SHELL_CACHE)?.has("/api/alerts")).toBe(true);
   });
 
   it("still resolves install when zones or alerts fail to precache", async () => {
     const { listeners, store } = loadServiceWorker({
       fetch: async (url) =>
-        url === "/api/zones" || url === "/api/alerts" ? response("boom", 500) : response("ok"),
+        url === "/data/reference-data.json" || url === "/api/alerts" ? response("boom", 500) : response("ok"),
     });
 
     const waits: Promise<unknown>[] = [];
     listeners.install({ waitUntil: (p: Promise<unknown>) => waits.push(p) });
 
     await expect(Promise.all(waits)).resolves.toBeDefined();
-    expect(store.get(ZONE_CACHE)?.has("/api/zones")).toBe(false);
+    expect(store.get(ZONE_CACHE)?.has("/data/reference-data.json")).toBe(false);
     expect(store.get(SHELL_CACHE)?.has("/api/alerts")).toBe(false);
     // The routes that did succeed are unaffected by the two that failed.
     expect(store.get(SHELL_CACHE)?.has("/")).toBe(true);
@@ -773,8 +773,8 @@ describe("service worker cache lifecycle", () => {
     const oldZoneCache = "weatherwell-zones-old";
     const { listeners, store } = loadServiceWorker({
       caches: {
-        [oldZoneCache]: { [`${ORIGIN}/api/zones`]: "OLD ZONES" },
-        [ZONE_CACHE]: { [`${ORIGIN}/api/zones`]: "CURRENT ZONES" },
+        [oldZoneCache]: { [`${ORIGIN}/data/reference-data.json`]: "OLD ZONES" },
+        [ZONE_CACHE]: { [`${ORIGIN}/data/reference-data.json`]: "CURRENT ZONES" },
       },
     });
 
@@ -876,7 +876,7 @@ describe("service worker and admin-scoped responses (I1)", () => {
         [SHELL_CACHE]: { [`${ORIGIN}/admin/history`]: "HISTORY", [`${ORIGIN}/evacuation`]: "EVACUATION" },
         [ASSET_CACHE]: { [`${ORIGIN}/admin?_rsc=x`]: "FLIGHT", [`${ORIGIN}/icon-192.png`]: "ICON" },
         [API_CACHE]: { [`${ORIGIN}/api/official-actions?limit=1`]: "RECORD" },
-        [ZONE_CACHE]: { [`${ORIGIN}/api/zones`]: "ZONES" },
+        [ZONE_CACHE]: { [`${ORIGIN}/data/reference-data.json`]: "ZONES" },
       },
     });
 
@@ -896,7 +896,7 @@ describe("service worker and admin-scoped responses (I1)", () => {
     expect(store.get(API_CACHE)?.has(`${ORIGIN}/api/official-actions?limit=1`)).toBe(false);
     expect(store.get(SHELL_CACHE)?.get(`${ORIGIN}/evacuation`)).toBe("EVACUATION");
     expect(store.get(ASSET_CACHE)?.get(`${ORIGIN}/icon-192.png`)).toBe("ICON");
-    expect(store.get(ZONE_CACHE)?.get(`${ORIGIN}/api/zones`)).toBe("ZONES");
+    expect(store.get(ZONE_CACHE)?.get(`${ORIGIN}/data/reference-data.json`)).toBe("ZONES");
   });
 
   it("evicts the v9 caches, which may already hold admin pages, on activate", async () => {

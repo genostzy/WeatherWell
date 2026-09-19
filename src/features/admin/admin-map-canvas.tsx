@@ -383,7 +383,7 @@ function ZoneAlertSelect({
  * call must not live inside AdminMapCanvas's zones.map().
  *
  * The typed headcount is seeded from zone.currentOccupancy (the last value
- * carried through /api/zones) and then tracked in this component's own
+ * carried through reference data) and then tracked in this component's own
  * state as the admin edits it — a write doesn't itself refetch reference
  * data, so this state only reflects the server again after the next
  * fetch/reload. Typing here derives the status shown below immediately;
