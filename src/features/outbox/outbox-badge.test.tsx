@@ -289,12 +289,12 @@ describe("OutboxBadge", () => {
   it("Retry turns the entry pending again, and the badge returns to 'waiting'", async () => {
     const user = userEvent.setup();
     auth.set("user-a");
-    seed(entry({ userId: "user-a", status: "stuck", stuckReason: "gave_up" }));
+    seed(entry({ userId: "user-a", status: "stuck", stuckReason: "gave_up", queuedAt: new Date().toISOString() }));
     renderWithData(<OutboxBadge />);
     await user.click(screen.getByRole("button", { name: "1 couldn't send" }));
     await user.click(screen.getByRole("button", { name: "Retry" }));
 
-    expect(screen.getByRole("button", { name: "1 waiting to send" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "1 waiting to send" })).toBeInTheDocument();
     const [stored] = JSON.parse(localStorage.getItem(OUTBOX_KEY)!) as OutboxEntry[];
     expect(stored.status).toBe("pending");
   });

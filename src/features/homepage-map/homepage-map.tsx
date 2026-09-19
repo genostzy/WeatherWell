@@ -136,7 +136,7 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
       </div>
 
       {/* Sidebar — desktop: right column. Mobile: above map. */}
-      <div className="order-first lg:order-none flex flex-col gap-2 sm:gap-3 lg:col-start-2 lg:row-span-4 lg:gap-4">
+      <div className="order-first lg:order-none flex flex-col gap-2 overflow-hidden sm:gap-3 lg:col-start-2 lg:row-span-4 lg:gap-4">
         <PersonalStatusHeadline zone={zones[0]} />
         <QuickStats />
 
@@ -150,7 +150,7 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
         {routeZone && (directionToSafety || routeHazard || notice) && (
           <div className="rounded-xl border-2 border-border p-3 text-sm">
             {routeZone && directionToSafety && (
-              <p className="font-medium">
+              <p className="font-medium break-words">
                 {Math.round(directionToSafety.distanceMeters)}m{" "}
                 {t(COMPASS_LABEL[directionToSafety.compassLabel], lang)} {t(TO, lang)}{" "}
                 {routeZone.evacuationCenterName}
