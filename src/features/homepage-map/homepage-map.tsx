@@ -14,7 +14,6 @@ import { useGeofenceAlert } from "./use-geofence-alert";
 import { GeofenceAlertBanner } from "./geofence-alert-banner";
 import { PersonalStatusHeadline } from "./personal-status-headline";
 import { CurrentConditionsPanel } from "./current-conditions-panel";
-import { ActionGrid } from "./action-grid";
 import { QuickStats } from "./quick-stats";
 import { useFloodForecast } from "@/lib/use-flood-forecast";
 import { PredictionTimeline } from "@/features/alerts/prediction-timeline";
@@ -114,7 +113,7 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
         onDismiss={dismissGeofence}
       />
     )}
-    <div className="grid w-full gap-3 sm:gap-4 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start lg:gap-6">
+    <div className="grid w-full gap-2 sm:gap-3 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-5">
       {/* Mobile: status + actions + map + conditions. Desktop: map left, sidebar right. */}
 
       {/* Map — desktop: left column. Mobile: below actions. */}
@@ -137,17 +136,17 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
       </div>
 
       {/* Sidebar — desktop: right column. Mobile: above map. */}
-      <div className="order-first lg:order-none flex flex-col gap-3 sm:gap-4 lg:col-start-2 lg:row-span-4 lg:gap-5">
+      <div className="order-first lg:order-none flex flex-col gap-2 sm:gap-3 lg:col-start-2 lg:row-span-4 lg:gap-4">
         <PersonalStatusHeadline zone={zones[0]} />
         <QuickStats />
-        <ActionGrid />
-        <CurrentConditionsPanel zone={zones[0]} />
 
+        {/* Weather + forecast — collapsible, lower priority */}
+        <CurrentConditionsPanel zone={zones[0]} />
         {forecast && forecast.steps.length > 0 && (
           <PredictionTimeline steps={forecast.steps} zoneName={zones[0].name} />
         )}
 
-        {/* Route info — only render when there's actual content to show */}
+        {/* Route info — only when a route is active */}
         {routeZone && (directionToSafety || routeHazard || notice) && (
           <div className="rounded-xl border-2 border-border p-3 text-sm">
             {routeZone && directionToSafety && (
@@ -166,18 +165,19 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
           </div>
         )}
 
-        {/* Route action buttons */}
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={handleFindSafeArea}>
+        {/* Quick actions — compact, inline */}
+        <div className="flex flex-wrap gap-1.5">
+          <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={handleFindSafeArea}>
             {t(FIND_SAFE_AREA, lang)}
           </Button>
-          <Button type="button" variant="outline" size="sm" onClick={handleFindSafeEvacuationCenter}>
+          <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={handleFindSafeEvacuationCenter}>
             {t(FIND_SAFE_EVACUATION_CENTER, lang)}
           </Button>
           <Button
             type="button"
             variant={isPlacingPin ? "default" : "outline"}
             size="sm"
+            className="h-7 text-xs"
             onClick={() => setIsPlacingPin((v) => !v)}
           >
             {t(isPlacingPin ? CANCEL_ADD_PIN : ADD_FLOOD_PIN, lang)}

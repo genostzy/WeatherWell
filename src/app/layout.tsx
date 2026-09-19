@@ -12,6 +12,7 @@ import { OutboxDrain } from "@/components/outbox-drain";
 import { RetiredStorageSweep } from "@/components/retired-storage-sweep";
 import { TilePrecacher } from "@/lib/tile-precacher";
 import { ReferenceDataProvider } from "@/lib/reference-data/provider";
+import { BottomNav } from "@/components/bottom-nav";
 
 export const viewport: Viewport = {
   themeColor: "#0a0a0a",
@@ -35,7 +36,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className="h-full antialiased">
-      <body className="min-h-full flex flex-col bg-background font-sans text-foreground">
+      <body className="min-h-full flex flex-col bg-background font-sans text-foreground pb-14 lg:pb-0">
         <TooltipProvider>
           <LanguageProvider>
             <ServiceWorkerRegistration />
@@ -60,6 +61,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             </ReferenceDataProvider>
           </LanguageProvider>
         </TooltipProvider>
+        <BottomNav />
       </body>
     </html>
   );

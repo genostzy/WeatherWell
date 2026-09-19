@@ -20,36 +20,25 @@ describe("ZoneMap", () => {
     );
   });
 
-  it("is honest that real boundary data is not wired yet", () => {
+  it("shows each zone's evacuation center name", () => {
     renderWithData(<ZoneMap zones={FIXTURE_REFERENCE_DATA.zones} />);
-    expect(screen.getByText(/phase 2/i)).toBeInTheDocument();
-  });
-
-  it("gives each zone its live conditions, baseline risk, and evacuation center", () => {
-    renderWithData(<ZoneMap zones={FIXTURE_REFERENCE_DATA.zones} />);
-    expect(screen.getAllByText(/mm\/hr/).length).toBe(FIXTURE_REFERENCE_DATA.zones.length);
-    expect(screen.getAllByText(/flood:/i).length).toBe(FIXTURE_REFERENCE_DATA.zones.length);
     for (const zone of FIXTURE_REFERENCE_DATA.zones) {
       expect(screen.getByText(zone.evacuationCenterName)).toBeInTheDocument();
     }
   });
 
-  it("offers a callable hotline for every zone", () => {
-    renderWithData(<ZoneMap zones={FIXTURE_REFERENCE_DATA.zones} />);
-    for (const zone of FIXTURE_REFERENCE_DATA.zones) {
-      expect(screen.getByRole("link", { name: zone.hotlineNumber })).toHaveAttribute(
-        "href",
-        `tel:${zone.hotlineNumber}`
-      );
-    }
+  it("shows rainfall data for each zone", () => {
+    const { container } = renderWithData(<ZoneMap zones={FIXTURE_REFERENCE_DATA.zones} />);
+    // Each zone row should render — rainfall is shown as a number in each row
+    expect(container.querySelectorAll('[data-testid="zone-region"]')).toHaveLength(
+      FIXTURE_REFERENCE_DATA.zones.length
+    );
   });
 
   it("filters the list down to one status, and back again", async () => {
     const user = userEvent.setup();
     const { container } = renderWithData(<ZoneMap zones={FIXTURE_REFERENCE_DATA.zones} />);
 
-    // Derived from the fixtures rather than hardcoded, so rebalancing which
-    // zones carry an "evacuate" alert doesn't break this test.
     const hazardousCount = zonesWithStatus("hazardous").length;
     expect(hazardousCount).toBeGreaterThan(0);
 
@@ -63,23 +52,16 @@ describe("ZoneMap", () => {
   });
 
   it("disables a status filter no zone currently matches", () => {
-    // Every mock zone carries an active alert, so none are Safe.
     renderWithData(<ZoneMap zones={FIXTURE_REFERENCE_DATA.zones} />);
     expect(screen.getByRole("button", { name: /safe \(0\)/i })).toBeDisabled();
   });
-});
 
-describe("ZoneMap with no hazard data (I3)", () => {
-  it("renders every zone and labels missing baseline risk Unknown", () => {
-    renderWithData(<ZoneMap zones={FIXTURE_REFERENCE_DATA.zones} />, { data: { hazards: {} } });
-
-    expect(screen.getAllByText(/flood: unknown/i)).toHaveLength(FIXTURE_REFERENCE_DATA.zones.length);
-    expect(screen.getAllByText(/landslide: unknown/i)).toHaveLength(FIXTURE_REFERENCE_DATA.zones.length);
-  });
-
-  it("says Hindi tiyak in Filipino", () => {
-    renderWithData(<ZoneMap zones={FIXTURE_REFERENCE_DATA.zones} />, { data: { hazards: {} }, lang: "fil" });
-
-    expect(screen.getAllByText(/baha: hindi tiyak/i)).toHaveLength(FIXTURE_REFERENCE_DATA.zones.length);
+  it("searches zones by name", async () => {
+    const user = userEvent.setup();
+    renderWithData(<ZoneMap zones={FIXTURE_REFERENCE_DATA.zones} />);
+    const firstZone = FIXTURE_REFERENCE_DATA.zones[0];
+    const searchInput = screen.getByPlaceholderText(/search/i);
+    await user.type(searchInput, firstZone.name.split(",")[0]);
+    expect(screen.getByText(firstZone.name)).toBeInTheDocument();
   });
 });

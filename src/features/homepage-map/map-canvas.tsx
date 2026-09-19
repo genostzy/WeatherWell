@@ -172,6 +172,13 @@ export function MapCanvas({
   const communityPins = useCommunityPins();
   const userId = useSessionUserId();
   const alerts = useAlerts();
+  const alertMap = useMemo(() => {
+    const m = new Map<string, typeof alerts[0]>();
+    for (const a of alerts) {
+      if (a.isActive) m.set(a.zoneId, a);
+    }
+    return m;
+  }, [alerts]);
   const initialCenter: [number, number] = [zones[0].lat, zones[0].lng];
   const [flyTarget, setFlyTarget] = useState<{ lat: number; lng: number } | null>(null);
   const [searchTarget, setSearchTarget] = useState<{ lat: number; lng: number } | null>(null);
@@ -229,13 +236,14 @@ export function MapCanvas({
   const radiusDeg = Math.min(0.25, 0.004 * Math.pow(2, Math.max(zoom - 10, 0)));
   const markerCap = zoom <= 11 ? 20 : zoom <= 12 ? 60 : zoom <= 13 ? 150 : 500;
 
-  const visibleZones = zones
-    .filter(
+  const visibleZones = useMemo(() => {
+    const filtered = zones.filter(
       (z) =>
         Math.abs(z.lat - viewCenter[0]) < radiusDeg &&
         Math.abs(z.lng - viewCenter[1]) < radiusDeg
-    )
-    .slice(0, markerCap);
+    );
+    return filtered.slice(0, markerCap);
+  }, [zones, viewCenter, radiusDeg, markerCap]);
 
   /**
    * Evacuation center display strategy:
@@ -292,7 +300,10 @@ export function MapCanvas({
   const nearestEvac = useMemo(() => {
     if (!livePosition) return null;
     let best: { zone: Zone; distance: number } | null = null;
+    // Only scan zones within ~50km — no one needs an evac center beyond that
+    const maxDeg = 0.5;
     for (const z of zones) {
+      if (Math.abs(z.lat - livePosition.lat) > maxDeg || Math.abs(z.lng - livePosition.lng) > maxDeg) continue;
       if (z.evacuationCenterCapacity <= 0) continue;
       if (z.currentOccupancy != null && z.currentOccupancy >= z.evacuationCenterCapacity) continue;
       const d = haversineMeters(livePosition.lat, livePosition.lng, z.evacuationCenterLat, z.evacuationCenterLng);
@@ -437,7 +448,7 @@ export function MapCanvas({
       {showHazard && <HazardBackdropLayer zones={visibleZones} hazardType={hazardType} />}
 
         {showStatus && visibleZones.map((zone) => {
-          const alert = alerts.find((a) => a.zoneId === zone.id && a.isActive);
+          const alert = alertMap.get(zone.id);
           const status = getZoneStatus(alert);
           const color = getZoneStatusColor(alert);
           const label = `${zone.name} — ${t(ZONE_STATUS_LABEL[status], lang)}`;

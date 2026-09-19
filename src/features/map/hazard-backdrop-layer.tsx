@@ -1,7 +1,8 @@
 "use client";
 
+import { useMemo } from "react";
 import { Circle } from "react-leaflet";
-import { useHazardsForZone } from "@/lib/reference-data/use-reference-data";
+import { useHazards } from "@/lib/reference-data/use-reference-data";
 import { hazardRiskColor } from "./hazard-color";
 import type { HazardType, Zone } from "@/lib/types";
 
@@ -9,10 +10,9 @@ import type { HazardType, Zone } from "@/lib/types";
  * The baseline hazard-susceptibility shading (PRD Core Feature #8) — long-term
  * risk for the selected hazard, not live conditions. Drawn as soft circles
  * rather than boundary polygons, per the PRD's "no drawn zone boundaries"
- * decision: administrative outlines would imply precision the underlying data
- * doesn't have at a zone's edges.
+ * decision.
  *
- * Identical on both maps, so it lives here rather than in either one.
+ * Pre-computes all hazard data in a single pass instead of per-zone hook calls.
  */
 export function HazardBackdropLayer({
   zones,
@@ -21,28 +21,32 @@ export function HazardBackdropLayer({
   zones: Zone[];
   hazardType: HazardType;
 }) {
+  const allHazards = useHazards();
+
+  const circles = useMemo(() => {
+    return zones.map((zone) => {
+      const risk = allHazards[zone.id]?.[hazardType] ?? "unknown";
+      const color = hazardRiskColor(risk);
+      return { id: zone.id, lat: zone.lat, lng: zone.lng, color };
+    });
+  }, [zones, allHazards, hazardType]);
+
   return (
     <>
-      {zones.map((zone) => (
-        <HazardCircle key={`hazard-${zone.id}`} zone={zone} hazardType={hazardType} />
+      {circles.map((c) => (
+        <Circle
+          key={`hazard-${c.id}`}
+          center={[c.lat, c.lng]}
+          radius={500}
+          pathOptions={{
+            color: c.color,
+            fillColor: c.color,
+            fillOpacity: 0.2,
+            opacity: 0.3,
+            weight: 1,
+          }}
+        />
       ))}
     </>
-  );
-}
-
-function HazardCircle({ zone, hazardType }: { zone: Zone; hazardType: HazardType }) {
-  const risk = useHazardsForZone(zone.id)[hazardType];
-  return (
-    <Circle
-      center={[zone.lat, zone.lng]}
-      radius={500}
-      pathOptions={{
-        color: hazardRiskColor(risk),
-        fillColor: hazardRiskColor(risk),
-        fillOpacity: 0.2,
-        opacity: 0.3,
-        weight: 1,
-      }}
-    />
   );
 }
