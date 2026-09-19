@@ -126,17 +126,28 @@ export function MapCanvas({
   const [flyTarget, setFlyTarget] = useState<{ lat: number; lng: number } | null>(null);
   const [zoom, setZoom] = useState(14);
 
-  /** Only render markers within ~25km of the center to avoid crashing the browser with 41k+ zones. */
-  const MAX_MARKER_DISTANCE_DEG = 0.25;
-  const visibleZones = zones.filter(
-    (z) =>
-      Math.abs(z.lat - center[0]) < MAX_MARKER_DISTANCE_DEG &&
-      Math.abs(z.lng - center[1]) < MAX_MARKER_DISTANCE_DEG
-  );
+  /**
+   * Zoom-adaptive marker culling. At lower zooms the map covers a huge area
+   * but should only render a handful of markers to stay responsive.
+   * As the user zooms in, both the radius and the cap increase so the
+   * neighbourhood fills in naturally.
+   *
+   * Radius: 0.02° (~2 km) at zoom 10 → 0.25° (~25 km) at zoom 15+.
+   * Cap:    20 markers at zoom ≤11 → 300 at zoom 14+.
+   */
+  const radiusDeg = Math.min(0.25, 0.004 * Math.pow(2, Math.max(zoom - 10, 0)));
+  const markerCap = zoom <= 11 ? 20 : zoom <= 12 ? 60 : zoom <= 13 ? 150 : 300;
 
-  // Zoom-dependent visibility: evac centers clutter the view when zoomed out.
-  const showEvacCenters = zoom >= 13;
-  const showStatusMarkers = zoom >= 11;
+  const visibleZones = zones
+    .filter(
+      (z) =>
+        Math.abs(z.lat - center[0]) < radiusDeg &&
+        Math.abs(z.lng - center[1]) < radiusDeg
+    )
+    .slice(0, markerCap);
+
+  // Evac centers only appear at close zoom to avoid double-clutter.
+  const showEvacCenters = zoom >= 15;
 
   return (
     <MapShell
@@ -176,7 +187,7 @@ export function MapCanvas({
 
       <HazardBackdropLayer zones={visibleZones} hazardType={hazardType} />
 
-        {showStatusMarkers && visibleZones.map((zone) => {
+        {visibleZones.map((zone) => {
           const alert = alerts.find((a) => a.zoneId === zone.id && a.isActive);
           const status = getZoneStatus(alert);
           const color = getZoneStatusColor(alert);
