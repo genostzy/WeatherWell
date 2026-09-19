@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Marker, Polyline, Popup, useMapEvents, useMap } from "react-leaflet";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
@@ -17,6 +17,7 @@ import {
   createEvacuationMarkerIcon,
   createCommunityPinMarkerIcon,
   createUserLocationIcon,
+  createClusteredEvacMarkerIcon,
 } from "@/features/map/marker-icons";
 import { MarkerLegend } from "@/features/map/marker-legend";
 import { HazardTypeSelector } from "@/features/map/hazard-type-selector";
@@ -68,17 +69,27 @@ function FlyToUser({ position }: { position: { lat: number; lng: number } }) {
 }
 
 /**
- * Tracks the current map zoom level and re-renders when it changes.
+ * Tracks the current map zoom level and viewport center.
  * Must be rendered inside <MapContainer> (a child of MapShell).
  */
-function ZoomTracker({ onZoom }: { onZoom: (z: number) => void }) {
+function ViewportTracker({
+  onZoom,
+  onCenter,
+}: {
+  onZoom: (z: number) => void;
+  onCenter: (c: [number, number]) => void;
+}) {
   const map = useMap();
   useEffect(() => {
-    onZoom(map.getZoom());
-    const handler = () => onZoom(map.getZoom());
-    map.on("zoomend", handler);
-    return () => { map.off("zoomend", handler); };
-  }, [map, onZoom]);
+    const update = () => {
+      onZoom(map.getZoom());
+      const c = map.getCenter();
+      onCenter([c.lat, c.lng]);
+    };
+    update();
+    map.on("zoomend moveend", update);
+    return () => { map.off("zoomend moveend", update); };
+  }, [map, onZoom, onCenter]);
   return null;
 }
 
@@ -122,36 +133,76 @@ export function MapCanvas({
   const communityPins = useCommunityPins();
   const userId = useSessionUserId();
   const alerts = useAlerts();
-  const center: [number, number] = [zones[0].lat, zones[0].lng];
+  const initialCenter: [number, number] = [zones[0].lat, zones[0].lng];
   const [flyTarget, setFlyTarget] = useState<{ lat: number; lng: number } | null>(null);
   const [zoom, setZoom] = useState(14);
+  const [viewCenter, setViewCenter] = useState<[number, number]>(initialCenter);
 
   /**
-   * Zoom-adaptive marker culling. At lower zooms the map covers a huge area
-   * but should only render a handful of markers to stay responsive.
-   * As the user zooms in, both the radius and the cap increase so the
-   * neighbourhood fills in naturally.
+   * Zoom-adaptive marker culling centred on the actual viewport (not zones[0]).
+   * Markers now follow the user's pan and never disappear when zoomed in.
    *
    * Radius: 0.02° (~2 km) at zoom 10 → 0.25° (~25 km) at zoom 15+.
-   * Cap:    20 markers at zoom ≤11 → 300 at zoom 14+.
+   * Cap:    20 markers at zoom ≤11 → 500 at zoom 14+.
    */
   const radiusDeg = Math.min(0.25, 0.004 * Math.pow(2, Math.max(zoom - 10, 0)));
-  const markerCap = zoom <= 11 ? 20 : zoom <= 12 ? 60 : zoom <= 13 ? 150 : 300;
+  const markerCap = zoom <= 11 ? 20 : zoom <= 12 ? 60 : zoom <= 13 ? 150 : 500;
 
   const visibleZones = zones
     .filter(
       (z) =>
-        Math.abs(z.lat - center[0]) < radiusDeg &&
-        Math.abs(z.lng - center[1]) < radiusDeg
+        Math.abs(z.lat - viewCenter[0]) < radiusDeg &&
+        Math.abs(z.lng - viewCenter[1]) < radiusDeg
     )
     .slice(0, markerCap);
 
-  // Evac centers only appear at close zoom to avoid double-clutter.
-  const showEvacCenters = zoom >= 15;
+  /**
+   * Evacuation center display strategy:
+   * - Zoom < 13: grouped by municipality (one cluster marker per city)
+   * - Zoom 13-14: individual markers but within a tighter radius
+   * - Zoom 15+: all nearby markers with capacity rings
+   */
+  const showEvacCenters = zoom >= 13;
+
+  /** Group nearby zones by municipality for clustered evac display. */
+  const evacClusters = useMemo(() => {
+    if (!showEvacCenters) return [];
+    const tightRadius = zoom >= 15 ? radiusDeg : radiusDeg * 0.5;
+    const nearby = zones.filter(
+      (z) =>
+        Math.abs(z.lat - viewCenter[0]) < tightRadius &&
+        Math.abs(z.lng - viewCenter[1]) < tightRadius,
+    );
+    const byMuni = new Map<string, Zone[]>();
+    for (const z of nearby) {
+      const key = z.municipalityName || "Unknown";
+      const arr = byMuni.get(key) ?? [];
+      arr.push(z);
+      byMuni.set(key, arr);
+    }
+    // If zoomed in enough, show individual markers instead of clusters.
+    if (zoom >= 15) return [];
+    return Array.from(byMuni.entries()).map(([municipality, zoneList]) => ({
+      municipality,
+      count: zoneList.length,
+      lat: zoneList.reduce((s, z) => s + z.lat, 0) / zoneList.length,
+      lng: zoneList.reduce((s, z) => s + z.lng, 0) / zoneList.length,
+    }));
+  }, [showEvacCenters, zoom, radiusDeg, viewCenter, zones]);
+
+  /** Individual evac centers shown at zoom 15+. */
+  const individualEvacZones = useMemo(() => {
+    if (zoom < 15) return [];
+    return zones.filter(
+      (z) =>
+        Math.abs(z.lat - viewCenter[0]) < radiusDeg &&
+        Math.abs(z.lng - viewCenter[1]) < radiusDeg,
+    );
+  }, [zoom, radiusDeg, viewCenter, zones]);
 
   return (
     <MapShell
-      center={center}
+      center={initialCenter}
       ariaLabel={t(MAP_ARIA_LABEL, lang)}
       className={isPlacingPin ? "cursor-crosshair" : ""}
       overlay={
@@ -183,7 +234,7 @@ export function MapCanvas({
     >
       {flyTarget && <FlyToUser position={flyTarget} />}
       {isPlacingPin && onMapClickForPin && <PinPlacer onPlace={onMapClickForPin} />}
-      <ZoomTracker onZoom={setZoom} />
+      <ViewportTracker onZoom={setZoom} onCenter={setViewCenter} />
 
       <HazardBackdropLayer zones={visibleZones} hazardType={hazardType} />
 
@@ -211,15 +262,39 @@ export function MapCanvas({
           );
         })}
 
-        {showEvacCenters && visibleZones.map((zone) => (
+        {showEvacCenters && evacClusters.map((cluster) => (
           <Marker
-            key={`evac-${zone.id}`}
-            position={[zone.evacuationCenterLat, zone.evacuationCenterLng]}
-            icon={createEvacuationMarkerIcon(zone.evacuationCenterName)}
+            key={`evac-cluster-${cluster.municipality}`}
+            position={[cluster.lat, cluster.lng]}
+            icon={createClusteredEvacMarkerIcon(cluster.municipality, cluster.count)}
           >
-            <Popup>{zone.evacuationCenterName}</Popup>
+            <Popup>{cluster.municipality} — {cluster.count} evacuation centers</Popup>
           </Marker>
         ))}
+
+        {individualEvacZones.map((zone) => {
+          const ratio = zone.evacuationCenterCapacity > 0 && zone.currentOccupancy != null
+            ? zone.currentOccupancy / zone.evacuationCenterCapacity
+            : undefined;
+          return (
+            <Marker
+              key={`evac-${zone.id}`}
+              position={[zone.evacuationCenterLat, zone.evacuationCenterLng]}
+              icon={createEvacuationMarkerIcon(zone.evacuationCenterName, ratio)}
+            >
+              <Popup>
+                <div className="space-y-1 text-sm">
+                  <p className="font-medium">{zone.evacuationCenterName}</p>
+                  {zone.evacuationCenterCapacity > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      {zone.currentOccupancy ?? 0} / {zone.evacuationCenterCapacity} capacity
+                    </p>
+                  )}
+                </div>
+              </Popup>
+            </Marker>
+          );
+        })}
 
         <PoiMarkerLayer zones={visibleZones} />
 

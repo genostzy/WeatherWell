@@ -78,10 +78,24 @@ export function createPoiMarkerIcon(category: POICategory, label: string): L.Div
   });
 }
 
-export function createEvacuationMarkerIcon(label: string): L.DivIcon {
+export function createEvacuationMarkerIcon(
+  label: string,
+  capacityRatio?: number,
+): L.DivIcon {
+  // Capacity ring: a colored arc around the marker showing occupancy.
+  // ratio 0-0.5 = green, 0.5-0.8 = amber, 0.8-1.0 = red, undefined = no ring.
+  let ringHtml = "";
+  if (capacityRatio !== undefined && capacityRatio >= 0) {
+    const ratio = Math.min(capacityRatio, 1);
+    const ringColor = ratio >= 0.8 ? "#dc2626" : ratio >= 0.5 ? "#f59e0b" : "#16a34a";
+    // SVG conic ring (stroke-dasharray trick on a circle)
+    const circumference = 2 * Math.PI * 11;
+    const filled = circumference * ratio;
+    ringHtml = `<svg width="30" height="30" viewBox="0 0 30 30" style="position:absolute;top:-2px;left:-2px;"><circle cx="15" cy="15" r="11" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2.5"/><circle cx="15" cy="15" r="11" fill="none" stroke="${ringColor}" stroke-width="2.5" stroke-dasharray="${filled} ${circumference - filled}" stroke-dashoffset="${circumference * 0.25}" stroke-linecap="round"/></svg>`;
+  }
   return L.divIcon({
     className: "evacuation-marker",
-    html: `<div role="img" aria-label="${escapeHtml(label)}" style="width:26px;height:26px;background:#0f766e;border:2px solid white;border-radius:6px;display:flex;align-items:center;justify-content:center;color:white;font-size:13px;">${EVACUATION_ICON_SVG}</div>`,
+    html: `<div role="img" aria-label="${escapeHtml(label)}" style="position:relative;width:26px;height:26px;">${ringHtml}<div style="width:26px;height:26px;background:#0f766e;border:2px solid white;border-radius:6px;display:flex;align-items:center;justify-content:center;color:white;font-size:13px;">${EVACUATION_ICON_SVG}</div></div>`,
     iconSize: [30, 30],
     iconAnchor: [15, 15],
   });
@@ -102,6 +116,20 @@ export function createUserLocationIcon(): L.DivIcon {
     <style>@keyframes user-location-pulse{0%{transform:scale(1);opacity:0.7}100%{transform:scale(2.5);opacity:0}}</style>`,
     iconSize: [20, 20],
     iconAnchor: [10, 10],
+  });
+}
+
+/**
+ * A clustered evac-center marker showing how many centers are in a
+ * municipality. Used when zoomed out to avoid rendering every individual
+ * center.
+ */
+export function createClusteredEvacMarkerIcon(municipality: string, count: number): L.DivIcon {
+  return L.divIcon({
+    className: "evacuation-cluster-marker",
+    html: `<div role="img" aria-label="${escapeHtml(`${count} evacuation centers in ${municipality}`)}" style="width:32px;height:32px;background:#0f766e;border:2px solid white;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-size:11px;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,0.35);">${count}</div>`,
+    iconSize: [36, 36],
+    iconAnchor: [18, 18],
   });
 }
 
