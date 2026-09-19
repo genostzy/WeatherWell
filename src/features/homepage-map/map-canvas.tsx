@@ -68,6 +68,21 @@ function FlyToUser({ position }: { position: { lat: number; lng: number } }) {
 }
 
 /**
+ * Tracks the current map zoom level and re-renders when it changes.
+ * Must be rendered inside <MapContainer> (a child of MapShell).
+ */
+function ZoomTracker({ onZoom }: { onZoom: (z: number) => void }) {
+  const map = useMap();
+  useEffect(() => {
+    onZoom(map.getZoom());
+    const handler = () => onZoom(map.getZoom());
+    map.on("zoomend", handler);
+    return () => { map.off("zoomend", handler); };
+  }, [map, onZoom]);
+  return null;
+}
+
+/**
  * The only piece of the homepage map that actually needs Leaflet (browser-only,
  * so this module is loaded via next/dynamic with ssr:false — see homepage-map.tsx).
  * Everything that doesn't depend on Leaflet (the status headline, action
@@ -109,6 +124,7 @@ export function MapCanvas({
   const alerts = useAlerts();
   const center: [number, number] = [zones[0].lat, zones[0].lng];
   const [flyTarget, setFlyTarget] = useState<{ lat: number; lng: number } | null>(null);
+  const [zoom, setZoom] = useState(14);
 
   /** Only render markers within ~25km of the center to avoid crashing the browser with 41k+ zones. */
   const MAX_MARKER_DISTANCE_DEG = 0.25;
@@ -117,6 +133,10 @@ export function MapCanvas({
       Math.abs(z.lat - center[0]) < MAX_MARKER_DISTANCE_DEG &&
       Math.abs(z.lng - center[1]) < MAX_MARKER_DISTANCE_DEG
   );
+
+  // Zoom-dependent visibility: evac centers clutter the view when zoomed out.
+  const showEvacCenters = zoom >= 13;
+  const showStatusMarkers = zoom >= 11;
 
   return (
     <MapShell
@@ -152,10 +172,11 @@ export function MapCanvas({
     >
       {flyTarget && <FlyToUser position={flyTarget} />}
       {isPlacingPin && onMapClickForPin && <PinPlacer onPlace={onMapClickForPin} />}
+      <ZoomTracker onZoom={setZoom} />
 
       <HazardBackdropLayer zones={visibleZones} hazardType={hazardType} />
 
-        {visibleZones.map((zone) => {
+        {showStatusMarkers && visibleZones.map((zone) => {
           const alert = alerts.find((a) => a.zoneId === zone.id && a.isActive);
           const status = getZoneStatus(alert);
           const color = getZoneStatusColor(alert);
@@ -179,7 +200,7 @@ export function MapCanvas({
           );
         })}
 
-        {visibleZones.map((zone) => (
+        {showEvacCenters && visibleZones.map((zone) => (
           <Marker
             key={`evac-${zone.id}`}
             position={[zone.evacuationCenterLat, zone.evacuationCenterLng]}
