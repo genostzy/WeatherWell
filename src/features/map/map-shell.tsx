@@ -19,6 +19,7 @@ export function MapShell({
   center,
   ariaLabel,
   className = "",
+  preferCanvas = false,
   overlay,
   children,
 }: {
@@ -26,6 +27,8 @@ export function MapShell({
   ariaLabel: string;
   /** Extra classes on the container — e.g. a crosshair cursor while placing a pin. */
   className?: string;
+  /** Use Canvas renderer for markers (faster for many markers, but breaks jsdom tests). */
+  preferCanvas?: boolean;
   /** Controls floated above the map. Children of this need `pointer-events-auto`; the plane itself is transparent to clicks so the map stays draggable. */
   overlay?: ReactNode;
   children: ReactNode;
@@ -39,6 +42,7 @@ export function MapShell({
         center={center}
         zoom={14}
         scrollWheelZoom={true}
+        preferCanvas={preferCanvas}
         style={{ height: "100%", width: "100%" }}
       >
         <TileLayer

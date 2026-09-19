@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
-import { Marker, Polyline, Popup, useMapEvents, useMap } from "react-leaflet";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import { Marker, Polyline, Popup, Tooltip, useMapEvents, useMap } from "react-leaflet";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { getZoneStatus, getZoneStatusColor, ZONE_STATUS_LABEL } from "@/lib/zone-status";
@@ -48,6 +48,16 @@ const TAP_MAP_TO_PLACE: LocalizedText = {
 };
 const LOCATE_ME: LocalizedText = { en: "Locate me", fil: "Hanapin ako" };
 const YOUR_LOCATION: LocalizedText = { en: "Your location", fil: "Iyong lokasyon" };
+const SEARCH_PLACEHOLDER: LocalizedText = { en: "Search zone…", fil: "Maghanap ng zone…" };
+const LAYERS_TITLE: LocalizedText = { en: "Layers", fil: "Mga Layer" };
+const LAYER_STATUS: LocalizedText = { en: "Status", fil: "Status" };
+const LAYER_EVAC: LocalizedText = { en: "Evacuation", fil: "Evacuation" };
+const LAYER_POI: LocalizedText = { en: "POIs", fil: "Mga POI" };
+const LAYER_PINS: LocalizedText = { en: "Pins", fil: "Mga Pin" };
+const LAYER_HAZARD: LocalizedText = { en: "Hazards", fil: "Mga Hazard" };
+const NEAREST_EVAC_LABEL: LocalizedText = { en: "Nearest evac", fil: "Pinakamalapit na evac" };
+const EVAC_FULL: LocalizedText = { en: "Full", fil: "Puno" };
+const EVAC_AVAILABLE: LocalizedText = { en: "Available", fil: "May espasyo" };
 
 /** Only mounted while `isPlacingPin` — reports the resident's tap back up without adding a permanent click handler to the whole map. */
 function PinPlacer({ onPlace }: { onPlace: (lat: number, lng: number) => void }) {
@@ -68,9 +78,18 @@ function FlyToUser({ position }: { position: { lat: number; lng: number } }) {
   return null;
 }
 
+/** Flies to a target position (from search). */
+function FlyToTarget({ target }: { target: { lat: number; lng: number } | null }) {
+  const map = useMap();
+  useEffect(() => {
+    if (target) map.flyTo([target.lat, target.lng], 16, { duration: 1.5 });
+  }, [map, target]);
+  return null;
+}
+
 /**
- * Tracks the current map zoom level and viewport center.
- * Must be rendered inside <MapContainer> (a child of MapShell).
+ * Tracks the current map zoom level and viewport center with throttling.
+ * Fires at most once every 200ms to avoid re-render storms during panning.
  */
 function ViewportTracker({
   onZoom,
@@ -80,17 +99,37 @@ function ViewportTracker({
   onCenter: (c: [number, number]) => void;
 }) {
   const map = useMap();
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     const update = () => {
-      onZoom(map.getZoom());
-      const c = map.getCenter();
-      onCenter([c.lat, c.lng]);
+      if (timerRef.current) return;
+      timerRef.current = setTimeout(() => {
+        timerRef.current = null;
+        onZoom(map.getZoom());
+        const c = map.getCenter();
+        onCenter([c.lat, c.lng]);
+      }, 200);
     };
-    update();
+    onZoom(map.getZoom());
+    const c = map.getCenter();
+    onCenter([c.lat, c.lng]);
     map.on("zoomend moveend", update);
-    return () => { map.off("zoomend moveend", update); };
+    return () => {
+      map.off("zoomend moveend", update);
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
   }, [map, onZoom, onCenter]);
   return null;
+}
+
+function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 /**
@@ -135,8 +174,50 @@ export function MapCanvas({
   const alerts = useAlerts();
   const initialCenter: [number, number] = [zones[0].lat, zones[0].lng];
   const [flyTarget, setFlyTarget] = useState<{ lat: number; lng: number } | null>(null);
+  const [searchTarget, setSearchTarget] = useState<{ lat: number; lng: number } | null>(null);
   const [zoom, setZoom] = useState(14);
   const [viewCenter, setViewCenter] = useState<[number, number]>(initialCenter);
+
+  const [showStatus, setShowStatus] = useState(true);
+  const [showEvac, setShowEvac] = useState(true);
+  const [showPoi, setShowPoi] = useState(true);
+  const [showPins, setShowPins] = useState(true);
+  const [showHazard, setShowHazard] = useState(true);
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<Zone[]>([]);
+  const [showSearch, setShowSearch] = useState(false);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleSearch = useCallback(
+    (query: string) => {
+      setSearchQuery(query);
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+      if (query.length < 2) {
+        setSearchResults([]);
+        return;
+      }
+      searchTimerRef.current = setTimeout(() => {
+        const q = query.toLowerCase();
+        const results = zones
+          .filter(
+            (z) =>
+              z.name.toLowerCase().includes(q) ||
+              z.municipalityName.toLowerCase().includes(q) ||
+              z.provinceName.toLowerCase().includes(q)
+          )
+          .slice(0, 8);
+        setSearchResults(results);
+      }, 250);
+    },
+    [zones]
+  );
+
+  useEffect(() => {
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, []);
 
   /**
    * Zoom-adaptive marker culling centred on the actual viewport (not zones[0]).
@@ -164,14 +245,18 @@ export function MapCanvas({
    */
   const showEvacCenters = zoom >= 13;
 
-  /** Group nearby zones by municipality for clustered evac display. */
+  /**
+   * Cluster by municipality across ALL zones, not just visible radius.
+   * This gives accurate counts regardless of viewport.
+   * Pre-filter to a reasonable bounding box to avoid clustering all 42k zones.
+   */
   const evacClusters = useMemo(() => {
-    if (!showEvacCenters) return [];
-    const tightRadius = zoom >= 15 ? radiusDeg : radiusDeg * 0.5;
+    if (!showEvacCenters || zoom >= 15) return [];
+    const clusterRadius = radiusDeg * 2;
     const nearby = zones.filter(
       (z) =>
-        Math.abs(z.lat - viewCenter[0]) < tightRadius &&
-        Math.abs(z.lng - viewCenter[1]) < tightRadius,
+        Math.abs(z.lat - viewCenter[0]) < clusterRadius &&
+        Math.abs(z.lng - viewCenter[1]) < clusterRadius
     );
     const byMuni = new Map<string, Zone[]>();
     for (const z of nearby) {
@@ -180,14 +265,18 @@ export function MapCanvas({
       arr.push(z);
       byMuni.set(key, arr);
     }
-    // If zoomed in enough, show individual markers instead of clusters.
-    if (zoom >= 15) return [];
-    return Array.from(byMuni.entries()).map(([municipality, zoneList]) => ({
-      municipality,
-      count: zoneList.length,
-      lat: zoneList.reduce((s, z) => s + z.lat, 0) / zoneList.length,
-      lng: zoneList.reduce((s, z) => s + z.lng, 0) / zoneList.length,
-    }));
+    return Array.from(byMuni.entries()).map(([municipality, zoneList]) => {
+      const totalCapacity = zoneList.reduce((s, z) => s + z.evacuationCenterCapacity, 0);
+      const totalOccupancy = zoneList.reduce((s, z) => s + (z.currentOccupancy ?? 0), 0);
+      return {
+        municipality,
+        count: zoneList.length,
+        lat: zoneList.reduce((s, z) => s + z.lat, 0) / zoneList.length,
+        lng: zoneList.reduce((s, z) => s + z.lng, 0) / zoneList.length,
+        totalCapacity,
+        totalOccupancy,
+      };
+    });
   }, [showEvacCenters, zoom, radiusDeg, viewCenter, zones]);
 
   /** Individual evac centers shown at zoom 15+. */
@@ -200,6 +289,18 @@ export function MapCanvas({
     );
   }, [zoom, radiusDeg, viewCenter, zones]);
 
+  const nearestEvac = useMemo(() => {
+    if (!livePosition) return null;
+    let best: { zone: Zone; distance: number } | null = null;
+    for (const z of zones) {
+      if (z.evacuationCenterCapacity <= 0) continue;
+      if (z.currentOccupancy != null && z.currentOccupancy >= z.evacuationCenterCapacity) continue;
+      const d = haversineMeters(livePosition.lat, livePosition.lng, z.evacuationCenterLat, z.evacuationCenterLng);
+      if (!best || d < best.distance) best = { zone: z, distance: d };
+    }
+    return best;
+  }, [livePosition, zones]);
+
   return (
     <MapShell
       center={initialCenter}
@@ -210,6 +311,74 @@ export function MapCanvas({
           <div className="pointer-events-auto absolute top-2 right-2">
             <MarkerLegend />
           </div>
+
+          {/* Search bar */}
+          <div className="pointer-events-auto absolute top-2 left-2 w-52">
+            <div className="relative">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => handleSearch(e.target.value)}
+                onFocus={() => setShowSearch(true)}
+                onBlur={() => setTimeout(() => setShowSearch(false), 200)}
+                placeholder={t(SEARCH_PLACEHOLDER, lang)}
+                className="w-full rounded-lg border-2 border-border bg-background/95 px-3 py-1.5 pr-8 text-xs font-medium shadow-md backdrop-blur placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+              <svg className="absolute right-2 top-1.5 h-3.5 w-3.5 text-muted-foreground" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+              {searchResults.length > 0 && showSearch && (
+                <div className="absolute left-0 top-full z-[1001] mt-1 w-full max-h-48 overflow-y-auto rounded-lg border-2 border-border bg-background shadow-lg">
+                  {searchResults.map((z) => (
+                    <button
+                      key={z.id}
+                      type="button"
+                      onMouseDown={() => {
+                        setSearchTarget({ lat: z.lat, lng: z.lng });
+                        setSearchQuery(z.name);
+                        setSearchResults([]);
+                        setShowSearch(false);
+                      }}
+                      className="block w-full px-3 py-2 text-left text-xs hover:bg-muted/50 first:rounded-t-lg last:rounded-b-lg"
+                    >
+                      <span className="font-medium">{z.name}</span>
+                      <span className="ml-1 text-muted-foreground">
+                        {z.municipalityName}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Layer toggle panel */}
+          <div className="pointer-events-auto absolute top-12 left-2">
+            <details className="group">
+              <summary className="flex cursor-pointer items-center gap-1 rounded-lg border-2 border-border bg-background/95 px-2 py-1 text-xs font-medium shadow-md backdrop-blur hover:bg-muted/50">
+                <svg className="h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                {t(LAYERS_TITLE, lang)}
+              </summary>
+              <div className="mt-1 space-y-1 rounded-lg border-2 border-border bg-background/95 p-2 shadow-md backdrop-blur">
+                {[
+                  { label: t(LAYER_STATUS, lang), value: showStatus, setter: setShowStatus },
+                  { label: t(LAYER_EVAC, lang), value: showEvac, setter: setShowEvac },
+                  { label: t(LAYER_POI, lang), value: showPoi, setter: setShowPoi },
+                  { label: t(LAYER_PINS, lang), value: showPins, setter: setShowPins },
+                  { label: t(LAYER_HAZARD, lang), value: showHazard, setter: setShowHazard },
+                ].map((layer) => (
+                  <label key={layer.label} className="flex cursor-pointer items-center gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={layer.value}
+                      onChange={(e) => layer.setter(e.target.checked)}
+                      className="h-3.5 w-3.5 rounded border-border"
+                    />
+                    {layer.label}
+                  </label>
+                ))}
+              </div>
+            </details>
+          </div>
+
           {livePosition && (
             <button
               type="button"
@@ -221,6 +390,34 @@ export function MapCanvas({
               {t(LOCATE_ME, lang)}
             </button>
           )}
+
+          {/* Nearest evac center indicator */}
+          {nearestEvac && (
+            <button
+              type="button"
+              onClick={() => setFlyTarget({ lat: nearestEvac.zone.evacuationCenterLat, lng: nearestEvac.zone.evacuationCenterLng })}
+              className="pointer-events-auto absolute bottom-14 right-2 max-w-[180px] rounded-lg border-2 border-border bg-background/95 px-2.5 py-1.5 text-xs font-medium shadow-md backdrop-blur transition-colors hover:bg-muted/50"
+            >
+              <div className="flex items-center gap-1.5">
+                <svg className="h-3.5 w-3.5 shrink-0 text-teal-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 12h4"></path><path d="M10 8h4"></path><path d="M14 21v-3a2 2 0 0 0-4 0v3"></path><path d="M6 10H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2"></path><path d="M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16"></path></svg>
+                <div className="min-w-0">
+                  <div className="truncate text-[10px] text-muted-foreground">{t(NEAREST_EVAC_LABEL, lang)}</div>
+                  <div className="truncate font-medium">{nearestEvac.zone.evacuationCenterName}</div>
+                  <div className="text-[10px] text-muted-foreground">
+                    {Math.round(nearestEvac.distance)}m
+                    {nearestEvac.zone.evacuationCenterCapacity > 0 && (
+                      <span className={nearestEvac.zone.currentOccupancy != null && nearestEvac.zone.currentOccupancy >= nearestEvac.zone.evacuationCenterCapacity ? "ml-1 text-red-500" : "ml-1 text-green-600"}>
+                        {nearestEvac.zone.currentOccupancy != null && nearestEvac.zone.currentOccupancy >= nearestEvac.zone.evacuationCenterCapacity
+                          ? t(EVAC_FULL, lang)
+                          : t(EVAC_AVAILABLE, lang)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </button>
+          )}
+
           <div className="pointer-events-auto absolute bottom-2 left-2">
             <HazardTypeSelector value={hazardType} onChange={onHazardTypeChange} />
           </div>
@@ -233,12 +430,13 @@ export function MapCanvas({
       }
     >
       {flyTarget && <FlyToUser position={flyTarget} />}
+      {searchTarget && <FlyToTarget target={searchTarget} />}
       {isPlacingPin && onMapClickForPin && <PinPlacer onPlace={onMapClickForPin} />}
       <ViewportTracker onZoom={setZoom} onCenter={setViewCenter} />
 
-      <HazardBackdropLayer zones={visibleZones} hazardType={hazardType} />
+      {showHazard && <HazardBackdropLayer zones={visibleZones} hazardType={hazardType} />}
 
-        {visibleZones.map((zone) => {
+        {showStatus && visibleZones.map((zone) => {
           const alert = alerts.find((a) => a.zoneId === zone.id && a.isActive);
           const status = getZoneStatus(alert);
           const color = getZoneStatusColor(alert);
@@ -262,17 +460,27 @@ export function MapCanvas({
           );
         })}
 
-        {showEvacCenters && evacClusters.map((cluster) => (
+        {showEvac && showEvacCenters && evacClusters.map((cluster) => (
           <Marker
             key={`evac-cluster-${cluster.municipality}`}
             position={[cluster.lat, cluster.lng]}
             icon={createClusteredEvacMarkerIcon(cluster.municipality, cluster.count)}
           >
-            <Popup>{cluster.municipality} — {cluster.count} evacuation centers</Popup>
+            <Popup>
+              <div className="space-y-1 text-sm">
+                <p className="font-medium">{cluster.municipality}</p>
+                <p>{cluster.count} evacuation centers</p>
+                {cluster.totalCapacity > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {cluster.totalOccupancy} / {cluster.totalCapacity} total capacity
+                  </p>
+                )}
+              </div>
+            </Popup>
           </Marker>
         ))}
 
-        {individualEvacZones.map((zone) => {
+        {showEvac && individualEvacZones.map((zone) => {
           const ratio = zone.evacuationCenterCapacity > 0 && zone.currentOccupancy != null
             ? zone.currentOccupancy / zone.evacuationCenterCapacity
             : undefined;
@@ -292,11 +500,16 @@ export function MapCanvas({
                   )}
                 </div>
               </Popup>
+              {zoom >= 15 && (
+                <Tooltip permanent direction="bottom" offset={[0, 8]} className="evac-label-tooltip">
+                  <span className="text-[10px] font-medium">{zone.evacuationCenterName}</span>
+                </Tooltip>
+              )}
             </Marker>
           );
         })}
 
-        <PoiMarkerLayer zones={visibleZones} />
+        {showPoi && <PoiMarkerLayer zones={visibleZones} />}
 
         {routeZone && effectiveRoutePolyline.length > 0 && (
           <Polyline
@@ -309,7 +522,7 @@ export function MapCanvas({
           />
         )}
 
-        {communityPins.map((pin) => {
+        {showPins && communityPins.map((pin) => {
           const label = `${t(PIN_STATUS_LABEL[pin.statusTag], lang)} — ${t(UNVERIFIED_REPORT, lang)}`;
           const alreadyVoted = hasVotedOnPin(pin);
           const own = isOwnPin(pin, userId);

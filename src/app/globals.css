@@ -144,3 +144,17 @@
     @apply font-sans;
   }
 }
+
+/* Evac center name label tooltips — small, no background, no pointer */
+.evac-label-tooltip {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: var(--foreground);
+  font-size: 10px;
+  white-space: nowrap;
+  padding: 0 !important;
+}
+.evac-label-tooltip::before {
+  border: none !important;
+}
