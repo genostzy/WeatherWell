@@ -53,6 +53,3 @@ next-env.d.ts
 
 # Supabase local temp
 supabase/.temp/
-
-# Generated static data (regenerate with: npx tsx scripts/generate-static-data.ts)
-public/data/*.json

@@ -12,7 +12,6 @@
     "knip": "knip",
     "test:watch": "vitest",
     "generate-data": "npx tsx scripts/generate-static-data.ts",
-    "prebuild": "npm run generate-data",
     "db:seed:generate": "tsx scripts/generate-seed.ts",
     "fetch:typhoon": "tsx scripts/fetch-typhoon.ts"
   },
