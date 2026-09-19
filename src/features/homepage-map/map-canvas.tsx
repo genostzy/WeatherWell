@@ -456,7 +456,7 @@ export function MapCanvas({
             <Marker
               key={`status-${zone.id}`}
               position={[zone.lat, zone.lng]}
-              icon={createStatusMarkerIcon(status, color, label)}
+              icon={createStatusMarkerIcon(status, color, label, zoom >= 16 && status !== "safe")}
               eventHandlers={{ click: () => onSelectZone(zone.id) }}
             >
               <Popup>
@@ -520,7 +520,7 @@ export function MapCanvas({
           );
         })}
 
-        {showPoi && <PoiMarkerLayer zones={visibleZones} />}
+        {showPoi && <PoiMarkerLayer zones={visibleZones} zoom={zoom} />}
 
         {routeZone && effectiveRoutePolyline.length > 0 && (
           <Polyline

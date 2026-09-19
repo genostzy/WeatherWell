@@ -34,13 +34,16 @@ function escapeHtml(value: string): string {
  * *shape* that differentiates statuses for colorblind users, via
  * STATUS_SHAPE_STYLE (shared with marker-legend.tsx).
  */
-export function createStatusMarkerIcon(status: ZoneStatus, color: string, label: string): L.DivIcon {
+export function createStatusMarkerIcon(status: ZoneStatus, color: string, label: string, showLabel = false): L.DivIcon {
   const shape = STATUS_SHAPE_STYLE[status];
+  const labelText = showLabel
+    ? `<span style="position:absolute;top:100%;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:9px;font-weight:600;color:white;background:rgba(0,0,0,0.7);border-radius:3px;padding:1px 4px;margin-top:2px;pointer-events:none;">${escapeHtml(label.split(" — ").pop() ?? "")}</span>`
+    : "";
   return L.divIcon({
     className: `zone-status-marker zone-status-marker--${status}`,
-    html: `<div role="img" aria-label="${escapeHtml(label)}" style="width:22px;height:22px;background:${color};border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.4);${shape}"></div>`,
+    html: `<div role="img" aria-label="${escapeHtml(label)}" style="position:relative;width:22px;height:22px;background:${color};border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.4);${shape}">${labelText}</div>`,
     iconSize: [26, 26],
-    iconAnchor: [13, 13],
+    iconAnchor: [13, showLabel ? 8 : 13],
   });
 }
 
@@ -69,10 +72,22 @@ const POI_ICON_SVG: Record<POICategory, string> = {
 const EVACUATION_ICON_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-building2 lucide-building-2" aria-hidden="true"><path d="M10 12h4"></path><path d="M10 8h4"></path><path d="M14 21v-3a2 2 0 0 0-4 0v3"></path><path d="M6 10H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2"></path><path d="M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16"></path></svg>';
 
-export function createPoiMarkerIcon(category: POICategory, label: string): L.DivIcon {
+const POI_BG_COLOR: Record<POICategory, string> = {
+  health_center: "#dc2626",
+  pharmacy: "#16a34a",
+  market: "#d97706",
+  water_station: "#2563eb",
+  barangay_office: "#6b7280",
+};
+
+export function createPoiMarkerIcon(category: POICategory, label: string, showLabel = false): L.DivIcon {
+  const bg = POI_BG_COLOR[category] ?? "#1f2937";
+  const labelText = showLabel
+    ? `<span style="position:absolute;top:100%;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:9px;font-weight:600;color:white;background:rgba(0,0,0,0.7);border-radius:3px;padding:1px 4px;margin-top:2px;pointer-events:none;">${escapeHtml(label)}</span>`
+    : "";
   return L.divIcon({
     className: `poi-marker poi-marker--${category}`,
-    html: `<div role="img" aria-label="${escapeHtml(label)}" style="width:24px;height:24px;background:#1f2937;border:2px solid white;border-radius:6px;display:flex;align-items:center;justify-content:center;color:white;font-size:12px;">${POI_ICON_SVG[category]}</div>`,
+    html: `<div role="img" aria-label="${escapeHtml(label)}" style="position:relative;width:24px;height:24px;background:${bg};border:2px solid white;border-radius:6px;display:flex;align-items:center;justify-content:center;color:white;font-size:12px;">${POI_ICON_SVG[category]}${labelText}</div>`,
     iconSize: [28, 28],
     iconAnchor: [14, 14],
   });

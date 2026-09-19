@@ -9,6 +9,10 @@
     {
       "path": "/api/cleanup-weather",
       "schedule": "0 1 * * *"
+    },
+    {
+      "path": "/api/cron/typhoon",
+      "schedule": "0 2 * * *"
     }
   ]
 }
