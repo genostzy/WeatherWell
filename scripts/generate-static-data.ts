@@ -42,7 +42,19 @@ async function fetchAll<T>(table: string, select: string, order?: string): Promi
   return all;
 }
 
-interface ZoneRow { id: string; psgc_barangay_code: string; name: string; municipality_name: string; province_name: string; lat: number; lng: number; downstream_zone_id: string | null }
+interface ZoneRow {
+  id: string;
+  psgc_barangay_code: string;
+  name: string;
+  municipality_name: string;
+  province_name: string;
+  lat: number;
+  lng: number;
+  downstream_zone_id: string | null;
+  hotline_number: string;
+  evacuation_route_text: { en: string; fil: string };
+  evacuation_route_path: [number, number][];
+}
 interface PoiRow { id: number; zone_id: string; category: string; name: string; lat: number; lng: number }
 interface HazardRow { zone_id: string; hazard_type: string; risk_level: string }
 interface EvacRow { zone_id: string; name: string; lat: number; lng: number; capacity: number; status: string; current_occupancy: number | null }
@@ -51,7 +63,7 @@ async function main() {
   mkdirSync("public/data", { recursive: true });
 
   const [zoneRows, poiRows, hazardRows, evacRows] = await Promise.all([
-    fetchAll<ZoneRow>("zones", "id, psgc_barangay_code, name, municipality_name, province_name, lat, lng, downstream_zone_id", "id"),
+    fetchAll<ZoneRow>("zones", "id, psgc_barangay_code, name, municipality_name, province_name, lat, lng, downstream_zone_id, hotline_number, evacuation_route_text, evacuation_route_path", "id"),
     fetchAll<PoiRow>("points_of_interest", "id, zone_id, category, name, lat, lng", "id"),
     fetchAll<HazardRow>("hazard_susceptibility", "zone_id, hazard_type, risk_level"),
     fetchAll<EvacRow>("evacuation_centers", "zone_id, name, lat, lng, capacity, status, current_occupancy"),
@@ -70,9 +82,9 @@ async function main() {
       provinceName: row.province_name,
       lat: row.lat,
       lng: row.lng,
-      evacuationRouteText: { en: "", fil: "" },
-      evacuationRoutePath: [],
-      hotlineNumber: centre?.name ?? "",
+      evacuationRouteText: row.evacuation_route_text,
+      evacuationRoutePath: row.evacuation_route_path,
+      hotlineNumber: row.hotline_number,
       ...(row.downstream_zone_id ? { downstreamZoneId: row.downstream_zone_id } : {}),
       ...(centre ? {
         evacuationCenterName: centre.name,
@@ -104,6 +116,18 @@ async function main() {
   for (const row of hazardRows) {
     if (!hazards[row.zone_id]) hazards[row.zone_id] = {};
     hazards[row.zone_id][row.hazard_type] = row.risk_level;
+  }
+
+  // Guards the exact regression this script once shipped silently: the zones
+  // query dropped evacuation_route_text/hotline_number and every zone wrote
+  // out blank, with nothing short of reading the output catching it.
+  const withRoute = zones.filter((z) => z.evacuationRouteText.en.length > 0).length;
+  const withHotline = zones.filter((z) => z.hotlineNumber.length > 0).length;
+  if (withRoute === 0 || withHotline === 0) {
+    console.error(
+      `Refusing to write reference-data.json: ${withRoute}/${zones.length} zones have route text, ${withHotline}/${zones.length} have a hotline number. Check the zones query selects evacuation_route_text and hotline_number.`
+    );
+    process.exit(1);
   }
 
   const data = { zones, pois, hazards };
