@@ -11,21 +11,25 @@ import type { Zone } from "@/lib/types";
  * POI that a resident doesn't, so unlike the zone and pin layers this one is
  * shared wholesale rather than duplicated per map.
  *
- * At zoom >= 16, permanent labels are shown so users can identify POIs
- * without tapping each one.
+ * At zoom >= 16, a permanent label tooltip is shown below each marker so
+ * users can identify POIs without tapping each one — the same mechanism
+ * `createEvacuationMarkerIcon`'s callers use, rather than a second,
+ * in-icon label: an icon that grows a label glued to its own div forces
+ * every draw call to pick one fixed anchor point, so any icon-relative
+ * label option shifts the marker's registration point on the map the
+ * instant it turns on. A separate floating Tooltip has no such coupling.
  */
 export function PoiMarkerLayer({ zones, zoom = 14 }: { zones: Zone[]; zoom?: number }) {
   const pois = usePois();
   const zoneIds = new Set(zones.map((zone) => zone.id));
   const visiblePois = pois.filter((poi) => zoneIds.has(poi.zoneId));
-  const showLabel = zoom >= 16;
 
   return (
     <>
       {visiblePois.map((poi) => (
-        <Marker key={poi.id} position={[poi.lat, poi.lng]} icon={createPoiMarkerIcon(poi.category, poi.name, showLabel)}>
+        <Marker key={poi.id} position={[poi.lat, poi.lng]} icon={createPoiMarkerIcon(poi.category, poi.name)}>
           <Popup>{poi.name}</Popup>
-          {zoom >= 17 && (
+          {zoom >= 16 && (
             <Tooltip permanent direction="bottom" offset={[0, 6]} className="evac-label-tooltip">
               <span className="text-[10px] font-medium">{poi.name}</span>
             </Tooltip>

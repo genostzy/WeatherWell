@@ -420,7 +420,7 @@ export function MapCanvas({
             <Marker
               key={`status-${zone.id}`}
               position={[zone.lat, zone.lng]}
-              icon={createStatusMarkerIcon(status, color, label, zoom >= 16 && status !== "safe")}
+              icon={createStatusMarkerIcon(status, color, label)}
               eventHandlers={{ click: () => onSelectZone(zone.id) }}
             >
               <Popup>
@@ -431,6 +431,11 @@ export function MapCanvas({
                   </a>
                 </div>
               </Popup>
+              {zoom >= 16 && status !== "safe" && (
+                <Tooltip permanent direction="bottom" offset={[0, 8]} className="evac-label-tooltip">
+                  <span className="text-[10px] font-medium">{t(ZONE_STATUS_LABEL[status], lang)}</span>
+                </Tooltip>
+              )}
             </Marker>
           );
         })}

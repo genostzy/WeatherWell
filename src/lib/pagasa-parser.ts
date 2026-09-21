@@ -261,10 +261,7 @@ function parsePagasaDateTime(text: string): string | null {
   return `${year}-${monthNum}-${day.padStart(2, "0")}T${String(h24).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:00+08:00`;
 }
 
-function parseRelativePagasaTime(
-  text: string,
-  _issued: string
-): string | null {
+function parseRelativePagasaTime(text: string): string | null {
   const cleaned = cleanText(text);
   const m =
     /next\s+(?:advisory|bulletin)\s*(?:at|will be issued at|:\s*)(.+)/i.exec(
@@ -513,7 +510,7 @@ export function parseBulletinHtml(html: string): ParsedBulletin | null {
       !nextBulletinAt &&
       /next (advisory|bulletin)/i.test(t)
     ) {
-      nextBulletinAt = parseRelativePagasaTime(t, issuedAt!);
+      nextBulletinAt = parseRelativePagasaTime(t);
     }
   });
 
@@ -592,7 +589,7 @@ export function parseBulletinPdfText(text: string): ParsedBulletin | null {
   const nextLine = lines.find((l) =>
     /next (tropical cyclone )?bulletin/i.test(l)
   );
-  if (nextLine) nextBulletinAt = parseRelativePagasaTime(nextLine, issuedAt);
+  if (nextLine) nextBulletinAt = parseRelativePagasaTime(nextLine);
 
   const BOILERPLATE =
     /BULLETIN|PAGASA|DOST|DEPARTMENT OF SCIENCE|SERVICES ADMINISTRATION|WEATHER DIVISION|TRACK AND INTENSITY|WIND SIGNALS|HAZARDS|TROPICAL CYCLONE WIND|OUTLOOK|REPUBLIC OF/i;

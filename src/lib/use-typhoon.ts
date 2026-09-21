@@ -105,17 +105,3 @@ export function useTyphoon() {
 
   return { track, isLoading, error };
 }
-
-/**
- * Check if a specific zone is under a wind signal.
- * Returns the signal level (0 = no signal, 1-5 = PAGASA TCWS).
- */
-export function getSignalForZone(
-  signals: TyphoonTrack["signals"],
-  _zoneName: string
-): number {
-  // Simplified: return the highest signal level.
-  // Full PSGC resolution would match zone names to signal areas.
-  if (signals.length === 0) return 0;
-  return Math.max(...signals.map((s) => s.signalLevel));
-}
