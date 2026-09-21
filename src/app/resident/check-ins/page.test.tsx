@@ -23,6 +23,7 @@ vi.mock("@/lib/supabase/user-server", () => ({
         data: [{ id: "c1", zone_id: "zone-1", status: "safe", checked_in_at: "2026-09-01T00:00:00Z" }],
         error: null,
       },
+      zones: { data: [{ id: "zone-1", name: "Barangay Nilombot" }], error: null },
     }),
   }),
 }));
@@ -30,10 +31,11 @@ vi.mock("@/lib/supabase/user-server", () => ({
 import ResidentCheckInsPage from "./page";
 
 describe("ResidentCheckInsPage", () => {
-  it("lists the resident's own check-ins via the authenticated client", async () => {
+  it("lists the resident's own check-ins, localized, with the zone's real name (not its id)", async () => {
     render(await ResidentCheckInsPage());
 
     expect(screen.getByText("Safe")).toBeInTheDocument();
-    expect(screen.getByText("zone-1")).toBeInTheDocument();
+    expect(screen.getByText("Barangay Nilombot")).toBeInTheDocument();
+    expect(screen.queryByText("zone-1")).not.toBeInTheDocument();
   });
 });

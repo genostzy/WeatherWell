@@ -1,9 +1,5 @@
 import { createSupabaseUserClient } from "@/lib/supabase/user-server";
-import { Card, CardContent } from "@/components/ui/card";
-
-const DEPTH_LABELS: Record<string, string> = {
-  dry: "Dry", ankle: "Ankle", knee: "Knee", waist: "Waist", neck: "Neck",
-};
+import { ResidentReportsList, type ResidentReportRow } from "@/features/resident/resident-reports-list";
 
 export default async function ResidentReportsPage() {
   const supabase = await createSupabaseUserClient();
@@ -17,28 +13,19 @@ export default async function ResidentReportsPage() {
     .order("reported_at", { ascending: false })
     .limit(50);
 
-  return (
-    <div className="space-y-4">
-      <h1 className="text-xl font-bold">My Reports</h1>
-      {!reports || reports.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No reports yet. Submit one from the homepage map.</p>
-      ) : (
-        <div className="space-y-2">
-          {reports.map((r) => (
-            <Card key={r.id}>
-              <CardContent className="flex items-center justify-between py-3">
-                <div>
-                  <p className="text-sm font-medium">{DEPTH_LABELS[r.depth_level] ?? r.depth_level}</p>
-                  <p className="text-xs text-muted-foreground">{r.zone_id}</p>
-                </div>
-                <time className="text-xs text-muted-foreground">
-                  {new Date(r.reported_at).toLocaleDateString()}
-                </time>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+  const rows = reports ?? [];
+  const zoneIds = [...new Set(rows.map((r) => r.zone_id))];
+  const { data: zoneRows } = zoneIds.length
+    ? await supabase.from("zones").select("id, name").in("id", zoneIds)
+    : { data: [] as { id: string; name: string }[] };
+  const zoneNames = new Map((zoneRows ?? []).map((z) => [z.id, z.name]));
+
+  const reportRows: ResidentReportRow[] = rows.map((r) => ({
+    id: r.id,
+    zoneName: zoneNames.get(r.zone_id) ?? r.zone_id,
+    depthLevel: r.depth_level,
+    reportedAt: r.reported_at,
+  }));
+
+  return <ResidentReportsList reports={reportRows} />;
 }

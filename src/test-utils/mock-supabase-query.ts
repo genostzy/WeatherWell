@@ -18,6 +18,7 @@ export function fakeSupabaseFrom(resultsByTable: Record<string, FakeQueryResult>
     const chain: Record<string, unknown> = {
       select: () => chain,
       eq: () => chain,
+      in: () => chain,
       order: () => chain,
       limit: () => chain,
       maybeSingle: () => Promise.resolve(result),

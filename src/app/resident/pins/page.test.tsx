@@ -19,9 +19,19 @@ vi.mock("@/lib/supabase/user-server", () => ({
     auth: { getClaims: async () => ({ data: { claims: { sub: "user-1" } } }) },
     ...fakeSupabaseFrom({
       community_pins: {
-        data: [{ id: "p1", status_tag: "flooded", caption: "Waist deep", created_at: "2026-09-01T00:00:00Z", removed: false }],
+        data: [
+          {
+            id: "p1",
+            zone_id: "zone-1",
+            status_tag: "flooded",
+            caption: "Waist deep",
+            created_at: "2026-09-01T00:00:00Z",
+            removed: false,
+          },
+        ],
         error: null,
       },
+      zones: { data: [{ id: "zone-1", name: "Barangay Nilombot" }], error: null },
     }),
   }),
 }));
@@ -29,10 +39,11 @@ vi.mock("@/lib/supabase/user-server", () => ({
 import ResidentPinsPage from "./page";
 
 describe("ResidentPinsPage", () => {
-  it("lists the resident's own pins via the authenticated client", async () => {
+  it("lists the resident's own pins, localized, with the zone's real name (not its id)", async () => {
     render(await ResidentPinsPage());
 
-    expect(screen.getByText("flooded")).toBeInTheDocument();
+    expect(screen.getByText("Flooded")).toBeInTheDocument();
+    expect(screen.getByText("Barangay Nilombot")).toBeInTheDocument();
     expect(screen.getByText("Waist deep")).toBeInTheDocument();
   });
 });

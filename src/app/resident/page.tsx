@@ -1,5 +1,5 @@
 import { createSupabaseUserClient } from "@/lib/supabase/user-server";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ResidentOverview } from "@/features/resident/resident-overview";
 
 export default async function ResidentOverviewPage() {
   const supabase = await createSupabaseUserClient();
@@ -28,36 +28,18 @@ export default async function ResidentOverviewPage() {
     .select("*", { count: "exact", head: true })
     .eq("user_id", userId!);
 
-  let zoneName = "No zone selected";
+  let zoneName: string | null = null;
   if (profile?.zone_id) {
     const { data: zone } = await supabase.from("zones").select("name").eq("id", profile.zone_id).maybeSingle();
     zoneName = zone?.name ?? profile.zone_id;
   }
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-xl font-bold">My Dashboard</h1>
-      <p className="text-sm text-muted-foreground">Zone: {zoneName}</p>
-      <div className="grid grid-cols-3 gap-3">
-        <Card>
-          <CardHeader className="pb-1">
-            <CardTitle className="text-2xl font-bold">{reportCount ?? 0}</CardTitle>
-          </CardHeader>
-          <CardContent><p className="text-xs text-muted-foreground">Reports</p></CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-1">
-            <CardTitle className="text-2xl font-bold">{checkInCount ?? 0}</CardTitle>
-          </CardHeader>
-          <CardContent><p className="text-xs text-muted-foreground">Check-ins</p></CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-1">
-            <CardTitle className="text-2xl font-bold">{pinCount ?? 0}</CardTitle>
-          </CardHeader>
-          <CardContent><p className="text-xs text-muted-foreground">Pins</p></CardContent>
-        </Card>
-      </div>
-    </div>
+    <ResidentOverview
+      zoneName={zoneName}
+      reportCount={reportCount ?? 0}
+      checkInCount={checkInCount ?? 0}
+      pinCount={pinCount ?? 0}
+    />
   );
 }

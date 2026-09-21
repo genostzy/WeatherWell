@@ -24,6 +24,7 @@ vi.mock("@/lib/supabase/user-server", () => ({
         data: [{ id: "r1", zone_id: "zone-1", depth_level: "knee", reported_at: "2026-09-01T00:00:00Z" }],
         error: null,
       },
+      zones: { data: [{ id: "zone-1", name: "Barangay Nilombot" }], error: null },
     }),
   }),
 }));
@@ -31,10 +32,11 @@ vi.mock("@/lib/supabase/user-server", () => ({
 import ResidentReportsPage from "./page";
 
 describe("ResidentReportsPage", () => {
-  it("lists the resident's own reports via the authenticated client", async () => {
+  it("lists the resident's own reports, localized, with the zone's real name (not its id)", async () => {
     render(await ResidentReportsPage());
 
-    expect(screen.getByText("Knee")).toBeInTheDocument();
-    expect(screen.getByText("zone-1")).toBeInTheDocument();
+    expect(screen.getByText("Knee-deep")).toBeInTheDocument();
+    expect(screen.getByText("Barangay Nilombot")).toBeInTheDocument();
+    expect(screen.queryByText("zone-1")).not.toBeInTheDocument();
   });
 });

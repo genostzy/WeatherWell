@@ -1,5 +1,5 @@
 import { createSupabaseUserClient } from "@/lib/supabase/user-server";
-import { Card, CardContent } from "@/components/ui/card";
+import { ResidentCheckInsList, type ResidentCheckInRow } from "@/features/resident/resident-check-ins-list";
 
 export default async function ResidentCheckInsPage() {
   const supabase = await createSupabaseUserClient();
@@ -13,30 +13,19 @@ export default async function ResidentCheckInsPage() {
     .order("checked_in_at", { ascending: false })
     .limit(50);
 
-  return (
-    <div className="space-y-4">
-      <h1 className="text-xl font-bold">My Check-ins</h1>
-      {!checkIns || checkIns.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No check-ins yet. You can check in from the evacuation page.</p>
-      ) : (
-        <div className="space-y-2">
-          {checkIns.map((c) => (
-            <Card key={c.id}>
-              <CardContent className="flex items-center justify-between py-3">
-                <div>
-                  <p className="text-sm font-medium">
-                    {c.status === "safe" ? "Safe" : "Needs Help"}
-                  </p>
-                  <p className="text-xs text-muted-foreground">{c.zone_id}</p>
-                </div>
-                <time className="text-xs text-muted-foreground">
-                  {new Date(c.checked_in_at).toLocaleDateString()}
-                </time>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+  const rows = checkIns ?? [];
+  const zoneIds = [...new Set(rows.map((c) => c.zone_id))];
+  const { data: zoneRows } = zoneIds.length
+    ? await supabase.from("zones").select("id, name").in("id", zoneIds)
+    : { data: [] as { id: string; name: string }[] };
+  const zoneNames = new Map((zoneRows ?? []).map((z) => [z.id, z.name]));
+
+  const checkInRows: ResidentCheckInRow[] = rows.map((c) => ({
+    id: c.id,
+    zoneName: zoneNames.get(c.zone_id) ?? c.zone_id,
+    status: c.status,
+    checkedInAt: c.checked_in_at,
+  }));
+
+  return <ResidentCheckInsList checkIns={checkInRows} />;
 }
