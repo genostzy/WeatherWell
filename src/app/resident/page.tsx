@@ -1,5 +1,4 @@
 import { createSupabaseUserClient } from "@/lib/supabase/user-server";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default async function ResidentOverviewPage() {
@@ -7,32 +6,31 @@ export default async function ResidentOverviewPage() {
   const { data } = await supabase.auth.getClaims();
   const userId = data?.claims?.sub;
 
-  const ref = createSupabaseServerClient();
-  const { data: profile } = await ref
+  const { data: profile } = await supabase
     .from("profiles")
     .select("zone_id")
     .eq("id", userId!)
     .maybeSingle();
 
-  const { count: reportCount } = await ref
+  const { count: reportCount } = await supabase
     .from("water_level_reports")
     .select("*", { count: "exact", head: true })
     .eq("reporter_id", userId!);
 
-  const { count: pinCount } = await ref
+  const { count: pinCount } = await supabase
     .from("community_pins")
     .select("*", { count: "exact", head: true })
     .eq("author_id", userId!)
     .eq("removed", false);
 
-  const { count: checkInCount } = await ref
+  const { count: checkInCount } = await supabase
     .from("evacuation_check_ins")
     .select("*", { count: "exact", head: true })
     .eq("user_id", userId!);
 
   let zoneName = "No zone selected";
   if (profile?.zone_id) {
-    const { data: zone } = await ref.from("zones").select("name").eq("id", profile.zone_id).maybeSingle();
+    const { data: zone } = await supabase.from("zones").select("name").eq("id", profile.zone_id).maybeSingle();
     zoneName = zone?.name ?? profile.zone_id;
   }
 

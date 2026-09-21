@@ -1,5 +1,4 @@
 import { createSupabaseUserClient } from "@/lib/supabase/user-server";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui/card";
 
 export default async function ResidentCheckInsPage() {
@@ -7,8 +6,7 @@ export default async function ResidentCheckInsPage() {
   const { data } = await supabase.auth.getClaims();
   const userId = data?.claims?.sub;
 
-  const ref = createSupabaseServerClient();
-  const { data: checkIns } = await ref
+  const { data: checkIns } = await supabase
     .from("evacuation_check_ins")
     .select("id, zone_id, status, checked_in_at")
     .eq("user_id", userId!)

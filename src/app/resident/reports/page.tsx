@@ -1,5 +1,4 @@
 import { createSupabaseUserClient } from "@/lib/supabase/user-server";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui/card";
 
 const DEPTH_LABELS: Record<string, string> = {
@@ -11,8 +10,7 @@ export default async function ResidentReportsPage() {
   const { data } = await supabase.auth.getClaims();
   const userId = data?.claims?.sub;
 
-  const ref = createSupabaseServerClient();
-  const { data: reports } = await ref
+  const { data: reports } = await supabase
     .from("water_level_reports")
     .select("id, zone_id, depth_level, reported_at")
     .eq("reporter_id", userId!)

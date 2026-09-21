@@ -1,5 +1,4 @@
 import { createSupabaseUserClient } from "@/lib/supabase/user-server";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui/card";
 
 export default async function ResidentPinsPage() {
@@ -7,8 +6,7 @@ export default async function ResidentPinsPage() {
   const { data } = await supabase.auth.getClaims();
   const userId = data?.claims?.sub;
 
-  const ref = createSupabaseServerClient();
-  const { data: pins } = await ref
+  const { data: pins } = await supabase
     .from("community_pins")
     .select("id, status_tag, caption, created_at, removed")
     .eq("author_id", userId!)
