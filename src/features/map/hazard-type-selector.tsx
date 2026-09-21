@@ -53,10 +53,24 @@ export function HazardTypeSelector({
         const Icon = HAZARD_TYPE_ICON[type];
         return (
           <div key={type}>
+            {/*
+              RadioGroupItem's own base classes (see ui/radio-group.tsx)
+              already carry a visible size (size-6) and positioning
+              (relative) — plain `sr-only` doesn't reliably win against
+              them, because tailwind-merge only dedupes classes within the
+              same conflict group, and `sr-only` isn't grouped against
+              `size-*`/position utilities the way e.g. `size-0` would be.
+              The result without the `!` overrides below: a bare, unstyled
+              24px circle renders at the radio's own in-flow position
+              instead of staying invisible, badly enough to visibly
+              overlap the map's search bar on a narrow phone screen. The
+              `!` (important) modifiers force the override regardless of
+              generated CSS order.
+            */}
             <RadioGroupItem
               value={type}
               id={`hazard-type-${type}`}
-              className="peer sr-only"
+              className="peer sr-only !absolute !size-px"
             />
             <Label
               htmlFor={`hazard-type-${type}`}
