@@ -42,11 +42,21 @@ const RETRY: LocalizedText = { en: "Try again", fil: "Subukang muli" };
  * healthy: on a first visit the worker may not control the page yet (it is
  * still downloading/installing), so nothing intercepts this fetch at all — a
  * stalled-but-open connection (a captive portal, a congested cell site) would
- * otherwise leave the gate in "loading" forever with no retry button. 10s is
- * comfortably past ALERTS_TIMEOUT_MS so a worker-mediated request that is
- * about to resolve from cache is not raced and cut off first.
+ * otherwise leave the gate in "loading" forever with no retry button.
+ *
+ * 30s, not 10s: /data/reference-data.json is ~1.6MB gzipped (the nationwide
+ * barangay seed) — on the "degraded network" this app's own PRD names as the
+ * design constraint, that legitimately takes longer than 10s to arrive while
+ * still being a connection that is working, not stalled. The old 10s bound
+ * turned a slow-but-successful load into a hard "can't reach WeatherWell"
+ * failure. This is a stopgap: it stops misclassifying slow as unreachable,
+ * but does not reduce what has to transfer before the app is usable — that
+ * needs the homepage to stop requiring the whole country's zones up front,
+ * which this constant alone cannot fix. Comfortably past ALERTS_TIMEOUT_MS
+ * either way, so a worker-mediated request that is about to resolve from
+ * cache is not raced and cut off first.
  */
-export const FETCH_TIMEOUT_MS = 10_000;
+export const FETCH_TIMEOUT_MS = 30_000;
 
 function fetchWithTimeout(input: string, timeoutMs: number): Promise<Response> {
   const controller = new AbortController();
