@@ -4,17 +4,35 @@ import { SignInPanel } from "./sign-in-panel";
 
 const startGoogleSignIn = vi.fn();
 const sendEmailSignInLink = vi.fn();
+const signInWithPassword = vi.fn();
+const signUpWithPassword = vi.fn();
+const push = vi.fn();
+const refresh = vi.fn();
 
 vi.mock("@/lib/auth/sign-in", () => ({
   startGoogleSignIn: (...args: unknown[]) => startGoogleSignIn(...args),
   sendEmailSignInLink: (...args: unknown[]) => sendEmailSignInLink(...args),
+  signInWithPassword: (...args: unknown[]) => signInWithPassword(...args),
+  signUpWithPassword: (...args: unknown[]) => signUpWithPassword(...args),
+}));
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push, refresh }),
 }));
 
 beforeEach(() => {
   vi.clearAllMocks();
   startGoogleSignIn.mockResolvedValue({ ok: true });
   sendEmailSignInLink.mockResolvedValue({ ok: true });
+  signInWithPassword.mockResolvedValue({ ok: true });
+  signUpWithPassword.mockResolvedValue({ ok: true });
 });
+
+/** The password form is the default mode, so no mode toggle is needed first. */
+function fillPasswordFields(email: string, password: string) {
+  fireEvent.change(screen.getByLabelText(/email/i), { target: { value: email } });
+  fireEvent.change(screen.getByLabelText(/password/i), { target: { value: password } });
+}
 
 describe("SignInPanel", () => {
   it("shows the official heading only when next starts with /admin", () => {
@@ -102,5 +120,55 @@ describe("SignInPanel", () => {
     render(<SignInPanel next="/admin" />);
     expect(startGoogleSignIn).not.toHaveBeenCalled();
     expect(sendEmailSignInLink).not.toHaveBeenCalled();
+  });
+
+  describe("password sign-in", () => {
+    it("calls signInWithPassword(email, password) and navigates to next on success", async () => {
+      render(<SignInPanel next="/admin" />);
+
+      fillPasswordFields("official@example.com", "hunter22");
+      fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+
+      await waitFor(() =>
+        expect(signInWithPassword).toHaveBeenCalledWith("official@example.com", "hunter22")
+      );
+      // Unlike Google (OAuth redirect) and the magic link (emailed link),
+      // password sign-in resolves in place — nothing else moves the resident
+      // off /sign-in, so the panel must do it itself.
+      expect(push).toHaveBeenCalledWith("/admin");
+      expect(refresh).toHaveBeenCalled();
+    });
+
+    it("shows an error next to the password form and does not navigate on a failed sign-in", async () => {
+      signInWithPassword.mockResolvedValue({ ok: false, error: "Invalid login credentials" });
+      render(<SignInPanel next="/admin" />);
+
+      fillPasswordFields("official@example.com", "wrong");
+      fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+
+      expect(await screen.findByText("Invalid login credentials")).toBeInTheDocument();
+      expect(push).not.toHaveBeenCalled();
+    });
+
+    it("calls signUpWithPassword after toggling to Create account, and stays on the page rather than navigating", async () => {
+      // Account creation may still need an email-confirmation click before a
+      // session exists (a Supabase project setting), so this must not
+      // navigate the way a successful sign-in does — the resident is told to
+      // check their email instead.
+      render(<SignInPanel next="/admin" />);
+
+      // Toggling swaps the submit button's own label to "Create account" too
+      // (and the toggle link to "Sign in"), so fields are filled first while
+      // "Create account" still names only the toggle, unambiguously.
+      fireEvent.click(screen.getByRole("button", { name: "Create account" }));
+      fillPasswordFields("resident@example.com", "hunter22");
+      fireEvent.click(screen.getByRole("button", { name: "Create account" }));
+
+      await waitFor(() =>
+        expect(signUpWithPassword).toHaveBeenCalledWith("resident@example.com", "hunter22")
+      );
+      expect(await screen.findByText(/Account created/)).toBeInTheDocument();
+      expect(push).not.toHaveBeenCalled();
+    });
   });
 });

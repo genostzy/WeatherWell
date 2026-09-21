@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -58,6 +59,7 @@ type Control = "google" | "email" | "existing" | "password";
 
 export function SignInPanel({ next, notice }: { next: string; notice?: string }) {
   const { lang } = useLanguage();
+  const router = useRouter();
   const [mode, setMode] = useState<Mode>("password");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -80,7 +82,21 @@ export function SignInPanel({ next, notice }: { next: string; notice?: string })
       return;
     }
     if (control === "email") setEmailSent(true);
-    if (control === "password" && isSignUp) setAccountCreated(true);
+    if (control === "password") {
+      if (isSignUp) {
+        // signUpWithPassword may still need an email-confirmation click
+        // before the session is live (Supabase project setting), so this
+        // stays on the page and tells the resident to sign in once
+        // confirmed, the same as the email-link flow's "check your email".
+        setAccountCreated(true);
+      } else {
+        // Google and the magic link leave the page themselves (an OAuth
+        // redirect, or an emailed link); password sign-in resolves in
+        // place, so this is the only control that has to navigate itself.
+        router.push(next);
+        router.refresh();
+      }
+    }
   }
 
   return (
