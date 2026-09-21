@@ -24,9 +24,9 @@ import {
   useOfficialMarkers,
   OFFICIAL_MARKER_TYPES,
   OFFICIAL_MARKER_LABEL,
+  type OfficialMarker,
   type OfficialMarkerType,
 } from "@/lib/official-markers";
-import { useSessionUserId } from "@/lib/auth/anonymous-session";
 import { MapShell } from "@/features/map/map-shell";
 import { ViewportTracker, viewportRadiusDeg, viewportMarkerCap } from "@/features/map/viewport-tracker";
 import { HazardBackdropLayer } from "@/features/map/hazard-backdrop-layer";
@@ -40,6 +40,7 @@ import {
   createOfficialMarkerIcon,
 } from "@/features/map/marker-icons";
 import type { AlertRecord, HazardType, LanguageCode, LocalizedText, Zone } from "@/lib/types";
+import type { ActionResult } from "@/app/actions/action-result";
 import { useHeadcountCommit } from "./use-headcount-commit";
 
 const MAP_ARIA_LABEL: LocalizedText = {
@@ -76,6 +77,7 @@ const CAPTION_PLACEHOLDER: LocalizedText = { en: "Add a note (optional)", fil: "
 const PLACE_MARKER: LocalizedText = { en: "Tap map to place", fil: "I-tap ang mapa" };
 const SAVE: LocalizedText = { en: "Save", fil: "I-save" };
 const DELETE: LocalizedText = { en: "Delete", fil: "Burahin" };
+const PLACED_AT: LocalizedText = { en: "Placed", fil: "Inilagay" };
 
 interface LayerVisibility {
   hazard: boolean;
@@ -112,7 +114,6 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
   const allPins = useAllCommunityPins();
   const hazards = useHazards();
   const managesZone = useManagesZone();
-  const userId = useSessionUserId();
   const alerts = useAlerts();
   const officialMarkers = useOfficialMarkers();
   const baseAlertFor = (zoneId: string) => alerts.find((a) => a.zoneId === zoneId && a.isActive);
@@ -129,6 +130,8 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
   const [pendingOfficialType, setPendingOfficialType] = useState<OfficialMarkerType>("flood");
   const [pendingOfficialCaption, setPendingOfficialCaption] = useState("");
   const [pendingOfficialPos, setPendingOfficialPos] = useState<{ lat: number; lng: number } | null>(null);
+  const [isSavingMarker, setIsSavingMarker] = useState(false);
+  const [markerSaveError, setMarkerSaveError] = useState<string | null>(null);
 
   const center: [number, number] = [zones[0].lat, zones[0].lng];
   const [zoom, setZoom] = useState(14);
@@ -225,24 +228,35 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
                     {pendingOfficialPos.lat.toFixed(5)}, {pendingOfficialPos.lng.toFixed(5)}
                   </p>
                 )}
+                {markerSaveError && (
+                  <p className="text-[10px] text-severity-red">{markerSaveError}</p>
+                )}
                 <div className="flex gap-1">
                   <button
                     type="button"
                     onClick={() => {
-                      if (pendingOfficialPos) {
-                        officialMarkers.addMarker(
+                      if (!pendingOfficialPos) return;
+                      setIsSavingMarker(true);
+                      setMarkerSaveError(null);
+                      void officialMarkers
+                        .addMarker(
                           pendingOfficialPos.lat,
                           pendingOfficialPos.lng,
                           pendingOfficialType,
-                          pendingOfficialCaption,
-                          userId ?? "admin",
-                        );
-                        setIsPlacingOfficial(false);
-                        setPendingOfficialCaption("");
-                        setPendingOfficialPos(null);
-                      }
+                          pendingOfficialCaption
+                        )
+                        .then((result) => {
+                          setIsSavingMarker(false);
+                          if (!result.ok) {
+                            setMarkerSaveError(result.error);
+                            return;
+                          }
+                          setIsPlacingOfficial(false);
+                          setPendingOfficialCaption("");
+                          setPendingOfficialPos(null);
+                        });
                     }}
-                    disabled={!pendingOfficialPos}
+                    disabled={!pendingOfficialPos || isSavingMarker}
                     className="flex-1 rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
                   >
                     {t(SAVE, lang)}
@@ -253,6 +267,7 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
                       setIsPlacingOfficial(false);
                       setPendingOfficialCaption("");
                       setPendingOfficialPos(null);
+                      setMarkerSaveError(null);
                     }}
                     className="flex-1 rounded-md border-2 border-border px-2 py-1 text-xs font-medium"
                   >
@@ -367,20 +382,11 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
               icon={createOfficialMarkerIcon(marker.type, label)}
             >
               <Popup>
-                <div className="space-y-1.5 text-sm">
-                  <p className="font-medium">{t(OFFICIAL_MARKER_LABEL[marker.type], lang)}</p>
-                  {marker.caption && <p className="text-xs text-muted-foreground">{marker.caption}</p>}
-                  <p className="text-[10px] text-muted-foreground">
-                    Placed {new Date(marker.placedAt).toLocaleTimeString()}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => officialMarkers.removeMarker(marker.id)}
-                    className="rounded border-2 border-severity-red px-2 py-0.5 text-xs font-medium text-severity-red"
-                  >
-                    {t(DELETE, lang)}
-                  </button>
-                </div>
+                <OfficialMarkerPopupContent
+                  marker={marker}
+                  lang={lang}
+                  onDelete={() => officialMarkers.removeMarker(marker.id)}
+                />
               </Popup>
             </Marker>
           );
@@ -440,6 +446,58 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
           );
         })}
     </MapShell>
+  );
+}
+
+/**
+ * One official marker's popup content — its own component (not inline in
+ * AdminMapCanvas's officialMarkers.markers.map()) for the same reason
+ * CommunityPinActions/ZoneAlertSelect/CenterOccupancyControl are: a
+ * per-marker useState call must not live inside a loop. Owns the
+ * delete-in-flight and delete-failed state, since removeMarker is now a
+ * real network write (RLS-checked server action) rather than the synchronous
+ * in-memory array splice it used to be.
+ */
+function OfficialMarkerPopupContent({
+  marker,
+  lang,
+  onDelete,
+}: {
+  marker: OfficialMarker;
+  lang: LanguageCode;
+  onDelete: () => Promise<ActionResult>;
+}) {
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleDelete() {
+    setDeleting(true);
+    setError(null);
+    const result = await onDelete();
+    setDeleting(false);
+    if (!result.ok) setError(result.error);
+    // On success the marker disappears from officialMarkers.markers on the
+    // next render (the hook refetches), so there is nothing further to do
+    // here — the popup unmounts along with its marker.
+  }
+
+  return (
+    <div className="space-y-1.5 text-sm">
+      <p className="font-medium">{t(OFFICIAL_MARKER_LABEL[marker.type], lang)}</p>
+      {marker.caption && <p className="text-xs text-muted-foreground">{marker.caption}</p>}
+      <p className="text-[10px] text-muted-foreground">
+        {t(PLACED_AT, lang)} {new Date(marker.placedAt).toLocaleTimeString(lang === "fil" ? "fil-PH" : "en-PH")}
+      </p>
+      <button
+        type="button"
+        onClick={() => void handleDelete()}
+        disabled={deleting}
+        className="rounded border-2 border-severity-red px-2 py-0.5 text-xs font-medium text-severity-red disabled:opacity-50"
+      >
+        {t(DELETE, lang)}
+      </button>
+      {error && <p className="text-xs text-severity-red">{error}</p>}
+    </div>
   );
 }
 

@@ -281,83 +281,6 @@ export type Database = {
           name?: string
         }
         Relationships: []
-      weather_readings: {
-        Row: {
-          created_at: string
-          fetched_at: string
-          humidity_pct: number
-          id: string
-          rainfall_mm: number
-          temperature_c: number
-          weather_code: number
-          wind_kph: number
-          zone_id: string
-        }
-        Insert: {
-          created_at?: string
-          fetched_at?: string
-          humidity_pct?: number
-          id?: string
-          rainfall_mm?: number
-          temperature_c?: number
-          weather_code?: number
-          wind_kph?: number
-          zone_id: string
-        }
-        Update: {
-          created_at?: string
-          fetched_at?: string
-          humidity_pct?: number
-          id?: string
-          rainfall_mm?: number
-          temperature_c?: number
-          weather_code?: number
-          wind_kph?: number
-          zone_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "weather_readings_zone_id_fkey"
-            columns: ["zone_id"]
-            isOneToOne: false
-            referencedRelation: "zones"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      typhoon_tracks: {
-        Row: {
-          category: Json
-          created_at: string
-          fetched_at: string
-          id: string
-          international_name: string | null
-          is_active: boolean
-          name: string
-          positions: Json
-        }
-        Insert: {
-          category?: Json
-          created_at?: string
-          fetched_at?: string
-          id?: string
-          international_name?: string | null
-          is_active?: boolean
-          name: string
-          positions?: Json
-        }
-        Update: {
-          category?: Json
-          created_at?: string
-          fetched_at?: string
-          id?: string
-          international_name?: string | null
-          is_active?: boolean
-          name?: string
-          positions?: Json
-        }
-        Relationships: []
-      }
       }
       official_actions: {
         Row: {
@@ -402,6 +325,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      official_markers: {
+        Row: {
+          caption: string
+          id: string
+          lat: number
+          lng: number
+          placed_at: string
+          placed_by: string
+          type: string
+        }
+        Insert: {
+          caption?: string
+          id?: string
+          lat: number
+          lng: number
+          placed_at?: string
+          placed_by: string
+          type: string
+        }
+        Update: {
+          caption?: string
+          id?: string
+          lat?: number
+          lng?: number
+          placed_at?: string
+          placed_by?: string
+          type?: string
+        }
+        Relationships: []
       }
       pin_votes: {
         Row: {
@@ -502,6 +455,122 @@ export type Database = {
           },
         ]
       }
+      push_subscriptions: {
+        Row: {
+          auth: string
+          created_at: string
+          endpoint: string
+          id: string
+          p256dh: string
+          updated_at: string
+          user_agent: string | null
+          user_id: string
+          zone_id: string | null
+        }
+        Insert: {
+          auth: string
+          created_at?: string
+          endpoint: string
+          id?: string
+          p256dh: string
+          updated_at?: string
+          user_agent?: string | null
+          user_id: string
+          zone_id?: string | null
+        }
+        Update: {
+          auth?: string
+          created_at?: string
+          endpoint?: string
+          id?: string
+          p256dh?: string
+          updated_at?: string
+          user_agent?: string | null
+          user_id?: string
+          zone_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "push_subscriptions_zone_id_fkey"
+            columns: ["zone_id"]
+            isOneToOne: false
+            referencedRelation: "zones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      typhoon_tracks: {
+        Row: {
+          bulletin_number: number | null
+          category: Json
+          created_at: string
+          fetched_at: string
+          gustiness_kph: number | null
+          headline: string | null
+          id: string
+          international_name: string | null
+          is_active: boolean
+          is_final: boolean
+          issued_at: string | null
+          max_winds_kph: number | null
+          movement_direction: string | null
+          movement_speed_kph: number | null
+          name: string
+          next_bulletin_at: string | null
+          positions: Json
+          pressure_hpa: number | null
+          signals: Json
+          source: string
+          wind_signal: number
+        }
+        Insert: {
+          bulletin_number?: number | null
+          category?: Json
+          created_at?: string
+          fetched_at?: string
+          gustiness_kph?: number | null
+          headline?: string | null
+          id?: string
+          international_name?: string | null
+          is_active?: boolean
+          is_final?: boolean
+          issued_at?: string | null
+          max_winds_kph?: number | null
+          movement_direction?: string | null
+          movement_speed_kph?: number | null
+          name: string
+          next_bulletin_at?: string | null
+          positions?: Json
+          pressure_hpa?: number | null
+          signals?: Json
+          source?: string
+          wind_signal?: number
+        }
+        Update: {
+          bulletin_number?: number | null
+          category?: Json
+          created_at?: string
+          fetched_at?: string
+          gustiness_kph?: number | null
+          headline?: string | null
+          id?: string
+          international_name?: string | null
+          is_active?: boolean
+          is_final?: boolean
+          issued_at?: string | null
+          max_winds_kph?: number | null
+          movement_direction?: string | null
+          movement_speed_kph?: number | null
+          name?: string
+          next_bulletin_at?: string | null
+          positions?: Json
+          pressure_hpa?: number | null
+          signals?: Json
+          source?: string
+          wind_signal?: number
+        }
+        Relationships: []
+      }
       water_level_reports: {
         Row: {
           depth_level: string
@@ -533,6 +602,50 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "water_level_reports_zone_id_fkey"
+            columns: ["zone_id"]
+            isOneToOne: false
+            referencedRelation: "zones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      weather_readings: {
+        Row: {
+          created_at: string
+          fetched_at: string
+          humidity_pct: number
+          id: string
+          rainfall_mm: number
+          temperature_c: number
+          weather_code: number
+          wind_kph: number
+          zone_id: string
+        }
+        Insert: {
+          created_at?: string
+          fetched_at?: string
+          humidity_pct?: number
+          id?: string
+          rainfall_mm?: number
+          temperature_c?: number
+          weather_code?: number
+          wind_kph?: number
+          zone_id: string
+        }
+        Update: {
+          created_at?: string
+          fetched_at?: string
+          humidity_pct?: number
+          id?: string
+          rainfall_mm?: number
+          temperature_c?: number
+          weather_code?: number
+          wind_kph?: number
+          zone_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "weather_readings_zone_id_fkey"
             columns: ["zone_id"]
             isOneToOne: false
             referencedRelation: "zones"
@@ -595,6 +708,25 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      check_and_trigger_alerts: {
+        Args: never
+        Returns: {
+          report_count: number
+          severity: string
+          triggered: boolean
+          zone_id: string
+        }[]
+      }
+      cleanup_old_weather_readings: { Args: never; Returns: undefined }
+      get_push_subscriptions_for_zone: {
+        Args: { p_zone_id: string }
+        Returns: {
+          auth: string
+          endpoint: string
+          p256dh: string
+        }[]
+      }
+      get_reference_data_compact: { Args: never; Returns: Json }
       recent_app_error_count: {
         Args: { p_environment?: string }
         Returns: number
@@ -621,6 +753,8 @@ export type Database = {
         }
         Returns: undefined
       }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
     }
     Enums: {
       [_ in never]: never
@@ -748,3 +882,8 @@ export type CompositeTypes<
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
 
+export const Constants = {
+  public: {
+    Enums: {},
+  },
+} as const

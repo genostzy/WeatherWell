@@ -2308,4 +2308,96 @@ begin
   raise notice 'ok, H15: both honest-time triggers still fire after the EXECUTE revoke';
 end $$;
 
+-- ===========================================================================
+-- Official markers: any appointed official may create, read or delete any
+-- marker; anon and residents can do none of those. Not zone-scoped (see the
+-- migration's own comment) -- OM7/OM8 below specifically prove an official
+-- can read and delete a marker a DIFFERENT official placed, since that is
+-- the property that would break if area-scoping were added later without
+-- updating these tests to match.
+-- ===========================================================================
+
+select tests.as_anon();
+select tests.expect_denied('OM1: anon cannot read official_markers',
+  $$select * from public.official_markers$$);
+select tests.expect_denied('OM2: anon cannot insert official_markers',
+  $$insert into public.official_markers (lat, lng, type, caption, placed_by)
+    values (14.0, 121.0, 'flood', 'x', '44444444-4444-4444-4444-444444444444')$$);
+
+-- A resident IS `authenticated` (holds the table-level SELECT grant, same
+-- as every operator), so an unauthorized read is RLS silently filtering to
+-- zero rows, not a thrown permission error -- expect_row_count is the
+-- correct assertion for this shape, matching the zones/profiles/alerts
+-- "unchanged value / zero rows" pattern used throughout this file. (anon's
+-- OM1 above IS a thrown error, correctly, because anon holds no table grant
+-- at all after this migration's revoke.)
+select tests.as_user('66666666-6666-6666-6666-666666666666');
+select tests.expect_row_count('OM3: a resident reads zero official_markers rows (RLS filters silently, not an error)',
+  $$select * from public.official_markers$$, 0);
+select tests.as_user('66666666-6666-6666-6666-666666666666');
+select tests.expect_denied('OM4: a resident cannot insert official_markers',
+  $$insert into public.official_markers (lat, lng, type, caption, placed_by)
+    values (14.0, 121.0, 'flood', 'x', '66666666-6666-6666-6666-666666666666')$$);
+
+select tests.as_user('44444444-4444-4444-4444-444444444444');
+select tests.expect_allowed('OM5: an official can insert a marker as themselves',
+  $$insert into public.official_markers (id, lat, lng, type, caption, placed_by)
+    values ('c0000000-0000-4000-8000-000000000001', 14.05, 121.05, 'blocked', 'Bridge closed',
+            '44444444-4444-4444-4444-444444444444')$$);
+
+select tests.as_user('44444444-4444-4444-4444-444444444444');
+select tests.expect_denied('OM6: an official cannot insert a marker attributed to someone else',
+  $$insert into public.official_markers (lat, lng, type, caption, placed_by)
+    values (14.05, 121.05, 'flood', 'x', '55555555-5555-5555-5555-555555555555')$$);
+
+-- OM7: a DIFFERENT official (municipal, area 0199901) can still read the
+-- marker A1 placed -- proving read is not restricted to the placer or to
+-- the placer's own area.
+select tests.as_user('55555555-5555-5555-5555-555555555555');
+select tests.expect_row_count('OM7: a different official can read a marker placed by another official',
+  $$select 1 from public.official_markers where id = 'c0000000-0000-4000-8000-000000000001'$$, 1);
+
+-- OM8: that same different official can also delete it.
+select tests.as_user('55555555-5555-5555-5555-555555555555');
+select tests.expect_allowed('OM8: a different official can delete a marker placed by another official',
+  $$delete from public.official_markers where id = 'c0000000-0000-4000-8000-000000000001'$$);
+
+do $$
+begin
+  set local role postgres;
+  if exists (select 1 from public.official_markers where id = 'c0000000-0000-4000-8000-000000000001') then
+    raise exception using errcode = 'TSTFL', message = 'OM8: marker still present after the delete';
+  end if;
+end $$;
+
+select tests.as_user('44444444-4444-4444-4444-444444444444');
+select tests.expect_allowed('OM9 setup: reinsert a marker to test resident deletion against',
+  $$insert into public.official_markers (id, lat, lng, type, caption, placed_by)
+    values ('c0000000-0000-4000-8000-000000000002', 14.05, 121.05, 'flood', 'x',
+            '44444444-4444-4444-4444-444444444444')$$);
+
+-- Same shape again for DELETE: the grant exists, so an unmatched USING
+-- clause is a silent zero-row delete, not a thrown error. A raw role switch
+-- (not tests.expect_denied) proves it the same way OM3 does, checking the
+-- row is still there afterward rather than expecting an exception.
+select tests.as_user('66666666-6666-6666-6666-666666666666');
+do $$
+begin
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', '66666666-6666-6666-6666-666666666666', 'role', 'authenticated')::text, true);
+  delete from public.official_markers where id = 'c0000000-0000-4000-8000-000000000002';
+  reset role;
+end $$;
+
+do $$
+begin
+  set local role postgres;
+  if not exists (select 1 from public.official_markers where id = 'c0000000-0000-4000-8000-000000000002') then
+    raise exception using errcode = 'TSTFL',
+      message = 'OM9: a resident''s DELETE removed a marker it should not have matched';
+  end if;
+  raise notice 'ok, OM9: a resident cannot delete an official marker (RLS filtered it, zero rows affected)';
+end $$;
+
 rollback;

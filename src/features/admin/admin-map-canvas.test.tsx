@@ -10,17 +10,24 @@ vi.mock("@/lib/auth/anonymous-session", () => ({
 
 const setZoneAlertMock = vi.fn().mockResolvedValue({ ok: true });
 const setCenterOccupancyMock = vi.fn().mockResolvedValue({ ok: true });
+const createOfficialMarkerMock = vi.fn().mockResolvedValue({ ok: true });
+const deleteOfficialMarkerMock = vi.fn().mockResolvedValue({ ok: true });
 
-// Both are "use server" modules that pull in user-server.ts, which does
+// All are "use server" modules that pull in user-server.ts, which does
 // `import "server-only"` — that throws unconditionally outside a real server
 // bundler. AdminMapCanvas only ever reaches them through a dynamic import
-// inside a popup control's change handler (see ZoneAlertSelect and
-// CenterOccupancyControl), so this mock exists for the tests that fire one.
+// inside a popup control's change handler (see ZoneAlertSelect,
+// CenterOccupancyControl and useOfficialMarkers), so this mock exists for
+// the tests that fire one.
 vi.mock("@/app/actions/set-zone-alert", () => ({
   setZoneAlert: (...args: unknown[]) => setZoneAlertMock(...args),
 }));
 vi.mock("@/app/actions/set-center", () => ({
   setCenterOccupancy: (...args: unknown[]) => setCenterOccupancyMock(...args),
+}));
+vi.mock("@/app/actions/official-markers", () => ({
+  createOfficialMarker: (...args: unknown[]) => createOfficialMarkerMock(...args),
+  deleteOfficialMarker: (...args: unknown[]) => deleteOfficialMarkerMock(...args),
 }));
 
 import { AdminMapCanvas } from "./admin-map-canvas";
@@ -50,8 +57,23 @@ import type { AlertRecord } from "@/lib/types";
  * one. Moderation no longer writes to local storage either: it queues a
  * `setPinRemoved` entry, which is what these tests assert on.
  */
+/**
+ * Also serves /api/official-markers (and anything else) an empty list — the
+ * page now fetches that on mount too (see useOfficialMarkers), and without
+ * this a URL-blind mock would hand it the pins array, which crashes the
+ * official-marker popup's own t(OFFICIAL_MARKER_LABEL[marker.type], lang)
+ * the moment it tries to render a "pin" as if it were a marker.
+ */
 function servePins(pins: CommunityPin[]): void {
-  vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => pins }));
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: string) => {
+      if (typeof url === "string" && url.startsWith("/api/pins")) {
+        return Promise.resolve({ ok: true, json: async () => pins });
+      }
+      return Promise.resolve({ ok: true, json: async () => [] });
+    })
+  );
 }
 
 function seedPin(overrides: Partial<CommunityPin> = {}): void {
@@ -92,6 +114,10 @@ describe("AdminMapCanvas", () => {
     servePins([]);
     setZoneAlertMock.mockClear();
     setCenterOccupancyMock.mockClear();
+    createOfficialMarkerMock.mockClear();
+    createOfficialMarkerMock.mockResolvedValue({ ok: true });
+    deleteOfficialMarkerMock.mockClear();
+    deleteOfficialMarkerMock.mockResolvedValue({ ok: true });
   });
 
   afterEach(() => {
@@ -471,5 +497,130 @@ describe("AdminMapCanvas viewport culling", () => {
     expect(screen.getByRole("img", { name: new RegExp(zone.evacuationCenterName, "i") })).toBeInTheDocument();
     expect(screen.queryByRole("img", { name: /Barangay Far Away/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("img", { name: /Far Away Evacuation Center/i })).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * Official markers are now a real, persisted, RLS-checked write (see
+ * src/app/actions/official-markers.ts and lib/official-markers.ts) rather
+ * than the in-memory useState array they used to be — these tests are the
+ * regression guard for that: a create or delete must actually call the
+ * Server Action, and a failed one must surface an error rather than
+ * silently updating the map.
+ */
+function serveOfficialMarkers(markers: unknown[]): void {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: string) => {
+      if (typeof url === "string" && url.startsWith("/api/official-markers")) {
+        return Promise.resolve({ ok: true, json: async () => markers });
+      }
+      return Promise.resolve({ ok: true, json: async () => [] });
+    })
+  );
+}
+
+describe("AdminMapCanvas official markers", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    createOfficialMarkerMock.mockClear();
+    createOfficialMarkerMock.mockResolvedValue({ ok: true });
+    deleteOfficialMarkerMock.mockClear();
+    deleteOfficialMarkerMock.mockResolvedValue({ ok: true });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("fetches and renders a marker from the server on mount", async () => {
+    serveOfficialMarkers([
+      {
+        id: "marker-1",
+        lat: zone.lat,
+        lng: zone.lng,
+        type: "blocked",
+        caption: "Bridge closed",
+        placedBy: "official-1",
+        placedAt: "2026-09-21T00:00:00Z",
+      },
+    ]);
+
+    renderWithData(<AdminMapCanvas zones={FIXTURE_REFERENCE_DATA.zones} />);
+
+    expect(await screen.findByRole("img", { name: /Blocked passage.*Bridge closed/ })).toBeInTheDocument();
+  });
+
+  it("opens the placement form, and Save is disabled until a position is set by tapping the map", async () => {
+    serveOfficialMarkers([]);
+    renderWithData(<AdminMapCanvas zones={FIXTURE_REFERENCE_DATA.zones} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /add marker/i }));
+
+    expect(screen.getByRole("button", { name: /^save$/i })).toBeDisabled();
+    expect(createOfficialMarkerMock).not.toHaveBeenCalled();
+  });
+
+  it("deletes a marker via its popup and reflects the removal (server re-fetch returns it gone)", async () => {
+    let served = [
+      {
+        id: "marker-1",
+        lat: zone.lat,
+        lng: zone.lng,
+        type: "flood",
+        caption: "",
+        placedBy: "official-1",
+        placedAt: "2026-09-21T00:00:00Z",
+      },
+    ];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string) => {
+        if (typeof url === "string" && url.startsWith("/api/official-markers")) {
+          return Promise.resolve({ ok: true, json: async () => served });
+        }
+        return Promise.resolve({ ok: true, json: async () => [] });
+      })
+    );
+
+    renderWithData(<AdminMapCanvas zones={FIXTURE_REFERENCE_DATA.zones} />);
+
+    fireEvent.click(await screen.findByRole("img", { name: /Flooded area/ }));
+    // The delete mock's success re-triggers useOfficialMarkers' refresh
+    // (see the hook), so the next fetch must actually return an empty list —
+    // otherwise this test would pass even if the component ignored the
+    // server response entirely and just kept the marker locally.
+    served = [];
+    fireEvent.click(screen.getByRole("button", { name: /^delete$/i }));
+
+    await waitFor(() => expect(deleteOfficialMarkerMock).toHaveBeenCalledWith("marker-1"));
+    await waitFor(() => expect(screen.queryByRole("img", { name: /Flooded area/ })).not.toBeInTheDocument());
+  });
+
+  it("shows an error and keeps the marker when the delete is refused", async () => {
+    deleteOfficialMarkerMock.mockResolvedValue({
+      ok: false,
+      permanent: true,
+      error: "Not an appointed official, or that marker no longer exists.",
+    });
+    serveOfficialMarkers([
+      {
+        id: "marker-1",
+        lat: zone.lat,
+        lng: zone.lng,
+        type: "flood",
+        caption: "",
+        placedBy: "official-1",
+        placedAt: "2026-09-21T00:00:00Z",
+      },
+    ]);
+
+    renderWithData(<AdminMapCanvas zones={FIXTURE_REFERENCE_DATA.zones} />);
+
+    fireEvent.click(await screen.findByRole("img", { name: /Flooded area/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^delete$/i }));
+
+    expect(await screen.findByText(/Not an appointed official/)).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /Flooded area/ })).toBeInTheDocument();
   });
 });
