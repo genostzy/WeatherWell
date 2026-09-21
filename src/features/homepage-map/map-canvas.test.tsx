@@ -35,6 +35,7 @@ describe("MapCanvas", () => {
     routeZone: null,
     routeHazard: false,
     effectiveRoutePolyline: [] as [number, number][],
+    onSelectZone: () => {},
   };
 
   /** Pins come from /api/pins now, so a test that wants one serves one. */
@@ -71,6 +72,15 @@ describe("MapCanvas", () => {
     renderWithData(<MapCanvas {...baseProps} />);
     expect(screen.getByText(/map legend/i)).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: /flood/i })).toBeInTheDocument();
+  });
+
+  it("calls onSelectZone when a zone status marker is clicked", () => {
+    const onSelectZone = vi.fn();
+    renderWithData(<MapCanvas {...baseProps} onSelectZone={onSelectZone} />);
+
+    fireEvent.click(screen.getByRole("img", { name: /Barangay Nilombot, Mapandan/i }));
+
+    expect(onSelectZone).toHaveBeenCalledWith(FIXTURE_REFERENCE_DATA.zones[0].id);
   });
 
   describe("community pin actions", () => {
@@ -137,6 +147,7 @@ describe("MapCanvas with no hazard data (I3)", () => {
           routeZone={null}
           routeHazard={false}
           effectiveRoutePolyline={[]}
+          onSelectZone={() => {}}
         />,
         { data: { hazards: {} } }
       );

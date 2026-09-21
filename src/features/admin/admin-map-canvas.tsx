@@ -5,7 +5,10 @@ import { Marker, Polyline, Popup, useMapEvents } from "react-leaflet";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { MOCK_CASCADES } from "@/lib/mock-data";
+import { getZoneStatus, getZoneStatusColor, ZONE_STATUS_LABEL } from "@/lib/zone-status";
+import { SEVERITY_ORDER, SEVERITY_LABEL, type Severity } from "@/lib/severity";
 import { CENTER_STATUS_LABEL, resolveEffectiveCenterStatus } from "@/lib/center-status";
+import { useAlerts, useSetZoneAlert } from "@/lib/alerts-store";
 import {
   useAllCommunityPins,
   removePinByAdmin,
@@ -14,6 +17,8 @@ import {
 } from "@/lib/community-pins";
 import { useOutbox } from "@/lib/outbox/outbox";
 import { PIN_STATUS_LABEL } from "@/lib/community-pin";
+import { buildZoneInputForZone, computeZoneState } from "@/lib/risk-engine/score";
+import { useHazards } from "@/lib/reference-data/use-reference-data";
 import { useManagesZone } from "@/lib/auth/official-context";
 import {
   useOfficialMarkers,
@@ -28,17 +33,22 @@ import { PoiMarkerLayer } from "@/features/map/poi-marker-layer";
 import { MarkerLegend } from "@/features/map/marker-legend";
 import { HazardTypeSelector } from "@/features/map/hazard-type-selector";
 import {
+  createStatusMarkerIcon,
   createEvacuationMarkerIcon,
   createCommunityPinMarkerIcon,
   createOfficialMarkerIcon,
 } from "@/features/map/marker-icons";
-import type { HazardType, LanguageCode, LocalizedText, Zone } from "@/lib/types";
+import type { AlertRecord, HazardType, LanguageCode, LocalizedText, Zone } from "@/lib/types";
 import { useHeadcountCommit } from "./use-headcount-commit";
 
 const MAP_ARIA_LABEL: LocalizedText = {
   en: "Admin operations map",
   fil: "Mapa ng operasyon ng admin",
 };
+const ALERT_SEVERITY: LocalizedText = { en: "Alert severity", fil: "Severity ng alerto" };
+const CLEAR_NO_ALERT: LocalizedText = { en: "Clear — no alert", fil: "Ligtas — walang alerto" };
+const RISK_SCORE: LocalizedText = { en: "Risk score", fil: "Risk score" };
+const ADVISORY_ONLY: LocalizedText = { en: "advisory only", fil: "payo lamang" };
 const HEADCOUNT: LocalizedText = { en: "Headcount", fil: "Bilang ng tao" };
 const SPOTS_LEFT: LocalizedText = { en: "spots left", fil: "espasyong natitira" };
 const OF: LocalizedText = { en: "of", fil: "sa" };
@@ -47,6 +57,7 @@ const RESTORE_PIN: LocalizedText = { en: "Restore pin", fil: "Ibalik ang pin" };
 const REMOVED: LocalizedText = { en: "Removed", fil: "Naalis" };
 const REMOVED_BY_VOTES: LocalizedText = { en: "removed by net score", fil: "naalis dahil sa net score" };
 const REMOVED_BY_ADMIN: LocalizedText = { en: "removed by admin", fil: "inalis ng admin" };
+/** No reason recorded means the author withdrew it themselves — see deleteOwnPin. */
 const REMOVED_BY_AUTHOR: LocalizedText = { en: "withdrawn by author", fil: "inalis ng may-akda" };
 const LAYERS: LocalizedText = { en: "Layers", fil: "Mga layer" };
 const LAYER_HAZARD: LocalizedText = { en: "Hazard backdrop", fil: "Hazard backdrop" };
@@ -83,12 +94,27 @@ function OfficialPinPlacer({ onPlace }: { onPlace: (lat: number, lng: number) =>
   return null;
 }
 
+/**
+ * The admin counterpart to the resident MapCanvas: same shell, tiles, hazard
+ * backdrop and POI layer, but every marker's popup is a control rather than a
+ * read-only detail.
+ *
+ * It exists because three admin jobs are genuinely spatial and the list panels
+ * on /admin throw that context away: judging whether a community pin is
+ * plausible depends on where it sits, deciding which evacuation center to
+ * redirect to depends on which full centers are near which flooded zones, and
+ * the upstream→downstream cascade chain is a shape on a map rather than a row
+ * in a table.
+ */
 export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
   const { lang } = useLanguage();
   const allPins = useAllCommunityPins();
+  const hazards = useHazards();
   const managesZone = useManagesZone();
   const userId = useSessionUserId();
+  const alerts = useAlerts();
   const officialMarkers = useOfficialMarkers();
+  const baseAlertFor = (zoneId: string) => alerts.find((a) => a.zoneId === zoneId && a.isActive);
   const [hazardType, setHazardType] = useState<HazardType>("flood");
   const [layers, setLayers] = useState<LayerVisibility>({
     hazard: true,
@@ -105,6 +131,9 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
 
   const center: [number, number] = [zones[0].lat, zones[0].lng];
   const zoneById = new Map(zones.map((zone) => [zone.id, zone]));
+
+  /** The risk score's cascade factor must follow the zone's actual alert. */
+  const hasEffectiveAlert = (zoneId: string) => baseAlertFor(zoneId) !== undefined;
 
   function toggleLayer(key: keyof LayerVisibility) {
     setLayers((current) => ({ ...current, [key]: !current[key] }));
@@ -238,7 +267,9 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
         />
       )}
 
-      {/* Upstream → downstream propagation */}
+      {/* Upstream → downstream propagation, drawn between zone centres. Only
+          meaningful on a map: the list panels state the relationship in words
+          but can't show that zone-1 sits upriver of zone-2. */}
       {layers.cascade &&
         MOCK_CASCADES.map((cascade) => {
           const from = zoneById.get(cascade.fromZoneId);
@@ -255,6 +286,34 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
             />
           );
         })}
+
+      {zones.map((zone) => {
+        const alert = baseAlertFor(zone.id);
+        const status = getZoneStatus(alert);
+        const label = `${zone.name} — ${t(ZONE_STATUS_LABEL[status], lang)}`;
+        const riskScore = computeZoneState(
+          buildZoneInputForZone(zone, zones, hasEffectiveAlert, hazards)
+        ).riskScore;
+        return (
+          <Marker
+            key={`status-${zone.id}`}
+            position={[zone.lat, zone.lng]}
+            icon={createStatusMarkerIcon(status, getZoneStatusColor(alert), label)}
+          >
+            <Popup>
+              <div className="space-y-2 text-sm">
+                <p className="font-medium">{label}</p>
+                <p className="text-xs text-muted-foreground">
+                  {t(RISK_SCORE, lang)}: <span className="font-semibold">{riskScore}</span>/100 —{" "}
+                  {t(ADVISORY_ONLY, lang)}
+                </p>
+
+                <ZoneAlertSelect zone={zone} alert={alert} lang={lang} canManage={managesZone(zone)} />
+              </div>
+            </Popup>
+          </Marker>
+        );
+      })}
 
       {zones.map((zone) => (
         <Marker
@@ -301,7 +360,12 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
           );
         })}
 
-      {/* Community pins */}
+      {/* Reads useAllCommunityPins, not useCommunityPins: a removed pin has to
+          stay visible here or there'd be no way to restore one that voting took
+          down wrongly (PRD Core Feature #5's "remove or restore any pin"). A
+          pin whose zone cannot be resolved is skipped — same as the
+          moderation panel (see community-pin-moderation-panel.tsx) — since
+          it cannot be proven in or out of the official's area. */}
       {layers.pins &&
         allPins.map((pin) => {
           const zone = zoneById.get(pin.zoneId);
@@ -353,6 +417,18 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
   );
 }
 
+/**
+ * The Remove/Restore control for one community-pin marker's popup. Its own
+ * component (not inline in AdminMapCanvas's pins.map()) for the same reason
+ * ZoneAlertSelect and CenterOccupancyControl are: a per-marker useState call
+ * must not live inside a loop.
+ *
+ * Gated by canManage exactly like its neighbours in this file. When it IS
+ * shown, the write is watched for a permanent failure — an out-of-area
+ * write is refused by RLS, and `mergePins` then quietly drops the queued
+ * entry, reverting the marker to its prior state with no explanation unless
+ * something is watching for that.
+ */
 function CommunityPinActions({
   pin,
   canManage,
@@ -393,6 +469,81 @@ function CommunityPinActions({
   );
 }
 
+/**
+ * The alert-severity control for one zone's marker popup. Its own component
+ * (not inline in AdminMapCanvas's zones.map()) so its pending-error state is
+ * a real useState call at the top of a component body, not a hook called
+ * from inside a loop.
+ *
+ * A native select rather than the shadcn one: Radix renders its listbox in a
+ * portal, which fights a Leaflet popup's own positioning and stacking.
+ * Admin-only surface, so the plain control is the safer trade.
+ */
+function ZoneAlertSelect({
+  zone,
+  alert,
+  lang,
+  canManage,
+}: {
+  zone: Zone;
+  alert: AlertRecord | undefined;
+  lang: LanguageCode;
+  canManage: boolean;
+}) {
+  const [error, setError] = useState(false);
+  // Through the alerts store, which refreshes the alert list once the write
+  // is confirmed, so this select and the marker follow it (C1).
+  const setZoneAlert = useSetZoneAlert();
+
+  async function handleChange(value: Severity | "none") {
+    setError(false);
+    const result = await setZoneAlert({ zoneId: zone.id, severity: value });
+    if (!result.ok) setError(true);
+  }
+
+  if (!canManage) {
+    return (
+      <p className="space-y-1">
+        <span className="text-xs font-medium">{t(ALERT_SEVERITY, lang)}</span>
+        <span className="block text-xs text-muted-foreground">{t(VIEW_ONLY, lang)}</span>
+      </p>
+    );
+  }
+
+  return (
+    <label className="block space-y-1">
+      <span className="text-xs font-medium">{t(ALERT_SEVERITY, lang)}</span>
+      <select
+        value={alert?.severity ?? "none"}
+        onChange={(event) => void handleChange(event.target.value as Severity | "none")}
+        aria-label={`${t(ALERT_SEVERITY, lang)} — ${zone.name}`}
+        className="w-full rounded-md border-2 border-border bg-background px-2 py-1 text-sm"
+      >
+        <option value="none">{t(CLEAR_NO_ALERT, lang)}</option>
+        {SEVERITY_ORDER.map((severity: Severity) => (
+          <option key={severity} value={severity}>
+            {t(SEVERITY_LABEL[severity], lang)}
+          </option>
+        ))}
+      </select>
+      {error && <p className="text-xs text-severity-red">{t(SAVE_FAILED, lang)}</p>}
+    </label>
+  );
+}
+
+/**
+ * The headcount control for one zone's evacuation-center popup — its own
+ * component for the same reason ZoneAlertSelect is: a per-marker useState
+ * call must not live inside AdminMapCanvas's zones.map().
+ *
+ * The typed headcount is seeded from zone.currentOccupancy (the last value
+ * carried through reference data) and then tracked in this component's own
+ * state as the admin edits it — a write doesn't itself refetch reference
+ * data, so this state only reflects the server again after the next
+ * fetch/reload. Typing here derives the status shown below immediately;
+ * the database write via setCenterOccupancy happens once the value is
+ * committed (see useHeadcountCommit).
+ */
 function CenterOccupancyControl({
   zone,
   lang,
@@ -404,6 +555,9 @@ function CenterOccupancyControl({
 }) {
   const [error, setError] = useState(false);
 
+  // Dynamic import for the same reason ZoneAlertSelect's does: set-center.ts
+  // is a "use server" module and must not be pulled statically into a
+  // client-component test's module graph.
   async function writeOccupancy(value: number | undefined) {
     setError(false);
     const { setCenterOccupancy } = await import("@/app/actions/set-center");
@@ -411,6 +565,7 @@ function CenterOccupancyControl({
     if (!result.ok) setError(true);
   }
 
+  // Written once per committed value, not per keystroke (M9).
   const headcount = useHeadcountCommit(zone.currentOccupancy, writeOccupancy);
   const occupancy = headcount.occupancy;
   const centerStatus = resolveEffectiveCenterStatus(zone.centerStatus, zone.evacuationCenterCapacity, occupancy);
