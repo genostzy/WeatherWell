@@ -1,24 +1,8 @@
 import { NextResponse } from "next/server";
-import webPush from "web-push";
-import { createClient } from "@supabase/supabase-js";
+import { isAuthorizedCronRequest } from "@/lib/cron-auth";
+import { sendZonePush } from "@/lib/send-zone-push";
 
 export const dynamic = "force-dynamic";
-
-// Configure web-push with VAPID keys
-const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
-const VAPID_SUBJECT = process.env.VAPID_SUBJECT ?? "mailto:admin@weatherwell.app";
-
-if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
-  webPush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
-}
-
-interface PushPayload {
-  title: string;
-  body: string;
-  zone: string;
-  url?: string;
-}
 
 /**
  * Simple in-memory rate limiter.
@@ -61,21 +45,20 @@ if (typeof setInterval !== "undefined") {
 /**
  * POST /api/push
  *
- * Sends a Web Push notification to all subscribers for a zone.
- * Requires VAPID keys to be configured.
- * Rate-limited to 10 requests per IP per minute.
+ * Manually-triggerable path for sending a Web Push notification to a zone's
+ * subscribers — the threshold-check cron does not call this over HTTP, it
+ * calls sendZonePush() directly (see that module for why). This route is
+ * for the same kind of on-demand use as /api/threshold-check's own POST:
+ * requires the cron secret, same as every other route holding the
+ * service-role key.
  *
  * Body: { zoneId: string, title: string, body: string, url?: string }
  */
 export async function POST(request: Request) {
-  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
-    return NextResponse.json(
-      { error: "Push notifications not configured" },
-      { status: 503 }
-    );
+  if (!isAuthorizedCronRequest(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Rate limit check
   const forwarded = request.headers.get("x-forwarded-for");
   const ip = forwarded?.split(",")[0]?.trim() ?? "unknown";
   if (!checkRateLimit(ip)) {
@@ -95,70 +78,13 @@ export async function POST(request: Request) {
     );
   }
 
-  // Validate zoneId format (prevent injection)
-  if (typeof zoneId !== "string" || zoneId.length > 100) {
-    return NextResponse.json(
-      { error: "Invalid zoneId" },
-      { status: 400 }
-    );
+  const result = await sendZonePush({ zoneId, title, body: messageBody, url });
+
+  if (!result.ok) {
+    return NextResponse.json({ error: result.error }, { status: result.status });
   }
 
-  // Use service role to read subscriptions (bypasses RLS)
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-
-  // Get subscriptions for this zone (and zone-less general subscriptions)
-  const { data: subscriptions, error } = await supabase
-    .from("push_subscriptions" as never)
-    .select("endpoint, p256dh, auth")
-    .or(`zone_id.eq.${zoneId},zone_id.is.null`) as { data: Array<{ endpoint: string; p256dh: string; auth: string }> | null; error: { message: string } | null };
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
-  if (!subscriptions || subscriptions.length === 0) {
-    return NextResponse.json({ sent: 0, message: "No subscribers" });
-  }
-
-  const payload: PushPayload = {
-    title,
-    body: messageBody,
-    zone: zoneId,
-    url: url ?? "/",
-  };
-
-  let sent = 0;
-  let failed = 0;
-
-  for (const sub of subscriptions) {
-    try {
-      await webPush.sendNotification(
-        {
-          endpoint: (sub as { endpoint: string }).endpoint,
-          keys: {
-            p256dh: (sub as { p256dh: string }).p256dh,
-            auth: (sub as { auth: string }).auth,
-          },
-        },
-        JSON.stringify(payload)
-      );
-      sent++;
-    } catch (err) {
-      failed++;
-      // If subscription is expired/invalid, remove it
-      if ((err as { statusCode?: number }).statusCode === 404 || (err as { statusCode?: number }).statusCode === 410) {
-        await supabase
-          .from("push_subscriptions" as never)
-          .delete()
-          .eq("endpoint" as never, (sub as { endpoint: string }).endpoint);
-      }
-    }
-  }
-
-  return NextResponse.json({ sent, failed, total: subscriptions.length });
+  return NextResponse.json({ sent: result.sent, failed: result.failed, total: result.total });
 }
 
 /**
@@ -168,7 +94,7 @@ export async function POST(request: Request) {
  */
 export async function GET() {
   return NextResponse.json({
-    supported: !!VAPID_PUBLIC_KEY && !!VAPID_PRIVATE_KEY,
-    publicKey: VAPID_PUBLIC_KEY ?? null,
+    supported: !!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && !!process.env.VAPID_PRIVATE_KEY,
+    publicKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? null,
   });
 }

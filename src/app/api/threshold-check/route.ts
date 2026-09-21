@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { isAuthorizedCronRequest } from "@/lib/cron-auth";
+import { sendZonePush } from "@/lib/send-zone-push";
 
 export const dynamic = "force-dynamic";
 
@@ -35,27 +36,21 @@ async function runThresholdCheck(): Promise<NextResponse> {
   let pushSent = 0;
 
   for (const alert of triggeredAlerts) {
-    try {
-      const pushResponse = await fetch(
-        `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/api/push`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            zoneId: alert.zone_id,
-            title: `WeatherWell Alert — ${alert.severity.toUpperCase()}`,
-            body: `Crowd reports indicate ${alert.severity} level flooding in your area.`,
-            url: `/`,
-          }),
-        }
-      );
+    // Called directly rather than over HTTP — see sendZonePush's own doc
+    // comment for why that used to be both a reliability and a security bug.
+    const result = await sendZonePush({
+      zoneId: alert.zone_id,
+      title: `WeatherWell Alert — ${alert.severity.toUpperCase()}`,
+      body: `Crowd reports indicate ${alert.severity} level flooding in your area.`,
+      url: `/`,
+    });
 
-      if (pushResponse.ok) {
-        const { sent } = await pushResponse.json();
-        pushSent += sent ?? 0;
-      }
-    } catch {
-      // Push failure shouldn't block alert creation
+    if (result.ok) {
+      pushSent += result.sent;
+    } else {
+      // The alert itself is already written — a push failure for one zone
+      // must not stop the loop from reaching the rest.
+      console.error(`sendZonePush failed for zone ${alert.zone_id}: ${result.error}`);
     }
   }
 
