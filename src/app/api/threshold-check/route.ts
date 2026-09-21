@@ -1,19 +1,17 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { isAuthorizedCronRequest } from "@/lib/cron-auth";
 
 export const dynamic = "force-dynamic";
 
 /**
- * POST /api/threshold-check
- *
  * Checks all zones for threshold-triggered alerts and sends push notifications.
- * Designed to be called by a cron job (Vercel Cron or external scheduler).
  *
  * Flow:
  * 1. Run check_and_trigger_alerts() to create/update alerts
  * 2. For each triggered alert, send push notifications to zone subscribers
  */
-export async function POST() {
+async function runThresholdCheck(): Promise<NextResponse> {
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -71,13 +69,23 @@ export async function POST() {
 /**
  * GET /api/threshold-check
  *
- * Returns the current configuration (for monitoring/debugging).
+ * Vercel Cron always sends GET, never POST — this was previously a stub
+ * that echoed static config, which meant the daily scheduled run in
+ * vercel.json never actually executed the threshold engine below. GET now
+ * runs the real check; POST is kept as an equivalent manually-triggerable
+ * path. Both require the same cron secret.
  */
-export async function GET() {
-  return NextResponse.json({
-    minReports: 3,
-    windowHours: 6,
-    depthThreshold: "ankle",
-    status: "configured",
-  });
+export async function GET(request: Request) {
+  if (!isAuthorizedCronRequest(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  return runThresholdCheck();
+}
+
+/** POST /api/threshold-check — see GET's doc comment. */
+export async function POST(request: Request) {
+  if (!isAuthorizedCronRequest(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  return runThresholdCheck();
 }

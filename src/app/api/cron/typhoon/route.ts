@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { parseBulletinHtml, categoryLabel, type ParsedBulletin } from "@/lib/pagasa-parser";
+import { parseBulletinHtml, categoryLabel, BulletinParseError, type ParsedBulletin } from "@/lib/pagasa-parser";
+import { isAuthorizedCronRequest } from "@/lib/cron-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +25,11 @@ type SupabaseClient = ReturnType<typeof createClient<any>>;
  * parses cyclone data, and stores in typhoon_tracks.
  * Runs daily on Hobby plan.
  */
-export async function GET() {
+export async function GET(request: Request) {
+  if (!isAuthorizedCronRequest(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const supabase: SupabaseClient = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -54,7 +59,24 @@ export async function GET() {
       return NextResponse.json({ ok: true, log, action: "deactivated_all" });
     }
 
-    const bulletin = parseBulletinHtml(html);
+    let bulletin: ParsedBulletin | null;
+    try {
+      bulletin = parseBulletinHtml(html);
+    } catch (e) {
+      // A BulletinParseError means PAGASA's page structure changed — not
+      // that there's an active cyclone we failed to store. Falling through
+      // to the generic catch below would return HTTP 500 without touching
+      // typhoon_tracks, leaving yesterday's (possibly long-resolved) system
+      // marked active indefinitely. Treat it the same as "no active
+      // cyclone": clear it, and surface the parse failure in the log so
+      // it's visible without silently claiming a real system is active.
+      if (e instanceof BulletinParseError) {
+        logMsg(`Bulletin parse failed (page structure may have changed): ${e.message}`);
+        await deactivateAll(supabase, log);
+        return NextResponse.json({ ok: true, log, action: "deactivated_all", parseError: e.message });
+      }
+      throw e;
+    }
     if (!bulletin) {
       logMsg("No active tropical cyclone detected");
       await deactivateAll(supabase, log);
