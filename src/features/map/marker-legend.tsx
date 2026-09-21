@@ -6,7 +6,6 @@ import {
   ChevronDown,
   ChevronUp,
   Droplet,
-  Landmark,
   MapPin,
   Pill,
   ShoppingBasket,
@@ -14,25 +13,8 @@ import {
 } from "lucide-react";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
-import { ZONE_STATUS_LABEL, SAFE_HEX, type ZoneStatus } from "@/lib/zone-status";
-import { SEVERITY_HEX } from "@/lib/severity";
-import { STATUS_SHAPE_STYLE } from "./status-shape";
+import { OFFICIAL_MARKER_TYPES, OFFICIAL_MARKER_LABEL, OFFICIAL_MARKER_COLOR } from "@/lib/official-markers";
 import type { LocalizedText } from "@/lib/types";
-
-const ZONE_STATUS_ORDER: ZoneStatus[] = ["safe", "cautionary", "dangerous", "hazardous"];
-
-/**
- * Representative colors for the legend's abstract "what does this shape+hue
- * mean" swatches — not tied to any single live alert. Cautionary covers both
- * yellow (Advisory) and orange (Watch) severities on the real map (see
- * getZoneStatusColor); orange is used here as the representative hue.
- */
-const STATUS_SWATCH_COLOR: Record<ZoneStatus, string> = {
-  safe: SAFE_HEX,
-  cautionary: SEVERITY_HEX.orange,
-  dangerous: SEVERITY_HEX.red,
-  hazardous: SEVERITY_HEX.evacuate,
-};
 
 const MARKER_LEGEND_ITEMS: {
   key: string;
@@ -46,15 +28,6 @@ const MARKER_LEGEND_ITEMS: {
   { key: "pharmacy", label: { en: "Pharmacy", fil: "Botika" }, icon: Pill },
   { key: "market", label: { en: "Market", fil: "Palengke" }, icon: ShoppingBasket },
   { key: "water_station", label: { en: "Water refilling station", fil: "Water station" }, icon: Droplet },
-  { key: "barangay_office", label: { en: "Barangay office", fil: "Barangay office" }, icon: Landmark },
-  /**
-   * Community pins are the one citizen-created marker type on the map, and
-   * createCommunityPinMarkerIcon draws them with a dashed border precisely so
-   * they're never mistaken for an official marker. The legend has to teach
-   * that distinction, or the dashed border is just an unexplained visual
-   * difference — so this swatch is outlined-and-dashed against the others'
-   * solid fill, and the label says plainly that pins aren't verified.
-   */
   {
     key: "community_pin",
     label: { en: "Community pin — unverified", fil: "Community pin — hindi pa na-verify" },
@@ -66,24 +39,7 @@ const MARKER_LEGEND_ITEMS: {
 const LEGEND_TITLE: LocalizedText = { en: "Map legend", fil: "Legend ng Mapa" };
 const SEE_MORE: LocalizedText = { en: "See more", fil: "Tingnan pa" };
 const SEE_LESS: LocalizedText = { en: "See less", fil: "Bawasan" };
-
-/**
- * STATUS_SHAPE_STYLE (shared with marker-icons.ts, which interpolates it
- * into a plain HTML string for Leaflet) is authored as raw CSS text. React's
- * `style` prop needs a JS object, so this converts one or more
- * `property: value;` declarations into that shape — kept local to this file
- * since marker-icons.ts never needs the object form.
- */
-function cssTextToStyleObject(cssText: string): Record<string, string> {
-  const style: Record<string, string> = {};
-  for (const declaration of cssText.split(";")) {
-    const [rawProperty, rawValue] = declaration.split(":");
-    if (!rawProperty || !rawValue) continue;
-    const camelProperty = rawProperty.trim().replace(/-([a-z])/g, (_, c) => c.toUpperCase());
-    style[camelProperty] = rawValue.trim();
-  }
-  return style;
-}
+const OFFICIAL_MARKERS_TITLE: LocalizedText = { en: "Official markers", fil: "Official marker" };
 
 /**
  * Compact by design — meant to float as a small overlay inside the map
@@ -97,15 +53,18 @@ export function MarkerLegend() {
   return (
     <div className="w-fit max-w-[200px] space-y-1.5 rounded-md border-2 border-border bg-background/95 p-2 text-xs shadow-md">
       <p className="font-semibold">{t(LEGEND_TITLE, lang)}</p>
+
+      {/* Official marker types */}
       <div className="space-y-1">
-        {ZONE_STATUS_ORDER.map((status) => (
-          <div key={status} className="flex items-center gap-1.5">
+        <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{t(OFFICIAL_MARKERS_TITLE, lang)}</p>
+        {OFFICIAL_MARKER_TYPES.map((type) => (
+          <div key={type} className="flex items-center gap-1.5">
             <span
-              className="h-2.5 w-2.5 shrink-0"
-              style={{ background: STATUS_SWATCH_COLOR[status], ...cssTextToStyleObject(STATUS_SHAPE_STYLE[status]) }}
+              className="h-2.5 w-2.5 shrink-0 rounded-sm"
+              style={{ background: OFFICIAL_MARKER_COLOR[type] }}
               aria-hidden="true"
             />
-            <span>{t(ZONE_STATUS_LABEL[status], lang)}</span>
+            <span>{t(OFFICIAL_MARKER_LABEL[type], lang)}</span>
           </div>
         ))}
       </div>

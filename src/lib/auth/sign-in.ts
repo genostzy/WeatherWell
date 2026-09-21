@@ -59,3 +59,17 @@ export async function sendEmailSignInLink(email: string, next: string): Promise<
   });
   return error ? { ok: false, error: error.message } : { ok: true };
 }
+
+/** Sign in with email + password. */
+export async function signInWithPassword(email: string, password: string): Promise<SignInResult> {
+  const supabase = getBrowserClient();
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
+/** Create a new account with email + password, then sign in. */
+export async function signUpWithPassword(email: string, password: string): Promise<SignInResult> {
+  const supabase = getBrowserClient();
+  const { error } = await supabase.auth.signUp({ email, password });
+  return error ? { ok: false, error: error.message } : { ok: true };
+}

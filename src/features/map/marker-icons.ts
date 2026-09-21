@@ -3,6 +3,8 @@ import type { ZoneStatus } from "@/lib/zone-status";
 import type { POICategory } from "@/lib/types";
 import type { PinStatusTag } from "@/lib/community-pin";
 import { PIN_STATUS_COLOR } from "@/lib/community-pin";
+import type { OfficialMarkerType } from "@/lib/official-markers";
+import { OFFICIAL_MARKER_COLOR } from "@/lib/official-markers";
 import { STATUS_SHAPE_STYLE } from "./status-shape";
 
 /**
@@ -163,5 +165,32 @@ export function createCommunityPinMarkerIcon(statusTag: PinStatusTag, label: str
     html: `<div role="img" aria-label="${escapeHtml(label)}" style="width:24px;height:24px;background:${PIN_STATUS_COLOR[statusTag]};border:2px dashed white;border-radius:50% 50% 50% 0;transform:rotate(45deg);display:flex;align-items:center;justify-content:center;"><span style="transform:rotate(-45deg);display:flex;">${PIN_ICON_SVG}</span></div>`,
     iconSize: [28, 28],
     iconAnchor: [14, 26],
+  });
+}
+
+/**
+ * Official markers placed manually by admins/operators. Solid border + distinct
+ * icon per type — clearly different from the dashed-border community pins.
+ * Uses a hexagon shape to distinguish from the zone-status shapes (circle,
+ * triangle, diamond, octagon).
+ */
+const OFFICIAL_MARKER_ICON_SVG: Record<OfficialMarkerType, string> = {
+  flood: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 16c.6.5 1.2 1 2.5 1C7 17 7 12 12 12c4.5 0 5 5 7.5 5 1.3 0 1.9-.5 2.5-1"/></svg>',
+  road_damage: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19h16"/><path d="M2 14l4-4 4 4 4-4 4 4"/></svg>',
+  blocked: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg>',
+  power_outage: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>',
+  water_issue: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/></svg>',
+  landslide: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m8 3 4 8 5-5 5 15H2L8 3z"/></svg>',
+  other: '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>',
+};
+
+export function createOfficialMarkerIcon(type: OfficialMarkerType, label: string): L.DivIcon {
+  const color = OFFICIAL_MARKER_COLOR[type];
+  const svg = OFFICIAL_MARKER_ICON_SVG[type];
+  return L.divIcon({
+    className: `official-marker official-marker--${type}`,
+    html: `<div role="img" aria-label="${escapeHtml(label)}" style="width:26px;height:26px;background:${color};border:2.5px solid white;border-radius:6px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,0.4);">${svg}</div>`,
+    iconSize: [30, 30],
+    iconAnchor: [15, 15],
   });
 }

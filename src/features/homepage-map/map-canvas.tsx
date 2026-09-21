@@ -4,20 +4,24 @@ import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { Marker, Polyline, Popup, Tooltip, useMapEvents, useMap } from "react-leaflet";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
-import { getZoneStatus, getZoneStatusColor, ZONE_STATUS_LABEL } from "@/lib/zone-status";
-import { useAlerts } from "@/lib/alerts-store";
 import { useCommunityPins, voteOnPin, hasVotedOnPin, isOwnPin, type CommunityPin } from "@/lib/community-pins";
 import { useSessionUserId } from "@/lib/auth/anonymous-session";
 import { PIN_STATUS_LABEL } from "@/lib/community-pin";
+import {
+  useOfficialMarkers,
+  OFFICIAL_MARKER_TYPES,
+  OFFICIAL_MARKER_LABEL,
+  type OfficialMarkerType,
+} from "@/lib/official-markers";
 import { MapShell } from "@/features/map/map-shell";
 import { HazardBackdropLayer } from "@/features/map/hazard-backdrop-layer";
 import { PoiMarkerLayer } from "@/features/map/poi-marker-layer";
 import {
-  createStatusMarkerIcon,
   createEvacuationMarkerIcon,
   createCommunityPinMarkerIcon,
   createUserLocationIcon,
   createClusteredEvacMarkerIcon,
+  createOfficialMarkerIcon,
 } from "@/features/map/marker-icons";
 import { MarkerLegend } from "@/features/map/marker-legend";
 import { HazardTypeSelector } from "@/features/map/hazard-type-selector";
@@ -26,10 +30,6 @@ import type { HazardType, LocalizedText, Zone } from "@/lib/types";
 const MAP_ARIA_LABEL: LocalizedText = {
   en: "Interactive flood zone map",
   fil: "Interactibong mapa ng flood zone",
-};
-const VIEW_EVACUATION_DETAILS: LocalizedText = {
-  en: "View evacuation details",
-  fil: "Tingnan ang detalye ng evacuation",
 };
 const UNVERIFIED_REPORT: LocalizedText = {
   en: "Unverified community report",
@@ -50,11 +50,18 @@ const LOCATE_ME: LocalizedText = { en: "Locate me", fil: "Hanapin ako" };
 const YOUR_LOCATION: LocalizedText = { en: "Your location", fil: "Iyong lokasyon" };
 const SEARCH_PLACEHOLDER: LocalizedText = { en: "Search zone…", fil: "Maghanap ng zone…" };
 const LAYERS_TITLE: LocalizedText = { en: "Layers", fil: "Mga Layer" };
-const LAYER_STATUS: LocalizedText = { en: "Status", fil: "Status" };
 const LAYER_EVAC: LocalizedText = { en: "Evacuation", fil: "Evacuation" };
 const LAYER_POI: LocalizedText = { en: "POIs", fil: "Mga POI" };
 const LAYER_PINS: LocalizedText = { en: "Pins", fil: "Mga Pin" };
 const LAYER_HAZARD: LocalizedText = { en: "Hazards", fil: "Mga Hazard" };
+const LAYER_OFFICIAL: LocalizedText = { en: "Official", fil: "Official" };
+const ADD_MARKER: LocalizedText = { en: "Add marker", fil: "Magdagdag ng marker" };
+const CANCEL: LocalizedText = { en: "Cancel", fil: "Kanselahin" };
+const MARKER_TYPE_LABEL: LocalizedText = { en: "Marker type", fil: "Uri ng marker" };
+const CAPTION_PLACEHOLDER: LocalizedText = { en: "Add a note (optional)", fil: "Magdagdag ng tala (opsyonal)" };
+const PLACE_MARKER: LocalizedText = { en: "Tap map to place", fil: "I-tap ang mapa" };
+const SAVE: LocalizedText = { en: "Save", fil: "I-save" };
+const DELETE: LocalizedText = { en: "Delete", fil: "Burahin" };
 const NEAREST_EVAC_LABEL: LocalizedText = { en: "Nearest evac", fil: "Pinakamalapit na evac" };
 const EVAC_FULL: LocalizedText = { en: "Full", fil: "Puno" };
 const EVAC_AVAILABLE: LocalizedText = { en: "Available", fil: "May espasyo" };
@@ -146,7 +153,6 @@ export function MapCanvas({
   routeZone,
   routeHazard,
   effectiveRoutePolyline,
-  onSelectZone,
   isPlacingPin = false,
   onMapClickForPin,
   onEditPin,
@@ -160,7 +166,6 @@ export function MapCanvas({
   routeZone: Zone | null;
   routeHazard: boolean;
   effectiveRoutePolyline: [number, number][];
-  onSelectZone: (zoneId: string) => void;
   isPlacingPin?: boolean;
   onMapClickForPin?: (lat: number, lng: number) => void;
   onEditPin?: (pin: CommunityPin) => void;
@@ -171,25 +176,23 @@ export function MapCanvas({
   const { lang } = useLanguage();
   const communityPins = useCommunityPins();
   const userId = useSessionUserId();
-  const alerts = useAlerts();
-  const alertMap = useMemo(() => {
-    const m = new Map<string, typeof alerts[0]>();
-    for (const a of alerts) {
-      if (a.isActive) m.set(a.zoneId, a);
-    }
-    return m;
-  }, [alerts]);
   const initialCenter: [number, number] = [zones[0].lat, zones[0].lng];
   const [flyTarget, setFlyTarget] = useState<{ lat: number; lng: number } | null>(null);
   const [searchTarget, setSearchTarget] = useState<{ lat: number; lng: number } | null>(null);
   const [zoom, setZoom] = useState(14);
   const [viewCenter, setViewCenter] = useState<[number, number]>(initialCenter);
 
-  const [showStatus, setShowStatus] = useState(true);
   const [showEvac, setShowEvac] = useState(true);
   const [showPoi, setShowPoi] = useState(true);
   const [showPins, setShowPins] = useState(true);
   const [showHazard, setShowHazard] = useState(true);
+  const [showOfficial, setShowOfficial] = useState(true);
+
+  const officialMarkers = useOfficialMarkers();
+  const [isPlacingOfficial, setIsPlacingOfficial] = useState(false);
+  const [pendingOfficialType, setPendingOfficialType] = useState<OfficialMarkerType>("flood");
+  const [pendingOfficialCaption, setPendingOfficialCaption] = useState("");
+  const [pendingOfficialPos, setPendingOfficialPos] = useState<{ lat: number; lng: number } | null>(null);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Zone[]>([]);
@@ -370,11 +373,11 @@ export function MapCanvas({
               </summary>
               <div className="mt-1 space-y-1 rounded-lg border-2 border-border bg-background/95 p-2 shadow-md backdrop-blur">
                 {[
-                  { label: t(LAYER_STATUS, lang), value: showStatus, setter: setShowStatus },
                   { label: t(LAYER_EVAC, lang), value: showEvac, setter: setShowEvac },
                   { label: t(LAYER_POI, lang), value: showPoi, setter: setShowPoi },
                   { label: t(LAYER_PINS, lang), value: showPins, setter: setShowPins },
                   { label: t(LAYER_HAZARD, lang), value: showHazard, setter: setShowHazard },
+                  { label: t(LAYER_OFFICIAL, lang), value: showOfficial, setter: setShowOfficial },
                 ].map((layer) => (
                   <label key={layer.label} className="flex cursor-pointer items-center gap-2 text-xs">
                     <input
@@ -432,9 +435,90 @@ export function MapCanvas({
           <div className="pointer-events-auto absolute bottom-2 left-2">
             <HazardTypeSelector value={hazardType} onChange={onHazardTypeChange} />
           </div>
+
+          {/* Add Official Marker button */}
+          <div className="pointer-events-auto absolute bottom-2 right-2">
+            {isPlacingOfficial ? (
+              <div className="space-y-2 rounded-lg border-2 border-border bg-background/95 p-2 shadow-md backdrop-blur">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-medium text-muted-foreground">{t(MARKER_TYPE_LABEL, lang)}</label>
+                  <select
+                    value={pendingOfficialType}
+                    onChange={(e) => setPendingOfficialType(e.target.value as OfficialMarkerType)}
+                    className="w-full rounded-md border-2 border-border bg-background px-2 py-1 text-xs"
+                  >
+                    {OFFICIAL_MARKER_TYPES.map((type) => (
+                      <option key={type} value={type}>{t(OFFICIAL_MARKER_LABEL[type], lang)}</option>
+                    ))}
+                  </select>
+                </div>
+                <input
+                  type="text"
+                  value={pendingOfficialCaption}
+                  onChange={(e) => setPendingOfficialCaption(e.target.value)}
+                  placeholder={t(CAPTION_PLACEHOLDER, lang)}
+                  className="w-full rounded-md border-2 border-border bg-background px-2 py-1 text-xs"
+                />
+                {pendingOfficialPos && (
+                  <p className="text-[10px] text-muted-foreground">
+                    {pendingOfficialPos.lat.toFixed(5)}, {pendingOfficialPos.lng.toFixed(5)}
+                  </p>
+                )}
+                <div className="flex gap-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (pendingOfficialPos) {
+                        officialMarkers.addMarker(
+                          pendingOfficialPos.lat,
+                          pendingOfficialPos.lng,
+                          pendingOfficialType,
+                          pendingOfficialCaption,
+                          userId ?? "anonymous",
+                        );
+                        setIsPlacingOfficial(false);
+                        setPendingOfficialCaption("");
+                        setPendingOfficialPos(null);
+                      }
+                    }}
+                    disabled={!pendingOfficialPos}
+                    className="flex-1 rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
+                  >
+                    {t(SAVE, lang)}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsPlacingOfficial(false);
+                      setPendingOfficialCaption("");
+                      setPendingOfficialPos(null);
+                    }}
+                    className="flex-1 rounded-md border-2 border-border px-2 py-1 text-xs font-medium"
+                  >
+                    {t(CANCEL, lang)}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setIsPlacingOfficial(true)}
+                className="flex items-center gap-1.5 rounded-lg border-2 border-border bg-background/95 px-2.5 py-1.5 text-xs font-medium shadow-md backdrop-blur transition-colors hover:bg-muted/50"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>
+                {t(ADD_MARKER, lang)}
+              </button>
+            )}
+          </div>
+
           {isPlacingPin && (
             <div className="pointer-events-none absolute top-2 left-1/2 -translate-x-1/2 rounded-md border-2 border-border bg-background/95 px-3 py-1 text-xs font-medium shadow-md">
               {t(TAP_MAP_TO_PLACE, lang)}
+            </div>
+          )}
+          {isPlacingOfficial && (
+            <div className="pointer-events-none absolute top-2 left-1/2 -translate-x-1/2 rounded-md border-2 border-border bg-background/95 px-3 py-1 text-xs font-medium shadow-md">
+              {t(PLACE_MARKER, lang)}
             </div>
           )}
         </>
@@ -443,28 +527,37 @@ export function MapCanvas({
       {flyTarget && <FlyToUser position={flyTarget} />}
       {searchTarget && <FlyToTarget target={searchTarget} />}
       {isPlacingPin && onMapClickForPin && <PinPlacer onPlace={onMapClickForPin} />}
+      {isPlacingOfficial && (
+        <PinPlacer
+          onPlace={(lat, lng) => setPendingOfficialPos({ lat, lng })}
+        />
+      )}
       <ViewportTracker onZoom={setZoom} onCenter={setViewCenter} />
 
       {showHazard && <HazardBackdropLayer zones={visibleZones} hazardType={hazardType} />}
 
-        {showStatus && visibleZones.map((zone) => {
-          const alert = alertMap.get(zone.id);
-          const status = getZoneStatus(alert);
-          const color = getZoneStatusColor(alert);
-          const label = `${zone.name} — ${t(ZONE_STATUS_LABEL[status], lang)}`;
+        {showOfficial && officialMarkers.markers.map((marker) => {
+          const label = `${t(OFFICIAL_MARKER_LABEL[marker.type], lang)}${marker.caption ? ` — ${marker.caption}` : ""}`;
           return (
             <Marker
-              key={`status-${zone.id}`}
-              position={[zone.lat, zone.lng]}
-              icon={createStatusMarkerIcon(status, color, label, zoom >= 16 && status !== "safe")}
-              eventHandlers={{ click: () => onSelectZone(zone.id) }}
+              key={marker.id}
+              position={[marker.lat, marker.lng]}
+              icon={createOfficialMarkerIcon(marker.type, label)}
             >
               <Popup>
-                <div className="space-y-1">
-                  <p className="font-medium">{label}</p>
-                  <a href="/evacuation" className="text-sm underline">
-                    {t(VIEW_EVACUATION_DETAILS, lang)}
-                  </a>
+                <div className="space-y-1.5 text-sm">
+                  <p className="font-medium">{t(OFFICIAL_MARKER_LABEL[marker.type], lang)}</p>
+                  {marker.caption && <p className="text-xs text-muted-foreground">{marker.caption}</p>}
+                  <p className="text-[10px] text-muted-foreground">
+                    Placed {new Date(marker.placedAt).toLocaleTimeString()}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => officialMarkers.removeMarker(marker.id)}
+                    className="rounded border-2 border-severity-red px-2 py-0.5 text-xs font-medium text-severity-red"
+                  >
+                    {t(DELETE, lang)}
+                  </button>
                 </div>
               </Popup>
             </Marker>

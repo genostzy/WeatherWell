@@ -61,6 +61,7 @@ describe("SignInPanel", () => {
   it("calls sendEmailSignInLink(email, next) from the email button and shows the check-your-email line", async () => {
     render(<SignInPanel next="/admin" />);
 
+    fireEvent.click(screen.getByRole("button", { name: "Use magic link instead" }));
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "official@example.com" } });
     fireEvent.click(screen.getByRole("button", { name: "Email me a sign-in link" }));
 

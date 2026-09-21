@@ -41,8 +41,16 @@ export function MapShell({
       <MapContainer
         center={center}
         zoom={14}
+        minZoom={5}
+        maxZoom={18}
         scrollWheelZoom={true}
         preferCanvas={preferCanvas}
+        maxBounds={[
+          [4, 116],
+          [21.5, 127],
+        ]}
+        maxBoundsViscosity={0.9}
+        worldCopyJump={true}
         style={{ height: "100%", width: "100%" }}
       >
         <TileLayer

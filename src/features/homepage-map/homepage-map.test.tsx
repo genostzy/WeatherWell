@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { lazy, Suspense, type ComponentType } from "react";
-import { screen, fireEvent } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HomepageMap } from "./homepage-map";
 import { renderWithData, FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
@@ -68,11 +68,9 @@ describe("HomepageMap", () => {
 
     renderWithData(<HomepageMap zones={FIXTURE_REFERENCE_DATA.zones} />, { lang: "fil" });
 
-    // Clicking the zone-1 status marker selects it as the active evacuation route.
-    fireEvent.click(await screen.findByRole("img", { name: /Barangay Nilombot, Mapandan/i }));
-
+    // zone-1 is the default route (first zone), so the compass should show.
     // Filipino must show the localized word, not the bare English "N" code.
-    expect(screen.getByText(/Hilaga/)).toBeInTheDocument();
+    expect(await screen.findByText(/Hilaga/)).toBeInTheDocument();
     expect(screen.queryByText(/\bN\b/)).not.toBeInTheDocument();
   });
 

@@ -74,7 +74,6 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
     routeHazard,
     notice,
     effectiveRoutePolyline,
-    handleSelectZone,
     handleFindSafeArea,
     handleFindSafeEvacuationCenter,
   } = useRouteFinding(zones);
@@ -125,7 +124,6 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
           routeZone={routeZone}
           routeHazard={routeHazard}
           effectiveRoutePolyline={effectiveRoutePolyline}
-          onSelectZone={handleSelectZone}
           isPlacingPin={isPlacingPin}
           onMapClickForPin={handleMapClickForPin}
           onEditPin={setEditingPin}

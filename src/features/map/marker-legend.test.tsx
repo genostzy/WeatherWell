@@ -4,15 +4,18 @@ import userEvent from "@testing-library/user-event";
 import { MarkerLegend } from "./marker-legend";
 
 describe("MarkerLegend", () => {
-  it("explains all four zone status labels up front", () => {
+  it("shows official marker types up front", () => {
     render(<MarkerLegend />);
-    expect(screen.getByText("Safe")).toBeInTheDocument();
-    expect(screen.getByText("Cautionary")).toBeInTheDocument();
-    expect(screen.getByText("Dangerous")).toBeInTheDocument();
-    expect(screen.getByText("Hazardous")).toBeInTheDocument();
+    expect(screen.getByText(/flooded area/i)).toBeInTheDocument();
+    expect(screen.getByText(/road damage/i)).toBeInTheDocument();
+    expect(screen.getByText(/blocked passage/i)).toBeInTheDocument();
+    expect(screen.getByText(/power outage/i)).toBeInTheDocument();
+    expect(screen.getByText(/water supply issue/i)).toBeInTheDocument();
+    expect(screen.getByText(/landslide/i)).toBeInTheDocument();
+    expect(screen.getByText(/other hazard/i)).toBeInTheDocument();
   });
 
-  it("hides the marker-type icons behind a collapsed 'See more' toggle", () => {
+  it("hides the POI and community pin icons behind a collapsed 'See more' toggle", () => {
     render(<MarkerLegend />);
     expect(screen.queryByText(/evacuation center/i)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /see more/i })).toHaveAttribute(
@@ -21,7 +24,7 @@ describe("MarkerLegend", () => {
     );
   });
 
-  it("reveals the evacuation and essential-service marker types on toggle", async () => {
+  it("reveals the evacuation, POI, and community pin marker types on toggle", async () => {
     const user = userEvent.setup();
     render(<MarkerLegend />);
 
@@ -31,8 +34,6 @@ describe("MarkerLegend", () => {
     expect(screen.getByText(/health center/i)).toBeInTheDocument();
     expect(screen.getByText(/pharmacy/i)).toBeInTheDocument();
     expect(screen.getByText(/market/i)).toBeInTheDocument();
-    expect(screen.getByText(/water/i)).toBeInTheDocument();
-    expect(screen.getByText(/barangay office/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /see less/i })).toHaveAttribute(
       "aria-expanded",
       "true"
@@ -45,8 +46,6 @@ describe("MarkerLegend", () => {
 
     await user.click(screen.getByRole("button", { name: /see more/i }));
 
-    // Pins are the only citizen-created marker on the map; the legend has to
-    // say so, or their dashed border is an unexplained visual difference.
     expect(screen.getByText(/community pin/i)).toBeInTheDocument();
     expect(screen.getByText(/unverified/i)).toBeInTheDocument();
   });
