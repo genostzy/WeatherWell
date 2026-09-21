@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Marker, Polyline, Popup, useMapEvents } from "react-leaflet";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
@@ -28,6 +28,7 @@ import {
 } from "@/lib/official-markers";
 import { useSessionUserId } from "@/lib/auth/anonymous-session";
 import { MapShell } from "@/features/map/map-shell";
+import { ViewportTracker, viewportRadiusDeg, viewportMarkerCap } from "@/features/map/viewport-tracker";
 import { HazardBackdropLayer } from "@/features/map/hazard-backdrop-layer";
 import { PoiMarkerLayer } from "@/features/map/poi-marker-layer";
 import { MarkerLegend } from "@/features/map/marker-legend";
@@ -130,6 +131,27 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
   const [pendingOfficialPos, setPendingOfficialPos] = useState<{ lat: number; lng: number } | null>(null);
 
   const center: [number, number] = [zones[0].lat, zones[0].lng];
+  const [zoom, setZoom] = useState(14);
+  const [viewCenter, setViewCenter] = useState<[number, number]>(center);
+
+  /**
+   * Viewport-culled zones for anything rendered one-marker/circle-per-zone
+   * (status markers, evac markers, the hazard backdrop, POIs). `zones` here
+   * is the FULL reference-data set — same array the resident map receives —
+   * so without this an official's map would try to place a Leaflet marker
+   * for every one of V1's ~42k barangays on every render. `zoneById` below
+   * stays on the full list: a community pin or cascade line has to resolve
+   * its own zone regardless of what's currently in view.
+   */
+  const radiusDeg = viewportRadiusDeg(zoom);
+  const markerCap = viewportMarkerCap(zoom);
+  const visibleZones = useMemo(() => {
+    const filtered = zones.filter(
+      (z) => Math.abs(z.lat - viewCenter[0]) < radiusDeg && Math.abs(z.lng - viewCenter[1]) < radiusDeg
+    );
+    return filtered.slice(0, markerCap);
+  }, [zones, viewCenter, radiusDeg, markerCap]);
+
   const zoneById = new Map(zones.map((zone) => [zone.id, zone]));
 
   /** The risk score's cascade factor must follow the zone's actual alert. */
@@ -258,8 +280,10 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
         </>
       }
     >
-      {layers.hazard && <HazardBackdropLayer zones={zones} hazardType={hazardType} />}
-      {layers.pois && <PoiMarkerLayer zones={zones} />}
+      <ViewportTracker onZoom={setZoom} onCenter={setViewCenter} />
+
+      {layers.hazard && <HazardBackdropLayer zones={visibleZones} hazardType={hazardType} />}
+      {layers.pois && <PoiMarkerLayer zones={visibleZones} />}
 
       {isPlacingOfficial && (
         <OfficialPinPlacer
@@ -287,10 +311,12 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
           );
         })}
 
-      {zones.map((zone) => {
+      {visibleZones.map((zone) => {
         const alert = baseAlertFor(zone.id);
         const status = getZoneStatus(alert);
         const label = `${zone.name} — ${t(ZONE_STATUS_LABEL[status], lang)}`;
+        // The FULL zones list, not visibleZones: a zone's risk score depends
+        // on its cascade neighbours, who may sit just outside the viewport.
         const riskScore = computeZoneState(
           buildZoneInputForZone(zone, zones, hasEffectiveAlert, hazards)
         ).riskScore;
@@ -315,7 +341,7 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
         );
       })}
 
-      {zones.map((zone) => (
+      {visibleZones.map((zone) => (
         <Marker
           key={`evac-${zone.id}`}
           position={[zone.evacuationCenterLat, zone.evacuationCenterLng]}

@@ -10,6 +10,7 @@ import { useCommunityPins, voteOnPin, hasVotedOnPin, isOwnPin, type CommunityPin
 import { useSessionUserId } from "@/lib/auth/anonymous-session";
 import { PIN_STATUS_LABEL } from "@/lib/community-pin";
 import { MapShell } from "@/features/map/map-shell";
+import { ViewportTracker, viewportRadiusDeg, viewportMarkerCap } from "@/features/map/viewport-tracker";
 import { HazardBackdropLayer } from "@/features/map/hazard-backdrop-layer";
 import { PoiMarkerLayer } from "@/features/map/poi-marker-layer";
 import {
@@ -84,41 +85,6 @@ function FlyToTarget({ target }: { target: { lat: number; lng: number } | null }
   useEffect(() => {
     if (target) map.flyTo([target.lat, target.lng], 16, { duration: 1.5 });
   }, [map, target]);
-  return null;
-}
-
-/**
- * Tracks the current map zoom level and viewport center with throttling.
- * Fires at most once every 200ms to avoid re-render storms during panning.
- */
-function ViewportTracker({
-  onZoom,
-  onCenter,
-}: {
-  onZoom: (z: number) => void;
-  onCenter: (c: [number, number]) => void;
-}) {
-  const map = useMap();
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    const update = () => {
-      if (timerRef.current) return;
-      timerRef.current = setTimeout(() => {
-        timerRef.current = null;
-        onZoom(map.getZoom());
-        const c = map.getCenter();
-        onCenter([c.lat, c.lng]);
-      }, 200);
-    };
-    onZoom(map.getZoom());
-    const c = map.getCenter();
-    onCenter([c.lat, c.lng]);
-    map.on("zoomend moveend", update);
-    return () => {
-      map.off("zoomend moveend", update);
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, [map, onZoom, onCenter]);
   return null;
 }
 
@@ -229,12 +195,10 @@ export function MapCanvas({
   /**
    * Zoom-adaptive marker culling centred on the actual viewport (not zones[0]).
    * Markers now follow the user's pan and never disappear when zoomed in.
-   *
-   * Radius: 0.02° (~2 km) at zoom 10 → 0.25° (~25 km) at zoom 15+.
-   * Cap:    20 markers at zoom ≤11 → 500 at zoom 14+.
+   * Shared with the admin map's own culling — see viewport-tracker.tsx.
    */
-  const radiusDeg = Math.min(0.25, 0.004 * Math.pow(2, Math.max(zoom - 10, 0)));
-  const markerCap = zoom <= 11 ? 20 : zoom <= 12 ? 60 : zoom <= 13 ? 150 : 500;
+  const radiusDeg = viewportRadiusDeg(zoom);
+  const markerCap = viewportMarkerCap(zoom);
 
   const visibleZones = useMemo(() => {
     const filtered = zones.filter(

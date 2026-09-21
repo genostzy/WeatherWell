@@ -447,3 +447,29 @@ describe("AdminMapCanvas with no hazard data (I3)", () => {
     expect(screen.getByText(/risk score/i).textContent).toMatch(/risk score: \d+\/100/i);
   });
 });
+
+describe("AdminMapCanvas viewport culling", () => {
+  // The reference data holds every zone nationwide (~42k at V1's real
+  // scale), the same array the resident map receives — without culling,
+  // AdminMapCanvas tried to place a status marker and an evac marker for
+  // every one of them on every render.
+  const farAwayZone = {
+    ...zone,
+    id: "zone-far-away",
+    name: "Barangay Far Away",
+    // ~370km from the fixture zones (all within ~0.1° of each other,
+    // comfortably inside even the widest culling radius of 0.25°).
+    lat: zone.lat + 3.3,
+    lng: zone.lng,
+    evacuationCenterName: "Far Away Evacuation Center",
+  };
+
+  it("renders a marker for a zone inside the viewport but not one ~370km away", () => {
+    renderWithData(<AdminMapCanvas zones={[...FIXTURE_REFERENCE_DATA.zones, farAwayZone]} />);
+
+    expect(screen.getByRole("img", { name: new RegExp(zone.name, "i") })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: new RegExp(zone.evacuationCenterName, "i") })).toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: /Barangay Far Away/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: /Far Away Evacuation Center/i })).not.toBeInTheDocument();
+  });
+});
