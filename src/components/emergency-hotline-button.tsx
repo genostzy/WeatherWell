@@ -24,7 +24,7 @@ export function EmergencyHotlineButton({ hotlineNumber }: { hotlineNumber: strin
         <a
           href={`tel:${hotlineNumber}`}
           aria-label={t(CALL_HOTLINE, lang)}
-          className="fixed bottom-4 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full border-2 border-white bg-severity-red text-white shadow-lg"
+          className="fixed bottom-[4.5rem] right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full border-2 border-white bg-severity-red text-white shadow-lg lg:bottom-4"
         >
           <Phone className="h-6 w-6" aria-hidden="true" />
         </a>

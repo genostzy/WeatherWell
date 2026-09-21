@@ -43,10 +43,6 @@ const EDIT_PIN: LocalizedText = { en: "Edit", fil: "I-edit" };
 const DELETE_PIN: LocalizedText = { en: "Delete", fil: "Burahin" };
 const YOUR_PIN: LocalizedText = { en: "Your pin", fil: "Iyong pin" };
 const VIEW_PHOTO: LocalizedText = { en: "View full photo", fil: "Tingnan ang buong larawan" };
-const TAP_MAP_TO_PLACE: LocalizedText = {
-  en: "Tap the map to drop your pin",
-  fil: "Pindutin ang mapa para ilagay ang pin",
-};
 const LOCATE_ME: LocalizedText = { en: "Locate me", fil: "Hanapin ako" };
 const YOUR_LOCATION: LocalizedText = { en: "Your location", fil: "Iyong lokasyon" };
 const SEARCH_PLACEHOLDER: LocalizedText = { en: "Search zone…", fil: "Maghanap ng zone…" };
@@ -396,11 +392,6 @@ export function MapCanvas({
           <div className="pointer-events-auto absolute bottom-2 left-2">
             <HazardTypeSelector value={hazardType} onChange={onHazardTypeChange} />
           </div>
-          {isPlacingPin && (
-            <div className="pointer-events-none absolute top-2 left-1/2 -translate-x-1/2 rounded-md border-2 border-border bg-background/95 px-3 py-1 text-xs font-medium shadow-md">
-              {t(TAP_MAP_TO_PLACE, lang)}
-            </div>
-          )}
         </>
       }
     >

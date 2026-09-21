@@ -46,7 +46,7 @@ export function HazardTypeSelector({
     <RadioGroup
       value={value}
       onValueChange={(v) => onChange(v as HazardType)}
-      className="flex w-auto flex-col gap-2"
+      className="flex w-auto flex-col gap-1"
       aria-label={t(HAZARD_TYPE_SELECTOR_LABEL, lang)}
     >
       {HAZARD_TYPE_ORDER.map((type) => {

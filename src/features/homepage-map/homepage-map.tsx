@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import dynamic from "next/dynamic";
-import { Button } from "@/components/ui/button";
+import { ShieldCheck, Building2, Droplet, X } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
@@ -40,6 +40,10 @@ const FIND_SAFE_EVACUATION_CENTER: LocalizedText = {
 };
 const ADD_FLOOD_PIN: LocalizedText = { en: "Add flood pin", fil: "Magdagdag ng flood pin" };
 const CANCEL_ADD_PIN: LocalizedText = { en: "Cancel adding pin", fil: "Kanselahin ang pagdagdag ng pin" };
+const TAP_MAP_TO_PLACE: LocalizedText = {
+  en: "Tap the map to drop your pin",
+  fil: "Pindutin ang mapa para ilagay ang pin",
+};
 const PIN_DIALOG_LABEL: LocalizedText = { en: "Flood pin details", fil: "Detalye ng flood pin" };
 const CLOSE_DIALOG: LocalizedText = { en: "Close", fil: "Isara" };
 const DELETE_PIN_TITLE: LocalizedText = { en: "Delete this pin?", fil: "Burahin ang pin na ito?" };
@@ -118,6 +122,11 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
 
       {/* Map — desktop: left column. Mobile: below actions. */}
       <div className="order-last lg:order-first lg:col-start-1 lg:row-span-4">
+        {isPlacingPin && (
+          <div className="mb-2 rounded-md border-2 border-border bg-muted/50 px-3 py-1.5 text-center text-xs font-medium">
+            {t(TAP_MAP_TO_PLACE, lang)}
+          </div>
+        )}
         <MapCanvas
           zones={zones}
           hazardType={hazardType}
@@ -138,6 +147,46 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
       {/* Sidebar — desktop: right column. Mobile: above map. */}
       <div className="order-first lg:order-none flex flex-col gap-2 overflow-hidden sm:gap-3 lg:col-start-2 lg:row-span-4 lg:gap-4">
         <PersonalStatusHeadline zone={zones[0]} />
+
+        {/* Quick actions — primary, placed right after status so they're seen first */}
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={handleFindSafeArea}
+            className="flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-border px-3 py-3 text-center outline-none transition-colors hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            <ShieldCheck aria-hidden="true" className="h-5 w-5 shrink-0" />
+            <span className="text-xs leading-tight font-medium">{t(FIND_SAFE_AREA, lang)}</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleFindSafeEvacuationCenter}
+            className="flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-border px-3 py-3 text-center outline-none transition-colors hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            <Building2 aria-hidden="true" className="h-5 w-5 shrink-0" />
+            <span className="text-xs leading-tight font-medium">
+              {t(FIND_SAFE_EVACUATION_CENTER, lang)}
+            </span>
+          </button>
+          <button
+            type="button"
+            aria-pressed={isPlacingPin}
+            onClick={() => setIsPlacingPin((v) => !v)}
+            className={`col-span-2 flex items-center justify-center gap-2 rounded-xl border-2 px-3 py-2.5 text-sm font-medium outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 ${
+              isPlacingPin
+                ? "border-primary bg-primary text-primary-foreground hover:bg-primary/80"
+                : "border-border hover:bg-muted/50"
+            }`}
+          >
+            {isPlacingPin ? (
+              <X aria-hidden="true" className="h-4 w-4 shrink-0" />
+            ) : (
+              <Droplet aria-hidden="true" className="h-4 w-4 shrink-0" />
+            )}
+            {t(isPlacingPin ? CANCEL_ADD_PIN : ADD_FLOOD_PIN, lang)}
+          </button>
+        </div>
+
         <QuickStats />
 
         {/* Weather + forecast — collapsible, lower priority */}
@@ -165,24 +214,6 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
           </div>
         )}
 
-        {/* Quick actions — compact, inline */}
-        <div className="flex flex-wrap gap-1.5">
-          <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={handleFindSafeArea}>
-            {t(FIND_SAFE_AREA, lang)}
-          </Button>
-          <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={handleFindSafeEvacuationCenter}>
-            {t(FIND_SAFE_EVACUATION_CENTER, lang)}
-          </Button>
-          <Button
-            type="button"
-            variant={isPlacingPin ? "default" : "outline"}
-            size="sm"
-            className="h-7 text-xs"
-            onClick={() => setIsPlacingPin((v) => !v)}
-          >
-            {t(isPlacingPin ? CANCEL_ADD_PIN : ADD_FLOOD_PIN, lang)}
-          </Button>
-        </div>
       </div>
 
       {/* Dialogs — both open over the map */}
