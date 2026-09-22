@@ -5,6 +5,8 @@ import type { PinStatusTag } from "@/lib/community-pin";
 import { PIN_STATUS_COLOR } from "@/lib/community-pin";
 import type { OfficialMarkerType } from "@/lib/official-markers";
 import { OFFICIAL_MARKER_COLOR } from "@/lib/official-markers";
+import type { Severity } from "@/lib/severity";
+import { SEVERITY_HEX } from "@/lib/severity";
 import { STATUS_SHAPE_STYLE } from "./status-shape";
 
 /**
@@ -66,6 +68,10 @@ const POI_ICON_SVG: Record<POICategory, string> = {
     '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-droplet" aria-hidden="true"><path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"></path></svg>',
   barangay_office:
     '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-landmark" aria-hidden="true"><path d="M10 18v-7"></path><path d="M11.119 2.205a2 2 0 0 1 1.762 0l7.84 3.846A.5.5 0 0 1 20.5 7h-17a.5.5 0 0 1-.22-.949z"></path><path d="M14 18v-7"></path><path d="M18 18v-7"></path><path d="M3 22h18"></path><path d="M6 18v-7"></path></svg>',
+  police_station:
+    '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-shield" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path></svg>',
+  fire_station:
+    '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-flame" aria-hidden="true"><path d="M12 3q1 4 4 6.5t3 5.5a1 1 0 0 1-14 0 5 5 0 0 1 1-3 1 1 0 0 0 5 0c0-2-1.5-3-1.5-5q0-2 2.5-4"></path></svg>',
 };
 
 const EVACUATION_ICON_SVG =
@@ -77,6 +83,8 @@ const POI_BG_COLOR: Record<POICategory, string> = {
   market: "#d97706",
   water_station: "#2563eb",
   barangay_office: "#6b7280",
+  police_station: "#1e3a8a",
+  fire_station: "#ea580c",
 };
 
 export function createPoiMarkerIcon(category: POICategory, label: string): L.DivIcon {
@@ -84,6 +92,25 @@ export function createPoiMarkerIcon(category: POICategory, label: string): L.Div
   return L.divIcon({
     className: `poi-marker poi-marker--${category}`,
     html: `<div role="img" aria-label="${escapeHtml(label)}" style="width:24px;height:24px;background:${bg};border:2px solid white;border-radius:6px;display:flex;align-items:center;justify-content:center;color:white;font-size:12px;">${POI_ICON_SVG[category]}</div>`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+  });
+}
+
+const HISTORICAL_EVENT_ICON_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-history" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path><path d="M12 7v5l4 2"></path></svg>';
+
+/**
+ * Rounded-square like createPoiMarkerIcon (a point of information, not a
+ * live zone status — those are the shapes in STATUS_SHAPE_STYLE, and a past
+ * event must never be mistaken for one of them), colored by severity so it
+ * still reads against the same scale the rest of the app uses.
+ */
+export function createHistoricalEventMarkerIcon(severity: Severity, label: string): L.DivIcon {
+  const bg = SEVERITY_HEX[severity];
+  return L.divIcon({
+    className: `historical-event-marker historical-event-marker--${severity}`,
+    html: `<div role="img" aria-label="${escapeHtml(label)}" style="width:24px;height:24px;background:${bg};border:2px solid white;border-radius:6px;display:flex;align-items:center;justify-content:center;color:white;font-size:12px;opacity:0.85;">${HISTORICAL_EVENT_ICON_SVG}</div>`,
     iconSize: [28, 28],
     iconAnchor: [14, 14],
   });

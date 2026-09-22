@@ -1,4 +1,4 @@
-﻿/**
+/**
  * GENERATED FILE — do not hand-edit.
  *
  * Produced by the Supabase MCP server's `generate_typescript_types` tool
@@ -260,6 +260,47 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "hazard_susceptibility_zone_id_fkey"
+            columns: ["zone_id"]
+            isOneToOne: false
+            referencedRelation: "zones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      historical_events: {
+        Row: {
+          created_at: string
+          description: Json
+          event_date: string
+          hazard_type: string
+          id: string
+          severity: string
+          source: string | null
+          zone_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: Json
+          event_date: string
+          hazard_type: string
+          id?: string
+          severity: string
+          source?: string | null
+          zone_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: Json
+          event_date?: string
+          hazard_type?: string
+          id?: string
+          severity?: string
+          source?: string | null
+          zone_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "historical_events_zone_id_fkey"
             columns: ["zone_id"]
             isOneToOne: false
             referencedRelation: "zones"

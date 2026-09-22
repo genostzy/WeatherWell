@@ -19,7 +19,7 @@ import { useOutbox } from "@/lib/outbox/outbox";
 import { PIN_STATUS_LABEL } from "@/lib/community-pin";
 import { buildZoneInputForZone, computeZoneState } from "@/lib/risk-engine/score";
 import { useHazards } from "@/lib/reference-data/use-reference-data";
-import { useManagesZone } from "@/lib/auth/official-context";
+import { useManagesZone, useOfficial } from "@/lib/auth/official-context";
 import {
   useOfficialMarkers,
   OFFICIAL_MARKER_TYPES,
@@ -31,8 +31,9 @@ import { MapShell } from "@/features/map/map-shell";
 import { ViewportTracker, viewportRadiusDeg, viewportMarkerCap } from "@/features/map/viewport-tracker";
 import { HazardBackdropLayer } from "@/features/map/hazard-backdrop-layer";
 import { PoiMarkerLayer } from "@/features/map/poi-marker-layer";
+import { HistoricalEventsLayer } from "@/features/map/historical-events-layer";
 import { MarkerLegend } from "@/features/map/marker-legend";
-import { HazardTypeSelector } from "@/features/map/hazard-type-selector";
+import { HazardTypeSelector, hazardMapTitle } from "@/features/map/hazard-type-selector";
 import {
   createStatusMarkerIcon,
   createEvacuationMarkerIcon,
@@ -67,6 +68,7 @@ const LAYER_PINS: LocalizedText = { en: "Community pins", fil: "Community pins" 
 const LAYER_POIS: LocalizedText = { en: "Essential services", fil: "Mahahalagang serbisyo" };
 const LAYER_CASCADE: LocalizedText = { en: "Cascade chain", fil: "Cascade chain" };
 const LAYER_OFFICIAL: LocalizedText = { en: "Official markers", fil: "Official marker" };
+const LAYER_HISTORICAL: LocalizedText = { en: "Historical events", fil: "Nakaraang mga pangyayari" };
 const CASCADE_LINE_COLOR = "#8b5cf6";
 const SAVE_FAILED: LocalizedText = { en: "Could not save — try again.", fil: "Hindi na-save — subukan ulit." };
 const VIEW_ONLY: LocalizedText = { en: "View only", fil: "Tingnan lang" };
@@ -85,6 +87,7 @@ interface LayerVisibility {
   pois: boolean;
   cascade: boolean;
   official: boolean;
+  historical: boolean;
 }
 
 /** Placed on the map when the admin taps during official-marker placement mode. */
@@ -111,6 +114,7 @@ function OfficialPinPlacer({ onPlace }: { onPlace: (lat: number, lng: number) =>
  */
 export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
   const { lang } = useLanguage();
+  const official = useOfficial();
   const allPins = useAllCommunityPins();
   const hazards = useHazards();
   const managesZone = useManagesZone();
@@ -124,6 +128,9 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
     pois: true,
     cascade: true,
     official: true,
+    // Opt-in, unlike the layers above: nothing fetches until an official
+    // turns this on — see useHistoricalEvents's own doc comment.
+    historical: false,
   });
 
   const [isPlacingOfficial, setIsPlacingOfficial] = useState(false);
@@ -169,6 +176,8 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
       center={center}
       ariaLabel={t(MAP_ARIA_LABEL, lang)}
       className={isPlacingOfficial ? "cursor-crosshair" : ""}
+      title={hazardMapTitle(hazardType, official.areaName, lang)}
+      controlsPosition="topleft"
       overlay={
         <>
           <div className="pointer-events-auto absolute top-2 right-2">
@@ -185,6 +194,7 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
                   ["pois", LAYER_POIS],
                   ["cascade", LAYER_CASCADE],
                   ["official", LAYER_OFFICIAL],
+                  ["historical", LAYER_HISTORICAL],
                 ] as const
               ).map(([key, label]) => (
                 <label key={key} className="flex items-center gap-1.5 py-0.5">
@@ -299,6 +309,7 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
 
       {layers.hazard && <HazardBackdropLayer zones={visibleZones} hazardType={hazardType} />}
       {layers.pois && <PoiMarkerLayer zones={visibleZones} />}
+      {layers.historical && <HistoricalEventsLayer zones={visibleZones} />}
 
       {isPlacingOfficial && (
         <OfficialPinPlacer

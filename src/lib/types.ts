@@ -91,12 +91,32 @@ export interface CascadeAlert {
   estimatedImpactHours: number;
 }
 
+/**
+ * A past disaster occurrence, shown as an optional map overlay (opt-in —
+ * see HistoricalEventsLayer). Located at its zone's centroid, not a precise
+ * point: the source data (PAGASA bulletins, barangay records) names an area,
+ * not coordinates.
+ */
+export interface HistoricalEvent {
+  id: string;
+  zoneId: string;
+  hazardType: HazardType;
+  /** ISO 8601 date (no time component). */
+  eventDate: string;
+  severity: Severity;
+  description: LocalizedText;
+  /** Where the record came from, e.g. "PAGASA Bulletin #12, Sept 2024" — null when not recorded. */
+  source: string | null;
+}
+
 export type POICategory =
   | "health_center"
   | "pharmacy"
   | "market"
   | "water_station"
-  | "barangay_office";
+  | "barangay_office"
+  | "police_station"
+  | "fire_station";
 
 export interface PointOfInterest {
   id: string;

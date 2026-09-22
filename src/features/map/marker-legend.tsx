@@ -6,9 +6,11 @@ import {
   ChevronDown,
   ChevronUp,
   Droplet,
+  Flame,
   Landmark,
   MapPin,
   Pill,
+  Shield,
   ShoppingBasket,
   Stethoscope,
 } from "lucide-react";
@@ -47,6 +49,8 @@ const MARKER_LEGEND_ITEMS: {
   { key: "market", label: { en: "Market", fil: "Palengke" }, icon: ShoppingBasket },
   { key: "water_station", label: { en: "Water refilling station", fil: "Water station" }, icon: Droplet },
   { key: "barangay_office", label: { en: "Barangay office", fil: "Barangay office" }, icon: Landmark },
+  { key: "police_station", label: { en: "Police station", fil: "Istasyon ng pulisya" }, icon: Shield },
+  { key: "fire_station", label: { en: "Fire station", fil: "Istasyon ng bumbero" }, icon: Flame },
   /**
    * Community pins are the one citizen-created marker type on the map, and
    * createCommunityPinMarkerIcon draws them with a dashed border precisely so

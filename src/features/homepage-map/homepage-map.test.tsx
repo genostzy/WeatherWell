@@ -72,8 +72,13 @@ describe("HomepageMap", () => {
     fireEvent.click(await screen.findByRole("img", { name: /Barangay Nilombot, Mapandan/i }));
 
     // Filipino must show the localized word, not the bare English "N" code.
-    expect(screen.getByText(/Hilaga/)).toBeInTheDocument();
-    expect(screen.queryByText(/\bN\b/)).not.toBeInTheDocument();
+    // Scoped to the route-info text itself (not queryByText across the whole
+    // document): the map's own north-orientation badge legitimately renders
+    // a literal "N" elsewhere on the page, which a page-wide search would
+    // wrongly trip on.
+    const routeInfo = screen.getByText(/Hilaga/);
+    expect(routeInfo.textContent).toContain("Hilaga");
+    expect(routeInfo.textContent).not.toMatch(/\bN\b/);
   });
 
   it("finds a hazard-free evacuation route when the default one crosses a hazard", async () => {

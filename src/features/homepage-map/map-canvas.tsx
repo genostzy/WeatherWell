@@ -13,6 +13,7 @@ import { MapShell } from "@/features/map/map-shell";
 import { ViewportTracker, viewportRadiusDeg, viewportMarkerCap } from "@/features/map/viewport-tracker";
 import { HazardBackdropLayer } from "@/features/map/hazard-backdrop-layer";
 import { PoiMarkerLayer } from "@/features/map/poi-marker-layer";
+import { HistoricalEventsLayer } from "@/features/map/historical-events-layer";
 import {
   createStatusMarkerIcon,
   createEvacuationMarkerIcon,
@@ -21,7 +22,7 @@ import {
   createClusteredEvacMarkerIcon,
 } from "@/features/map/marker-icons";
 import { MarkerLegend } from "@/features/map/marker-legend";
-import { HazardTypeSelector } from "@/features/map/hazard-type-selector";
+import { HazardTypeSelector, hazardMapTitle } from "@/features/map/hazard-type-selector";
 import type { HazardType, LocalizedText, Zone } from "@/lib/types";
 
 const MAP_ARIA_LABEL: LocalizedText = {
@@ -52,6 +53,7 @@ const LAYER_EVAC: LocalizedText = { en: "Evacuation", fil: "Evacuation" };
 const LAYER_POI: LocalizedText = { en: "POIs", fil: "Mga POI" };
 const LAYER_PINS: LocalizedText = { en: "Pins", fil: "Mga Pin" };
 const LAYER_HAZARD: LocalizedText = { en: "Hazards", fil: "Mga Hazard" };
+const LAYER_HISTORICAL: LocalizedText = { en: "Historical events", fil: "Nakaraang mga pangyayari" };
 const NEAREST_EVAC_LABEL: LocalizedText = { en: "Nearest evac", fil: "Pinakamalapit na evac" };
 const EVAC_FULL: LocalizedText = { en: "Full", fil: "Puno" };
 const EVAC_AVAILABLE: LocalizedText = { en: "Available", fil: "May espasyo" };
@@ -152,6 +154,8 @@ export function MapCanvas({
   const [showPoi, setShowPoi] = useState(true);
   const [showPins, setShowPins] = useState(true);
   const [showHazard, setShowHazard] = useState(true);
+  /** Opt-in, unlike the layers above: nothing fetches until a resident turns this on — see useHistoricalEvents's own doc comment. */
+  const [showHistorical, setShowHistorical] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Zone[]>([]);
@@ -277,6 +281,8 @@ export function MapCanvas({
       center={initialCenter}
       ariaLabel={t(MAP_ARIA_LABEL, lang)}
       className={isPlacingPin ? "cursor-crosshair" : ""}
+      title={zones[0] ? hazardMapTitle(hazardType, zones[0].name, lang) : undefined}
+      controlsPosition="bottomright"
       overlay={
         <>
           <div className="pointer-events-auto absolute top-2 right-2">
@@ -335,6 +341,7 @@ export function MapCanvas({
                   { label: t(LAYER_POI, lang), value: showPoi, setter: setShowPoi },
                   { label: t(LAYER_PINS, lang), value: showPins, setter: setShowPins },
                   { label: t(LAYER_HAZARD, lang), value: showHazard, setter: setShowHazard },
+                  { label: t(LAYER_HISTORICAL, lang), value: showHistorical, setter: setShowHistorical },
                 ].map((layer) => (
                   <label key={layer.label} className="flex cursor-pointer items-center gap-2 text-xs">
                     <input
@@ -401,6 +408,7 @@ export function MapCanvas({
       <ViewportTracker onZoom={setZoom} onCenter={setViewCenter} />
 
       {showHazard && <HazardBackdropLayer zones={visibleZones} hazardType={hazardType} />}
+      {showHistorical && <HistoricalEventsLayer zones={visibleZones} />}
 
         {showStatus && visibleZones.map((zone) => {
           const alert = alertMap.get(zone.id);

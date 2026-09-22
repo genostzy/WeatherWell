@@ -5,14 +5,31 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
-import type { HazardType, LocalizedText } from "@/lib/types";
+import type { HazardType, LanguageCode, LocalizedText } from "@/lib/types";
 
-const HAZARD_TYPE_LABEL: Record<HazardType, LocalizedText> = {
+export const HAZARD_TYPE_LABEL: Record<HazardType, LocalizedText> = {
   flood: { en: "Flood", fil: "Baha" },
   landslide: { en: "Landslide", fil: "Guho" },
   storm_surge: { en: "Storm Surge", fil: "Storm Surge" },
   dam_release: { en: "Dam Release", fil: "Paglabas ng Dam" },
 };
+
+/**
+ * Cartographic map title: names the hazard subject and the area, e.g.
+ * "Flood Risk Map — Barangay Nilombot, Mapandan". Shared by both the
+ * resident and admin maps (see MapShell's `title` prop) so the wording
+ * only lives once.
+ */
+export function hazardMapTitle(hazardType: HazardType, areaName: string, lang: LanguageCode): string {
+  const hazard = t(HAZARD_TYPE_LABEL[hazardType], lang);
+  return t(
+    {
+      en: `${hazard} Risk Map — ${areaName}`,
+      fil: `Mapa ng Panganib sa ${hazard} — ${areaName}`,
+    },
+    lang
+  );
+}
 
 const HAZARD_TYPE_ICON: Record<HazardType, typeof Droplet> = {
   flood: Droplet,
