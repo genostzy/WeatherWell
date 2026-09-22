@@ -106,6 +106,33 @@ describe("ReferenceDataProvider", () => {
     expect(await screen.findByText("Barangay Nilombot, Mapandan")).toBeInTheDocument();
   });
 
+  it("expands the real static file's interned evacuationRouteText before handing zones to children", async () => {
+    // The real /data/reference-data.json (unlike this file's other fixtures)
+    // carries an evacuationRouteTextTable and each zone's evacuationRouteText
+    // as an index into it — see generate-static-data.ts / expandRouteText.
+    function RouteText() {
+      const zones = useZones();
+      return <span data-testid="route-text">{zones[0]?.evacuationRouteText.en}</span>;
+    }
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        zones: [{ id: "zone-1", name: "Barangay Nilombot, Mapandan", evacuationRouteText: 0 }],
+        evacuationRouteTextTable: [{ en: "Head to the barangay road.", fil: "Dumaan sa barangay road." }],
+        pois: [],
+        hazards: {},
+      }),
+    });
+    render(
+      <LanguageProvider>
+        <ReferenceDataProvider>
+          <RouteText />
+        </ReferenceDataProvider>
+      </LanguageProvider>
+    );
+    expect(await screen.findByTestId("route-text")).toHaveTextContent("Head to the barangay road.");
+  });
+
   it("tells the resident it cannot reach the data instead of spinning forever", async () => {
     // A device that is offline AND has never cached /data/reference-data.json. An indefinite
     // spinner during a flood is the worst possible answer.

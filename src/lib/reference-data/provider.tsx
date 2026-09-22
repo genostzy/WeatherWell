@@ -7,7 +7,7 @@ import { t } from "@/lib/i18n";
 import { AlertsContext, AlertsRefreshContext } from "@/lib/alerts-store";
 import { useHasOnboarded } from "@/features/onboarding/onboarding-storage";
 import type { AlertRecord, CenterStatus, LocalizedText } from "@/lib/types";
-import type { ReferenceData } from "./types";
+import { expandRouteText, type ReferenceData, type RawReferenceData } from "./types";
 
 export const ReferenceDataContext = createContext<ReferenceData | null>(null);
 
@@ -166,10 +166,18 @@ export function ReferenceDataProvider({
           setState({ status: "failed" });
           return;
         }
-        return Promise.all([zonesResponse.json(), alertsResponse.json()]).then(([data, alerts]) => {
+        return Promise.all([zonesResponse.json(), alertsResponse.json()]).then(([raw, alerts]) => {
+          // The real static file carries an interned evacuationRouteTextTable
+          // (see RawReferenceData's own doc comment); test fixtures across this
+          // codebase hand-write plain zone objects without one, and must keep
+          // working exactly as before.
+          const data =
+            raw && typeof raw === "object" && "evacuationRouteTextTable" in raw
+              ? expandRouteText(raw as RawReferenceData)
+              : (raw as ReferenceData);
           setState({
             status: "ready",
-            data: data as ReferenceData,
+            data,
             alerts: alerts as AlertRecord[],
           });
         });

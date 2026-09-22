@@ -13,6 +13,33 @@ export interface ReferenceData {
   hazards: HazardsByZone;
 }
 
+/**
+ * The shape /data/reference-data.json actually serves: identical to
+ * ReferenceData except each zone's evacuationRouteText is an index into
+ * evacuationRouteTextTable rather than the text itself. Only a handful of
+ * distinct strings exist across ~42k zones (mostly the same placeholder), so
+ * scripts/generate-static-data.ts interns them instead of repeating the same
+ * bytes 42,000 times. expandRouteText below reverses it on load.
+ */
+export interface RawReferenceData {
+  zones: (Omit<Zone, "evacuationRouteText"> & { evacuationRouteText: number })[];
+  evacuationRouteTextTable: Zone["evacuationRouteText"][];
+  pois: PointOfInterest[];
+  hazards: HazardsByZone;
+}
+
+/** Reverses generate-static-data.ts's interning of evacuationRouteText. */
+export function expandRouteText(raw: RawReferenceData): ReferenceData {
+  return {
+    zones: raw.zones.map((zone) => ({
+      ...zone,
+      evacuationRouteText: raw.evacuationRouteTextTable[zone.evacuationRouteText],
+    })),
+    pois: raw.pois,
+    hazards: raw.hazards,
+  };
+}
+
 /** Row shapes as Postgres returns them — snake_case, centre nested by the join. */
 interface ZoneRow {
   id: string;

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { toReferenceData } from "./types";
+import { toReferenceData, expandRouteText, type RawReferenceData } from "./types";
 import { resolveEffectiveCenterStatus } from "@/lib/center-status";
 
 /**
@@ -117,5 +117,62 @@ describe("toReferenceData", () => {
     expect(zones[0].evacuationCenterName).toBe("");
     expect(zones[0].centerStatus).toBe("space_available");
     expect(zones[0].evacuationCenterLat).toBe(ZONE_ROW.lat);
+  });
+});
+
+describe("expandRouteText", () => {
+  // generate-static-data.ts interns evacuationRouteText (only a handful of
+  // distinct strings exist across ~42k zones) rather than repeating the
+  // same bytes in every zone — see RawReferenceData's own doc comment.
+  const ZONE_ROW_EXPANDED = {
+    id: "zone-1",
+    psgcBarangayCode: "0105528012",
+    name: "Barangay Nilombot, Mapandan",
+    municipalityName: "Mapandan",
+    provinceName: "Pangasinan",
+    evacuationCenterName: "Nilombot Elementary School",
+    lat: 16.0288,
+    lng: 120.4366,
+    evacuationCenterLat: 16.0295,
+    evacuationCenterLng: 120.436,
+    evacuationRoutePath: [[16.0288, 120.4366]] as [number, number][],
+    hotlineNumber: "09171234567",
+    centerStatus: "space_available" as const,
+    evacuationCenterCapacity: 300,
+  };
+  const TABLE = [
+    { en: "Contact your barangay captain.", fil: "Makipag-ugnayan sa barangay captain." },
+    { en: "Head to the barangay road.", fil: "Dumaan sa barangay road." },
+  ];
+
+  it("resolves each zone's index into the real localized text", () => {
+    const raw: RawReferenceData = {
+      zones: [
+        { ...ZONE_ROW_EXPANDED, id: "zone-1", evacuationRouteText: 0 },
+        { ...ZONE_ROW_EXPANDED, id: "zone-2", evacuationRouteText: 1 },
+      ],
+      evacuationRouteTextTable: TABLE,
+      pois: [],
+      hazards: {},
+    };
+
+    const { zones } = expandRouteText(raw);
+
+    expect(zones[0].evacuationRouteText).toBe(TABLE[0]);
+    expect(zones[1].evacuationRouteText).toBe(TABLE[1]);
+  });
+
+  it("leaves pois and hazards untouched", () => {
+    const raw: RawReferenceData = {
+      zones: [{ ...ZONE_ROW_EXPANDED, evacuationRouteText: 0 }],
+      evacuationRouteTextTable: TABLE,
+      pois: [{ id: "poi-1", zoneId: "zone-1", category: "health_center", name: "Clinic", lat: 0, lng: 0 }],
+      hazards: { "zone-1": { flood: "high" } },
+    };
+
+    const { pois, hazards } = expandRouteText(raw);
+
+    expect(pois).toEqual(raw.pois);
+    expect(hazards).toEqual(raw.hazards);
   });
 });
