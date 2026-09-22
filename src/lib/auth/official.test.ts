@@ -73,4 +73,15 @@ describe("landingPathFor", () => {
     };
     expect(landingPathFor(official, zones)).toBeNull();
   });
+
+  it("sends an admin to the overview (null), same as a municipal official", () => {
+    const official: Official = {
+      userId: "u4",
+      displayName: "Test Admin",
+      areaCode: "",
+      areaName: "All areas",
+      level: "admin",
+    };
+    expect(landingPathFor(official, zones)).toBeNull();
+  });
 });

@@ -102,6 +102,26 @@ describe("loadOfficial", () => {
     expect(referenceFrom).toHaveBeenCalledWith("zones");
   });
 
+  it("returns an admin with no area lookup at all — area_code is NULL for an admin", async () => {
+    getClaims.mockResolvedValue({ data: { claims: { sub: "admin-1" } } });
+    profileChain({ role: "admin", area_code: null, display_name: "Test Admin" });
+    const { loadOfficial } = await import("./load-official");
+
+    const gate = await loadOfficial();
+
+    expect(gate).toEqual({
+      state: "official",
+      official: {
+        userId: "admin-1",
+        displayName: "Test Admin",
+        areaCode: "",
+        areaName: "All areas",
+        level: "admin",
+      },
+    });
+    expect(referenceFrom).not.toHaveBeenCalled();
+  });
+
   it("resolves a 7-digit operator's area against municipalities, as a municipality", async () => {
     getClaims.mockResolvedValue({ data: { claims: { sub: "official-2" } } });
     profileChain({ role: "operator", area_code: "1234567", display_name: "Pedro Reyes" });

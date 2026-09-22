@@ -5,7 +5,7 @@ export interface Official {
   /** A PSGC prefix: 10 digits for one barangay, 7 for a whole town. */
   areaCode: string;
   areaName: string;
-  level: "barangay" | "municipality";
+  level: "barangay" | "municipality" | "admin";
 }
 
 export function areaLevel(areaCode: string): "barangay" | "municipality" {

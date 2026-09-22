@@ -27,6 +27,27 @@ export const loadOfficial = cache(async (): Promise<GateState> => {
     .eq("id", claims.sub)
     .maybeSingle();
 
+  if (profile?.role === "admin") {
+    if (!profile.display_name) {
+      const email = typeof claims.email === "string" && claims.email ? claims.email : null;
+      return { state: "not-appointed", email };
+    }
+    // No zone/municipality lookup: an admin's area_code is NULL by design
+    // (Task 1's admin_has_name constraint), and a Postgrest .eq(col, null)
+    // filter can only ever return zero rows — attempting it would be dead
+    // code that always fell through to the raw-code fallback anyway.
+    return {
+      state: "official",
+      official: {
+        userId: claims.sub,
+        displayName: profile.display_name,
+        areaCode: "",
+        areaName: "All areas",
+        level: "admin",
+      },
+    };
+  }
+
   if (profile?.role !== "operator" || !profile.area_code || !profile.display_name) {
     const email = typeof claims.email === "string" && claims.email ? claims.email : null;
     return { state: "not-appointed", email };
