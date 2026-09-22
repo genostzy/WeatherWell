@@ -27,29 +27,41 @@ beforeEach(() => {
 });
 
 describe("AccountLink", () => {
-  it("shows a Guest status and a plain Sign in link when there is no session", async () => {
+  it("shows what a signed-out visitor's state means and a plain Sign in link when there is no session", async () => {
     // A visitor who has never written has nothing to keep, and must not be
-    // signed in just because this mounted — but their guest status is still
+    // signed in just because this mounted — but their status is still
     // shown, same as an anonymous visitor who has written something.
     pathname = "/report";
     getSession.mockResolvedValue({ data: { session: null } });
 
     renderWithData(<AccountLink />);
 
-    expect(await screen.findByText("Guest")).toBeInTheDocument();
+    expect(await screen.findByText(/saved on this device/i)).toBeInTheDocument();
     const link = screen.getByRole("link", { name: "Sign in" });
     expect(link).toHaveAttribute("href", "/sign-in?next=%2Freport");
   });
 
-  it("shows a Guest status and a keep-my-reports-on-a-new-phone link for an anonymous session", async () => {
+  it("shows what an anonymous session's state means and a keep-my-reports-on-a-new-phone link", async () => {
     pathname = "/report";
     getSession.mockResolvedValue({ data: { session: { user: { id: "u1", is_anonymous: true } } } });
 
     renderWithData(<AccountLink />);
 
-    expect(await screen.findByText("Guest")).toBeInTheDocument();
+    expect(await screen.findByText(/saved on this device/i)).toBeInTheDocument();
     const link = screen.getByRole("link", { name: "Keep your reports on a new phone" });
     expect(link).toHaveAttribute("href", "/sign-in?next=%2Freport");
+  });
+
+  it("tells a signed-out visitor what their state means rather than labelling them", async () => {
+    // "Guest" reads as second-class for what is the correct state for
+    // almost every resident. State the consequence instead.
+    pathname = "/";
+    getSession.mockResolvedValue({ data: { session: null } });
+
+    renderWithData(<AccountLink />);
+
+    expect(await screen.findByText(/saved on this device/i)).toBeInTheDocument();
+    expect(screen.queryByText(/^Guest$/)).not.toBeInTheDocument();
   });
 
   it("shows a Signed in status and a Sign out form posting to /auth/signout for a permanent session", async () => {

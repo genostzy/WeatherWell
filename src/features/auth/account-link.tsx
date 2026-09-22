@@ -16,7 +16,10 @@ const KEEP_REPORTS: LocalizedText = {
 };
 const SIGN_IN: LocalizedText = { en: "Sign in", fil: "Mag-sign in" };
 const SIGN_OUT: LocalizedText = { en: "Sign out", fil: "Mag-sign out" };
-const GUEST_LABEL: LocalizedText = { en: "Guest", fil: "Guest" };
+const ON_THIS_DEVICE: LocalizedText = {
+  en: "Saved on this device",
+  fil: "Nakatago sa device na ito",
+};
 const SIGNED_IN_LABEL: LocalizedText = { en: "Signed in", fil: "Naka-sign in" };
 
 type SessionKind = "none" | "anonymous" | "permanent";
@@ -35,8 +38,9 @@ function kindOf(session: { user: { is_anonymous?: boolean } } | null | undefined
  * or signInAnonymously. A visitor who has never written has no session and
  * nothing to keep, and mounting this component must not be what signs them
  * in — only their own first write does that. It still always shows a status
- * ("Guest" here, same as an anonymous visitor who has written something) —
- * having no session is a fact about the visitor, not a reason to hide it.
+ * ("Saved on this device" here, same as an anonymous visitor who has written
+ * something) — having no session is a fact about the visitor, not a reason
+ * to hide it.
  *
  * Renders nothing on /admin routes: admin-header.tsx already has its own
  * sign-out, and an official would otherwise see two.
@@ -88,13 +92,13 @@ export function AccountLink() {
     );
   }
 
-  // "none" and "anonymous" both read as "Guest" to a resident — the
+  // "none" and "anonymous" both read the same way to a resident — the
   // difference (never written vs. written-but-not-linked-to-an-account) is
   // an implementation detail. Only the sign-in link's own label changes:
   // there's nothing to "keep" yet for a visitor who has never written.
   return (
     <div className="flex items-center gap-1.5">
-      <span className="text-xs text-muted-foreground">{t(GUEST_LABEL, lang)}</span>
+      <span className="text-xs text-muted-foreground">{t(ON_THIS_DEVICE, lang)}</span>
       <Button asChild variant="ghost" size="sm">
         <Link href={`/sign-in?next=${encodeURIComponent(pathname)}`}>
           {t(kind === "anonymous" ? KEEP_REPORTS : SIGN_IN, lang)}
