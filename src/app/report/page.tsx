@@ -26,6 +26,7 @@ import { t } from "@/lib/i18n";
 import { DEPTH_LABEL, DEPTH_CM, DEPTH_SEVERITY, type DepthLevel } from "@/lib/depth";
 import { getRainfallForZone, isHeavyRainfall } from "@/lib/mock-data";
 import { addWaterLevelReport } from "@/lib/water-level-reports";
+import { useLivePosition } from "@/features/homepage-map/use-live-position";
 import { useActiveAlertForZone } from "@/lib/alerts-store";
 import { getZoneStatus, getZoneStatusColor, ZONE_STATUS_LABEL } from "@/lib/zone-status";
 import { CENTER_STATUS_LABEL, CENTER_STATUS_CLASS, resolveEffectiveCenterStatus } from "@/lib/center-status";
@@ -71,13 +72,17 @@ export default function ReportPage() {
   const [saveFailed, setSaveFailed] = useState(false);
   const zone = useSelectedZone();
   const { lang } = useLanguage();
+  // Never awaited before submit — a resident without a GPS fix yet must still
+  // be able to report in one tap. Whatever fix is already in hand (or null)
+  // rides along; the geofence check on the server skips itself when absent.
+  const position = useLivePosition();
 
   function handleSubmit(depthLevel: DepthLevel): boolean {
     try {
       // Persisted so it actually shows up in "What neighbours are reporting"
       // and moves the threshold bar below straight away — not just a thank-you
       // screen. The queue, not the network, is what makes that immediate.
-      addWaterLevelReport(zone.id, depthLevel);
+      addWaterLevelReport(zone.id, depthLevel, position);
     } catch {
       // `enqueue` throws OutboxWriteFailed when local storage is full or
       // blocked, so the report reached neither the queue nor the network. Any

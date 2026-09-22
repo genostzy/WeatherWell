@@ -252,8 +252,16 @@ function triggerDrain(): void {
  * believes a report was queued when it was not is exactly the failure the
  * outbox module exists to prevent.
  */
-export function addWaterLevelReport(zoneId: string, depthLevel: DepthLevel): void {
-  enqueue("submitWaterLevelReport", { zoneId, depthLevel });
+export function addWaterLevelReport(
+  zoneId: string,
+  depthLevel: DepthLevel,
+  position?: { lat: number; lng: number } | null
+): void {
+  enqueue("submitWaterLevelReport", {
+    zoneId,
+    depthLevel,
+    ...(position ? { lat: position.lat, lng: position.lng } : {}),
+  });
   triggerDrain();
 }
 

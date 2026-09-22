@@ -148,6 +148,36 @@ describe("submitWaterLevelReport", () => {
     expect(payload).not.toHaveProperty("reported_at");
   });
 
+  it("sends lat/lng when the device supplied a position", async () => {
+    getClaims.mockResolvedValue({ data: { claims: { sub: "user-1" } } });
+    insert.mockResolvedValue({ error: null });
+
+    await submitWaterLevelReport({
+      id: "11111111-1111-1111-1111-111111111111",
+      zoneId: "zone-1",
+      depthLevel: "knee",
+      lat: 16.0,
+      lng: 120.436,
+    });
+
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ lat: 16.0, lng: 120.436 }));
+  });
+
+  it("sends no lat/lng keys at all when the device had no position — the geofence trigger must skip, not reject", async () => {
+    getClaims.mockResolvedValue({ data: { claims: { sub: "user-1" } } });
+    insert.mockResolvedValue({ error: null });
+
+    await submitWaterLevelReport({
+      id: "11111111-1111-1111-1111-111111111111",
+      zoneId: "zone-1",
+      depthLevel: "knee",
+    });
+
+    const payload = insert.mock.calls[0][0];
+    expect(payload).not.toHaveProperty("lat");
+    expect(payload).not.toHaveProperty("lng");
+  });
+
   it("maps a too-old report (22023) to a permanent failure with reason too_old", async () => {
     // private.honest_report_time() refuses a report more than 6 hours old --
     // this can never succeed on retry, so the outbox must drop it for good,

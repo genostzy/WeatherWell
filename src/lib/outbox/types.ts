@@ -12,7 +12,13 @@ export type OutboxOperation =
   | "recordCheckIn";
 
 export interface OutboxPayloads {
-  submitWaterLevelReport: { zoneId: string; depthLevel: DepthLevel };
+  submitWaterLevelReport: {
+    zoneId: string;
+    depthLevel: DepthLevel;
+    /** The device's position when the report was filed — omitted when unavailable (denied, no fix yet, an older build). See the geofence trigger's own comment for why that must never block the write. */
+    lat?: number;
+    lng?: number;
+  };
   createPin: {
     zoneId: string;
     statusTag: PinStatusTag;

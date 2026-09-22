@@ -617,6 +617,8 @@ export type Database = {
           depth_level: string
           id: string
           is_outlier: boolean
+          lat: number | null
+          lng: number | null
           reported_at: string
           reporter_id: string
           trust_weight: number
@@ -626,6 +628,8 @@ export type Database = {
           depth_level: string
           id?: string
           is_outlier?: boolean
+          lat?: number | null
+          lng?: number | null
           reported_at?: string
           reporter_id: string
           trust_weight?: number
@@ -635,6 +639,8 @@ export type Database = {
           depth_level?: string
           id?: string
           is_outlier?: boolean
+          lat?: number | null
+          lng?: number | null
           reported_at?: string
           reporter_id?: string
           trust_weight?: number

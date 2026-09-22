@@ -70,6 +70,20 @@ describe("water-level-reports", () => {
     expect(pending[0].payload).toEqual({ zoneId: "zone-1", depthLevel: "knee" });
   });
 
+  it("carries the device's position into the queued payload when given", () => {
+    addWaterLevelReport("zone-1", "knee", { lat: 16.0, lng: 120.436 });
+
+    const [pending] = readOutbox();
+    expect(pending.payload).toEqual({ zoneId: "zone-1", depthLevel: "knee", lat: 16.0, lng: 120.436 });
+  });
+
+  it("queues no lat/lng keys at all when no position is given — never blocks on a missing GPS fix", () => {
+    addWaterLevelReport("zone-1", "knee", null);
+
+    const [pending] = readOutbox();
+    expect(pending.payload).toEqual({ zoneId: "zone-1", depthLevel: "knee" });
+  });
+
   it("gives the optimistic row the same id the server will use", () => {
     // Reconciliation is by id: when the server row arrives it replaces the
     // optimistic one rather than appearing beside it as a duplicate.

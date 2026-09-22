@@ -9,6 +9,9 @@ export interface SubmitReportInput {
   id: string;
   zoneId: string;
   depthLevel: DepthLevel;
+  /** The device's position when the report was filed. Omitted when unavailable — never blocks the write. See the geofence trigger (20260922090000_report_geofence_and_rate_limit.sql) for why. */
+  lat?: number;
+  lng?: number;
   /**
    * ISO timestamp of when the resident actually made this report, carried
    * through by the outbox for a write sent later than it was made. Already on
@@ -84,6 +87,9 @@ export async function submitWaterLevelReport(
     // ordinary submission omits the key entirely and keeps the column's
     // database-clock default.
     ...(input.madeAt ? { reported_at: input.madeAt } : {}),
+    // Omitted entirely (not null) when the device had no position, so the
+    // insert's column list matches whichever grant applies either way.
+    ...(input.lat !== undefined && input.lng !== undefined ? { lat: input.lat, lng: input.lng } : {}),
   });
 
   if (!error) return { ok: true };
