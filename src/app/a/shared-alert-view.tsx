@@ -27,12 +27,18 @@ const HOTLINE_CAUTION: LocalizedText = {
   fil: "Ang numerong ito ay mula sa nagpadala ng link na ito, hindi mula sa WeatherWell.",
 };
 
-function subscribeToHash(): () => void {
-  // The fragment never changes after this page loads — a resident arrives
-  // via one fresh link each time, never a same-page navigation — so there
-  // is nothing to actually listen for. useSyncExternalStore still requires
-  // a subscribe function; this one just never fires.
-  return () => {};
+/**
+ * Same subscribe shape as createLocalStorageStore's "storage" listener —
+ * `hashchange` is the browser's own event for exactly this external state.
+ * Needed for the rare but real case of a recipient opening a SECOND
+ * forwarded-alert link in an already-mounted tab (an installed PWA reusing
+ * its window, or browser back/forward between two /a links): without this,
+ * the page keeps rendering the first alert's severity and evacuation centre
+ * after the URL has already moved on to a different one.
+ */
+function subscribeToHash(callback: () => void): () => void {
+  window.addEventListener("hashchange", callback);
+  return () => window.removeEventListener("hashchange", callback);
 }
 
 function getHash(): string {

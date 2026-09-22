@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, act } from "@testing-library/react";
 import { SharedAlertView } from "./shared-alert-view";
 import { LanguageProvider } from "@/features/i18n/language-provider";
 import { encodeAlert, type SharedAlert } from "@/lib/alert-share/payload";
@@ -101,5 +101,28 @@ describe("SharedAlertView", () => {
     // decode successfully with a garbage issuedAt.
     renderWithHash(`#${encodeAlert({ ...ALERT, issuedAt: "not-a-real-timestamp" })}`);
     expect(screen.queryByText(/invalid date/i)).not.toBeInTheDocument();
+  });
+
+  it("picks up a second alert's hash on an already-mounted page, not just on a fresh load", () => {
+    // A recipient who taps a second forwarded-alert link while the first is
+    // still open in the same tab (an installed PWA reusing its window, or
+    // browser back/forward between two /a links) must see the NEW alert, not
+    // a stale one left over from mount — a safety-data staleness bug, not a
+    // cosmetic one.
+    renderWithHash(`#${encodeAlert(ALERT)}`);
+    expect(screen.getByText(/Barangay Malimpuec, Mapandan/)).toBeInTheDocument();
+
+    const secondAlert: SharedAlert = {
+      ...ALERT,
+      zoneName: "Barangay Iba, Somewhere Else",
+      message: "Neck-deep flooding. Evacuate now.",
+    };
+    act(() => {
+      window.location.hash = `#${encodeAlert(secondAlert)}`;
+      window.dispatchEvent(new Event("hashchange"));
+    });
+
+    expect(screen.getByText(/Barangay Iba, Somewhere Else/)).toBeInTheDocument();
+    expect(screen.queryByText(/Barangay Malimpuec, Mapandan/)).not.toBeInTheDocument();
   });
 });
