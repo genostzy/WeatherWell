@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { decodeAlert } from "@/lib/alert-share/payload";
+import { SEVERITY_BADGE_CLASS } from "@/lib/severity";
 import type { LocalizedText } from "@/lib/types";
 
 const FORWARDED: LocalizedText = {
@@ -21,6 +22,10 @@ const DAMAGED: LocalizedText = {
 const EVACUATE_TO: LocalizedText = { en: "Evacuate to", fil: "Lumikas sa" };
 const OPEN_APP: LocalizedText = { en: "Open WeatherWell for my area", fil: "Buksan ang WeatherWell para sa aking lugar" };
 const ISSUED: LocalizedText = { en: "Issued", fil: "Inilabas" };
+const HOTLINE_CAUTION: LocalizedText = {
+  en: "This number came from the person who sent this link, not from WeatherWell.",
+  fil: "Ang numerong ito ay mula sa nagpadala ng link na ito, hindi mula sa WeatherWell.",
+};
 
 function subscribeToHash(): () => void {
   // The fragment never changes after this page loads — a resident arrives
@@ -75,15 +80,29 @@ export function SharedAlertView() {
     );
   }
 
+  const severityClass = alert.severityKey ? SEVERITY_BADGE_CLASS[alert.severityKey] : undefined;
+
   return (
     <Card className="w-full max-w-md">
-      <CardHeader className="space-y-1">
-        <p lang={lang} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <AlertTriangle aria-hidden="true" className="h-3.5 w-3.5" />
+      <CardHeader className="space-y-3">
+        <p
+          data-slot="notice"
+          lang={lang}
+          className="flex items-center gap-1.5 rounded-md border border-border bg-muted px-3 py-2 text-sm font-medium"
+        >
+          <AlertTriangle aria-hidden="true" className="h-4 w-4 shrink-0" />
           {t(FORWARDED, lang)}
         </p>
         <CardTitle className="text-lg">{alert.zoneName}</CardTitle>
-        <p className="text-sm font-semibold uppercase">{alert.severity}</p>
+        <p
+          className={
+            severityClass
+              ? `inline-block w-fit rounded-md border px-2 py-0.5 text-sm font-semibold uppercase ${severityClass}`
+              : "text-sm font-semibold uppercase"
+          }
+        >
+          {alert.severity}
+        </p>
       </CardHeader>
       <CardContent className="space-y-4">
         <p lang={lang} className="text-sm">
@@ -98,12 +117,17 @@ export function SharedAlertView() {
         )}
 
         {alert.hotline && (
-          <Button asChild size="lg" className="w-full">
-            <a href={`tel:${alert.hotline}`}>
-              <Phone aria-hidden="true" className="h-4 w-4" />
-              {alert.hotline}
-            </a>
-          </Button>
+          <div className="space-y-1">
+            <Button asChild variant="outline" size="lg" className="w-full">
+              <a href={`tel:${alert.hotline}`}>
+                <Phone aria-hidden="true" className="h-4 w-4" />
+                {alert.hotline}
+              </a>
+            </Button>
+            <p lang={lang} className="text-xs text-muted-foreground">
+              {t(HOTLINE_CAUTION, lang)}
+            </p>
+          </div>
         )}
 
         <p className="text-xs text-muted-foreground">

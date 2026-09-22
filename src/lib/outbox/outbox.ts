@@ -217,7 +217,16 @@ function commit(next: OutboxEntry[], changed: OutboxEntry[] = [], deletedIds: st
 
 export function enqueue<K extends OutboxOperation>(
   operation: K,
-  payload: OutboxPayloads[K]
+  payload: OutboxPayloads[K],
+  /**
+   * Delays every drain path (this page's, another tab's, and the service
+   * worker's — all three read `nextAttemptAt` via `isDue`) until this many
+   * milliseconds from now. Used by call sites with their own undo window: a
+   * `requestBackgroundSend` wake-up races the network against that window
+   * otherwise, and "still in the queue" stops meaning "definitely not sent
+   * yet" the moment a fast response can land inside it.
+   */
+  holdForMs?: number
 ): OutboxEntry {
   const queuedAt = new Date().toISOString();
   const entry: OutboxEntry = {
@@ -228,7 +237,7 @@ export function enqueue<K extends OutboxOperation>(
     attempts: 0,
     userId: knownSessionUserId(),
     status: "pending",
-    nextAttemptAt: null,
+    nextAttemptAt: holdForMs ? new Date(Date.now() + holdForMs).toISOString() : null,
     updatedAt: queuedAt,
   };
 

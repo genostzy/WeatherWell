@@ -256,13 +256,22 @@ function triggerDrain(): void {
 export function addWaterLevelReport(
   zoneId: string,
   depthLevel: DepthLevel,
-  position?: { lat: number; lng: number } | null
+  position?: { lat: number; lng: number } | null,
+  /** See `enqueue`'s `holdForMs` — passed through for QuickDepthReport's undo window. */
+  holdForMs?: number
 ): OutboxEntry {
-  const entry = enqueue("submitWaterLevelReport", {
-    zoneId,
-    depthLevel,
-    ...(position ? { lat: position.lat, lng: position.lng } : {}),
-  });
+  const entry = enqueue(
+    "submitWaterLevelReport",
+    {
+      zoneId,
+      depthLevel,
+      ...(position ? { lat: position.lat, lng: position.lng } : {}),
+    },
+    holdForMs
+  );
+  // A held entry is not due yet (see isDue), so this is harmless even when
+  // holdForMs is set — drain simply finds nothing to send this round and
+  // picks it up on its own once the hold expires.
   triggerDrain();
   return entry;
 }

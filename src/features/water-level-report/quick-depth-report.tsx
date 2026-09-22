@@ -57,8 +57,12 @@ export function QuickDepthReport({ zoneId }: { zoneId: string }) {
 
   function report(depthLevel: DepthLevel) {
     if (timer.current) clearTimeout(timer.current);
+    // A second depth tap while the first is still within its undo window is
+    // a correction, not a second report — discard the one it's replacing so
+    // both don't end up queued for one resident's one intent.
+    if (state.kind === "reported") discardEntry(state.entryId);
     try {
-      const entry = addWaterLevelReport(zoneId, depthLevel, position);
+      const entry = addWaterLevelReport(zoneId, depthLevel, position, UNDO_WINDOW_MS);
       setState({ kind: "reported", entryId: entry.id, depthLevel });
       timer.current = setTimeout(() => setState({ kind: "idle" }), UNDO_WINDOW_MS);
     } catch {
@@ -113,7 +117,7 @@ export function QuickDepthReport({ zoneId }: { zoneId: string }) {
             <span lang={lang} className="text-green-500">
               {t(RECORDED, lang)}: {t(DEPTH_LABEL[state.depthLevel], lang)}
             </span>
-            <Button type="button" variant="ghost" size="sm" onClick={() => undo(state.entryId)}>
+            <Button type="button" variant="ghost" size="lg" onClick={() => undo(state.entryId)}>
               {t(UNDO, lang)}
             </Button>
           </span>

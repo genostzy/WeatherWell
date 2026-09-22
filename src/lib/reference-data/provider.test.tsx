@@ -259,6 +259,15 @@ describe("ReferenceDataProvider's bypassGate", () => {
     expect(screen.getByRole("status")).toBeInTheDocument();
   });
 
+  it("renders children immediately on /a regardless of onboarded status — the shared-alert route needs no reference data at all", () => {
+    mockUsePathname.mockReturnValue("/a");
+    window.localStorage.setItem(ONBOARDED_KEY, "true"); // even an already-onboarded resident's device must not wait
+    (fetch as ReturnType<typeof vi.fn>).mockReturnValue(new Promise(() => {})); // never resolves — 22MB fetch that must not gate this route
+    renderBypassable();
+    expect(screen.getByText("plain content")).toBeInTheDocument();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
   it("does not bypass a stale deep link to another route, even while not onboarded", () => {
     // A not-yet-onboarded visitor landing on e.g. /evacuation (a stale
     // bookmark, a restored session) must keep its current behavior — render

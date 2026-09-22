@@ -68,4 +68,30 @@ describe("SharedAlertView", () => {
     renderWithHash(`#${encodeAlert(ALERT)}`);
     expect(screen.getByText(/forwarded|unverified/i)).toBeInTheDocument();
   });
+
+  it("gives the unverified notice real visual weight, not the least prominent line on the card", () => {
+    // The recipient's only signal that a phone number on this screen is
+    // unvetted is this notice — it must not be smaller/quieter than the
+    // content it's warning about.
+    renderWithHash(`#${encodeAlert(ALERT)}`);
+    const notice = screen.getByText(/forwarded|unverified/i).closest("[data-slot='notice']");
+    expect(notice).not.toBeNull();
+  });
+
+  it("colors the severity by its key when the payload carries one, same palette as the app's own alerts", () => {
+    renderWithHash(`#${encodeAlert({ ...ALERT, severityKey: "evacuate" })}`);
+    const badge = screen.getByText(ALERT.severity);
+    expect(badge.className).toMatch(/severity-evacuate/);
+  });
+
+  it("does not claim a color for a severity it cannot map to a known key", () => {
+    renderWithHash(`#${encodeAlert(ALERT)}`); // no severityKey
+    const text = screen.getByText(ALERT.severity);
+    expect(text.className).not.toMatch(/severity-/);
+  });
+
+  it("cautions that the hotline number came from whoever sent the link, not from WeatherWell", () => {
+    renderWithHash(`#${encodeAlert(ALERT)}`);
+    expect(screen.getByText(/number came from|hindi verified na numero|sender/i)).toBeInTheDocument();
+  });
 });

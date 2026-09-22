@@ -15,7 +15,15 @@ export interface SharedAlert {
   v: 1;
   zoneId: string;
   zoneName: string;
+  /** The localised human label ("Evacuate Now" / "Lumikas Na") — what renders as text. */
   severity: string;
+  /**
+   * The severity enum alongside the label above, so /a can colour the badge
+   * the same way the app's own alert surfaces do. Optional: an unrecognised
+   * or absent key renders the label as plain text rather than claiming a
+   * colour it cannot back up.
+   */
+  severityKey?: "yellow" | "orange" | "red" | "evacuate";
   /** ISO 8601. */
   issuedAt: string;
   /** Already localised by the sharer — the recipient may not share a language setting. */

@@ -70,6 +70,52 @@ describe("QuickDepthReport", () => {
     }
   });
 
+  it("replaces the queued report on a correction tap, rather than filing both", async () => {
+    // A mis-tap followed immediately by the correct depth is the exact
+    // scenario the undo window exists to absorb — but pressing a second
+    // depth button, not Undo, is the more natural correction gesture, and it
+    // must not leave two reports queued for one resident's one intent.
+    const user = userEvent.setup();
+    renderWithData(<QuickDepthReport zoneId="zone-1" />);
+
+    await user.click(screen.getByRole("button", { name: /knee-deep/i }));
+    await user.click(screen.getByRole("button", { name: /waist-deep/i }));
+
+    const queued = readOutbox();
+    expect(queued).toHaveLength(1);
+    expect(queued[0].payload).toMatchObject({ depthLevel: "waist" });
+  });
+
+  it("holds the report back from the wire for the whole undo window, so a network round trip can never outrace it", async () => {
+    // Review Focus 4's other half: the entry being "still queued" is not
+    // proof it was never sent — enqueue also wakes the service worker
+    // immediately (requestBackgroundSend), and a fast response could confirm
+    // delivery well inside the 3s window. The only way undo can never lie is
+    // if nothing attempts to send during the window at all.
+    const user = userEvent.setup();
+    renderWithData(<QuickDepthReport zoneId="zone-1" />);
+
+    const before = Date.now();
+    await user.click(screen.getByRole("button", { name: /dry/i }));
+
+    const [entry] = readOutbox();
+    expect(entry.nextAttemptAt).not.toBeNull();
+    expect(Date.parse(entry.nextAttemptAt!)).toBeGreaterThanOrEqual(before + 3000 - 50);
+  });
+
+  it("gives Undo a real touch target, not a 28px ghost button, on a 3-second deadline", async () => {
+    const user = userEvent.setup();
+    renderWithData(<QuickDepthReport zoneId="zone-1" />);
+
+    await user.click(screen.getByRole("button", { name: /ankle-deep/i }));
+
+    const undo = screen.getByRole("button", { name: /undo/i });
+    // h-11 (44px, WCAG 2.5.5) is this app's `lg` button size — every other
+    // primary control uses it; Undo is the one control on this surface a
+    // panicked resident has 3 seconds to hit accurately.
+    expect(undo.className).toMatch(/h-11/);
+  });
+
   it("degrades to a truthful message when undo lands after delivery", async () => {
     // Review Focus 4: the drain may deliver the report between the tap and
     // the undo. The entry is gone from the queue; undo must say so rather

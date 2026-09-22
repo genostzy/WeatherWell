@@ -49,4 +49,24 @@ describe("ShareAlertQr", () => {
 
     expect(screen.getByText(/camera/i)).toBeInTheDocument();
   });
+
+  it("gives the toggle a real touch target, matching every other primary control", () => {
+    renderQr();
+    const toggle = screen.getByRole("button", { name: /qr|show code/i });
+    expect(toggle.className).toMatch(/h-11/);
+  });
+
+  it("shows a truthful fallback instead of silently doing nothing when the code can't be generated", async () => {
+    // toDataURL rejects when the payload exceeds QR capacity — a long
+    // bilingual alert message crosses that ceiling well before it looks long.
+    const qrcode = await import("qrcode");
+    (qrcode.default.toDataURL as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error("data too big"));
+    const user = userEvent.setup();
+    renderQr();
+
+    await user.click(screen.getByRole("button", { name: /qr|show code/i }));
+
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+    expect(screen.getByText(/too long|can't|cannot/i)).toBeInTheDocument();
+  });
 });

@@ -139,13 +139,20 @@ export function ReferenceDataProvider({
   // null ("not yet known", server and first client paint alike) never
   // bypasses; only a confirmed `false` does, one render after hydration.
   const onboarded = useHasOnboarded();
-  // Deliberately scoped to exactly the two routes that matter, not "every
+  // Deliberately scoped to exactly the routes that matter, not "every
   // route while not onboarded": a stale deep link into e.g. /evacuation
   // before onboarding must keep its current behavior (render with whatever
   // default zone it already falls back to), not start throwing "no
   // ReferenceDataProvider ancestor" because this bypassed the gate there too.
+  // /a is unconditional (not gated on onboarded status): SharedAlertView
+  // reads nothing from ReferenceDataContext, and the whole point of the
+  // route is rendering a forwarded alert from its URL fragment alone, for a
+  // recipient who may never have opened this app before — gating it behind
+  // a nationwide reference-data fetch defeats that.
   const bypassGate =
-    (pathname?.startsWith("/onboarding") ?? false) || (pathname === "/" && onboarded === false);
+    (pathname?.startsWith("/onboarding") ?? false) ||
+    (pathname === "/" && onboarded === false) ||
+    pathname === "/a";
   const [state, setState] = useState<State>({ status: "loading" });
 
   // Promise chaining rather than async/await: every setState call below runs

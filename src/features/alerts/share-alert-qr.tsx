@@ -16,6 +16,10 @@ const SCAN_INSTRUCTION: LocalizedText = {
   fil: "Itutok ang camera ng kabilang telepono dito. Walang kailangang internet sa kahit alin.",
 };
 const CODE_ALT: LocalizedText = { en: "QR code containing this alert", fil: "QR code na naglalaman ng alertong ito" };
+const GENERATION_FAILED: LocalizedText = {
+  en: "Alert too long for a QR code — send the link instead.",
+  fil: "Masyadong mahaba ang alerto para sa QR code — ipadala na lang ang link.",
+};
 
 /**
  * Renders the alert as a QR code so it can cross to another phone with no
@@ -30,24 +34,40 @@ const CODE_ALT: LocalizedText = { en: "QR code containing this alert", fil: "QR 
 export function ShareAlertQr({ alert }: { alert: SharedAlert }) {
   const { lang } = useLanguage();
   const [dataUrl, setDataUrl] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
 
   async function toggle() {
     if (dataUrl) {
       setDataUrl(null);
       return;
     }
+    setFailed(false);
     const url = `${window.location.origin}/a#${encodeAlert(alert)}`;
-    // Medium correction: a phone screen in rain, held by someone else, is a
-    // worse scanning surface than paper.
-    setDataUrl(await QRCode.toDataURL(url, { errorCorrectionLevel: "M", margin: 2, width: 320 }));
+    try {
+      // Medium correction: a phone screen in rain, held by someone else, is a
+      // worse scanning surface than paper.
+      setDataUrl(await QRCode.toDataURL(url, { errorCorrectionLevel: "M", margin: 2, width: 320 }));
+    } catch {
+      // toDataURL rejects when the payload exceeds QR capacity (~1.6KB at
+      // this error-correction level) — a long bilingual alert message
+      // crosses that ceiling before it looks long. Silence here would be a
+      // button that visibly does nothing when pressed.
+      setFailed(true);
+    }
   }
 
   return (
     <div className="space-y-2">
-      <Button type="button" variant="outline" size="sm" onClick={() => void toggle()}>
+      <Button type="button" variant="outline" size="lg" onClick={() => void toggle()}>
         <QrCode aria-hidden="true" className="h-4 w-4" />
         {t(dataUrl ? HIDE_CODE : SHOW_CODE, lang)}
       </Button>
+
+      {failed && (
+        <p lang={lang} role="alert" className="text-sm text-severity-red">
+          {t(GENERATION_FAILED, lang)}
+        </p>
+      )}
 
       {dataUrl && (
         <div className="space-y-2 rounded-md border-2 border-border bg-white p-3">

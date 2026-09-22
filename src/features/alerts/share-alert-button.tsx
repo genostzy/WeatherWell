@@ -36,6 +36,7 @@ export function ShareAlertButton({
     zoneId: zone.id,
     zoneName: zone.name,
     severity: t(SEVERITY_LABEL[alert.severity], lang),
+    severityKey: alert.severity,
     issuedAt: alert.issuedAt,
     message: t(alert.message, lang),
     // Task 1's predicates apply here too: a forwarded alert must not carry
