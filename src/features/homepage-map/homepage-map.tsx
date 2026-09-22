@@ -15,6 +15,7 @@ import { GeofenceAlertBanner } from "./geofence-alert-banner";
 import { PersonalStatusHeadline } from "./personal-status-headline";
 import { CurrentConditionsPanel } from "./current-conditions-panel";
 import { QuickStats } from "./quick-stats";
+import { QuickDepthReport } from "@/features/water-level-report/quick-depth-report";
 import { useFloodForecast } from "@/lib/use-flood-forecast";
 import { PredictionTimeline } from "@/features/alerts/prediction-timeline";
 import { CommunityPinForm } from "./community-pin-form";
@@ -147,6 +148,8 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
       {/* Sidebar — desktop: right column. Mobile: above map. */}
       <div className="order-first lg:order-none flex flex-col gap-2 overflow-hidden sm:gap-3 lg:col-start-2 lg:row-span-4 lg:gap-4">
         <PersonalStatusHeadline zone={zones[0]} />
+
+        <QuickDepthReport zoneId={zones[0].id} />
 
         {/* Quick actions — primary, placed right after status so they're seen first */}
         <div className="grid grid-cols-2 gap-2">

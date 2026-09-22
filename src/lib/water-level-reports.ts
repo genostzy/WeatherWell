@@ -246,23 +246,25 @@ function triggerDrain(): void {
 
 /**
  * Queues a resident's report and asks the outbox to try to send it right
- * away. Stays void-returning so its call sites do not change — but `enqueue`
- * can throw `OutboxWriteFailed` when the queue itself did not persist (local
- * storage full or blocked), and that is left to propagate: a caller that
- * believes a report was queued when it was not is exactly the failure the
- * outbox module exists to prevent.
+ * away. Returns the queued entry so a caller (QuickDepthReport's undo) can
+ * refer back to this exact write. `enqueue` can throw `OutboxWriteFailed`
+ * when the queue itself did not persist (local storage full or blocked),
+ * and that is left to propagate: a caller that believes a report was queued
+ * when it was not is exactly the failure the outbox module exists to
+ * prevent.
  */
 export function addWaterLevelReport(
   zoneId: string,
   depthLevel: DepthLevel,
   position?: { lat: number; lng: number } | null
-): void {
-  enqueue("submitWaterLevelReport", {
+): OutboxEntry {
+  const entry = enqueue("submitWaterLevelReport", {
     zoneId,
     depthLevel,
     ...(position ? { lat: position.lat, lng: position.lng } : {}),
   });
   triggerDrain();
+  return entry;
 }
 
 export function minutesSinceReport(reportedAt: string): number {
