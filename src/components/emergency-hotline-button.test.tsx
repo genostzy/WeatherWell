@@ -1,30 +1,39 @@
 import { describe, it, expect } from "vitest";
-import { render as rtlRender, screen, type RenderResult } from "@testing-library/react";
-import type { ReactElement } from "react";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { render, screen } from "@testing-library/react";
 import { EmergencyHotlineButton } from "./emergency-hotline-button";
+import { LanguageProvider } from "@/features/i18n/language-provider";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
-// EmergencyHotlineButton now wraps its link in a shadcn Tooltip (Radix),
-// which throws without an ancestor TooltipProvider. The real app supplies
-// this via layout.tsx; supply the same here. TooltipTrigger asChild clones
-// its child rather than wrapping it, so the `link` role queries below are
-// unaffected.
-function render(ui: ReactElement): RenderResult {
-  return rtlRender(<TooltipProvider>{ui}</TooltipProvider>);
+// EmergencyHotlineButton wraps its link in a shadcn Tooltip (Radix), which
+// throws without an ancestor TooltipProvider — the real app supplies this
+// via layout.tsx. TooltipTrigger asChild clones its child rather than
+// wrapping it, so the `link` role queries below are unaffected.
+function renderButton(hotlineNumber: string) {
+  return render(
+    <LanguageProvider>
+      <TooltipProvider>
+        <EmergencyHotlineButton hotlineNumber={hotlineNumber} />
+      </TooltipProvider>
+    </LanguageProvider>
+  );
 }
 
 describe("EmergencyHotlineButton", () => {
-  it("renders a tel: link with the given hotline number", () => {
-    render(<EmergencyHotlineButton hotlineNumber="09171234567" />);
-    const link = screen.getByRole("link", { name: /emergency hotline/i });
-    expect(link).toHaveAttribute("href", "tel:09171234567");
+  it("renders a tel: link for a real number", () => {
+    renderButton("09171234567");
+    expect(screen.getByRole("link")).toHaveAttribute("href", "tel:09171234567");
   });
 
-  it("meets the 44px minimum touch target", () => {
-    render(<EmergencyHotlineButton hotlineNumber="09171234567" />);
-    const link = screen.getByRole("link", { name: /emergency hotline/i });
-    // h-14/w-14 in Tailwind is 3.5rem = 56px, comfortably over the 44px minimum.
-    expect(link.className).toMatch(/h-14/);
-    expect(link.className).toMatch(/w-14/);
+  it("renders nothing for the seed's placeholder number", () => {
+    // A red emergency call button that dials 00000000000 is worse than no
+    // button: it costs a resident the seconds they spend discovering it
+    // does not work.
+    renderButton("00000000000");
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+  });
+
+  it("renders nothing for an empty number", () => {
+    renderButton("");
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
 });

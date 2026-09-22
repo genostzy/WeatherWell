@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/tooltip";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
+import { hasRealHotline } from "@/lib/zone-data-quality";
 import type { LocalizedText } from "@/lib/types";
 
 const CALL_HOTLINE: LocalizedText = {
@@ -17,6 +18,14 @@ const CALL_HOTLINE: LocalizedText = {
 
 export function EmergencyHotlineButton({ hotlineNumber }: { hotlineNumber: string }) {
   const { lang } = useLanguage();
+
+  // A placeholder hotline is not a degraded feature, it is a wrong answer:
+  // the resident taps a red emergency button and nothing rings. Render
+  // nothing instead, so the absence is obvious before an emergency rather
+  // than during one. See src/lib/zone-data-quality.ts.
+  if (!hasRealHotline({ hotlineNumber } as Parameters<typeof hasRealHotline>[0])) {
+    return null;
+  }
 
   return (
     <Tooltip>
