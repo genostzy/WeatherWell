@@ -94,4 +94,12 @@ describe("SharedAlertView", () => {
     renderWithHash(`#${encodeAlert(ALERT)}`);
     expect(screen.getByText(/number came from|hindi verified na numero|sender/i)).toBeInTheDocument();
   });
+
+  it("never shows the literal string 'Invalid Date' for a structurally-valid but corrupted timestamp", () => {
+    // isSharedAlert only checks typeof issuedAt === "string" — it cannot
+    // validate that the string parses, so a corrupted payload can still
+    // decode successfully with a garbage issuedAt.
+    renderWithHash(`#${encodeAlert({ ...ALERT, issuedAt: "not-a-real-timestamp" })}`);
+    expect(screen.queryByText(/invalid date/i)).not.toBeInTheDocument();
+  });
 });

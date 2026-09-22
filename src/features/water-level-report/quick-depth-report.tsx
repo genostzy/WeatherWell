@@ -24,6 +24,10 @@ const ALREADY_SENT: LocalizedText = {
   en: "Already sent to the barangay — it can't be taken back.",
   fil: "Naipadala na sa barangay — hindi na ito mababawi.",
 };
+const WITHDRAWN: LocalizedText = { en: "Report withdrawn", fil: "Nabawi ang ulat" };
+
+/** How long a terminal status message (withdrawn, already-sent, failed) stays up before the region clears itself. */
+const STATUS_MESSAGE_MS = 4000;
 
 /** How long the resident has to take back a mis-tap. */
 const UNDO_WINDOW_MS = 3000;
@@ -71,6 +75,7 @@ export function QuickDepthReport({ zoneId }: { zoneId: string }) {
       // Saying "Reported" here would be the one lie this surface must not
       // tell.
       setState({ kind: "failed" });
+      timer.current = setTimeout(() => setState({ kind: "idle" }), STATUS_MESSAGE_MS);
     }
   }
 
@@ -82,10 +87,12 @@ export function QuickDepthReport({ zoneId }: { zoneId: string }) {
       // withdraw, and pretending otherwise would tell a resident their
       // report is gone when the barangay already has it.
       setState({ kind: "too-late" });
+      timer.current = setTimeout(() => setState({ kind: "idle" }), STATUS_MESSAGE_MS);
       return;
     }
     discardEntry(entryId);
     setState({ kind: "undone" });
+    timer.current = setTimeout(() => setState({ kind: "idle" }), STATUS_MESSAGE_MS);
   }
 
   return (
@@ -120,6 +127,11 @@ export function QuickDepthReport({ zoneId }: { zoneId: string }) {
             <Button type="button" variant="ghost" size="lg" onClick={() => undo(state.entryId)}>
               {t(UNDO, lang)}
             </Button>
+          </span>
+        )}
+        {state.kind === "undone" && (
+          <span lang={lang} className="text-muted-foreground">
+            {t(WITHDRAWN, lang)}
           </span>
         )}
         {state.kind === "too-late" && (

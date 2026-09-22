@@ -130,9 +130,21 @@ export function SharedAlertView() {
           </div>
         )}
 
-        <p className="text-xs text-muted-foreground">
-          {t(ISSUED, lang)}: {new Date(alert.issuedAt).toLocaleString()}
-        </p>
+        {(() => {
+          const issued = new Date(alert.issuedAt);
+          // isSharedAlert can only check that issuedAt is a string, not that
+          // it parses — a corrupted-but-structurally-valid payload must not
+          // render the literal "Invalid Date" text.
+          if (Number.isNaN(issued.getTime())) return null;
+          return (
+            <p className="text-xs text-muted-foreground">
+              {t(ISSUED, lang)}: {issued.toLocaleString(lang === "fil" ? "fil-PH" : "en-PH", {
+                dateStyle: "medium",
+                timeStyle: "short",
+              })}
+            </p>
+          );
+        })()}
 
         <Button asChild variant="outline" className="w-full">
           <Link href="/">{t(OPEN_APP, lang)}</Link>

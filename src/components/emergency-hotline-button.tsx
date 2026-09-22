@@ -23,7 +23,7 @@ export function EmergencyHotlineButton({ hotlineNumber }: { hotlineNumber: strin
   // the resident taps a red emergency button and nothing rings. Render
   // nothing instead, so the absence is obvious before an emergency rather
   // than during one. See src/lib/zone-data-quality.ts.
-  if (!hasRealHotline({ hotlineNumber } as Parameters<typeof hasRealHotline>[0])) {
+  if (!hasRealHotline({ hotlineNumber })) {
     return null;
   }
 

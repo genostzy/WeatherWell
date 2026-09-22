@@ -45,6 +45,16 @@ describe("QuickDepthReport", () => {
     expect(readOutbox()).toHaveLength(0);
   });
 
+  it("confirms the withdrawal instead of the status region just going blank", async () => {
+    const user = userEvent.setup();
+    renderWithData(<QuickDepthReport zoneId="zone-1" />);
+
+    await user.click(screen.getByRole("button", { name: /waist-deep/i }));
+    await user.click(screen.getByRole("button", { name: /undo/i }));
+
+    expect(screen.getByRole("status").textContent).toMatch(/withdrawn|nabawi/i);
+  });
+
   it("stops offering undo once the window has passed", async () => {
     // fireEvent, not userEvent: userEvent.click() under vi.useFakeTimers()
     // hangs indefinitely in this project's React 19 + testing-library setup

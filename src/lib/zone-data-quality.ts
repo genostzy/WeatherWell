@@ -18,7 +18,7 @@ import type { Zone } from "@/lib/types";
 /** The seed's placeholder is all zeroes; a real number never is. */
 const ALL_ZEROES = /^0+$/;
 
-export function hasRealHotline(zone: Zone): boolean {
+export function hasRealHotline(zone: Pick<Zone, "hotlineNumber">): boolean {
   const number = zone.hotlineNumber.trim();
   if (number.length === 0) return false;
   return !ALL_ZEROES.test(number);
