@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { screen, fireEvent } from "@testing-library/react";
-import { renderWithData } from "@/test-utils/render-with-data";
+import { renderWithData, FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
 
 // Submitting queues a report, and queuing asks the outbox to drain, which
 // signs in. Stubbed to the offline answer so this file never constructs the
@@ -12,6 +12,13 @@ vi.mock("@/lib/auth/anonymous-session", () => ({
 }));
 
 import ReportPage from "./page";
+
+// The report page mounts the live-position watch; only geolocation is faked
+// (never the whole navigator — Leaflet reads userAgent at module init).
+Object.defineProperty(navigator, "geolocation", {
+  configurable: true,
+  value: { watchPosition: vi.fn(() => 1), clearWatch: vi.fn() },
+});
 
 describe("ReportPage when the report cannot be saved", () => {
   beforeEach(() => {
@@ -87,5 +94,24 @@ describe("ReportPage when the report cannot be saved", () => {
 
     expect(screen.getByText(/report recorded/i)).toBeInTheDocument();
     expect(screen.queryByText(/report not saved/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("ReportPage evacuation centre line", () => {
+  it("names the centre when the zone has a real one", () => {
+    // The full centre name, not a bare "Nilombot" substring: the fixture
+    // zone's own heading already says "Barangay Nilombot, Mapandan", so a
+    // partial match collides with it.
+    renderWithData(<ReportPage />);
+    expect(screen.getByText(/Nilombot Elementary School/i)).toBeInTheDocument();
+  });
+
+  it("says no centre is on record rather than showing a blank name with a status badge", () => {
+    const zones = FIXTURE_REFERENCE_DATA.zones.map((zone) => ({
+      ...zone,
+      evacuationCenterName: "",
+    }));
+    renderWithData(<ReportPage />, { data: { ...FIXTURE_REFERENCE_DATA, zones } });
+    expect(screen.getByText(/no evacuation centre on record/i)).toBeInTheDocument();
   });
 });

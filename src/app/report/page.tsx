@@ -13,6 +13,7 @@ import {
   Building2,
 } from "lucide-react";
 import { BackLink } from "@/components/back-link";
+import { hasRealEvacuationCenter } from "@/lib/zone-data-quality";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ReportForm } from "@/features/water-level-report/report-form";
@@ -42,6 +43,10 @@ const RAINFALL: LocalizedText = { en: "Rainfall", fil: "Ulan" };
 const HEAVY_RAIN_NOW: LocalizedText = { en: "Heavy rain right now", fil: "Malakas ang ulan ngayon" };
 const CLEAR_NO_ALERT: LocalizedText = { en: "No active alert", fil: "Walang aktibong alerto" };
 const EVACUATION_CENTER: LocalizedText = { en: "Evacuation center", fil: "Evacuation center" };
+const NO_CENTER_ON_RECORD: LocalizedText = {
+  en: "No evacuation centre on record — ask your barangay captain",
+  fil: "Walang nakatalang evacuation centre — magtanong sa inyong barangay captain",
+};
 const SAFETY_FIRST: LocalizedText = { en: "Report from somewhere safe", fil: "Mag-ulat mula sa ligtas na lugar" };
 const SAFETY_BODY: LocalizedText = {
   en: "Never wade into moving water to measure it. Judge the depth against something you can see from where you are — a step, a fence, a parked tricycle.",
@@ -170,10 +175,20 @@ export default function ReportPage() {
               </span>
               <span className="flex items-center gap-1.5">
                 <Building2 aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
-                {t(EVACUATION_CENTER, lang)}: {zone.evacuationCenterName}
-                <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${CENTER_STATUS_CLASS[centerStatus]}`}>
-                  {t(CENTER_STATUS_LABEL[centerStatus], lang)}
-                </span>
+                {hasRealEvacuationCenter(zone) ? (
+                  <>
+                    {t(EVACUATION_CENTER, lang)}: {zone.evacuationCenterName}
+                    <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${CENTER_STATUS_CLASS[centerStatus]}`}>
+                      {t(CENTER_STATUS_LABEL[centerStatus], lang)}
+                    </span>
+                  </>
+                ) : (
+                  // No status badge here on purpose: "Space available" beside
+                  // a blank name is a claim about a centre that does not exist.
+                  <span lang={lang} className="text-muted-foreground">
+                    {t(NO_CENTER_ON_RECORD, lang)}
+                  </span>
+                )}
               </span>
             </div>
           </CardContent>
