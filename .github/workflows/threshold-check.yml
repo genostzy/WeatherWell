@@ -1,0 +1,30 @@
+name: Threshold check
+
+# Vercel's Hobby/free tier caps vercel.json cron jobs at once a day, but the
+# threshold engine's own report window (check_and_trigger_alerts) is 6 hours
+# — see supabase/migrations/20260917150000_push_and_threshold.sql. A daily
+# cron only evaluates a 6-hour slice near midnight UTC, so crowd reports
+# filed outside that slice never got checked. Every 3 hours keeps every
+# report within one run of its 6-hour window.
+on:
+  schedule:
+    - cron: "0 */3 * * *"
+  workflow_dispatch:
+
+env:
+  APP_URL: https://weatherwell-wilsondayritjrapex-5422s-projects.vercel.app
+
+concurrency:
+  group: threshold-check
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Run the threshold engine
+        run: |
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "$APP_URL/api/threshold-check"
