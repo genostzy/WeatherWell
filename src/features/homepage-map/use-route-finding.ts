@@ -11,6 +11,18 @@ const NO_SAFE_AREA_FOUND: LocalizedText = {
   fil: "Walang zone na Ligtas sa ngayon.",
 };
 /**
+ * A silent success looks identical to the button doing nothing: the route
+ * panel that would otherwise show a destination only renders once there is a
+ * live GPS fix (see HomepageMap's directionToSafety), which a resident who
+ * just tapped the button may not have yet. These two variants both always
+ * show, regardless of GPS.
+ */
+function safeAreaFoundNotice(zoneName: string, alreadyThere: boolean): LocalizedText {
+  return alreadyThere
+    ? { en: `You're already in a safe zone: ${zoneName}.`, fil: `Ligtas ka na sa zone na ito: ${zoneName}.` }
+    : { en: `Nearest safe zone: ${zoneName}.`, fil: `Pinakamalapit na ligtas na zone: ${zoneName}.` };
+}
+/**
  * Covers both ways the search can come up empty — every path crosses a hazard,
  * or every centre sits in one. Saying only "every route passes through a
  * hazardous area" would be untrue in the second case, and a resident deciding
@@ -128,8 +140,9 @@ export function useRouteFinding(zones: Zone[]) {
   function handleFindSafeArea() {
     const safeZone = zones.find((z) => zoneStatusOf(z.id) === "safe");
     if (safeZone) {
+      const alreadyThere = safeZone.id === routeZoneId;
       setRouteZoneId(safeZone.id);
-      setNotice(null);
+      setNotice(safeAreaFoundNotice(safeZone.name, alreadyThere));
       setRealRoute(null);
     } else {
       setNotice(NO_SAFE_AREA_FOUND);

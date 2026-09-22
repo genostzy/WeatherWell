@@ -70,6 +70,10 @@ const COMPASS_LABEL: Record<string, LocalizedText> = {
 export function HomepageMap({ zones }: { zones: Zone[] }) {
   const { lang } = useLanguage();
   const [hazardType, setHazardType] = useState<HazardType>("flood");
+  // Set only by "Find safe evacuation center" — see MapCanvas's own comment
+  // on evacVisible for why a route to a safe zone (Find safe area) does not
+  // also reveal the shelter layer.
+  const [revealEvacuationCenters, setRevealEvacuationCenters] = useState(false);
   const livePosition = useLivePosition();
   const { alert: geofenceAlert, dismiss: dismissGeofence } = useGeofenceAlert(zones, livePosition);
   const forecast = useFloodForecast(zones[0]?.id);
@@ -142,6 +146,7 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
           onDeletePin={setDeletingPin}
           onViewPhoto={setPhotoPin}
           livePosition={livePosition}
+          revealEvacuationCenters={revealEvacuationCenters}
         />
       </div>
 
@@ -163,7 +168,10 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
           </button>
           <button
             type="button"
-            onClick={handleFindSafeEvacuationCenter}
+            onClick={() => {
+              handleFindSafeEvacuationCenter();
+              setRevealEvacuationCenters(true);
+            }}
             className="flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-border px-3 py-3 text-center outline-none transition-colors hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50"
           >
             <Building2 aria-hidden="true" className="h-5 w-5 shrink-0" />

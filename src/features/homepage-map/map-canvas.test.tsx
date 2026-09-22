@@ -74,6 +74,37 @@ describe("MapCanvas", () => {
     expect(screen.getByRole("radio", { name: /flood/i })).toBeInTheDocument();
   });
 
+  describe("evacuation center visibility", () => {
+    it("does not show evacuation centers on the map by default", () => {
+      // Showing every evacuation center up front reveals shelter capacity
+      // and locations nobody asked for yet — it only becomes useful once a
+      // resident is actually looking for one.
+      renderWithData(<MapCanvas {...baseProps} />);
+      expect(screen.queryByRole("img", { name: /evacuation center/i })).not.toBeInTheDocument();
+    });
+
+    it("reveals evacuation centers once the resident searches", () => {
+      renderWithData(<MapCanvas {...baseProps} />);
+      fireEvent.change(screen.getByPlaceholderText(/search zone/i), {
+        target: { value: FIXTURE_REFERENCE_DATA.zones[0].name },
+      });
+      expect(screen.getAllByRole("img", { name: /evacuation center/i }).length).toBeGreaterThan(0);
+    });
+
+    it("hides evacuation centers again once the search is cleared", () => {
+      renderWithData(<MapCanvas {...baseProps} />);
+      const search = screen.getByPlaceholderText(/search zone/i);
+      fireEvent.change(search, { target: { value: FIXTURE_REFERENCE_DATA.zones[0].name } });
+      fireEvent.change(search, { target: { value: "" } });
+      expect(screen.queryByRole("img", { name: /evacuation center/i })).not.toBeInTheDocument();
+    });
+
+    it("reveals evacuation centers when the parent reports 'find safe evacuation center' was used", () => {
+      renderWithData(<MapCanvas {...baseProps} revealEvacuationCenters />);
+      expect(screen.getAllByRole("img", { name: /evacuation center/i }).length).toBeGreaterThan(0);
+    });
+  });
+
   it("calls onSelectZone when a zone status marker is clicked", () => {
     const onSelectZone = vi.fn();
     renderWithData(<MapCanvas {...baseProps} onSelectZone={onSelectZone} />);

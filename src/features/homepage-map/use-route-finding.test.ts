@@ -91,13 +91,28 @@ describe("useRouteFinding", () => {
     expect(result.current.notice).not.toBeNull();
   });
 
-  it("finds a Safe zone for the separate find-safe-area action", () => {
-    // Clear zone-4's alert so exactly one zone reads Safe.
+  it("finds a Safe zone for the separate find-safe-area action and names it", () => {
+    // Clear zone-4's alert so exactly one zone reads Safe. A silent success
+    // (notice: null) is indistinguishable from the button doing nothing at
+    // all — the route panel that would otherwise show this only renders when
+    // there's a live GPS fix, which this hook cannot assume.
     const { result } = renderRouteFinding(cleared("zone-4"));
 
     act(() => result.current.handleFindSafeArea());
 
     expect(result.current.routeZone?.id).toBe("zone-4");
-    expect(result.current.notice).toBeNull();
+    expect(result.current.notice).not.toBeNull();
+    expect(result.current.notice?.en).toMatch(/zone-4|Santa Barbara/i);
+  });
+
+  it("tells the resident outright when the zone they're already viewing is the safe one", () => {
+    // zone-1 is the hook's own default routeZoneId — finding it again must
+    // not look identical to finding nothing.
+    const { result } = renderRouteFinding(cleared("zone-1"));
+
+    act(() => result.current.handleFindSafeArea());
+
+    expect(result.current.routeZone?.id).toBe("zone-1");
+    expect(result.current.notice?.en).toMatch(/already/i);
   });
 });

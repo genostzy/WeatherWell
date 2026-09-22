@@ -91,6 +91,9 @@ describe("HomepageMap", () => {
     await user.click(screen.getByRole("button", { name: /find safe evacuation center/i }));
 
     expect(screen.queryByText(/passes through a hazardous area/i)).not.toBeInTheDocument();
+    // Evacuation centers are hidden until asked for — this button is one of
+    // the two ways to ask.
+    expect(screen.getAllByRole("img", { name: /evacuation center/i }).length).toBeGreaterThan(0);
   });
 
   it("reports when no zone is currently Safe", async () => {
@@ -101,5 +104,17 @@ describe("HomepageMap", () => {
     await user.click(screen.getByRole("button", { name: /^find safe area$/i }));
 
     expect(screen.getByText(/no zone is currently safe/i)).toBeInTheDocument();
+  });
+
+  it("does not reveal evacuation centers from 'Find safe area' alone", async () => {
+    // Find safe area routes to a safe ZONE, not specifically to an
+    // evacuation center — only the evacuation-center search, or the
+    // resident's own search box, should surface the shelter layer.
+    const user = userEvent.setup();
+    renderWithData(<HomepageMap zones={FIXTURE_REFERENCE_DATA.zones} />);
+
+    await user.click(screen.getByRole("button", { name: /^find safe area$/i }));
+
+    expect(screen.queryByRole("img", { name: /evacuation center/i })).not.toBeInTheDocument();
   });
 });

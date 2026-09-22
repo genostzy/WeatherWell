@@ -117,6 +117,7 @@ export function MapCanvas({
   onDeletePin,
   onViewPhoto,
   livePosition,
+  revealEvacuationCenters = false,
 }: {
   zones: Zone[];
   hazardType: HazardType;
@@ -131,6 +132,8 @@ export function MapCanvas({
   onDeletePin?: (pin: CommunityPin) => void;
   onViewPhoto?: (pin: CommunityPin) => void;
   livePosition?: { lat: number; lng: number } | null;
+  /** True once the resident has used "Find safe evacuation center" — see the layer-visibility comment below. */
+  revealEvacuationCenters?: boolean;
 }) {
   const { lang } = useLanguage();
   const communityPins = useCommunityPins();
@@ -150,7 +153,10 @@ export function MapCanvas({
   const [viewCenter, setViewCenter] = useState<[number, number]>(initialCenter);
 
   const [showStatus, setShowStatus] = useState(true);
-  const [showEvac, setShowEvac] = useState(true);
+  // Hidden until the resident asks for it (search, or "Find safe evacuation
+  // center") — see evacVisible below. The Layers checkbox is still a manual
+  // override for a resident who wants them on regardless.
+  const [showEvac, setShowEvac] = useState(false);
   const [showPoi, setShowPoi] = useState(true);
   const [showPins, setShowPins] = useState(true);
   const [showHazard, setShowHazard] = useState(true);
@@ -216,6 +222,18 @@ export function MapCanvas({
    * - Zoom 15+: all nearby markers with capacity rings
    */
   const showEvacCenters = zoom >= 13;
+
+  /**
+   * Evacuation centers stay off the map until the resident actually wants
+   * one: an always-on shelter layer surfaces capacity and locations nobody
+   * asked to see yet. `searchQuery` covers both "typing" and "just picked a
+   * result" (the result click sets it to the zone's name rather than
+   * clearing it), so one condition covers the whole search interaction.
+   * `revealEvacuationCenters` is the parent's signal that "Find safe
+   * evacuation center" was used. `showEvac` remains a manual override via
+   * the Layers panel for a resident who wants them on regardless.
+   */
+  const evacVisible = showEvac || searchQuery.length > 0 || revealEvacuationCenters;
 
   /**
    * Cluster by municipality across ALL zones, not just visible radius.
@@ -439,7 +457,7 @@ export function MapCanvas({
           );
         })}
 
-        {showEvac && showEvacCenters && evacClusters.map((cluster) => (
+        {evacVisible && showEvacCenters && evacClusters.map((cluster) => (
           <Marker
             key={`evac-cluster-${cluster.municipality}`}
             position={[cluster.lat, cluster.lng]}
@@ -459,7 +477,7 @@ export function MapCanvas({
           </Marker>
         ))}
 
-        {showEvac && individualEvacZones.map((zone) => {
+        {evacVisible && individualEvacZones.map((zone) => {
           const ratio = zone.evacuationCenterCapacity > 0 && zone.currentOccupancy != null
             ? zone.currentOccupancy / zone.evacuationCenterCapacity
             : undefined;
