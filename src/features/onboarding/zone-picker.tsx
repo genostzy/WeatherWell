@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -194,13 +194,17 @@ export function ZonePicker({ onSelect }: { onSelect: (zoneId: string) => void })
     []
   );
 
-  function withdrawProposal() {
+  // Wrapped in useCallback with stable deps (a ref and a state setter, both
+  // guaranteed referentially stable by React) so detectLocation below is
+  // stable too — otherwise the mount effect would refire on every render
+  // detectLocation itself causes, re-attempting a location read in a loop.
+  const withdrawProposal = useCallback(() => {
     const proposed = proposedZoneId.current;
     proposedZoneId.current = null;
     if (proposed !== null) {
       setSelectedZone((current) => (current?.id === proposed ? null : current));
     }
-  }
+  }, []);
 
   function chooseByHand(zone: ZoneSummary) {
     proposedZoneId.current = null;
@@ -246,7 +250,12 @@ export function ZonePicker({ onSelect }: { onSelect: (zoneId: string) => void })
     }, SEARCH_DEBOUNCE_MS);
   }
 
-  function handleUseMyLocation() {
+  // useCallback with stable deps (withdrawProposal is itself stable; every
+  // other value read here is a ref or a state setter) so the identity of
+  // this function does not change across renders — the mount effect below
+  // depends on it, and an unstable identity would re-attempt a location
+  // read on every render this function itself causes.
+  const detectLocation = useCallback(() => {
     if (!navigator.geolocation) {
       withdrawProposal();
       setDetection({ state: "failed" });
@@ -311,7 +320,26 @@ export function ZonePicker({ onSelect }: { onSelect: (zoneId: string) => void })
       fail,
       { timeout: LOCATION_TIMEOUT_MS, maximumAge: LOCATION_MAX_AGE_MS }
     );
-  }
+  }, [withdrawProposal]);
+
+  // Attempted automatically rather than waiting for a tap: for a resident
+  // who allows location this turns onboarding into a single Confirm press,
+  // and it removes the wrong-barangay risk that a typed search carries
+  // (Philippine barangay names repeat heavily — a mis-pick means a wrong
+  // evacuation route). A denial or a failure just falls through to the
+  // search box below, exactly as before.
+  useEffect(() => {
+    // Deferred to a microtask rather than called directly: detectLocation's
+    // own no-geolocation branch calls setDetection synchronously, and doing
+    // that straight from an effect body trips
+    // react-hooks/set-state-in-effect's cascading-render warning. Queuing it
+    // moves the state update out of the effect's own synchronous execution
+    // without changing when the read is attempted in practice — this still
+    // starts before the resident could possibly have tapped anything.
+    queueMicrotask(() => {
+      void detectLocation();
+    });
+  }, [detectLocation]);
 
   const displayResults = showResults ? searchResults : [];
 
@@ -323,7 +351,7 @@ export function ZonePicker({ onSelect }: { onSelect: (zoneId: string) => void })
         type="button"
         variant="outline"
         size="lg"
-        onClick={handleUseMyLocation}
+        onClick={detectLocation}
         disabled={detection.state === "detecting"}
       >
         {t(COPY.useLocation, lang)}

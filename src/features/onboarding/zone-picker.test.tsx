@@ -245,6 +245,32 @@ describe("ZonePicker", () => {
     expect(await screen.findByText(/Couldn't get your location/)).toBeInTheDocument();
   });
 
+  it("attempts the location read on mount and pre-selects the detected barangay", async () => {
+    // Typing a barangay name costs ~9 keystrokes and risks picking the
+    // wrong one — Philippine barangay names repeat heavily (Poblacion,
+    // San Jose). A wrong pick means a wrong evacuation route.
+    stubFix(16.0288, 120.4366); // exactly zone-1's own coordinates
+    const onSelect = vi.fn();
+
+    renderWithData(<ZonePicker onSelect={onSelect} />);
+
+    expect(await screen.findByText("Barangay Nilombot, Mapandan")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /confirm barangay/i })).toBeEnabled();
+  });
+
+  it("falls back to search when the resident denies location", async () => {
+    const getCurrentPosition = vi.fn(
+      (_success: PositionCallback, error?: PositionErrorCallback) => {
+        error?.({ code: 1, message: "denied" } as GeolocationPositionError);
+      }
+    );
+    stubGeolocation({ getCurrentPosition });
+
+    renderWithData(<ZonePicker onSelect={() => {}} />);
+
+    expect(await screen.findByLabelText(/search barangay/i)).toBeInTheDocument();
+  });
+
   it("speaks Filipino, including the distance message", async () => {
     stubFix(16.08, 120.4038);
     renderWithData(<ZonePicker onSelect={() => {}} />, { lang: "fil" });
