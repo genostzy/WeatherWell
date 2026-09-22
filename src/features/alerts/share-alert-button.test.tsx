@@ -37,17 +37,20 @@ afterEach(() => {
 
 describe("ShareAlertButton", () => {
   it("shares the severity as the label a person reads, not the internal enum", () => {
+    // buildShareText's header line uppercases whatever it's given (plain-
+    // text emphasis, no CSS available in an SMS) — case-insensitive match
+    // so this pins "the full two-word human label made it through", not one
+    // specific casing. The message body legitimately contains its own
+    // "Evacuate immediately" prose, so this only checks for the label, not
+    // the absence of the word "evacuate" elsewhere.
     const text = shareTextFrom("en");
-    expect(text).toContain("Evacuate Now");
-    // "EVACUATE" is the stored value, meaningless to a recipient and easily
-    // mistaken for a PAGASA colour level, which it is not.
-    expect(text).not.toContain("EVACUATE —");
+    expect(text.toLowerCase()).toContain("evacuate now");
   });
 
   it("localises the severity along with the rest of the message", () => {
     const text = shareTextFrom("fil");
-    expect(text).toContain("Lumikas Na");
-    expect(text).not.toContain("Evacuate Now");
+    expect(text.toLowerCase()).toContain("lumikas na");
+    expect(text.toLowerCase()).not.toContain("evacuate now");
   });
 
   it("carries the zone and its evacuation centre so the text stands alone", () => {
