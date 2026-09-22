@@ -54,10 +54,14 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
                   </div>
                 </header>
               }
+              gatedExtras={
+                <>
+                  <SelectedZoneHotlineButton />
+                  <TilePrecacher />
+                </>
+              }
             >
               {children}
-              <SelectedZoneHotlineButton />
-              <TilePrecacher />
             </ReferenceDataProvider>
           </LanguageProvider>
         </TooltipProvider>

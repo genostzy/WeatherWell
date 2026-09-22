@@ -4,6 +4,8 @@ import userEvent from "@testing-library/user-event";
 import OnboardingPage from "@/app/onboarding/page";
 import Home from "@/app/page";
 import { renderWithData, FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
+import { mockZoneApis } from "@/test-utils/mock-zone-apis";
+import { ONBOARDED_KEY } from "@/features/onboarding/onboarding-storage";
 
 const { replace } = vi.hoisted(() => ({ replace: vi.fn() }));
 vi.mock("next/navigation", () => ({
@@ -20,6 +22,7 @@ describe("onboarding → home zone threading", () => {
   beforeEach(() => {
     replace.mockClear();
     window.localStorage.clear();
+    mockZoneApis(FIXTURE_REFERENCE_DATA.zones);
   });
 
   async function completeOnboardingWith(zoneName: string) {
@@ -70,6 +73,13 @@ describe("onboarding → home zone threading", () => {
     });
 
     it("falls back to the first zone when nothing has been picked yet", () => {
+      // Onboarded, but no zone ever selected — a different fact from "not
+      // onboarded" (ONBOARDED_KEY vs. the separate selectedZoneId key).
+      // Home only renders its zone content once onboarded is confirmed
+      // true; leaving this unset would show OnboardingGate's redirect
+      // skeleton instead, which is a different test (see the flow tests
+      // above and OnboardingGate's own test file).
+      window.localStorage.setItem(ONBOARDED_KEY, "true");
       renderWithData(<Home />);
 
       const zoneNames = screen.getAllByText(new RegExp(FIXTURE_REFERENCE_DATA.zones.map((z) => z.name).join("|")));

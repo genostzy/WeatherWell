@@ -4,7 +4,13 @@ import { ReferenceDataProvider, FETCH_TIMEOUT_MS } from "./provider";
 import { useZones, usePois, useHazardsForZone } from "./use-reference-data";
 import { useAlerts } from "@/lib/alerts-store";
 import { LanguageProvider } from "@/features/i18n/language-provider";
+import { ONBOARDED_KEY } from "@/features/onboarding/onboarding-storage";
 import type { AlertRecord } from "@/lib/types";
+
+const { mockUsePathname } = vi.hoisted(() => ({ mockUsePathname: vi.fn(() => "/") }));
+vi.mock("next/navigation", () => ({
+  usePathname: () => mockUsePathname(),
+}));
 
 function ZoneNames() {
   const zones = useZones();
@@ -70,9 +76,16 @@ function renderProvider() {
 
 beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn());
+  mockUsePathname.mockReturnValue("/");
+  // Every existing test in this file predates the bypass-gate feature and is
+  // about the ordinary gate, not onboarding — default to "already onboarded"
+  // so bypassGate stays false for them. The bypassGate describe block below
+  // clears this itself for the cases that need "not yet onboarded".
+  window.localStorage.setItem(ONBOARDED_KEY, "true");
 });
 afterEach(() => {
   vi.unstubAllGlobals();
+  window.localStorage.clear();
 });
 
 describe("ReferenceDataProvider", () => {
@@ -171,6 +184,108 @@ describe("ReferenceDataProvider", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+/** Deliberately reads nothing from ReferenceDataContext — stands in for onboarding's real content, which resolves a zone over the network instead. */
+function Plain() {
+  return <p>plain content</p>;
+}
+
+describe("ReferenceDataProvider's bypassGate", () => {
+  function renderBypassable() {
+    render(
+      <LanguageProvider>
+        <ReferenceDataProvider>
+          <Plain />
+        </ReferenceDataProvider>
+      </LanguageProvider>
+    );
+  }
+
+  it("renders children immediately on /onboarding, even mid-onboarding fetch", () => {
+    mockUsePathname.mockReturnValue("/onboarding");
+    window.localStorage.clear(); // not yet onboarded — the realistic case for this route
+    (fetch as ReturnType<typeof vi.fn>).mockReturnValue(new Promise(() => {})); // never resolves
+    renderBypassable();
+    expect(screen.getByText("plain content")).toBeInTheDocument();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("renders children immediately on / for a not-yet-onboarded visitor", () => {
+    // This is what lets OnboardingGate (a child of this provider, rendered
+    // on /) redirect a first-time visitor without first waiting on the full
+    // nationwide fetch — see the provider's own doc comment.
+    mockUsePathname.mockReturnValue("/");
+    window.localStorage.clear();
+    (fetch as ReturnType<typeof vi.fn>).mockReturnValue(new Promise(() => {}));
+    renderBypassable();
+    expect(screen.getByText("plain content")).toBeInTheDocument();
+  });
+
+  it("does not bypass on / once the visitor is confirmed onboarded", () => {
+    mockUsePathname.mockReturnValue("/");
+    window.localStorage.setItem(ONBOARDED_KEY, "true");
+    (fetch as ReturnType<typeof vi.fn>).mockReturnValue(new Promise(() => {}));
+    renderBypassable();
+    expect(screen.queryByText("plain content")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toBeInTheDocument();
+  });
+
+  it("does not bypass a stale deep link to another route, even while not onboarded", () => {
+    // A not-yet-onboarded visitor landing on e.g. /evacuation (a stale
+    // bookmark, a restored session) must keep its current behavior — render
+    // gated on real data like any other route — not start throwing "no
+    // ReferenceDataProvider ancestor" because this bypassed the gate there
+    // too. Only / and /onboarding are exempt.
+    mockUsePathname.mockReturnValue("/evacuation");
+    window.localStorage.clear();
+    (fetch as ReturnType<typeof vi.fn>).mockReturnValue(new Promise(() => {}));
+    renderBypassable();
+    expect(screen.queryByText("plain content")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toBeInTheDocument();
+  });
+
+  it("never bypasses gatedExtras, even while children bypass the gate (regression: this used to crash the /onboarding build)", () => {
+    // gatedExtras stands in for the root layout's SelectedZoneHotlineButton
+    // and TilePrecacher — global widgets mounted alongside {children} that
+    // call useZones() themselves. Before gatedExtras existed, they were
+    // plain children too, so bypassing the gate for the onboarding page
+    // bypassed it for them as well and they threw "no ReferenceDataProvider
+    // ancestor" — caught by `next build` prerendering /onboarding, not by
+    // any unit test. This is that test.
+    mockUsePathname.mockReturnValue("/onboarding");
+    window.localStorage.clear();
+    (fetch as ReturnType<typeof vi.fn>).mockReturnValue(new Promise(() => {}));
+    render(
+      <LanguageProvider>
+        <ReferenceDataProvider gatedExtras={<ZoneNames />}>
+          <Plain />
+        </ReferenceDataProvider>
+      </LanguageProvider>
+    );
+    // The bypassable page content shows immediately...
+    expect(screen.getByText("plain content")).toBeInTheDocument();
+    // ...but the real-data-dependent widget waits, rather than throwing.
+    expect(screen.queryByText("Barangay Nilombot, Mapandan")).not.toBeInTheDocument();
+  });
+
+  it("renders gatedExtras once data arrives, even on a bypassed route", async () => {
+    mockUsePathname.mockReturnValue("/onboarding");
+    window.localStorage.clear();
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ONE_ZONE,
+    });
+    render(
+      <LanguageProvider>
+        <ReferenceDataProvider gatedExtras={<ZoneNames />}>
+          <Plain />
+        </ReferenceDataProvider>
+      </LanguageProvider>
+    );
+    expect(screen.getByText("plain content")).toBeInTheDocument();
+    expect(await screen.findByText("Barangay Nilombot, Mapandan")).toBeInTheDocument();
   });
 });
 

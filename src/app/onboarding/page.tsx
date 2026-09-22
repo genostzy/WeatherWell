@@ -9,14 +9,12 @@ import {
   markOnboarded,
   setSelectedZoneId,
 } from "@/features/onboarding/onboarding-storage";
-import { useZones } from "@/lib/reference-data/use-reference-data";
 
 type Step = "consent" | "zone" | "install";
 
 export default function OnboardingPage() {
   const [step, setStep] = useState<Step>("consent");
   const router = useRouter();
-  const zones = useZones();
 
   return (
     <main className="flex flex-1 flex-col items-center justify-center gap-8 p-4 sm:p-6 lg:p-8">
@@ -24,7 +22,6 @@ export default function OnboardingPage() {
 
       {step === "zone" && (
         <ZonePicker
-          zones={zones}
           onSelect={(zoneId) => {
             // The picked zone is what every other screen resolves against —
             // store it before moving on. Onboarding is only marked complete at

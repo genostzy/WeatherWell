@@ -1,9 +1,11 @@
 "use client";
 
 import { createContext, useCallback, useEffect, useState, type ReactNode } from "react";
+import { usePathname } from "next/navigation";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { AlertsContext, AlertsRefreshContext } from "@/lib/alerts-store";
+import { useHasOnboarded } from "@/features/onboarding/onboarding-storage";
 import type { AlertRecord, CenterStatus, LocalizedText } from "@/lib/types";
 import type { ReferenceData } from "./types";
 
@@ -82,12 +84,26 @@ type State =
  * "every barangay is safe" — the single most dangerous wrong answer this
  * system can give.
  *
+ * `/` and `/onboarding` bypass the gate entirely for a not-yet-onboarded
+ * visitor (see `bypassGate` below) — not every route, just these two.
+ * OnboardingGate is what redirects a first-time visitor from `/` to
+ * `/onboarding`, and OnboardingGate is itself a child of this provider:
+ * without the `/` bypass, even *reaching* that redirect would wait on the
+ * full nationwide fetch first. Nothing on either route before onboarding
+ * completes reads useZones()/useSelectedZone()/AlertsContext; ZonePicker
+ * resolves a zone through /api/zones/search and /api/zones/nearest instead.
+ * Blocking either would make the very first thing a new resident does the
+ * single worst-case load in the app, on the exact degraded connection this
+ * data is meant to survive. Every other route keeps gating exactly as
+ * before, deep link or not.
+ *
  * On a repeat visit the service worker answers reference data from cache with no
  * network, so this resolves immediately and the gate is invisible.
  */
 export function ReferenceDataProvider({
   children,
   chrome,
+  gatedExtras,
 }: {
   children: ReactNode;
   /**
@@ -101,8 +117,35 @@ export function ReferenceDataProvider({
    * would not exist yet either.
    */
   chrome?: ReactNode;
+  /**
+   * The opposite of the bypass `children` gets on `/` and `/onboarding`:
+   * always waits for `state.status === "ready"`, on every route, no
+   * exceptions. For global widgets the root layout mounts alongside
+   * `children` — SelectedZoneHotlineButton, TilePrecacher — that call
+   * useZones()/useSelectedZone() themselves and genuinely need real data
+   * regardless of what page is showing. If these were plain `children`,
+   * bypassing the gate for the onboarding page would also bypass it for
+   * them, and they would throw ("no ReferenceDataProvider ancestor")
+   * instead of just waiting quietly like they always have.
+   */
+  gatedExtras?: ReactNode;
 }) {
   const { lang } = useLanguage();
+  const pathname = usePathname();
+  // useHasOnboarded, not a plain hasOnboarded() call: this is read during
+  // render (not an effect), and a plain call would return false on the
+  // server (no window) but the real value on the client's first paint —
+  // a hydration mismatch for any returning, already-onboarded resident.
+  // null ("not yet known", server and first client paint alike) never
+  // bypasses; only a confirmed `false` does, one render after hydration.
+  const onboarded = useHasOnboarded();
+  // Deliberately scoped to exactly the two routes that matter, not "every
+  // route while not onboarded": a stale deep link into e.g. /evacuation
+  // before onboarding must keep its current behavior (render with whatever
+  // default zone it already falls back to), not start throwing "no
+  // ReferenceDataProvider ancestor" because this bypassed the gate there too.
+  const bypassGate =
+    (pathname?.startsWith("/onboarding") ?? false) || (pathname === "/" && onboarded === false);
   const [state, setState] = useState<State>({ status: "loading" });
 
   // Promise chaining rather than async/await: every setState call below runs
@@ -191,12 +234,18 @@ export function ReferenceDataProvider({
   return (
     <ReferenceDataContext.Provider value={state.status === "ready" ? state.data : null}>
       {chrome}
-      {state.status === "loading" && (
+      {bypassGate && (
+        // The fetch above still runs in the background (so it's likely
+        // already cached by the time onboarding finishes and lands on the
+        // real gate), but nothing here waits on it.
+        children
+      )}
+      {!bypassGate && state.status === "loading" && (
         <p role="status" lang={lang} className="p-6 text-center text-sm text-muted-foreground">
           {t(LOADING, lang)}
         </p>
       )}
-      {state.status === "failed" && (
+      {!bypassGate && state.status === "failed" && (
         <div className="flex flex-col items-center gap-4 p-6">
           <p role="alert" lang={lang} className="max-w-md text-center text-sm">
             {t(UNREACHABLE, lang)}
@@ -211,9 +260,16 @@ export function ReferenceDataProvider({
         </div>
       )}
       {state.status === "ready" && (
+        // gatedExtras always renders here once ready, bypass or not.
+        // children only renders here when NOT bypassed — the bypass branch
+        // above already rendered it, and rendering it twice would mount two
+        // copies of the real onboarding page once its data happens to load.
         <SetCenterStatusContext.Provider value={applyCenterStatus}>
           <AlertsContext.Provider value={state.alerts}>
-            <AlertsRefreshContext.Provider value={refreshAlerts}>{children}</AlertsRefreshContext.Provider>
+            <AlertsRefreshContext.Provider value={refreshAlerts}>
+              {!bypassGate && children}
+              {gatedExtras}
+            </AlertsRefreshContext.Provider>
           </AlertsContext.Provider>
         </SetCenterStatusContext.Provider>
       )}

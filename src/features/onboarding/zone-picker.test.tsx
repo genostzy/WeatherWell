@@ -3,6 +3,7 @@ import { act, fireEvent, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ZonePicker } from "./zone-picker";
 import { FIXTURE_REFERENCE_DATA, renderWithData } from "@/test-utils/render-with-data";
+import { mockZoneApis } from "@/test-utils/mock-zone-apis";
 
 const ZONES = FIXTURE_REFERENCE_DATA.zones;
 
@@ -36,17 +37,18 @@ async function searchAndSelect(query: string, zoneName: string) {
 describe("ZonePicker", () => {
   beforeEach(() => {
     stubGeolocation(undefined);
+    mockZoneApis(ZONES);
   });
 
   it("starts with confirm disabled and no selected zone", () => {
-    renderWithData(<ZonePicker zones={ZONES} onSelect={() => {}} />);
+    renderWithData(<ZonePicker onSelect={() => {}} />);
     expect(screen.getByRole("button", { name: /confirm/i })).toBeDisabled();
     expect(screen.queryByText(/Selected:/)).not.toBeInTheDocument();
   });
 
   it("searches and selects a zone by name", async () => {
     const onSelect = vi.fn();
-    renderWithData(<ZonePicker zones={ZONES} onSelect={onSelect} />);
+    renderWithData(<ZonePicker onSelect={onSelect} />);
 
     await searchAndSelect("Nilombot", "Barangay Nilombot, Mapandan");
 
@@ -60,7 +62,7 @@ describe("ZonePicker", () => {
   });
 
   it("searches by municipality name", async () => {
-    renderWithData(<ZonePicker zones={ZONES} onSelect={() => {}} />);
+    renderWithData(<ZonePicker onSelect={() => {}} />);
 
     const input = screen.getByRole("textbox", { name: /search barangay/i });
     await userEvent.type(input, "Mangaldan");
@@ -71,7 +73,7 @@ describe("ZonePicker", () => {
   });
 
   it("shows no-results message for unmatched search", async () => {
-    renderWithData(<ZonePicker zones={ZONES} onSelect={() => {}} />);
+    renderWithData(<ZonePicker onSelect={() => {}} />);
 
     const input = screen.getByRole("textbox", { name: /search barangay/i });
     await userEvent.type(input, "zzzznonexistent");
@@ -83,7 +85,7 @@ describe("ZonePicker", () => {
     // ~1.1 km north of zone-2 (Mangaldan). zone-1 is first in the list.
     const getCurrentPosition = stubFix(16.08, 120.4038);
     const onSelect = vi.fn();
-    renderWithData(<ZonePicker zones={ZONES} onSelect={onSelect} />);
+    renderWithData(<ZonePicker onSelect={onSelect} />);
 
     await userEvent.click(screen.getByRole("button", { name: /use my location/i }));
 
@@ -100,7 +102,7 @@ describe("ZonePicker", () => {
 
   it("says plainly when the resident is outside every covered barangay, and selects nothing", async () => {
     stubFix(14.5995, 120.9842); // Manila
-    renderWithData(<ZonePicker zones={ZONES} onSelect={() => {}} />);
+    renderWithData(<ZonePicker onSelect={() => {}} />);
 
     await userEvent.click(screen.getByRole("button", { name: /use my location/i }));
 
@@ -114,7 +116,7 @@ describe("ZonePicker", () => {
 
   it("clears a barangay the location proposed when a later fix turns out to be outside coverage", async () => {
     stubFix(16.08, 120.4038); // near zone-2
-    renderWithData(<ZonePicker zones={ZONES} onSelect={() => {}} />);
+    renderWithData(<ZonePicker onSelect={() => {}} />);
     await userEvent.click(screen.getByRole("button", { name: /use my location/i }));
     await screen.findByText(/Closest barangay we cover/);
     expect(screen.getByText("Barangay Poblacion, Mangaldan")).toBeInTheDocument();
@@ -127,7 +129,7 @@ describe("ZonePicker", () => {
   });
 
   it("keeps a barangay the resident picked by hand when a fix is outside coverage", async () => {
-    renderWithData(<ZonePicker zones={ZONES} onSelect={() => {}} />);
+    renderWithData(<ZonePicker onSelect={() => {}} />);
 
     // Search and select zone-2 manually
     await searchAndSelect("Poblacion, Mangaldan", "Barangay Poblacion, Mangaldan");
@@ -141,7 +143,7 @@ describe("ZonePicker", () => {
 
   it("labels an imprecise fix as approximate", async () => {
     stubFix(16.08, 120.4038, 2500);
-    renderWithData(<ZonePicker zones={ZONES} onSelect={() => {}} />);
+    renderWithData(<ZonePicker onSelect={() => {}} />);
 
     await userEvent.click(screen.getByRole("button", { name: /use my location/i }));
 
@@ -156,7 +158,7 @@ describe("ZonePicker", () => {
     );
     stubGeolocation({ getCurrentPosition });
 
-    renderWithData(<ZonePicker zones={ZONES} onSelect={() => {}} />);
+    renderWithData(<ZonePicker onSelect={() => {}} />);
     await userEvent.click(screen.getByRole("button", { name: /use my location/i }));
 
     expect(await screen.findByText(/Couldn't get your location/)).toBeInTheDocument();
@@ -171,7 +173,7 @@ describe("ZonePicker", () => {
     it("asks the device for a bounded read: a timeout, and a recent cached fix is fine", () => {
       const getCurrentPosition = vi.fn();
       stubGeolocation({ getCurrentPosition });
-      renderWithData(<ZonePicker zones={ZONES} onSelect={() => {}} />);
+      renderWithData(<ZonePicker onSelect={() => {}} />);
 
       fireEvent.click(screen.getByRole("button", { name: /use my location/i }));
 
@@ -188,7 +190,7 @@ describe("ZonePicker", () => {
       // option or not.
       const getCurrentPosition = vi.fn();
       stubGeolocation({ getCurrentPosition });
-      renderWithData(<ZonePicker zones={ZONES} onSelect={() => {}} />);
+      renderWithData(<ZonePicker onSelect={() => {}} />);
       const button = screen.getByRole("button", { name: /use my location/i });
 
       fireEvent.click(button);
@@ -222,7 +224,7 @@ describe("ZonePicker", () => {
         lateSuccess = success;
       });
       stubGeolocation({ getCurrentPosition });
-      renderWithData(<ZonePicker zones={ZONES} onSelect={() => {}} />);
+      renderWithData(<ZonePicker onSelect={() => {}} />);
 
       fireEvent.click(screen.getByRole("button", { name: /use my location/i }));
       act(() => {
@@ -238,14 +240,14 @@ describe("ZonePicker", () => {
   });
 
   it("reports failure when the device has no geolocation API at all", async () => {
-    renderWithData(<ZonePicker zones={ZONES} onSelect={() => {}} />);
+    renderWithData(<ZonePicker onSelect={() => {}} />);
     await userEvent.click(screen.getByRole("button", { name: /use my location/i }));
     expect(await screen.findByText(/Couldn't get your location/)).toBeInTheDocument();
   });
 
   it("speaks Filipino, including the distance message", async () => {
     stubFix(16.08, 120.4038);
-    renderWithData(<ZonePicker zones={ZONES} onSelect={() => {}} />, { lang: "fil" });
+    renderWithData(<ZonePicker onSelect={() => {}} />, { lang: "fil" });
 
     await userEvent.click(screen.getByRole("button", { name: "Gamitin ang aking lokasyon" }));
 

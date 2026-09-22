@@ -6,8 +6,24 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
-import { APPROXIMATE_ACCURACY_METERS, findNearestZone } from "@/lib/nearest-zone";
-import type { LanguageCode, LocalizedText, Zone } from "@/lib/types";
+import { APPROXIMATE_ACCURACY_METERS } from "@/lib/nearest-zone";
+import type { LanguageCode, LocalizedText } from "@/lib/types";
+
+/**
+ * Just enough to display and confirm a choice — never the full Zone (route
+ * text, hotline, evacuation center detail). Both /api/zones/search and
+ * /api/zones/nearest return exactly this shape, on demand, so onboarding
+ * never has to hold anything resembling the full ~42k-zone dataset just to
+ * let a first-time resident pick their barangay.
+ */
+interface ZoneSummary {
+  id: string;
+  name: string;
+  municipalityName: string;
+  provinceName: string;
+  lat: number;
+  lng: number;
+}
 
 /**
  * How long the device may spend on one location read, and how old a fix it
@@ -27,6 +43,9 @@ const LOCATION_GIVE_UP_MS = 30_000;
 
 /** Maximum number of search results to render (avoid DOM overload with 42k zones). */
 const MAX_RESULTS = 20;
+
+/** How long to wait after the last keystroke before firing a search request. */
+const SEARCH_DEBOUNCE_MS = 250;
 
 type Detection =
   | { state: "idle" }
@@ -89,13 +108,21 @@ function farMessage(meters: number, lang: LanguageCode): string {
 }
 
 /**
- * Filter zones by search query. Matches against zone name, municipality,
- * and province. Case-insensitive, accent-insensitive.
- * Normalizes common abbreviations so "Brgy" matches "Barangay", etc.
+ * Expands common abbreviations and strips accents before the query reaches
+ * the server's ILIKE match \u2014 "Brgy" -> "Barangay", etc. The server does the
+ * actual matching now (GET /api/zones/search); this just keeps typing those
+ * abbreviations working the way it did when matching was client-side.
+ *
+ * Deliberately does NOT touch comma/whitespace around it: the old
+ * client-side filterZones normalized both the query and every candidate
+ * zone's own text the same way, so collapsing "X, Y" to "X,Y" was safe on
+ * both sides. The candidate side is now real, un-normalized zone names in
+ * Postgres (always "Barangay X, Municipality" with the space) \u2014 doing it
+ * only to the query would silently break the single most natural way
+ * anyone types a full "barangay, municipality" search.
  */
-function filterZones(zones: readonly Zone[], query: string): Zone[] {
-  if (!query.trim()) return [];
-  const normalised = query
+function normalizeQuery(query: string): string {
+  return query
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -104,34 +131,43 @@ function filterZones(zones: readonly Zone[], query: string): Zone[] {
     .replace(/\bsto\.?\s+/g, "santo ")
     .replace(/\bmt\.?\s+/g, "mount ")
     .replace(/\bgen\.?\s+/g, "general ")
-    .replace(/\s*,\s*/g, ",")
-    .replace(/\s+/g, " ")
     .trim();
-  return zones.filter((zone) => {
-    const searchable = `${zone.name} ${zone.municipalityName} ${zone.provinceName}`
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/\s*,\s*/g, ",")
-      .replace(/\s+/g, " ")
-      .trim();
-    return searchable.includes(normalised);
-  });
 }
 
-export function ZonePicker({
-  zones,
-  onSelect,
-}: {
-  zones: Zone[];
-  onSelect: (zoneId: string) => void;
-}) {
+interface ZoneSearchRow {
+  id: string;
+  name: string;
+  municipality_name: string;
+  province_name: string;
+  lat: number;
+  lng: number;
+}
+
+function toZoneSummary(row: ZoneSearchRow): ZoneSummary {
+  return {
+    id: row.id,
+    name: row.name,
+    municipalityName: row.municipality_name,
+    provinceName: row.province_name,
+    lat: row.lat,
+    lng: row.lng,
+  };
+}
+
+export function ZonePicker({ onSelect }: { onSelect: (zoneId: string) => void }) {
   const { lang } = useLanguage();
   // Starts empty so the user must make a real choice.
-  const [selected, setSelected] = useState<string>("");
+  const [selectedZone, setSelectedZone] = useState<ZoneSummary | null>(null);
   const [query, setQuery] = useState("");
   const [detection, setDetection] = useState<Detection>({ state: "idle" });
   const [showResults, setShowResults] = useState(false);
+  const [searchResults, setSearchResults] = useState<ZoneSummary[]>([]);
+  const [searchTotal, setSearchTotal] = useState(0);
+  // Distinguishes "still waiting on the debounced request" from "the request
+  // came back empty" — without this, the empty search-results state during
+  // the debounce window would flash "No barangays match" before the request
+  // even fires.
+  const [isSearching, setIsSearching] = useState(false);
   // The barangay a location fix proposed, if the current selection came from
   // one. A later fix that finds nothing near withdraws only that proposal —
   // never a barangay the resident chose by hand.
@@ -140,13 +176,20 @@ export function ZonePicker({
   const proposedZoneId = useRef<string | null>(null);
   // Which read is current. A callback from an earlier read (one this screen
   // already gave up on) is ignored rather than proposing a barangay late.
+  // Also covers the /api/zones/nearest round trip inside it — the read
+  // isn't "settled" until that resolves too, so a give-up timer firing
+  // mid-request still correctly makes a late response a no-op.
   const readCount = useRef(0);
   const giveUpTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // A slow search response arriving after a newer one must not overwrite it.
+  const searchRequestId = useRef(0);
 
   useEffect(
     () => () => {
       if (giveUpTimer.current !== null) clearTimeout(giveUpTimer.current);
+      if (searchTimer.current !== null) clearTimeout(searchTimer.current);
     },
     []
   );
@@ -154,14 +197,53 @@ export function ZonePicker({
   function withdrawProposal() {
     const proposed = proposedZoneId.current;
     proposedZoneId.current = null;
-    if (proposed !== null) setSelected((current) => (current === proposed ? "" : current));
+    if (proposed !== null) {
+      setSelectedZone((current) => (current?.id === proposed ? null : current));
+    }
   }
 
-  function chooseByHand(zoneId: string) {
+  function chooseByHand(zone: ZoneSummary) {
     proposedZoneId.current = null;
-    setSelected(zoneId);
+    setSelectedZone(zone);
     setQuery("");
     setShowResults(false);
+    setSearchResults([]);
+    setSearchTotal(0);
+  }
+
+  function handleSearchInput(value: string) {
+    setQuery(value);
+    setShowResults(true);
+    if (searchTimer.current !== null) clearTimeout(searchTimer.current);
+
+    const q = value.trim();
+    if (!q) {
+      searchRequestId.current += 1;
+      setIsSearching(false);
+      setSearchResults([]);
+      setSearchTotal(0);
+      return;
+    }
+
+    setIsSearching(true);
+    const thisRequest = ++searchRequestId.current;
+    searchTimer.current = setTimeout(() => {
+      fetch(`/api/zones/search?q=${encodeURIComponent(normalizeQuery(q))}&limit=${MAX_RESULTS}`)
+        .then((res) => (res.ok ? res.json() : { results: [], total: 0 }))
+        .then((body: { results: ZoneSearchRow[]; total: number }) => {
+          // A newer search (or the field being cleared) already superseded this one.
+          if (searchRequestId.current !== thisRequest) return;
+          setIsSearching(false);
+          setSearchResults(body.results.map(toZoneSummary));
+          setSearchTotal(body.total);
+        })
+        .catch(() => {
+          if (searchRequestId.current !== thisRequest) return;
+          setIsSearching(false);
+          setSearchResults([]);
+          setSearchTotal(0);
+        });
+    }, SEARCH_DEBOUNCE_MS);
   }
 
   function handleUseMyLocation() {
@@ -198,33 +280,40 @@ export function ZonePicker({
     // promise. The fix only ever proposes; the resident still confirms.
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
-        if (!settle()) return;
-        const match = findNearestZone({ lat: coords.latitude, lng: coords.longitude }, zones);
-        if (!match) {
-          withdrawProposal();
-          setDetection({ state: "failed" });
-          return;
-        }
-        const approximate = coords.accuracy > APPROXIMATE_ACCURACY_METERS;
-        if (match.isNear) {
-          setSelected(match.zone.id);
-          proposedZoneId.current = match.zone.id;
-          setDetection({ state: "near", zoneName: match.zone.name, distanceMeters: match.distanceMeters, approximate });
-        } else {
-          // Outside coverage: selecting the "nearest" would sign someone in
-          // Davao up for Pangasinan's alerts. Say so, and let them choose.
-          withdrawProposal();
-          setDetection({ state: "far", distanceMeters: match.distanceMeters, approximate });
-        }
+        fetch(`/api/zones/nearest?lat=${coords.latitude}&lng=${coords.longitude}`)
+          .then((res) => (res.ok ? res.json() : null))
+          .then((body: { zone: ZoneSummary | null; distanceMeters: number | null; isNear: boolean } | null) => {
+            if (!settle()) return;
+            if (!body || !body.zone || body.distanceMeters === null) {
+              withdrawProposal();
+              setDetection({ state: "failed" });
+              return;
+            }
+            const zone = body.zone;
+            const approximate = coords.accuracy > APPROXIMATE_ACCURACY_METERS;
+            if (body.isNear) {
+              setSelectedZone(zone);
+              proposedZoneId.current = zone.id;
+              setDetection({ state: "near", zoneName: zone.name, distanceMeters: body.distanceMeters, approximate });
+            } else {
+              // Outside coverage: selecting the "nearest" would sign someone in
+              // Davao up for Pangasinan's alerts. Say so, and let them choose.
+              withdrawProposal();
+              setDetection({ state: "far", distanceMeters: body.distanceMeters, approximate });
+            }
+          })
+          .catch(() => {
+            if (!settle()) return;
+            withdrawProposal();
+            setDetection({ state: "failed" });
+          });
       },
       fail,
       { timeout: LOCATION_TIMEOUT_MS, maximumAge: LOCATION_MAX_AGE_MS }
     );
   }
 
-  const results = filterZones(zones, query);
-  const selectedZone = zones.find((z) => z.id === selected);
-  const displayResults = showResults ? results.slice(0, MAX_RESULTS) : [];
+  const displayResults = showResults ? searchResults : [];
 
   return (
     <div className="w-full max-w-md space-y-6" lang={lang}>
@@ -263,7 +352,7 @@ export function ZonePicker({
               variant="ghost"
               size="sm"
               onClick={() => {
-                setSelected("");
+                setSelectedZone(null);
                 setQuery("");
                 inputRef.current?.focus();
               }}
@@ -283,10 +372,7 @@ export function ZonePicker({
             id="zone-search"
             placeholder={t(COPY.searchPlaceholder, lang)}
             value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              setShowResults(true);
-            }}
+            onChange={(e) => handleSearchInput(e.target.value)}
             onFocus={() => setShowResults(true)}
             onBlur={() => {
               // Delay to allow click on result before hiding
@@ -305,14 +391,14 @@ export function ZonePicker({
               key={zone.id}
               type="button"
               role="option"
-              aria-selected={zone.id === selected}
+              aria-selected={zone.id === selectedZone?.id}
               className={`w-full px-3 py-2 text-left text-sm hover:bg-accent ${
-                zone.id === selected ? "bg-accent" : ""
+                zone.id === selectedZone?.id ? "bg-accent" : ""
               }`}
               onMouseDown={(e) => {
                 // Prevent blur from firing before click
                 e.preventDefault();
-                chooseByHand(zone.id);
+                chooseByHand(zone);
               }}
             >
               <div className="flex flex-col">
@@ -321,12 +407,12 @@ export function ZonePicker({
               </div>
             </button>
           ))}
-          {results.length > MAX_RESULTS && (
+          {searchTotal > searchResults.length && (
             <p className="px-3 py-2 text-xs text-muted-foreground">
               {t(
                 {
-                  en: `Showing ${MAX_RESULTS} of ${results.length} results — type more to narrow down.`,
-                  fil: `Ipinapakita ang ${MAX_RESULTS} sa ${results.length} result — mag-type pa para mapaliit.`,
+                  en: `Showing ${searchResults.length} of ${searchTotal} results — type more to narrow down.`,
+                  fil: `Ipinapakita ang ${searchResults.length} sa ${searchTotal} result — mag-type pa para mapaliit.`,
                 },
                 lang
               )}
@@ -335,16 +421,16 @@ export function ZonePicker({
         </div>
       )}
 
-      {/* No results message */}
-      {showResults && query.trim() && results.length === 0 && (
+      {/* No results message — only once the request has actually come back empty */}
+      {showResults && query.trim() && !isSearching && searchResults.length === 0 && (
         <p className="text-sm text-muted-foreground">{t(COPY.noResults, lang)}</p>
       )}
 
       <Button
         className="w-full"
         size="lg"
-        disabled={!selected}
-        onClick={() => selected && onSelect(selected)}
+        disabled={!selectedZone}
+        onClick={() => selectedZone && onSelect(selectedZone.id)}
       >
         {t(COPY.confirm, lang)}
       </Button>

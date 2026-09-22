@@ -80,7 +80,7 @@ describe("accessibility (WCAG 2.1 AA, automated subset)", () => {
 
   it("zone picker has no violations", async () => {
     expect(
-      await violationsFor(<ZonePicker zones={zones} onSelect={() => {}} />)
+      await violationsFor(<ZonePicker onSelect={() => {}} />)
     ).toEqual([]);
   });
 
