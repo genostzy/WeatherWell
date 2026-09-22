@@ -2400,4 +2400,93 @@ begin
   raise notice 'ok, OM9: a resident cannot delete an official marker (RLS filtered it, zero rows affected)';
 end $$;
 
+-- Admin role (2026-09-22 plan, Task 1): an admin fixture, appointed the
+-- same way any operator fixture in this file is — directly, as postgres,
+-- bypassing RLS. Fresh ids/zone (not the earlier 1111.../3333.../
+-- tests-fixture-zone-2 fixtures — this file has 2400+ lines of
+-- accumulated state on those by this point).
+do $$
+declare
+  admin_id uuid := 'd0000000-0000-4000-8000-000000000001';
+begin
+  insert into auth.users (id) values (admin_id);
+  update public.profiles
+     set role = 'admin', display_name = 'Test Admin'
+   where id = admin_id;
+end $$;
+
+insert into public.zones
+  (id, psgc_barangay_code, name, evacuation_route_text, lat, lng, evacuation_route_path, hotline_number)
+values
+  ('tests-fixture-zone-admin', '000000002', 'Test Zone Admin', '{"en":"x","fil":"x"}'::jsonb, 14.2, 121.2, '[]'::jsonb, '000');
+
+-- Critical: an admin manages a zone they have no area_code overlap with
+-- at all (their area_code is NULL) — proving the OR branch in
+-- manages_zone, not a coincidental prefix match.
+select tests.as_user('d0000000-0000-4000-8000-000000000001');
+select tests.expect_allowed(
+  'an admin CAN issue an alert for a zone with no area_code relationship to them',
+  $$insert into public.alerts (zone_id, severity, message, source)
+    values ('tests-fixture-zone-admin', 'yellow', '{"en":"x","fil":"x"}'::jsonb, 'manual')$$);
+
+-- A plain resident must still be refused the same action, or the test
+-- above would prove nothing about the admin branch specifically.
+select tests.as_user('11111111-1111-1111-1111-111111111111');
+select tests.expect_denied(
+  'a resident (not admin, not operator) cannot issue an alert',
+  $$insert into public.alerts (zone_id, severity, message, source)
+    values ('tests-fixture-zone-admin', 'red', '{"en":"x","fil":"x"}'::jsonb, 'manual')$$);
+
+-- admin_appoint_official / admin_remove_official: gated to admin only.
+-- A fresh target user this block appoints and then removes, so the two
+-- calls do not depend on ordering against any other fixture in this file.
+insert into auth.users (id, email, is_anonymous, email_confirmed_at)
+  values ('d0000000-0000-4000-8000-000000000002', 'appointee@example.com', false, now());
+
+select tests.as_user('11111111-1111-1111-1111-111111111111');
+select tests.expect_denied(
+  'a resident cannot call admin_appoint_official',
+  $$select public.admin_appoint_official('appointee@example.com', '0105528', 'Test Appointee')$$);
+
+select tests.as_user('33333333-3333-3333-3333-333333333333');
+select tests.expect_denied(
+  'an official (not admin) cannot call admin_appoint_official',
+  $$select public.admin_appoint_official('appointee@example.com', '0105528', 'Test Appointee')$$);
+
+select tests.as_user('d0000000-0000-4000-8000-000000000001');
+select tests.expect_allowed(
+  'an admin CAN call admin_appoint_official',
+  $$select public.admin_appoint_official('appointee@example.com', '0105528', 'Test Appointee')$$);
+
+do $$
+declare
+  observed_role text;
+  observed_name text;
+begin
+  select role, display_name into observed_role, observed_name
+    from public.profiles where id = 'd0000000-0000-4000-8000-000000000002';
+  if observed_role is distinct from 'operator' or observed_name is distinct from 'Test Appointee' then
+    raise exception using errcode = 'TSTFL',
+      message = format('admin_appoint_official did not appoint correctly: role=%s name=%s', observed_role, observed_name);
+  end if;
+  raise notice 'ok: admin_appoint_official appointed the target correctly';
+end $$;
+
+select tests.as_user('d0000000-0000-4000-8000-000000000001');
+select tests.expect_allowed(
+  'an admin CAN call admin_remove_official',
+  $$select public.admin_remove_official('appointee@example.com')$$);
+
+do $$
+declare
+  observed_role text;
+begin
+  select role into observed_role from public.profiles where id = 'd0000000-0000-4000-8000-000000000002';
+  if observed_role is distinct from 'resident' then
+    raise exception using errcode = 'TSTFL',
+      message = format('admin_remove_official did not remove correctly: role=%s', observed_role);
+  end if;
+  raise notice 'ok: admin_remove_official removed the target correctly';
+end $$;
+
 rollback;
