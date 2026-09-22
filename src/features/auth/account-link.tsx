@@ -14,7 +14,10 @@ const KEEP_REPORTS: LocalizedText = {
   en: "Keep your reports on a new phone",
   fil: "Panatilihin ang iyong mga ulat sa bagong telepono",
 };
+const SIGN_IN: LocalizedText = { en: "Sign in", fil: "Mag-sign in" };
 const SIGN_OUT: LocalizedText = { en: "Sign out", fil: "Mag-sign out" };
+const GUEST_LABEL: LocalizedText = { en: "Guest", fil: "Guest" };
+const SIGNED_IN_LABEL: LocalizedText = { en: "Signed in", fil: "Naka-sign in" };
 
 type SessionKind = "none" | "anonymous" | "permanent";
 
@@ -25,13 +28,15 @@ function kindOf(session: { user: { is_anonymous?: boolean } } | null | undefined
 
 /**
  * Mounted once, in the root layout's header, beside <LanguageToggle /> — so
- * it renders on every page for every visitor, signed in or not. That makes
- * it display-only by construction: it reads getSession() purely to decide
- * what to show, the same exception useSessionUserId documents, and it must
- * NEVER call ensureAnonymousSession or signInAnonymously. A visitor who has
- * never written has no session and nothing to keep, and mounting this
- * component must not be what signs them in — only their own first write
- * does that.
+ * it renders on every page for every visitor, signed in or not, including
+ * the homepage. That makes it display-only by construction: it reads
+ * getSession() purely to decide what to show, the same exception
+ * useSessionUserId documents, and it must NEVER call ensureAnonymousSession
+ * or signInAnonymously. A visitor who has never written has no session and
+ * nothing to keep, and mounting this component must not be what signs them
+ * in — only their own first write does that. It still always shows a status
+ * ("Guest" here, same as an anonymous visitor who has written something) —
+ * having no session is a fact about the visitor, not a reason to hide it.
  *
  * Renders nothing on /admin routes: admin-header.tsx already has its own
  * sign-out, and an official would otherwise see two.
@@ -67,22 +72,34 @@ export function AccountLink() {
     };
   }, [isAdmin]);
 
-  if (isAdmin || kind === "none") return null;
+  if (isAdmin) return null;
 
-  if (kind === "anonymous") {
+  if (kind === "permanent") {
     return (
-      <Button asChild variant="ghost" size="sm">
-        <Link href={`/sign-in?next=${encodeURIComponent(pathname)}`}>{t(KEEP_REPORTS, lang)}</Link>
-      </Button>
+      <div className="flex items-center gap-1.5">
+        <span className="text-xs text-muted-foreground">{t(SIGNED_IN_LABEL, lang)}</span>
+        <form method="post" action="/auth/signout">
+          <input type="hidden" name="next" value={pathname} />
+          <Button type="submit" variant="ghost" size="sm">
+            {t(SIGN_OUT, lang)}
+          </Button>
+        </form>
+      </div>
     );
   }
 
+  // "none" and "anonymous" both read as "Guest" to a resident — the
+  // difference (never written vs. written-but-not-linked-to-an-account) is
+  // an implementation detail. Only the sign-in link's own label changes:
+  // there's nothing to "keep" yet for a visitor who has never written.
   return (
-    <form method="post" action="/auth/signout">
-      <input type="hidden" name="next" value={pathname} />
-      <Button type="submit" variant="ghost" size="sm">
-        {t(SIGN_OUT, lang)}
+    <div className="flex items-center gap-1.5">
+      <span className="text-xs text-muted-foreground">{t(GUEST_LABEL, lang)}</span>
+      <Button asChild variant="ghost" size="sm">
+        <Link href={`/sign-in?next=${encodeURIComponent(pathname)}`}>
+          {t(kind === "anonymous" ? KEEP_REPORTS : SIGN_IN, lang)}
+        </Link>
       </Button>
-    </form>
+    </div>
   );
 }

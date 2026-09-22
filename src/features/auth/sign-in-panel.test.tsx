@@ -49,6 +49,26 @@ describe("SignInPanel", () => {
     expect(screen.getByText("Sign in as an official")).toBeInTheDocument();
   });
 
+  describe("Continue as guest", () => {
+    it("links straight to next, without signing in, for a resident", () => {
+      render(<SignInPanel next="/map" />);
+
+      const link = screen.getByRole("link", { name: "Continue as guest" });
+      expect(link).toHaveAttribute("href", "/map");
+      expect(startGoogleSignIn).not.toHaveBeenCalled();
+    });
+
+    it("is omitted for the official heading — /admin requires a real account", () => {
+      render(<SignInPanel next="/admin" />);
+      expect(screen.queryByRole("link", { name: "Continue as guest" })).not.toBeInTheDocument();
+    });
+
+    it("is also omitted for a nested /admin/... next", () => {
+      render(<SignInPanel next="/admin/zone/zone-1" />);
+      expect(screen.queryByRole("link", { name: "Continue as guest" })).not.toBeInTheDocument();
+    });
+  });
+
   it("does not treat /administration or /admin-help as the officials' route", () => {
     // A bare `next.startsWith("/admin")` would wrongly match both of these —
     // "/admin" is a prefix of each, but neither is the admin area.

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -53,6 +54,7 @@ const ACCOUNT_CREATED: LocalizedText = {
 };
 const NO_ACCOUNT: LocalizedText = { en: "Don't have an account?", fil: "Wala pang account?" };
 const HAVE_ACCOUNT: LocalizedText = { en: "Already have an account?", fil: "May account na?" };
+const CONTINUE_AS_GUEST: LocalizedText = { en: "Continue as guest", fil: "Magpatuloy bilang guest" };
 
 type Mode = "password" | "magic-link";
 type Control = "google" | "email" | "existing" | "password";
@@ -259,6 +261,17 @@ export function SignInPanel({ next, notice }: { next: string; notice?: string })
         >
           {mode === "password" ? t(USE_MAGIC_LINK, lang) : t(USE_PASSWORD, lang)}
         </button>
+
+        {!isOfficial && (
+          // Guest mode is the default per the PRD — signing in is always
+          // optional for a resident. /admin requires a real account (its own
+          // layout redirects a signed-out visitor straight back here), so
+          // this is omitted for the official heading rather than offering an
+          // escape hatch that just bounces back.
+          <Button asChild variant="outline" size="lg" className="w-full">
+            <Link href={next}>{t(CONTINUE_AS_GUEST, lang)}</Link>
+          </Button>
+        )}
       </CardContent>
     </Card>
   );
