@@ -1552,3 +1552,58 @@ describe("service worker outbox schedule parity (public/sw.js mirrors schedule.t
     });
   }
 });
+
+/** PRD: "the service worker handles push events and retries once after 60 seconds." */
+describe("service worker push event", () => {
+  function stubShowNotification(
+    context: Record<string, unknown>,
+    impl: (...args: unknown[]) => Promise<void>
+  ) {
+    const self = context.self as { registration: { showNotification: (...args: unknown[]) => Promise<void> } };
+    self.registration.showNotification = impl;
+  }
+
+  function firePush(listeners: Record<string, (event: unknown) => void>): Promise<unknown> {
+    let waited: Promise<unknown> = Promise.resolve();
+    listeners.push({
+      data: { json: () => ({ title: "WeatherWell Alert — RED", body: "Flooding reported.", zone: "zone-1" }) },
+      waitUntil: (p: Promise<unknown>) => {
+        waited = p;
+      },
+    });
+    return waited;
+  }
+
+  it("shows the notification once when the first attempt succeeds", async () => {
+    const { listeners, context } = loadServiceWorker({});
+    const calls: unknown[] = [];
+    stubShowNotification(context, (...args) => {
+      calls.push(args);
+      return Promise.resolve();
+    });
+
+    await firePush(listeners);
+
+    expect(calls.length).toBe(1);
+  });
+
+  it("retries once after 60 seconds when the first attempt fails", async () => {
+    vi.useFakeTimers();
+    try {
+      const { listeners, context } = loadServiceWorker({});
+      let attempt = 0;
+      stubShowNotification(context, () => {
+        attempt += 1;
+        return attempt === 1 ? Promise.reject(new Error("permission revoked")) : Promise.resolve();
+      });
+
+      const waited = firePush(listeners);
+      await vi.advanceTimersByTimeAsync(60000);
+      await waited;
+
+      expect(attempt).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

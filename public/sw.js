@@ -1047,6 +1047,22 @@ self.addEventListener("message", (event) => {
   }
 });
 
+const PUSH_RETRY_DELAY_MS = 60000;
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** PRD: "the service worker handles push events and retries once after 60 seconds." */
+async function showNotificationWithRetry(title, options) {
+  try {
+    await self.registration.showNotification(title, options);
+  } catch {
+    await sleep(PUSH_RETRY_DELAY_MS);
+    await self.registration.showNotification(title, options);
+  }
+}
+
 self.addEventListener("push", (event) => {
   const data = event.data ? event.data.json() : {};
   const title = data.title || "WeatherWell Alert";
@@ -1054,7 +1070,7 @@ self.addEventListener("push", (event) => {
   const zone = data.zone || "";
 
   event.waitUntil(
-    self.registration.showNotification(title, {
+    showNotificationWithRetry(title, {
       body,
       icon: "/icon-192.png",
       badge: "/icon-192.png",
