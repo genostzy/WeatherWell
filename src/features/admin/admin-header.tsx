@@ -9,6 +9,7 @@ import type { LocalizedText } from "@/lib/types";
 
 const SIGN_OUT: LocalizedText = { en: "Sign out", fil: "Mag-sign out" };
 const HISTORY: LocalizedText = { en: "History", fil: "Kasaysayan" };
+const OFFICIALS: LocalizedText = { en: "Officials", fil: "Mga Opisyal" };
 
 /**
  * Sits atop every /admin page, mounted once by the layout's OfficialProvider.
@@ -25,6 +26,11 @@ export function AdminHeader() {
         {official.displayName} — {official.areaName}
       </span>
       <div className="flex items-center gap-2">
+        {official.level === "admin" && (
+          <Button asChild variant="ghost" size="sm">
+            <Link href="/admin/officials">{t(OFFICIALS, lang)}</Link>
+          </Button>
+        )}
         <Button asChild variant="ghost" size="sm">
           <Link href="/admin/history">{t(HISTORY, lang)}</Link>
         </Button>

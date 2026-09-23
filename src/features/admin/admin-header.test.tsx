@@ -32,4 +32,21 @@ describe("AdminHeader", () => {
     expect(form).toHaveAttribute("action", "/auth/signout");
     expect(form?.querySelector('input[name="next"]')).toHaveValue("/");
   });
+
+  it("shows an Officials link for an admin", () => {
+    const admin: Official = {
+      userId: "admin-1",
+      displayName: "Test Admin",
+      areaCode: "",
+      areaName: "All areas",
+      level: "admin",
+    };
+    renderWithData(<AdminHeader />, { official: admin });
+    expect(screen.getByRole("link", { name: /officials/i })).toHaveAttribute("href", "/admin/officials");
+  });
+
+  it("hides the Officials link for a barangay or municipal official", () => {
+    renderWithData(<AdminHeader />, { official: OFFICIAL });
+    expect(screen.queryByRole("link", { name: /officials/i })).not.toBeInTheDocument();
+  });
 });

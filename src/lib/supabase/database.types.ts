@@ -755,6 +755,11 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_appoint_official: {
+        Args: { p_area: string; p_display_name: string; p_email: string }
+        Returns: string
+      }
+      admin_remove_official: { Args: { p_email: string }; Returns: string }
       check_and_trigger_alerts: {
         Args: never
         Returns: {
@@ -928,3 +933,9 @@ export type CompositeTypes<
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
+
+export const Constants = {
+  public: {
+    Enums: {},
+  },
+} as const
