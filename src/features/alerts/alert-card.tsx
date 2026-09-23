@@ -13,6 +13,11 @@ const NO_ACTIVE_ALERT: LocalizedText = {
   fil: "Walang aktibong alerto para sa zone na ito.",
 };
 
+const UNVERIFIED: LocalizedText = {
+  en: "Unverified — based on residents' reports, not yet confirmed by an official.",
+  fil: "Hindi pa kumpirmado — batay sa ulat ng mga residente, hindi pa napapatunayan ng opisyal.",
+};
+
 const CONFIDENCE_LABEL = {
   en: { estimated: "Estimated", validated: "Validated", calibrated: "Calibrated" },
   fil: { estimated: "Tantiya", validated: "Napatunayan", calibrated: "Na-calibrate" },
@@ -42,6 +47,11 @@ export function AlertCard({
             {alert.predictedTiming && (
               <p lang={lang} className="text-sm text-muted-foreground">
                 ⏱ {t(alert.predictedTiming, lang)}
+              </p>
+            )}
+            {alert.source === "auto_crowdsourced" && (
+              <p lang={lang} className="text-sm text-muted-foreground">
+                {t(UNVERIFIED, lang)}
               </p>
             )}
             <div className="flex items-center justify-between">

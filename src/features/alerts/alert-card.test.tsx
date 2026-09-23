@@ -29,6 +29,29 @@ describe("AlertCard", () => {
     expect(screen.queryByText(alert.message.en)).not.toBeInTheDocument();
   });
 
+  it("marks an automatic crowd-report alert as unverified", () => {
+    render(<AlertCard alert={{ ...alert, source: "auto_crowdsourced" }} zone={zone} />);
+    expect(
+      screen.getByText("Unverified — based on residents' reports, not yet confirmed by an official.")
+    ).toBeInTheDocument();
+  });
+
+  it("shows the unverified note in Filipino too", () => {
+    render(
+      <LanguageProvider initialLang="fil">
+        <AlertCard alert={{ ...alert, source: "auto_crowdsourced" }} zone={zone} />
+      </LanguageProvider>
+    );
+    expect(
+      screen.getByText("Hindi pa kumpirmado — batay sa ulat ng mga residente, hindi pa napapatunayan ng opisyal.")
+    ).toHaveAttribute("lang", "fil");
+  });
+
+  it("does not mark an official's alert as unverified", () => {
+    render(<AlertCard alert={{ ...alert, source: "manual" }} zone={zone} />);
+    expect(screen.queryByText(/not yet confirmed by an official/i)).not.toBeInTheDocument();
+  });
+
   it("tags localized copy with its language for screen readers", () => {
     render(
       <LanguageProvider initialLang="fil">
