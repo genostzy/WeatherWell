@@ -1,4 +1,4 @@
-name: Threshold check
+name: Threshold check and typhoon refresh
 
 # Vercel's Hobby/free tier caps vercel.json cron jobs at once a day, but the
 # threshold engine's own report window (check_and_trigger_alerts) is 6 hours
@@ -28,3 +28,11 @@ jobs:
           curl --fail --silent --show-error \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             "$APP_URL/api/threshold-check"
+      # The typhoon bulletin otherwise refreshes once a day (vercel.json);
+      # every 3 hours keeps a storm reading from going most of a day stale.
+      - name: Refresh the typhoon bulletin
+        if: ${{ always() }}
+        run: |
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "$APP_URL/api/cron/typhoon"
