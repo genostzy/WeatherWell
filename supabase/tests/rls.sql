@@ -2779,39 +2779,48 @@ begin
   reset role;
 end $$;
 
--- SP1 error-log cap (L3, correction 5): 300/hour x 30-day retention allowed
--- ~216,000 rows (~1 GB). A 5,000-row total cap bounds it. Fillers are two
--- hours old so the existing hourly cap cannot be what refuses the call.
+-- SP1 error-log cap (L3, correction 5, final-review I3): 300/hour x 30-day
+-- retention allowed ~216,000 rows (~1 GB). The table is bounded at 5,000
+-- rows as a ring buffer: when full, the OLDEST row makes way, so a flood of
+-- junk can never stop new errors from being recorded (refusing them would
+-- blind /api/health for up to 30 days). Fillers are two hours old so the
+-- hourly cap is not what decides.
 do $$
 begin
   set local role postgres;
   perform set_config('request.jwt.claims', '', true);
   delete from public.app_errors;
   insert into public.app_errors (occurred_at, source, kind, message, route, environment, fingerprint)
-    select now() - interval '2 hours', 'client', 'unhandled', 'fill', '/', 'preview', 'sp1-fill-' || g
-      from generate_series(1, 4999) g;
+    select now() - interval '2 hours' - (g || ' seconds')::interval, 'client', 'unhandled', 'fill', '/', 'preview', 'sp1-fill-' || g
+      from generate_series(1, 5000) g;
   reset role;
 end $$;
 
 select tests.as_anon();
-select tests.expect_allowed('SP1-E1: the 5,000th row is still accepted',
-  $$select public.report_app_error('client','unhandled','under cap', null,'/','preview', null,'fp-sp1-a')$$);
-select tests.expect_allowed('SP1-E2: a call past the total cap succeeds without storing',
-  $$select public.report_app_error('client','unhandled','over cap', null,'/','preview', null,'fp-sp1-b')$$);
+select tests.expect_allowed('SP1-E1: a new error is accepted when the log is full',
+  $$select public.report_app_error('client','unhandled','newest', null,'/','preview', null,'fp-sp1-new')$$);
 
 do $$
+declare
+  total int;
 begin
   set local role postgres;
-  if not exists (select 1 from public.app_errors where fingerprint = 'fp-sp1-a') then
+  select count(*) into total from public.app_errors;
+  if not exists (select 1 from public.app_errors where fingerprint = 'fp-sp1-new') then
     reset role;
-    raise exception using errcode = 'TSTFL', message = 'SP1-E1: the row under the total cap was not stored';
+    raise exception using errcode = 'TSTFL', message = 'SP1-E1: a full log refused a new error instead of dropping the oldest';
   end if;
-  if exists (select 1 from public.app_errors where fingerprint = 'fp-sp1-b') then
+  if total > 5000 then
     reset role;
-    raise exception using errcode = 'TSTFL', message = 'SP1-E2: a row was stored beyond the 5,000-row total cap';
+    raise exception using errcode = 'TSTFL', message = format('SP1-E2: the log grew past 5,000 rows (%s)', total);
+  end if;
+  -- sp1-fill-5000 is the oldest filler (5000 seconds before the others' base).
+  if exists (select 1 from public.app_errors where fingerprint = 'sp1-fill-5000') then
+    reset role;
+    raise exception using errcode = 'TSTFL', message = 'SP1-E3: the oldest row was not the one dropped';
   end if;
   reset role;
-  raise notice 'ok SP1-E1/E2: the error log is capped at 5,000 rows';
+  raise notice 'ok SP1-E1/E2/E3: the error log is a 5,000-row ring buffer';
 end $$;
 
 rollback;
