@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import { Marker, Polyline, Popup, useMapEvents } from "react-leaflet";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
-import { MOCK_CASCADES } from "@/lib/mock-data";
 import { getZoneStatus, getZoneStatusColor, ZONE_STATUS_LABEL } from "@/lib/zone-status";
 import { SEVERITY_ORDER, SEVERITY_LABEL, type Severity } from "@/lib/severity";
 import { CENTER_STATUS_LABEL, resolveEffectiveCenterStatus } from "@/lib/center-status";
@@ -17,8 +16,6 @@ import {
 } from "@/lib/community-pins";
 import { useOutbox } from "@/lib/outbox/outbox";
 import { PIN_STATUS_LABEL } from "@/lib/community-pin";
-import { buildZoneInputForZone, computeZoneState } from "@/lib/risk-engine/score";
-import { useHazards } from "@/lib/reference-data/use-reference-data";
 import { useManagesZone, useOfficial } from "@/lib/auth/official-context";
 import {
   useOfficialMarkers,
@@ -50,8 +47,6 @@ const MAP_ARIA_LABEL: LocalizedText = {
 };
 const ALERT_SEVERITY: LocalizedText = { en: "Alert severity", fil: "Severity ng alerto" };
 const CLEAR_NO_ALERT: LocalizedText = { en: "Clear — no alert", fil: "Ligtas — walang alerto" };
-const RISK_SCORE: LocalizedText = { en: "Risk score", fil: "Risk score" };
-const ADVISORY_ONLY: LocalizedText = { en: "advisory only", fil: "payo lamang" };
 const HEADCOUNT: LocalizedText = { en: "Headcount", fil: "Bilang ng tao" };
 const SPOTS_LEFT: LocalizedText = { en: "spots left", fil: "espasyong natitira" };
 const OF: LocalizedText = { en: "of", fil: "sa" };
@@ -116,7 +111,6 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
   const { lang } = useLanguage();
   const official = useOfficial();
   const allPins = useAllCommunityPins();
-  const hazards = useHazards();
   const managesZone = useManagesZone();
   const alerts = useAlerts();
   const officialMarkers = useOfficialMarkers();
@@ -164,8 +158,6 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
 
   const zoneById = new Map(zones.map((zone) => [zone.id, zone]));
 
-  /** The risk score's cascade factor must follow the zone's actual alert. */
-  const hasEffectiveAlert = (zoneId: string) => baseAlertFor(zoneId) !== undefined;
 
   function toggleLayer(key: keyof LayerVisibility) {
     setLayers((current) => ({ ...current, [key]: !current[key] }));
@@ -321,13 +313,12 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
           meaningful on a map: the list panels state the relationship in words
           but can't show that zone-1 sits upriver of zone-2. */}
       {layers.cascade &&
-        MOCK_CASCADES.map((cascade) => {
-          const from = zoneById.get(cascade.fromZoneId);
-          const to = zoneById.get(cascade.toZoneId);
-          if (!from || !to) return null;
+        visibleZones.map((from) => {
+          const to = from.downstreamZoneId ? zoneById.get(from.downstreamZoneId) : undefined;
+          if (!to) return null;
           return (
             <Polyline
-              key={`cascade-${cascade.fromZoneId}-${cascade.toZoneId}`}
+              key={`cascade-${from.id}-${to.id}`}
               positions={[
                 [from.lat, from.lng],
                 [to.lat, to.lng],
@@ -341,11 +332,6 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
         const alert = baseAlertFor(zone.id);
         const status = getZoneStatus(alert);
         const label = `${zone.name} — ${t(ZONE_STATUS_LABEL[status], lang)}`;
-        // The FULL zones list, not visibleZones: a zone's risk score depends
-        // on its cascade neighbours, who may sit just outside the viewport.
-        const riskScore = computeZoneState(
-          buildZoneInputForZone(zone, zones, hasEffectiveAlert, hazards)
-        ).riskScore;
         return (
           <Marker
             key={`status-${zone.id}`}
@@ -355,10 +341,6 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
             <Popup>
               <div className="space-y-2 text-sm">
                 <p className="font-medium">{label}</p>
-                <p className="text-xs text-muted-foreground">
-                  {t(RISK_SCORE, lang)}: <span className="font-semibold">{riskScore}</span>/100 —{" "}
-                  {t(ADVISORY_ONLY, lang)}
-                </p>
 
                 <ZoneAlertSelect zone={zone} alert={alert} lang={lang} canManage={managesZone(zone)} />
               </div>

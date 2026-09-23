@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Users, TriangleAlert } from "lucide-react";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
-import { REPORT_THRESHOLD } from "@/lib/mock-data";
+import { REPORT_THRESHOLD } from "@/lib/weather-thresholds";
 import { useWaterLevelReports, getRecentReportsForZoneLive } from "@/lib/water-level-reports";
 import { TimeAgo } from "@/components/time-ago";
 import { DEPTH_LABEL, DEPTH_CM, DEPTH_SEVERITY } from "@/lib/depth";

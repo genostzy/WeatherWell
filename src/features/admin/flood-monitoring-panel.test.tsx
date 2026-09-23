@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import { FloodMonitoringPanel } from "./flood-monitoring-panel";
-import { MOCK_WATER_LEVEL_REPORTS, REPORT_THRESHOLD } from "@/lib/mock-data";
+import { MOCK_WATER_LEVEL_REPORTS } from "@/lib/mock-data";
+import { REPORT_THRESHOLD } from "@/lib/weather-thresholds";
+import { countReportsToday } from "@/lib/reports-today";
 import { renderWithData, FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
 import type { Official } from "@/lib/auth/official";
 
@@ -55,6 +57,14 @@ describe("FloodMonitoringPanel", () => {
     );
     expect(zoneWithEnough).toBeDefined();
     await waitFor(() => expect(screen.getAllByText(/report threshold met/i).length).toBeGreaterThan(0));
+  });
+
+  it("counts a zone's reports today from the live feed, not invented figures", async () => {
+    const zone = FIXTURE_REFERENCE_DATA.zones[0];
+    const expected = countReportsToday(seededServerReports(), new Set([zone.id]));
+    renderWithData(<FloodMonitoringPanel zones={[zone]} />);
+    await waitFor(() => expect(screen.getByText(`${expected} reports today`)).toBeInTheDocument());
+    expect(expected).toBeGreaterThan(0);
   });
 
   it("shows the latest report's depth for a zone with reports", async () => {

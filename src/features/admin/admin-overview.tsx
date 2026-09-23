@@ -5,10 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import {
-  Activity,
   AlertTriangle,
   Building2,
-  CloudRain,
   Map,
   MapPin,
   Play,
@@ -19,26 +17,19 @@ import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { StatCard } from "@/features/admin/stat-card";
 import { FloodMonitoringPanel } from "@/features/admin/flood-monitoring-panel";
-import { RainfallMonitoringPanel } from "@/features/admin/rainfall-monitoring-panel";
 import { TyphoonTrackingPanel } from "@/features/admin/typhoon-tracking-panel";
 import { LandslideRiskPanel } from "@/features/admin/landslide-risk-panel";
 import { EvacuationManagementPanel } from "@/features/admin/evacuation-management-panel";
-import { ReportTrendPanel } from "@/features/admin/report-trend-panel";
-import { AlertAnalyticsPanel } from "@/features/admin/alert-analytics-panel";
 import { CommunityPinModerationPanel } from "@/features/admin/community-pin-moderation-panel";
 import { NoZonesNotice } from "@/features/admin/no-zones-notice";
-import {
-  getRainfallForZone,
-  getReportsTodayForZone,
-  isHeavyRainfall,
-} from "@/lib/mock-data";
+import { useWaterLevelReports } from "@/lib/water-level-reports";
+import { countReportsToday } from "@/lib/reports-today";
 import { useTyphoon } from "@/lib/use-typhoon";
 import { resolveEffectiveCenterStatus } from "@/lib/center-status";
 import { useAlerts } from "@/lib/alerts-store";
 import { useCommunityPins } from "@/lib/community-pins";
-import { useZones, useHazards } from "@/lib/reference-data/use-reference-data";
+import { useZones } from "@/lib/reference-data/use-reference-data";
 import { getZoneStatus } from "@/lib/zone-status";
-import { buildZoneInputForZone, computeZoneState } from "@/lib/risk-engine/score";
 import { useOfficial } from "@/lib/auth/official-context";
 import { isInArea } from "@/lib/auth/official";
 import type { LocalizedText } from "@/lib/types";
@@ -50,7 +41,6 @@ const SUBTITLE: LocalizedText = {
 };
 const AT_A_GLANCE: LocalizedText = { en: "At a glance", fil: "Sa isang sulyap" };
 const HAZARDS: LocalizedText = { en: "Hazard monitoring", fil: "Pagsubaybay sa panganib" };
-const ANALYTICS: LocalizedText = { en: "Trends & analytics", fil: "Mga trend at analytics" };
 const OPERATIONS: LocalizedText = { en: "Operations", fil: "Operasyon" };
 const OPEN_MAP: LocalizedText = { en: "Operations map", fil: "Mapa ng operasyon" };
 const MAP_HINT: LocalizedText = {
@@ -72,18 +62,12 @@ const ZONES_UNDER_ALERT: LocalizedText = { en: "Zones under alert", fil: "Zone n
 const OF_TOTAL: LocalizedText = { en: "of", fil: "sa" };
 const REPORTS_TODAY: LocalizedText = { en: "Reports today", fil: "Ulat ngayon" };
 const ACROSS_ALL_ZONES: LocalizedText = { en: "across all zones", fil: "sa lahat ng zone" };
-const HEAVIEST_RAIN: LocalizedText = { en: "Heaviest rainfall", fil: "Pinakamalakas na ulan" };
 const CENTERS_FULL: LocalizedText = { en: "Centers at capacity", fil: "Punong center" };
 const CENTERS_NOTE: LocalizedText = { en: "full or limited", fil: "puno o limitado" };
 const COMMUNITY_PINS: LocalizedText = { en: "Community pins", fil: "Community pins" };
 const UNVERIFIED: LocalizedText = { en: "unverified, resident-reported", fil: "hindi pa na-verify, galing sa residente" };
 const ACTIVE_CYCLONE: LocalizedText = { en: "Tropical cyclone", fil: "Bagyo" };
 const NONE_TRACKED: LocalizedText = { en: "None tracked", fil: "Wala" };
-const HIGHEST_RISK_SCORE: LocalizedText = { en: "Highest risk score", fil: "Pinakamataas na risk score" };
-const RISK_SCORE_HINT: LocalizedText = {
-  en: "computed, advisory only — not the actual alert",
-  fil: "kinakalkula, payo lamang — hindi ang aktwal na alerto",
-};
 
 export function AdminOverview() {
   const { lang } = useLanguage();
@@ -94,7 +78,7 @@ export function AdminOverview() {
   // every barangay in a municipal official's town.
   const allZones = useZones();
   const zones = allZones.filter((zone) => isInArea(zone.psgcBarangayCode, official.areaCode));
-  const hazards = useHazards();
+  const reports = useWaterLevelReports();
   const alerts = useAlerts();
   const { track: typhoonTrack } = useTyphoon();
   const baseAlertFor = (zoneId: string) => alerts.find((a) => a.zoneId === zoneId && a.isActive);
@@ -112,36 +96,15 @@ export function AdminOverview() {
   const scopedPins = pins.filter((pin) => inAreaZoneIds.has(pin.zoneId));
 
   const zonesUnderAlert = zones.filter((zone) => getZoneStatus(baseAlertFor(zone.id)) !== "safe").length;
-  const reportsToday = zones.reduce((sum, zone) => sum + getReportsTodayForZone(zone.id), 0);
-  const heaviestRain = Math.max(...zones.map((zone) => getRainfallForZone(zone.id)));
+  const reportsToday = countReportsToday(reports, inAreaZoneIds);
   const constrainedCenters = zones.filter((zone) => {
     const status = resolveEffectiveCenterStatus(zone.centerStatus, zone.evacuationCenterCapacity, zone.currentOccupancy);
     return status !== "space_available";
   }).length;
-  const hasEffectiveAlert = (zoneId: string) => baseAlertFor(zoneId) !== undefined;
   // An admin's areaCode ("") matches every zone nationwide (~42k in
-  // production, not the handful a barangay/municipal official manages) —
-  // found live during Task 8 of 2026-09-22-admin-role-and-password-auth:
-  // the browser tab froze entirely at that scale, both from every panel
-  // below rendering one row per zone, and from this risk score itself —
-  // buildZoneInputForZone's upstream lookup is O(zones), so scoring every
-  // zone here is O(zones²), ~1.8 billion comparisons at 42k zones. Skipped
-  // outright for an admin: the per-zone list panels are replaced with a
-  // pointer to the map (this app's existing "see every zone at once"
-  // surface), and the "Highest risk score" tile — which only makes sense
-  // as a per-area figure — is omitted rather than faked cheaply.
+  // production): one row per zone in the panels below froze the browser tab
+  // at that scale, so an admin gets a pointer to the map instead.
   const isNationwide = official.level === "admin";
-  // Scored against every zone, not just the official's (I4): floods cross
-  // town lines, and the cascade factor looks for the zone upstream, which can
-  // sit in another town. Only what is displayed is limited to the area, so
-  // this tile agrees with /admin/map, which already scores against all zones.
-  const zoneStates = isNationwide
-    ? []
-    : zones.map((zone) => computeZoneState(buildZoneInputForZone(zone, allZones, hasEffectiveAlert, hazards)));
-  const highestRiskState = isNationwide
-    ? null
-    : zoneStates.reduce((highest, state) => (state.riskScore > highest.riskScore ? state : highest));
-  const highestRiskZone = highestRiskState ? zones.find((zone) => zone.id === highestRiskState.zoneId)! : null;
 
   return (
     <main className="flex min-h-screen flex-col items-center gap-6 p-4 sm:p-6 lg:p-8">
@@ -168,14 +131,6 @@ export function AdminOverview() {
               icon={Users}
             />
             <StatCard
-              label={t(HEAVIEST_RAIN, lang)}
-              value={heaviestRain}
-              unit="mm/hr"
-              hint={isHeavyRainfall(heaviestRain) ? t({ en: "Heavy", fil: "Malakas" }, lang) : undefined}
-              icon={CloudRain}
-              accentClass={isHeavyRainfall(heaviestRain) ? "text-severity-orange" : "text-foreground"}
-            />
-            <StatCard
               label={t(CENTERS_FULL, lang)}
               value={constrainedCenters}
               hint={t(CENTERS_NOTE, lang)}
@@ -195,15 +150,6 @@ export function AdminOverview() {
               icon={Wind}
               accentClass={typhoonTrack ? "text-severity-orange" : "text-foreground"}
             />
-            {highestRiskState && highestRiskZone && (
-              <StatCard
-                label={t(HIGHEST_RISK_SCORE, lang)}
-                value={highestRiskState.riskScore}
-                hint={`${highestRiskZone.name} — ${t(RISK_SCORE_HINT, lang)}`}
-                icon={Activity}
-                accentClass={highestRiskState.riskScore >= 50 ? "text-severity-orange" : "text-foreground"}
-              />
-            )}
           </div>
         </section>
 
@@ -224,19 +170,10 @@ export function AdminOverview() {
             <section className="space-y-4">
               <h2 className="text-lg font-semibold">{t(HAZARDS, lang)}</h2>
               <FloodMonitoringPanel zones={zones} />
-              <RainfallMonitoringPanel zones={zones} />
               <div className="grid gap-4 lg:grid-cols-2">
                 <TyphoonTrackingPanel />
                 <LandslideRiskPanel zones={zones} />
               </div>
-            </section>
-
-            <Separator />
-
-            <section className="space-y-4">
-              <h2 className="text-lg font-semibold">{t(ANALYTICS, lang)}</h2>
-              <ReportTrendPanel zones={zones} />
-              <AlertAnalyticsPanel zones={zones} />
             </section>
           </>
         )}

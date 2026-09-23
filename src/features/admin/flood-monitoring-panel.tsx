@@ -8,7 +8,8 @@ import { Droplet, Users, Settings2 } from "lucide-react";
 import { SeverityBadge } from "@/features/alerts/severity-badge";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
-import { getReportsTodayForZone, REPORT_THRESHOLD } from "@/lib/mock-data";
+import { REPORT_THRESHOLD } from "@/lib/weather-thresholds";
+import { countReportsToday } from "@/lib/reports-today";
 import {
   useWaterLevelReports,
   getRecentReportsForZoneLive,
@@ -83,7 +84,7 @@ function FloodMonitoringRow({
   const status = getZoneStatus(alert);
   const statusColor = getZoneStatusColor(alert);
   const susceptibility = useHazardsForZone(zone.id).flood;
-  const reportsToday = getReportsTodayForZone(zone.id);
+  const reportsToday = countReportsToday(allReports, new Set([zone.id]));
   const recent = getRecentReportsForZoneLive(allReports, zone.id);
   const agreeing = recent.filter((report) => !report.isOutlier).length;
 

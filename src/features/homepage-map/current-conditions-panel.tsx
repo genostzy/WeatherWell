@@ -4,7 +4,7 @@ import { useState } from "react";
 import { ChevronDown, ChevronUp, CloudRain } from "lucide-react";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
-import { getHeatIndexCategory, hasElevatedLandslideRisk, type HeatIndexCategory } from "@/lib/mock-data";
+import { getHeatIndexCategory, hasElevatedLandslideRisk, type HeatIndexCategory } from "@/lib/weather-thresholds";
 import { useWeatherData } from "@/lib/use-weather-data";
 import { isThunderstorm } from "@/lib/open-meteo";
 import { useTyphoon } from "@/lib/use-typhoon";

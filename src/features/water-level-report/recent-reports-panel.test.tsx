@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { RecentReportsPanel } from "./recent-reports-panel";
-import { MOCK_WATER_LEVEL_REPORTS, REPORT_THRESHOLD } from "@/lib/mock-data";
+import { MOCK_WATER_LEVEL_REPORTS } from "@/lib/mock-data";
+import { REPORT_THRESHOLD } from "@/lib/weather-thresholds";
 import { FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
 import { addWaterLevelReport } from "@/lib/water-level-reports";
 import { DEPTH_LABEL } from "@/lib/depth";

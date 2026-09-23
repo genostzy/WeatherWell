@@ -375,3 +375,30 @@ describe("ZoneDashboardPage with no hazard data (I3)", () => {
     expect(screen.getAllByText("Unknown")).toHaveLength(2);
   });
 });
+
+describe("ZoneDashboardPage rainfall trend", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("charts the live 12-hour rainfall from /api/weather, not invented history", async () => {
+    const zone = FIXTURE_REFERENCE_DATA.zones[0];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => ({
+        ok: true,
+        json: async () =>
+          String(url).includes("/api/weather")
+            ? { current: null, rainfallHistory: [1, 2, 23], rainfallForecast: [] }
+            : [],
+      }))
+    );
+    renderWithData(<ZoneDashboardPage params={resolvedParams({ zoneId: zone.id })} searchParams={emptySearchParams} />);
+    expect(await screen.findByRole("img", { name: /rainfall, last 12 hours: starts at 1mm\/hr, now 23mm\/hr/i })).toBeInTheDocument();
+  });
+
+  it("says there is no reading instead of drawing a flat zero line", async () => {
+    const zone = FIXTURE_REFERENCE_DATA.zones[0];
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) }));
+    renderWithData(<ZoneDashboardPage params={resolvedParams({ zoneId: zone.id })} searchParams={emptySearchParams} />);
+    expect(await screen.findByText(/no live weather reading right now/i)).toBeInTheDocument();
+  });
+});

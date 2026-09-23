@@ -5,7 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Mountain } from "lucide-react";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
-import { getRainfallForZone, hasElevatedLandslideRisk } from "@/lib/mock-data";
+import { hasElevatedLandslideRisk } from "@/lib/weather-thresholds";
+import { useWeatherData } from "@/lib/use-weather-data";
 import { useHazardsForZone } from "@/lib/reference-data/use-reference-data";
 import { HAZARD_LEVEL_LABEL } from "@/lib/hazards";
 import type { LanguageCode, LocalizedText, Zone } from "@/lib/types";
@@ -39,7 +40,8 @@ export function LandslideRiskPanel({ zones }: { zones: Zone[] }) {
 
 function LandslideRiskRow({ zone, lang }: { zone: Zone; lang: LanguageCode }) {
   const susceptibility = useHazardsForZone(zone.id).landslide;
-  const elevated = hasElevatedLandslideRisk(susceptibility, getRainfallForZone(zone.id));
+  const { current } = useWeatherData(zone.id);
+  const elevated = current !== null && hasElevatedLandslideRisk(susceptibility, current.rainfall_mm);
   return (
     <div className="flex flex-wrap items-center justify-between gap-2">
       <span className="font-medium">{zone.name}</span>

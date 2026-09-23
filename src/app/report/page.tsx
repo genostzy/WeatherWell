@@ -25,7 +25,7 @@ import { useSelectedZone } from "@/features/zones/use-selected-zone";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { DEPTH_LABEL, DEPTH_CM, DEPTH_SEVERITY, type DepthLevel } from "@/lib/depth";
-import { isHeavyRainfall } from "@/lib/mock-data";
+import { isHeavyRainfall } from "@/lib/weather-thresholds";
 import { useWeatherData } from "@/lib/use-weather-data";
 import { addWaterLevelReport } from "@/lib/water-level-reports";
 import { useLivePosition } from "@/features/homepage-map/use-live-position";

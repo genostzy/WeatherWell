@@ -15,11 +15,8 @@ import {
 } from "@/components/ui/select";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
-import {
-  getRainfallForZone,
-  getRainfallHistoryForZone,
-  isHeavyRainfall,
-} from "@/lib/mock-data";
+import { isHeavyRainfall } from "@/lib/weather-thresholds";
+import { useWeatherData } from "@/lib/use-weather-data";
 import { useHazardsForZone, useSetCenterStatus, useZones } from "@/lib/reference-data/use-reference-data";
 import { HAZARD_LEVEL_LABEL } from "@/lib/hazards";
 import { useActiveAlertForZone, useSetZoneAlert } from "@/lib/alerts-store";
@@ -43,6 +40,7 @@ const CLEAR: LocalizedText = { en: "Clear", fil: "Ligtas" };
 const CAPACITY: LocalizedText = { en: "Evacuation center capacity", fil: "Kapasidad ng evacuation center" };
 const RAINFALL: LocalizedText = { en: "Current rainfall", fil: "Kasalukuyang Ulan" };
 const RAINFALL_TREND: LocalizedText = { en: "Rainfall — last 12 hours", fil: "Ulan — huling 12 oras" };
+const NO_READING: LocalizedText = { en: "No live weather reading right now", fil: "Walang live na ulat ng panahon ngayon" };
 const FLOOD_SUSCEPTIBILITY: LocalizedText = { en: "Flood susceptibility", fil: "Panganib ng Baha" };
 const LANDSLIDE_SUSCEPTIBILITY: LocalizedText = { en: "Landslide susceptibility", fil: "Panganib ng Guho" };
 const NOTE: LocalizedText = {
@@ -72,6 +70,7 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
   const [alertError, setAlertError] = useState(false);
   const [statusError, setStatusError] = useState(false);
   const managesZone = useManagesZone();
+  const { rainfallHistory } = useWeatherData(zoneId);
 
   const foundZone = zones.find((z) => z.id === zoneId);
   if (!foundZone) notFound();
@@ -86,8 +85,7 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
   // to the zone's own centerStatus if no headcount has ever been recorded.
   const centerStatus = resolveEffectiveCenterStatus(zone.centerStatus, zone.evacuationCenterCapacity, zone.currentOccupancy);
   const isTrackingHeadcount = zone.currentOccupancy !== undefined;
-  const rainfall = getRainfallForZone(zone.id);
-  const rainfallHistory = getRainfallHistoryForZone(zone.id);
+  const rainfall = rainfallHistory[rainfallHistory.length - 1] ?? 0;
 
   // The alert write goes through the alerts store (useSetZoneAlert), which
   // refreshes the alert list once the database confirms it — see C1 there.
@@ -232,13 +230,19 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
             <CardTitle className="text-base">{t(RAINFALL_TREND, lang)}</CardTitle>
           </CardHeader>
           <CardContent>
-            <TrendChart
-              series={rainfallHistory}
-              color={isHeavyRainfall(rainfall) ? SEVERITY_HEX.orange : SEVERITY_HEX.yellow}
-              label={`${zone.name} rainfall, last 12 hours`}
-              unit="mm/hr"
-              height={72}
-            />
+            {rainfallHistory.length > 0 ? (
+              <TrendChart
+                series={rainfallHistory}
+                color={isHeavyRainfall(rainfall) ? SEVERITY_HEX.orange : SEVERITY_HEX.yellow}
+                label={`${zone.name} rainfall, last 12 hours`}
+                unit="mm/hr"
+                height={72}
+              />
+            ) : (
+              <p lang={lang} className="text-sm text-muted-foreground">
+                {t(NO_READING, lang)}
+              </p>
+            )}
           </CardContent>
         </Card>
 

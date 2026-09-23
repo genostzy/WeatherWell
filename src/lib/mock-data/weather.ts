@@ -1,5 +1,4 @@
 import type { HazardRiskLevel, HazardType, LocalizedText } from "../types";
-import type { HazardLevel } from "../hazards";
 
 /**
  * PRD's Current Conditions panel calls for near-real-time rainfall per zone,
@@ -15,11 +14,6 @@ const MOCK_RAINFALL_MM_PER_HOUR: Record<string, number> = {
 
 export function getRainfallForZone(zoneId: string): number {
   return MOCK_RAINFALL_MM_PER_HOUR[zoneId] ?? 0;
-}
-
-/** PAGASA's own "heavy" rainfall classification starts around 15mm in an hour. */
-export function isHeavyRainfall(mmPerHour: number): boolean {
-  return mmPerHour >= 15;
 }
 
 export interface TyphoonTrack {
@@ -68,16 +62,6 @@ export function hasThunderstormWatch(zoneId: string): boolean {
   return MOCK_THUNDERSTORM_WATCH[zoneId] ?? false;
 }
 
-export type HeatIndexCategory = "caution" | "extreme_caution" | "danger" | "extreme_danger";
-
-/** PAGASA's own published heat index bands (apparent temperature, °C). */
-export function getHeatIndexCategory(celsius: number): HeatIndexCategory {
-  if (celsius >= 52) return "extreme_danger";
-  if (celsius >= 42) return "danger";
-  if (celsius >= 33) return "extreme_caution";
-  return "caution";
-}
-
 /** Weekly-refresh cadence, unlike rainfall/wind/typhoon/thunderstorm above — see Current Conditions panel's per-reading age requirement. */
 const MOCK_HEAT_INDEX_C: Record<string, number> = {
   "zone-1": 32,
@@ -95,17 +79,6 @@ export const MOCK_DROUGHT_OUTLOOK: LocalizedText = {
   en: "No dry spell expected in the next 30 days.",
   fil: "Walang inaasahang tagtuyot sa susunod na 30 araw.",
 };
-
-/**
- * Medium/High landslide susceptibility plus currently-heavy rainfall — the
- * pairing the Current Conditions panel's caution note calls out. Shared by
- * the resident-facing panel and the admin Landslide Risk panel so both read
- * the same rule. Unknown susceptibility is never elevated (I3): a caution
- * built on missing data is a false alarm.
- */
-export function hasElevatedLandslideRisk(susceptibility: HazardLevel, mmPerHour: number): boolean {
-  return (susceptibility === "medium" || susceptibility === "high") && isHeavyRainfall(mmPerHour);
-}
 
 const WEATHER_READ_LIGHT_RAIN: LocalizedText = {
   en: "cloudy, with a bit of rain expected later",

@@ -170,12 +170,11 @@ describe("AdminMapCanvas", () => {
     expect(await screen.findByText(/could not save/i)).toBeInTheDocument();
   });
 
-  it("shows the zone's computed risk score alongside the override control", () => {
+  it("shows no computed risk score — it was built on invented rainfall and report counts", () => {
     renderWithData(<AdminMapCanvas zones={FIXTURE_REFERENCE_DATA.zones} />);
     fireEvent.click(screen.getByRole("img", { name: new RegExp(zone.name, "i") }));
 
-    expect(screen.getByText(/risk score/i)).toBeInTheDocument();
-    expect(screen.getByText(/advisory only/i)).toBeInTheDocument();
+    expect(screen.queryByText(/risk score/i)).not.toBeInTheDocument();
   });
 
   it("writes an evacuation center headcount from its marker popup", async () => {
@@ -466,11 +465,11 @@ describe("AdminMapCanvas with no hazard data (I3)", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders and shows a finite risk score for a zone with no hazard rows", () => {
+  it("renders a zone's popup when it has no hazard rows", () => {
     renderWithData(<AdminMapCanvas zones={FIXTURE_REFERENCE_DATA.zones} />, { data: { hazards: {} } });
     fireEvent.click(screen.getByRole("img", { name: new RegExp(zone.name, "i") }));
 
-    expect(screen.getByText(/risk score/i).textContent).toMatch(/risk score: \d+\/100/i);
+    expect(screen.getByRole("combobox", { name: new RegExp(zone.name, "i") })).toBeInTheDocument();
   });
 });
 
