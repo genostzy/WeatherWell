@@ -1,9 +1,7 @@
 {
   "ignore": [
     "scripts/**",
-    "src/lib/tile-cache.ts",
-    "src/lib/use-weather-data.ts",
-    "src/lib/use-zone-weather.ts"
+    "src/lib/tile-cache.ts"
   ],
   "exclude": ["files", "exports", "types", "nsExports", "nsTypes", "enumMembers"]
 }

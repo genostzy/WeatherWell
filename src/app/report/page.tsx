@@ -25,7 +25,8 @@ import { useSelectedZone } from "@/features/zones/use-selected-zone";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { DEPTH_LABEL, DEPTH_CM, DEPTH_SEVERITY, type DepthLevel } from "@/lib/depth";
-import { getRainfallForZone, isHeavyRainfall } from "@/lib/mock-data";
+import { isHeavyRainfall } from "@/lib/mock-data";
+import { useWeatherData } from "@/lib/use-weather-data";
 import { addWaterLevelReport } from "@/lib/water-level-reports";
 import { useLivePosition } from "@/features/homepage-map/use-live-position";
 import { useActiveAlertForZone } from "@/lib/alerts-store";
@@ -107,7 +108,8 @@ export default function ReportPage() {
   const alert = useActiveAlertForZone(zone.id);
   const status = getZoneStatus(alert);
   const statusColor = getZoneStatusColor(alert);
-  const rainfall = getRainfallForZone(zone.id);
+  const { current: liveWeather } = useWeatherData(zone.id);
+  const rainfall = liveWeather ? liveWeather.rainfall_mm : null;
   // Capacity and occupancy are not optional in practice: without them a
   // tracked headcount is skipped and this page shows the zone's default while
   // every other surface shows the derived status, so the same centre reads
@@ -166,10 +168,10 @@ export default function ReportPage() {
               <span className="flex items-center gap-1.5">
                 <CloudRain
                   aria-hidden="true"
-                  className={`h-4 w-4 ${isHeavyRainfall(rainfall) ? "text-severity-orange" : "text-muted-foreground"}`}
+                  className={`h-4 w-4 ${rainfall !== null && isHeavyRainfall(rainfall) ? "text-severity-orange" : "text-muted-foreground"}`}
                 />
-                {t(RAINFALL, lang)}: {rainfall} mm/hr
-                {isHeavyRainfall(rainfall) && (
+                {t(RAINFALL, lang)}: {rainfall === null ? "—" : `${rainfall} mm/hr`}
+                {rainfall !== null && isHeavyRainfall(rainfall) && (
                   <span className="text-severity-orange">· {t(HEAVY_RAIN_NOW, lang)}</span>
                 )}
               </span>

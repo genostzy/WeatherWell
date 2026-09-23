@@ -1,8 +1,18 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { screen } from "@testing-library/react";
 import { PersonalStatusHeadline } from "./personal-status-headline";
 import { renderWithData, FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
-import { getActiveAlertForZone, getFriendlyWeatherRead, MOCK_ALERTS } from "@/lib/mock-data";
+import { getActiveAlertForZone, MOCK_ALERTS } from "@/lib/mock-data";
+
+vi.mock("@/lib/use-weather-data", () => ({
+  useWeatherData: () => ({
+    current: { rainfall_mm: 16, wind_kph: 5, temperature_c: 27, apparent_temperature_c: 31, humidity_pct: 90, weather_code: 61, fetched_at: "x" },
+    rainfallHistory: [],
+    rainfallForecast: [],
+    isLoading: false,
+    error: null,
+  }),
+}));
 import { zoneWithSeverity } from "@/test-utils/mock-fixtures";
 import { t } from "@/lib/i18n";
 import type { AlertRecord, LanguageCode, Zone } from "@/lib/types";
@@ -57,8 +67,8 @@ describe("PersonalStatusHeadline", () => {
 
   it("follows a Safe headline with a friendly weather read", () => {
     renderHeadline(SAFE_ZONE);
-    const weatherRead = t(getFriendlyWeatherRead(SAFE_ZONE.id), "en");
-    expect(screen.getByText(weatherRead)).toBeInTheDocument();
+    // From the live reading (16 mm/hr), not a per-zone mock.
+    expect(screen.getByText(/heavy rain right now/i)).toBeInTheDocument();
   });
 
   it("follows a non-Safe headline with the zone's actual active alert message, not a weather read", () => {

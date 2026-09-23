@@ -6,7 +6,7 @@ import { t } from "@/lib/i18n";
 import { useAlerts } from "@/lib/alerts-store";
 import { useZones } from "@/lib/reference-data/use-reference-data";
 import { getZoneStatus } from "@/lib/zone-status";
-import { getRainfallForZone, getWindForZone } from "@/lib/mock-data";
+import { useWeatherData } from "@/lib/use-weather-data";
 import type { LocalizedText } from "@/lib/types";
 
 const ALERTS: LocalizedText = { en: "alerts", fil: "alert" };
@@ -33,8 +33,9 @@ export function QuickStats() {
 
   // Weather: check the selected zone (first zone) for notable conditions
   const primaryZone = zones[0];
-  const rainfall = primaryZone ? getRainfallForZone(primaryZone.id) : 0;
-  const wind = primaryZone ? getWindForZone(primaryZone.id) : 0;
+  const { current } = useWeatherData(primaryZone?.id);
+  const rainfall = current?.rainfall_mm ?? 0;
+  const wind = Math.round(current?.wind_kph ?? 0);
   const hasRain = rainfall > 5;
   const hasWind = wind > 15;
 

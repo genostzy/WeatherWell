@@ -4,16 +4,9 @@ import { useState } from "react";
 import { ChevronDown, ChevronUp, CloudRain } from "lucide-react";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
-import {
-  getRainfallForZone,
-  getWindForZone,
-  hasThunderstormWatch,
-  getHeatIndexForZone,
-  getHeatIndexCategory,
-  hasElevatedLandslideRisk,
-  MOCK_DROUGHT_OUTLOOK,
-  type HeatIndexCategory,
-} from "@/lib/mock-data";
+import { getHeatIndexCategory, hasElevatedLandslideRisk, type HeatIndexCategory } from "@/lib/mock-data";
+import { useWeatherData } from "@/lib/use-weather-data";
+import { isThunderstorm } from "@/lib/open-meteo";
 import { useTyphoon } from "@/lib/use-typhoon";
 import { useHazardsForZone } from "@/lib/reference-data/use-reference-data";
 import type { LocalizedText, Zone } from "@/lib/types";
@@ -24,13 +17,12 @@ const WIND: LocalizedText = { en: "Wind", fil: "Hangin" };
 const TYPHOON_TRACK: LocalizedText = { en: "Typhoon track", fil: "Landas ng Bagyo" };
 const NO_ACTIVE_SYSTEM: LocalizedText = { en: "No active tropical cyclone", fil: "Walang aktibong bagyo" };
 const THUNDERSTORM_WATCH: LocalizedText = {
-  en: "Thunderstorm watch in effect",
-  fil: "May thunderstorm watch",
+  en: "Thunderstorm in the area",
+  fil: "May bagyong may kulog sa lugar",
 };
-const HEAT_INDEX: LocalizedText = { en: "Heat index", fil: "Heat Index" };
-const DROUGHT_OUTLOOK: LocalizedText = { en: "Drought / dry-spell outlook", fil: "Outlook sa Tagtuyot" };
-const UPDATED_RECENTLY: LocalizedText = { en: "Updated minutes ago", fil: "Na-update ilang minuto ang nakaraan" };
-const UPDATED_WEEKLY: LocalizedText = { en: "Heat & drought: updated weekly", fil: "Heat at drought: lingguhang na-a-update" };
+const HEAT_INDEX: LocalizedText = { en: "Feels like", fil: "Pakiramdam" };
+const SOURCE: LocalizedText = { en: "Live data from Open-Meteo, updated hourly", fil: "Live na datos mula sa Open-Meteo, bawat oras" };
+const NO_READING: LocalizedText = { en: "No live weather reading right now", fil: "Walang live na ulat ng panahon ngayon" };
 const LANDSLIDE_CAUTION: LocalizedText = {
   en: "Caution: heavy rain on landslide-prone ground nearby.",
   fil: "Pag-ingat: malakas na ulan sa lupaing madaling maguho.",
@@ -59,13 +51,15 @@ export function CurrentConditionsPanel({ zone }: { zone: Zone }) {
   const [expanded, setExpanded] = useState(false);
   const { track } = useTyphoon();
 
-  const rainfall = getRainfallForZone(zone.id);
-  const wind = getWindForZone(zone.id);
-  const thunderstorm = hasThunderstormWatch(zone.id);
-  const heatIndex = getHeatIndexForZone(zone.id);
-  const heatCategory = getHeatIndexCategory(heatIndex);
+  const { current } = useWeatherData(zone.id);
+  const rainfall = current ? current.rainfall_mm : null;
+  const wind = current ? Math.round(current.wind_kph) : null;
+  const thunderstorm = current ? isThunderstorm(current.weather_code) : false;
+  const heatIndex = current ? Math.round(current.apparent_temperature_c) : null;
+  const heatCategory = heatIndex === null ? null : getHeatIndexCategory(heatIndex);
   const landslideSusceptibility = useHazardsForZone(zone.id).landslide;
-  const landslideCaution = hasElevatedLandslideRisk(landslideSusceptibility, rainfall);
+  const landslideCaution = rainfall !== null && hasElevatedLandslideRisk(landslideSusceptibility, rainfall);
+  const shown = (value: number | null, unit: string) => (value === null ? "—" : value + unit);
   const ChevronIcon = expanded ? ChevronUp : ChevronDown;
 
   const hasSignalWarning = track && track.wind_signal > 0;
@@ -85,7 +79,7 @@ export function CurrentConditionsPanel({ zone }: { zone: Zone }) {
           <CloudRain aria-hidden="true" className={`h-4 w-4 shrink-0 ${iconColor}`} />
           <span lang={lang} className="whitespace-nowrap">{t(TITLE, lang)}</span>
           <span className="truncate font-normal text-muted-foreground">
-            · {rainfall}mm/hr · {wind}km/h
+            · {shown(rainfall, "mm/hr")} · {shown(wind, "km/h")}
           </span>
         </span>
         <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
@@ -98,11 +92,11 @@ export function CurrentConditionsPanel({ zone }: { zone: Zone }) {
         <div id="current-conditions-detail" className="space-y-2 border-t border-border px-4 pb-4 pt-3 text-sm">
           <div className="flex items-center justify-between gap-2">
             <span className="text-muted-foreground">{t(RAINFALL, lang)}</span>
-            <span className="font-medium tabular-nums">{rainfall} mm/hr</span>
+            <span className="font-medium tabular-nums">{shown(rainfall, " mm/hr")}</span>
           </div>
           <div className="flex items-center justify-between gap-2">
             <span className="text-muted-foreground">{t(WIND, lang)}</span>
-            <span className="font-medium tabular-nums">{wind} km/h</span>
+            <span className="font-medium tabular-nums">{shown(wind, " km/h")}</span>
           </div>
           <div className="flex items-center justify-between gap-2">
             <span className="text-muted-foreground">{t(TYPHOON_TRACK, lang)}</span>
@@ -130,13 +124,7 @@ export function CurrentConditionsPanel({ zone }: { zone: Zone }) {
           <div className="flex items-center justify-between gap-2">
             <span className="text-muted-foreground">{t(HEAT_INDEX, lang)}</span>
             <span className="font-medium tabular-nums">
-              {heatIndex}°C · {t(HEAT_CATEGORY_LABEL[heatCategory], lang)}
-            </span>
-          </div>
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-muted-foreground">{t(DROUGHT_OUTLOOK, lang)}</span>
-            <span lang={lang} className="text-right font-medium">
-              {t(MOCK_DROUGHT_OUTLOOK, lang)}
+              {heatIndex === null || heatCategory === null ? "—" : heatIndex + "°C · " + t(HEAT_CATEGORY_LABEL[heatCategory], lang)}
             </span>
           </div>
 
@@ -147,7 +135,7 @@ export function CurrentConditionsPanel({ zone }: { zone: Zone }) {
           )}
 
           <p lang={lang} className="pt-1 text-xs text-muted-foreground">
-            {t(UPDATED_RECENTLY, lang)}. {t(UPDATED_WEEKLY, lang)}.
+            {t(current ? SOURCE : NO_READING, lang)}.
           </p>
         </div>
       )}

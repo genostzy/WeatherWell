@@ -7,7 +7,8 @@ import { getZoneStatus, getZoneStatusColor, ZONE_STATUS_LABEL } from "@/lib/zone
 import { resolveAlertDowngrade } from "@/lib/alert-downgrade";
 import { useActiveAlertForZone, useAlerts } from "@/lib/alerts-store";
 import { AlertDowngradeNotice } from "@/features/alerts/alert-downgrade-notice";
-import { getFriendlyWeatherRead } from "@/lib/mock-data";
+import { useWeatherData } from "@/lib/use-weather-data";
+import { friendlyWeatherRead } from "@/lib/weather-read";
 import type { Zone } from "@/lib/types";
 
 /**
@@ -26,7 +27,8 @@ export function PersonalStatusHeadline({ zone }: { zone: Zone }) {
   const color = getZoneStatusColor(alert);
   const Icon = status === "safe" ? ShieldCheck : TriangleAlert;
   // Safe: a friendly weather read. Otherwise: the zone's actual alert message.
-  const followUp = status === "safe" ? getFriendlyWeatherRead(zone.id) : alert?.message;
+  const { current } = useWeatherData(zone.id);
+  const followUp = status === "safe" ? friendlyWeatherRead(current) : alert?.message;
 
   return (
     <div className="w-full space-y-2">

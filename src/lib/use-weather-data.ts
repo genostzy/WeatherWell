@@ -1,29 +1,28 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import type { LiveWeatherReading } from "@/lib/open-meteo";
 
-export interface WeatherReading {
-  rainfall_mm: number;
-  wind_kph: number;
-  temperature_c: number;
-  humidity_pct: number;
-  weather_code: number;
-  fetched_at: string;
-}
+export type WeatherReading = LiveWeatherReading;
 
-export interface WeatherData {
+interface WeatherData {
   zoneId: string;
   current: WeatherReading | null;
   rainfallHistory: number[];
+  rainfallForecast: number[];
 }
 
+const NO_HOURS: number[] = [];
+
 /**
- * Hook to fetch weather data for a zone from the API.
- * Polls every 30 minutes. Returns null data when no readings exist yet.
+ * Live weather for a zone from /api/weather (Open-Meteo). Polls every 30
+ * minutes. `current` stays null until a reading arrives or if the service
+ * is unreachable — screens show "no data", never a made-up zero.
  */
 export function useWeatherData(zoneId: string | undefined): {
   current: WeatherReading | null;
   rainfallHistory: number[];
+  rainfallForecast: number[];
   isLoading: boolean;
   error: unknown;
 } {
@@ -40,7 +39,7 @@ export function useWeatherData(zoneId: string | undefined): {
     async function fetchWeather() {
       try {
         setIsLoading(true);
-        const res = await fetch(`/api/weather?zoneId=${zoneId}`, {
+        const res = await fetch(`/api/weather?zoneId=${encodeURIComponent(zoneId!)}`, {
           signal: controller.signal,
         });
         if (!res.ok) throw new Error("Failed to fetch weather");
@@ -56,8 +55,6 @@ export function useWeatherData(zoneId: string | undefined): {
     }
 
     fetchWeather();
-
-    // Poll every 30 minutes
     const interval = setInterval(fetchWeather, 30 * 60 * 1000);
 
     return () => {
@@ -69,7 +66,8 @@ export function useWeatherData(zoneId: string | undefined): {
 
   return {
     current: data?.current ?? null,
-    rainfallHistory: data?.rainfallHistory ?? [],
+    rainfallHistory: data?.rainfallHistory ?? NO_HOURS,
+    rainfallForecast: data?.rainfallForecast ?? NO_HOURS,
     isLoading,
     error,
   };

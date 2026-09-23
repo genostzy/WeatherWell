@@ -1,57 +1,44 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { buildOpenMeteoUrl, parseOpenMeteo } from "@/lib/open-meteo";
 
 export const dynamic = "force-dynamic";
+
+/** Open-Meteo updates hourly; 30 minutes keeps it fresh without hammering a free service. */
+const REVALIDATE_SECONDS = 1800;
 
 /**
  * GET /api/weather?zoneId=...
  *
- * Returns the latest weather reading for a zone, plus 12-hour history.
- * Falls back to empty arrays if no readings exist yet (data not ingested).
+ * Live conditions, the last 12 hours and the next 6 hours of rain for a
+ * zone's own coordinates, from Open-Meteo (free, no key). A failure is a
+ * 502, never an empty "0 mm": no rain and no data are different facts.
  */
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const zoneId = searchParams.get("zoneId");
-
+  const zoneId = new URL(request.url).searchParams.get("zoneId");
   if (!zoneId) {
     return NextResponse.json({ error: "zoneId required" }, { status: 400 });
   }
 
-  const supabase = createSupabaseServerClient();
+  const { data: zone, error } = await createSupabaseServerClient()
+    .from("zones")
+    .select("lat, lng")
+    .eq("id", zoneId)
+    .maybeSingle();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!zone) return NextResponse.json({ error: "Unknown zone" }, { status: 404 });
 
-  // Latest reading — use raw query until types are regenerated after migration
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: latest, error: latestError } = await (supabase as any)
-    .from("weather_readings")
-    .select("rainfall_mm, wind_kph, temperature_c, humidity_pct, weather_code, fetched_at")
-    .eq("zone_id", zoneId)
-    .order("fetched_at", { ascending: false })
-    .limit(1)
-    .single();
-
-  if (latestError && latestError.code !== "PGRST116") {
-    return NextResponse.json({ error: latestError.message }, { status: 500 });
+  const upstream = await fetch(buildOpenMeteoUrl(zone.lat, zone.lng), {
+    next: { revalidate: REVALIDATE_SECONDS },
+  }).catch(() => null);
+  if (!upstream?.ok) {
+    return NextResponse.json({ error: "Weather service unavailable" }, { status: 502 });
   }
 
-  // 12-hour history (12 hourly readings, oldest first)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: history, error: historyError } = await (supabase as any)
-    .from("weather_readings")
-    .select("rainfall_mm, fetched_at")
-    .eq("zone_id", zoneId)
-    .order("fetched_at", { ascending: false })
-    .limit(12);
-
-  if (historyError) {
-    return NextResponse.json({ error: historyError.message }, { status: 500 });
+  const parsed = parseOpenMeteo(await upstream.json(), new Date().toISOString());
+  if (!parsed.current) {
+    return NextResponse.json({ error: "Weather service returned no reading" }, { status: 502 });
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rainfallHistory = (history ?? []).reverse().map((r: any) => r.rainfall_mm);
-
-  return NextResponse.json({
-    zoneId,
-    current: latest ?? null,
-    rainfallHistory,
-  });
+  return NextResponse.json({ zoneId, source: "open-meteo", ...parsed });
 }

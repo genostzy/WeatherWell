@@ -4,7 +4,6 @@ import { useState, useMemo, useCallback } from "react";
 import Link from "next/link";
 import {
   Building2,
-  CloudRain,
   MapPin,
   Search,
 } from "lucide-react";
@@ -14,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { useSelectedZone } from "@/features/zones/use-selected-zone";
 import { t } from "@/lib/i18n";
-import { getRainfallForZone, isHeavyRainfall } from "@/lib/mock-data";
 import { getZoneStatus, getZoneStatusColor, ZONE_STATUS_LABEL, type ZoneStatus } from "@/lib/zone-status";
 import { CENTER_STATUS_LABEL, CENTER_STATUS_CLASS, resolveEffectiveCenterStatus } from "@/lib/center-status";
 import { useAlerts } from "@/lib/alerts-store";
@@ -168,7 +166,7 @@ export function ZoneMap({ zones }: { zones: Zone[] }) {
 
 /**
  * Compact zone row — shows essential info at a glance.
- * Much lighter than the old Card: just status, name, evac center, rainfall, and action links.
+ * Much lighter than the old Card: just status, name, evac center, and action links.
  */
 function ZoneRow({
   zone,
@@ -188,7 +186,6 @@ function ZoneRow({
     zone.evacuationCenterCapacity,
     zone.currentOccupancy
   );
-  const rainfall = getRainfallForZone(zone.id);
 
   return (
     <Card data-testid="zone-region" className="gap-0 overflow-hidden py-0">
@@ -230,10 +227,6 @@ function ZoneRow({
 
         {/* Quick stats + actions */}
         <div className="flex shrink-0 items-center gap-2">
-          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-            <CloudRain className={`h-3 w-3 ${isHeavyRainfall(rainfall) ? "text-severity-orange" : ""}`} />
-            <span>{rainfall}</span>
-          </div>
           <div className="flex gap-1">
             <Button asChild size="sm" variant="ghost" className="h-6 px-1.5 text-xs">
               <Link href="/evacuation">
