@@ -4,8 +4,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import axe from "axe-core";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { AlertCard } from "@/features/alerts/alert-card";
-import { CascadeWarning } from "@/features/alerts/cascade-warning";
+import { AlertDetails } from "@/features/alerts/alert-details";
 import { PredictionTimeline } from "@/features/alerts/prediction-timeline";
 import { ShareAlertButton } from "@/features/alerts/share-alert-button";
 import { EvacuationInstructions } from "@/features/evacuation/evacuation-instructions";
@@ -25,7 +24,6 @@ import { HazardTypeSelector } from "@/features/map/hazard-type-selector";
 import { PersonalStatusHeadline } from "@/features/homepage-map/personal-status-headline";
 import {
   MOCK_ALERTS,
-  MOCK_CASCADES,
   getPredictionsForZone,
 } from "@/lib/mock-data";
 import { renderWithData, FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
@@ -52,9 +50,9 @@ async function violationsFor(ui: ReactElement): Promise<string[]> {
 }
 
 describe("accessibility (WCAG 2.1 AA, automated subset)", () => {
-  it("alert card has no violations", async () => {
+  it("alert details have no violations", async () => {
     expect(
-      await violationsFor(<AlertCard alert={MOCK_ALERTS[0]} zone={zones[0]} />)
+      await violationsFor(<AlertDetails alert={MOCK_ALERTS[0]} zone={zones[0]} lang="en" />)
     ).toEqual([]);
   });
 
@@ -87,17 +85,6 @@ describe("accessibility (WCAG 2.1 AA, automated subset)", () => {
   it("emergency hotline button has no violations", async () => {
     expect(
       await violationsFor(<EmergencyHotlineButton hotlineNumber="09171234567" />)
-    ).toEqual([]);
-  });
-
-  it("cascade warning has no violations", async () => {
-    const cascade = MOCK_CASCADES[0];
-    const fromZone = zones.find((z) => z.id === cascade.fromZoneId)!;
-    const toZone = zones.find((z) => z.id === cascade.toZoneId)!;
-    expect(
-      await violationsFor(
-        <CascadeWarning cascade={cascade} fromZone={fromZone} toZone={toZone} />
-      )
     ).toEqual([]);
   });
 

@@ -7,6 +7,7 @@ import { getZoneStatus, getZoneStatusColor, ZONE_STATUS_LABEL } from "@/lib/zone
 import { resolveAlertDowngrade } from "@/lib/alert-downgrade";
 import { useActiveAlertForZone, useAlerts } from "@/lib/alerts-store";
 import { AlertDowngradeNotice } from "@/features/alerts/alert-downgrade-notice";
+import { AlertDetails } from "@/features/alerts/alert-details";
 import { useWeatherData } from "@/lib/use-weather-data";
 import { friendlyWeatherRead } from "@/lib/weather-read";
 import type { Zone } from "@/lib/types";
@@ -65,6 +66,7 @@ export function PersonalStatusHeadline({ zone }: { zone: Zone }) {
                 {t(followUp, lang)}
               </p>
             )}
+            {alert && <AlertDetails alert={alert} zone={zone} lang={lang} />}
           </div>
         </div>
       </div>

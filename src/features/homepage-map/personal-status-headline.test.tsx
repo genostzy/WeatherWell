@@ -125,3 +125,37 @@ describe("PersonalStatusHeadline", () => {
     expect(screen.getByText(/evacuate/i)).toBeInTheDocument();
   });
 });
+
+describe("PersonalStatusHeadline alert details (they lived on the unused AlertCard)", () => {
+  const zone = zoneWithSeverity("red");
+  const HOUR = 60 * 60 * 1000;
+
+  it("marks an automatic crowd-report alert as unverified", () => {
+    renderHeadline(zone, "en", withZoneAlert(zone.id, { source: "auto_crowdsourced" }));
+    expect(screen.getByText(/not yet confirmed by an official/i)).toBeInTheDocument();
+  });
+
+  it("does not mark an official's alert as unverified", () => {
+    renderHeadline(zone, "en", withZoneAlert(zone.id, { source: "manual" }));
+    expect(screen.queryByText(/not yet confirmed by an official/i)).not.toBeInTheDocument();
+  });
+
+  it("flags an alert over a day old", () => {
+    renderHeadline(zone, "fil", withZoneAlert(zone.id, { issuedAt: new Date(Date.now() - 30 * HOUR).toISOString() }));
+    expect(screen.getByText(/maaaring hindi na napapanahon/i)).toBeInTheDocument();
+  });
+
+  it("offers read-aloud where the browser can speak", () => {
+    vi.stubGlobal("speechSynthesis", { speak: vi.fn(), cancel: vi.fn() });
+    renderHeadline(zone, "en");
+    expect(screen.getByRole("button", { name: /read aloud/i })).toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
+
+  it("shows none of these for a safe zone", () => {
+    vi.stubGlobal("speechSynthesis", { speak: vi.fn(), cancel: vi.fn() });
+    renderHeadline(SAFE_ZONE, "en");
+    expect(screen.queryByRole("button", { name: /read aloud/i })).not.toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
+});
