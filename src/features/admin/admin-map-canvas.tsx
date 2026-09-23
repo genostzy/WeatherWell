@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Marker, Polyline, Popup, useMapEvents } from "react-leaflet";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
+import { friendlyError } from "@/lib/friendly-error";
 import { getZoneStatus, getZoneStatusColor, ZONE_STATUS_LABEL } from "@/lib/zone-status";
 import { SEVERITY_ORDER, SEVERITY_LABEL, type Severity } from "@/lib/severity";
 import { CENTER_STATUS_LABEL, resolveEffectiveCenterStatus } from "@/lib/center-status";
@@ -231,7 +232,7 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
                   </p>
                 )}
                 {markerSaveError && (
-                  <p className="text-[10px] text-severity-red">{markerSaveError}</p>
+                  <p className="text-[10px] text-severity-red">{friendlyError(markerSaveError, lang)}</p>
                 )}
                 <div className="flex gap-1">
                   <button
@@ -489,7 +490,7 @@ function OfficialMarkerPopupContent({
       >
         {t(DELETE, lang)}
       </button>
-      {error && <p className="text-xs text-severity-red">{error}</p>}
+      {error && <p className="text-xs text-severity-red">{friendlyError(error, lang)}</p>}
     </div>
   );
 }

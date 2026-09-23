@@ -45,6 +45,12 @@ describe("AdminHeader", () => {
     expect(screen.getByRole("link", { name: /officials/i })).toHaveAttribute("href", "/admin/officials");
   });
 
+  it("names an admin's area in the reader's language (L2)", () => {
+    const admin: Official = { userId: "admin-1", displayName: "Test Admin", areaCode: "", areaName: "All areas", level: "admin" };
+    renderWithData(<AdminHeader />, { official: admin, lang: "fil" });
+    expect(screen.getByText(/Lahat ng lugar/)).toBeInTheDocument();
+  });
+
   it("hides the Officials link for a barangay or municipal official", () => {
     renderWithData(<AdminHeader />, { official: OFFICIAL });
     expect(screen.queryByRole("link", { name: /officials/i })).not.toBeInTheDocument();

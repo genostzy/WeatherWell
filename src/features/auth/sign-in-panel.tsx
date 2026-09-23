@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
+import { friendlyError } from "@/lib/friendly-error";
 import { startGoogleSignIn, signInWithPassword, signUpWithPassword, type SignInResult } from "@/lib/auth/sign-in";
 import { isAdminPath } from "@/lib/auth/admin-path";
 import type { LocalizedText } from "@/lib/types";
@@ -119,7 +120,7 @@ export function SignInPanel({ next, notice }: { next: string; notice?: string })
             </Button>
             {errors.existing && (
               <p role="alert" className="text-sm text-destructive">
-                {errors.existing}
+                {friendlyError(errors.existing, lang)}
               </p>
             )}
           </div>
@@ -137,7 +138,7 @@ export function SignInPanel({ next, notice }: { next: string; notice?: string })
           </Button>
           {errors.google && (
             <p role="alert" className="text-sm text-destructive">
-              {errors.google}
+              {friendlyError(errors.google, lang)}
             </p>
           )}
         </div>
@@ -180,7 +181,7 @@ export function SignInPanel({ next, notice }: { next: string; notice?: string })
           </Button>
           {errors.password && (
             <p role="alert" className="text-sm text-destructive">
-              {errors.password}
+              {friendlyError(errors.password, lang)}
             </p>
           )}
           {accountCreated && (

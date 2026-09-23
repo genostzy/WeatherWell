@@ -10,6 +10,7 @@ import type { LocalizedText } from "@/lib/types";
 const SIGN_OUT: LocalizedText = { en: "Sign out", fil: "Mag-sign out" };
 const HISTORY: LocalizedText = { en: "History", fil: "Kasaysayan" };
 const OFFICIALS: LocalizedText = { en: "Officials", fil: "Mga Opisyal" };
+const ALL_AREAS: LocalizedText = { en: "All areas", fil: "Lahat ng lugar" };
 
 /**
  * Sits atop every /admin page, mounted once by the layout's OfficialProvider.
@@ -23,7 +24,7 @@ export function AdminHeader() {
   return (
     <header className="flex flex-wrap items-center justify-between gap-3 border-b p-3">
       <span className="min-w-0 truncate font-medium">
-        {official.displayName} — {official.areaName}
+        {official.displayName} — {official.level === "admin" ? t(ALL_AREAS, lang) : official.areaName}
       </span>
       <div className="flex items-center gap-2">
         {official.level === "admin" && (

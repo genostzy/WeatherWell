@@ -197,19 +197,19 @@ describe("SignInPanel", () => {
       expect(await screen.findByText(/check your email to confirm/i)).toBeInTheDocument();
     });
 
-    it("shows a password sign-in error next to the form", async () => {
+    it("shows a password sign-in error next to the form, in the reader's language (L2)", async () => {
       signInWithPassword.mockResolvedValue({ ok: false, error: "Invalid login credentials" });
       render(
-        <LanguageProvider>
+        <LanguageProvider initialLang="fil">
           <SignInPanel next="/" />
         </LanguageProvider>
       );
 
       fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "x@example.com" } });
       fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: "wrong" } });
-      fireEvent.click(screen.getByRole("button", { name: /^sign in$/i }));
+      fireEvent.click(screen.getByRole("button", { name: /^mag-sign in$/i }));
 
-      expect(await screen.findByText("Invalid login credentials")).toBeInTheDocument();
+      expect(await screen.findByText("Mali ang email o password.")).toBeInTheDocument();
     });
   });
 });

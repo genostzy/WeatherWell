@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
+import { friendlyError } from "@/lib/friendly-error";
 import { appointOfficial } from "@/app/actions/appoint-official";
 import { removeOfficial } from "@/app/actions/remove-official";
 import type { LocalizedText } from "@/lib/types";
@@ -106,7 +107,7 @@ export function OfficialsPanel({ officials }: { officials: OfficialRow[] }) {
         </Button>
         {error && (
           <p role="alert" className="text-sm text-destructive">
-            {error}
+            {friendlyError(error, lang)}
           </p>
         )}
       </form>
