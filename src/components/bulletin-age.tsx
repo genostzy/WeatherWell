@@ -3,6 +3,7 @@
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { useHasHydrated } from "@/lib/use-hydrated";
+import { minutesSinceReport } from "@/lib/water-level-reports";
 import type { LocalizedText } from "@/lib/types";
 
 const STALE_AFTER_HOURS = 12;
@@ -23,7 +24,7 @@ export function BulletinAge({ issuedAt }: { issuedAt: string | null }) {
   const hasHydrated = useHasHydrated();
   if (!issuedAt || !hasHydrated) return null;
 
-  const hours = Math.max(0, Math.floor((Date.now() - Date.parse(issuedAt)) / 3_600_000));
+  const hours = Math.max(0, Math.floor(minutesSinceReport(issuedAt) / 60));
   return (
     <p lang={lang} className="text-xs text-muted-foreground">
       {t(PREFIX, lang)} {hours} {t(HOURS_OLD, lang)}
