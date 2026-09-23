@@ -175,3 +175,59 @@ describe("AdminOverview risk score across town lines (I4)", () => {
     expect(screen.queryAllByText(zone1.name)).toHaveLength(0);
   });
 });
+
+describe("AdminOverview for a nationwide admin", () => {
+  // A real admin's areaCode ("") matches every zone nationwide (~42k in
+  // production, not the 4-zone fixture set here) — found live during
+  // 2026-09-22-admin-role-and-password-auth's Task 8 verification: every
+  // panel below renders one row per zone, and at nationwide scale that
+  // froze the browser tab entirely. The KPI tiles stay (cheap aggregates,
+  // fixed at 7 cards regardless of zone count); the per-zone list panels
+  // are replaced with a link to the map, which is already the app's
+  // existing "see every zone at once" surface (MAP_HINT's own copy).
+  const ADMIN: Official = {
+    userId: "admin-1",
+    displayName: "Test Admin",
+    areaCode: "",
+    areaName: "All areas",
+    level: "admin",
+  };
+
+  it("still shows the at-a-glance KPI tiles, except the per-area risk score", () => {
+    renderWithData(<AdminOverview />, { official: ADMIN });
+    expect(screen.getByText(/zones under alert/i)).toBeInTheDocument();
+    expect(screen.getByText(/reports today/i)).toBeInTheDocument();
+    // Skipped outright rather than faked cheaply — see admin-overview.tsx's
+    // own comment: it would cost an O(zones²) scoring pass at national scale.
+    expect(screen.queryByText(/highest risk score/i)).not.toBeInTheDocument();
+  });
+
+  it("skips every per-zone list panel", () => {
+    renderWithData(<AdminOverview />, { official: ADMIN });
+    expect(screen.queryByText(/flood monitoring/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/heavy rainfall monitoring/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/landslide risk/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/crowd reports over time/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/evacuation management/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /community pin moderation/i })).not.toBeInTheDocument();
+  });
+
+  it("points to the map instead, for zone-by-zone detail", () => {
+    renderWithData(<AdminOverview />, { official: ADMIN });
+    const links = screen.getAllByRole("link", { name: /open map/i });
+    expect(links.some((link) => link.getAttribute("href") === "/admin/map")).toBe(true);
+  });
+
+  it("still shows a barangay official every per-zone panel, unaffected", () => {
+    const official: Official = {
+      userId: "u1",
+      displayName: "Test",
+      areaCode: FIXTURE_REFERENCE_DATA.zones[0].psgcBarangayCode,
+      areaName: "Test barangay",
+      level: "barangay",
+    };
+    renderWithData(<AdminOverview />, { official });
+    expect(screen.getByText(/flood monitoring/i)).toBeInTheDocument();
+    expect(screen.getByText(/evacuation management/i)).toBeInTheDocument();
+  });
+});

@@ -2489,4 +2489,34 @@ begin
   raise notice 'ok: admin_remove_official removed the target correctly';
 end $$;
 
+-- Regression for the live bug found during Task 8 verification
+-- (2026-09-22-admin-role-and-password-auth): profiles' only SELECT policy
+-- was self-only (profiles_read_own), so /admin/officials always returned
+-- an empty list for a real admin despite real appointed officials existing.
+-- Still impersonating the admin from the block above.
+do $$
+declare
+  seen boolean;
+begin
+  select exists(select 1 from public.profiles where id = 'd0000000-0000-4000-8000-000000000002') into seen;
+  if not seen then
+    raise exception using errcode = 'TSTFL',
+      message = 'admin could not read another profile row (profiles_read_own_or_admin regressed)';
+  end if;
+  raise notice 'ok: admin can read another profile row';
+end $$;
+
+select tests.as_user('d0000000-0000-4000-8000-000000000002');
+do $$
+declare
+  seen boolean;
+begin
+  select exists(select 1 from public.profiles where id = 'd0000000-0000-4000-8000-000000000001') into seen;
+  if seen then
+    raise exception using errcode = 'TSTFL',
+      message = 'a non-admin could read another profile row (profiles_read_own_or_admin over-widened)';
+  end if;
+  raise notice 'ok: a non-admin still cannot read another profile row';
+end $$;
+
 rollback;

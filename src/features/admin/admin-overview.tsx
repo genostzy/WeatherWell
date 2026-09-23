@@ -63,6 +63,10 @@ const SIMULATION_HINT: LocalizedText = {
   en: "Practice issuing an alert and watch every delivery channel fire, without notifying anyone.",
   fil: "Magsanay mag-issue ng alerto at panoorin ang bawat delivery channel, walang aabisuhan.",
 };
+const NATIONWIDE_NOTICE: LocalizedText = {
+  en: "You manage every zone nationwide, so per-zone lists are not shown here — open the map for zone-by-zone detail.",
+  fil: "Pinamamahalaan mo ang bawat zone sa buong bansa, kaya hindi ipinapakita dito ang per-zone na listahan — buksan ang mapa para sa detalye ng bawat zone.",
+};
 
 const ZONES_UNDER_ALERT: LocalizedText = { en: "Zones under alert", fil: "Zone na may alerto" };
 const OF_TOTAL: LocalizedText = { en: "of", fil: "sa" };
@@ -115,17 +119,29 @@ export function AdminOverview() {
     return status !== "space_available";
   }).length;
   const hasEffectiveAlert = (zoneId: string) => baseAlertFor(zoneId) !== undefined;
+  // An admin's areaCode ("") matches every zone nationwide (~42k in
+  // production, not the handful a barangay/municipal official manages) —
+  // found live during Task 8 of 2026-09-22-admin-role-and-password-auth:
+  // the browser tab froze entirely at that scale, both from every panel
+  // below rendering one row per zone, and from this risk score itself —
+  // buildZoneInputForZone's upstream lookup is O(zones), so scoring every
+  // zone here is O(zones²), ~1.8 billion comparisons at 42k zones. Skipped
+  // outright for an admin: the per-zone list panels are replaced with a
+  // pointer to the map (this app's existing "see every zone at once"
+  // surface), and the "Highest risk score" tile — which only makes sense
+  // as a per-area figure — is omitted rather than faked cheaply.
+  const isNationwide = official.level === "admin";
   // Scored against every zone, not just the official's (I4): floods cross
   // town lines, and the cascade factor looks for the zone upstream, which can
   // sit in another town. Only what is displayed is limited to the area, so
   // this tile agrees with /admin/map, which already scores against all zones.
-  const zoneStates = zones.map((zone) =>
-    computeZoneState(buildZoneInputForZone(zone, allZones, hasEffectiveAlert, hazards))
-  );
-  const highestRiskState = zoneStates.reduce((highest, state) =>
-    state.riskScore > highest.riskScore ? state : highest
-  );
-  const highestRiskZone = zones.find((zone) => zone.id === highestRiskState.zoneId)!;
+  const zoneStates = isNationwide
+    ? []
+    : zones.map((zone) => computeZoneState(buildZoneInputForZone(zone, allZones, hasEffectiveAlert, hazards)));
+  const highestRiskState = isNationwide
+    ? null
+    : zoneStates.reduce((highest, state) => (state.riskScore > highest.riskScore ? state : highest));
+  const highestRiskZone = highestRiskState ? zones.find((zone) => zone.id === highestRiskState.zoneId)! : null;
 
   return (
     <main className="flex min-h-screen flex-col items-center gap-6 p-4 sm:p-6 lg:p-8">
@@ -179,35 +195,51 @@ export function AdminOverview() {
               icon={Wind}
               accentClass={typhoonTrack ? "text-severity-orange" : "text-foreground"}
             />
-            <StatCard
-              label={t(HIGHEST_RISK_SCORE, lang)}
-              value={highestRiskState.riskScore}
-              hint={`${highestRiskZone.name} — ${t(RISK_SCORE_HINT, lang)}`}
-              icon={Activity}
-              accentClass={highestRiskState.riskScore >= 50 ? "text-severity-orange" : "text-foreground"}
-            />
+            {highestRiskState && highestRiskZone && (
+              <StatCard
+                label={t(HIGHEST_RISK_SCORE, lang)}
+                value={highestRiskState.riskScore}
+                hint={`${highestRiskZone.name} — ${t(RISK_SCORE_HINT, lang)}`}
+                icon={Activity}
+                accentClass={highestRiskState.riskScore >= 50 ? "text-severity-orange" : "text-foreground"}
+              />
+            )}
           </div>
         </section>
 
         <Separator />
 
-        <section className="space-y-4">
-          <h2 className="text-lg font-semibold">{t(HAZARDS, lang)}</h2>
-          <FloodMonitoringPanel zones={zones} />
-          <RainfallMonitoringPanel zones={zones} />
-          <div className="grid gap-4 lg:grid-cols-2">
-            <TyphoonTrackingPanel />
-            <LandslideRiskPanel zones={zones} />
-          </div>
-        </section>
+        {isNationwide && (
+          <Card>
+            <CardContent className="pt-6">
+              <p lang={lang} className="text-sm text-muted-foreground">
+                {t(NATIONWIDE_NOTICE, lang)}
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
-        <Separator />
+        {!isNationwide && (
+          <>
+            <section className="space-y-4">
+              <h2 className="text-lg font-semibold">{t(HAZARDS, lang)}</h2>
+              <FloodMonitoringPanel zones={zones} />
+              <RainfallMonitoringPanel zones={zones} />
+              <div className="grid gap-4 lg:grid-cols-2">
+                <TyphoonTrackingPanel />
+                <LandslideRiskPanel zones={zones} />
+              </div>
+            </section>
 
-        <section className="space-y-4">
-          <h2 className="text-lg font-semibold">{t(ANALYTICS, lang)}</h2>
-          <ReportTrendPanel zones={zones} />
-          <AlertAnalyticsPanel zones={zones} />
-        </section>
+            <Separator />
+
+            <section className="space-y-4">
+              <h2 className="text-lg font-semibold">{t(ANALYTICS, lang)}</h2>
+              <ReportTrendPanel zones={zones} />
+              <AlertAnalyticsPanel zones={zones} />
+            </section>
+          </>
+        )}
 
         <Separator />
 
@@ -231,8 +263,12 @@ export function AdminOverview() {
             </CardContent>
           </Card>
 
-          <EvacuationManagementPanel zones={zones} />
-          <CommunityPinModerationPanel zones={zones} />
+          {!isNationwide && (
+            <>
+              <EvacuationManagementPanel zones={zones} />
+              <CommunityPinModerationPanel zones={zones} />
+            </>
+          )}
 
           <Card>
             <CardContent className="flex flex-wrap items-center justify-between gap-3">
