@@ -67,3 +67,13 @@ export function filterToArea(
     return zone !== undefined && isInArea(zone.psgcBarangayCode, areaCode);
   });
 }
+
+/**
+ * Which History view opens: an explicit ?scope= wins; otherwise an admin,
+ * whose area is the whole country, starts on every area (M1) and everyone
+ * else on their own.
+ */
+export function historyScope(raw: string | undefined, level: string | undefined): "mine" | "all" {
+  if (raw === "all" || raw === "mine") return raw;
+  return level === "admin" ? "all" : "mine";
+}

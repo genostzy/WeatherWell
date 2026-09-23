@@ -28,14 +28,21 @@ export default async function OfficialsPage() {
     notFound();
   }
 
-  const [{ data: profiles }, { data: zones }, { data: municipalities }] = await Promise.all([
-    (await createSupabaseUserClient())
-      .from("profiles")
-      .select("id, display_name, area_code")
-      .eq("role", "operator"),
-    createSupabaseServerClient().from("zones").select("psgc_barangay_code, name"),
-    createSupabaseServerClient().from("municipalities").select("code, name"),
-  ]);
+  const { data: profiles } = await (await createSupabaseUserClient())
+    .from("profiles")
+    .select("id, display_name, area_code")
+    .eq("role", "operator");
+
+  // Only the areas these officials hold (M1): the zones table is ~42k rows,
+  // and an unranged read stops at PostgREST's 1,000-row cap, so most
+  // barangay officials' areas came back unnamed.
+  const areaCodes = [...new Set((profiles ?? []).map((p) => p.area_code).filter((code): code is string => !!code))];
+  const [{ data: zones }, { data: municipalities }] = areaCodes.length
+    ? await Promise.all([
+        createSupabaseServerClient().from("zones").select("psgc_barangay_code, name").in("psgc_barangay_code", areaCodes),
+        createSupabaseServerClient().from("municipalities").select("code, name").in("code", areaCodes),
+      ])
+    : [{ data: [] }, { data: [] }];
 
   // Emails live in auth.users, not profiles, and reading auth.users needs
   // the service-role key (createSupabaseServerClient uses the publishable

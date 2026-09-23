@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { toOfficialActions, filterToArea, type OfficialActionRow } from "./official-actions-mapper";
+import { toOfficialActions, filterToArea, historyScope, type OfficialActionRow } from "./official-actions-mapper";
 
 const ROW: OfficialActionRow = {
   id: 1,
@@ -78,5 +78,22 @@ describe("filterToArea", () => {
       { ...ROW, id: 3, zone_id: null },
     ]);
     expect(filterToArea(actions, ZONES, "0199901").map((a) => a.id)).toEqual([1]);
+  });
+});
+
+describe("historyScope", () => {
+  it("opens on every area for an admin, whose area is the whole country (M1)", () => {
+    expect(historyScope(undefined, "admin")).toBe("all");
+  });
+
+  it("opens on the official's own area otherwise", () => {
+    expect(historyScope(undefined, "barangay")).toBe("mine");
+    expect(historyScope(undefined, undefined)).toBe("mine");
+  });
+
+  it("honours an explicit choice either way", () => {
+    expect(historyScope("mine", "admin")).toBe("mine");
+    expect(historyScope("all", "municipality")).toBe("all");
+    expect(historyScope("junk", "barangay")).toBe("mine");
   });
 });

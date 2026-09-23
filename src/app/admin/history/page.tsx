@@ -1,7 +1,7 @@
 import { loadOfficial } from "@/lib/auth/load-official";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseUserClient } from "@/lib/supabase/user-server";
-import { toOfficialActions, filterToArea } from "@/lib/official-actions-mapper";
+import { toOfficialActions, filterToArea, historyScope } from "@/lib/official-actions-mapper";
 import { HistoryList } from "@/features/admin/history-list";
 
 /**
@@ -20,19 +20,10 @@ import { HistoryList } from "@/features/admin/history-list";
 export default async function HistoryPage({ searchParams }: PageProps<"/admin/history">) {
   const params = await searchParams;
   const rawScope = Array.isArray(params.scope) ? params.scope[0] : params.scope;
-  const scope = rawScope === "all" ? "all" : "mine";
 
   const gate = await loadOfficial();
   const official = gate.state === "official" ? gate.official : null;
-
-  const { data: zoneRows } = await createSupabaseServerClient()
-    .from("zones")
-    .select("id, name, psgc_barangay_code");
-  const zones = (zoneRows ?? []).map((zone) => ({
-    id: zone.id,
-    name: zone.name,
-    psgcBarangayCode: zone.psgc_barangay_code,
-  }));
+  const scope = historyScope(rawScope, official?.level);
 
   const supabase = await createSupabaseUserClient();
   const { data } = await supabase
@@ -46,6 +37,19 @@ export default async function HistoryPage({ searchParams }: PageProps<"/admin/hi
   // column always holds at runtime, same as /api/official-actions.
   const rows = (data ?? []).map((row) => ({ ...row, detail: row.detail as Record<string, unknown> }));
   const allActions = toOfficialActions(rows);
+
+  // Only the zones these 200 actions name (M1): the whole table is ~42k rows,
+  // and an unranged read stops at PostgREST's 1,000-row cap, which silently
+  // dropped "My area" actions in barangays past that cut.
+  const zoneIds = [...new Set(rows.map((row) => row.zone_id).filter((id): id is string => !!id))];
+  const { data: zoneRows } = zoneIds.length
+    ? await createSupabaseServerClient().from("zones").select("id, name, psgc_barangay_code").in("id", zoneIds)
+    : { data: [] };
+  const zones = (zoneRows ?? []).map((zone) => ({
+    id: zone.id,
+    name: zone.name,
+    psgcBarangayCode: zone.psgc_barangay_code,
+  }));
   // Appointment/removal entries carry no zone_id, so filterToArea always
   // drops them — "My area" is barangay-and-town operations only; they
   // appear exclusively under "All areas" (design spec, "History").
