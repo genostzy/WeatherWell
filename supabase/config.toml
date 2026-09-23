@@ -63,8 +63,9 @@ enabled = true
 schema_paths = []
 
 [db.seed]
-# If enabled, seeds the database after migrations during a db reset.
-enabled = true
+# Off: seed/seed.sql predates the nationwide migration and collides with it
+# (zone-1 reuses barangay code 0105528012). The tests bring their own rows.
+enabled = false
 # Specifies an ordered list of seed files to load during db reset.
 # Supports glob patterns relative to supabase directory: "./seeds/*.sql"
 sql_paths = ["./seed/seed.sql"]
