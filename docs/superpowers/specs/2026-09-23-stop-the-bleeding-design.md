@@ -92,6 +92,21 @@ The function pins `search_path = ''`.
 
 The alert card shows a short note when the alert's `source` is `auto_crowdsourced`: "Unverified — based on residents' reports, not yet confirmed by an official" / Filipino equivalent, as a `LocalizedText`.
 
+## Corrections found while planning
+
+Reading the code for the plan changed seven details above. These supersede the sections they name.
+
+1. **Section 2 simplifies.** Yellow is the lowest severity, so any active alert is equal or higher. "Skip the barangay if it has any active alert" covers both "never touch an official's alert" and "never re-issue or downgrade". Reports must also be strictly *after* the last human decision (`>`), and only non-`dry` reports count. Today three "dry" reports trigger an alert.
+2. **Section 3 adds one drop.** `public.get_reference_data_compact()` is also unused, and callable by anyone. Each call returns the entire nationwide dataset, which lets anyone burn database CPU. It is dropped alongside `get_push_subscriptions_for_zone`.
+3. **Section 4, mechanism.** Postgres ignores a column-level `REVOKE` while a table-level `SELECT` grant exists. The migration revokes table-level `SELECT` from `anon`/`authenticated`, then grants back `id, zone_id, depth_level, reported_at, trust_weight, is_outlier`. The resident overview's report count also switches to `my_water_level_reports()`, because its `select("*")` would otherwise fail.
+4. **Section 5 adds the reason there are 0 subscriptions.** `usePushSubscription` saves the subscription only if a session already exists. A resident who has never filed a report has no session, so their subscription is silently dropped. It now calls `ensureAnonymousSession()` before saving. The `zone_id` foreign key changes from `on delete set null` to `on delete cascade`, which `NOT NULL` requires.
+5. **Section 6 was mostly done already.** `report_app_error` already de-duplicates for 5 minutes and caps at 300 per hour. The real gap is storage. 300 per hour × 30-day retention allows about 216,000 rows (about 1 GB), twice the free-tier database. The fix: also skip the insert once the table holds 5,000 rows.
+6. **Push text.** `/api/threshold-check` sends "Crowd reports indicate yellow level flooding". It changes to an unverified-advisory wording that matches the alert.
+7. **Last session's `rls.sql` blocks are broken, and are fixed here.**
+   - `tests.as_user()` only records an impersonation for `expect_allowed`/`expect_denied`; it does not switch the role. The two profile-visibility blocks run as `postgres`, so the admin check proves nothing, and the non-admin check fails the whole suite.
+   - The two admin-demotion blocks count *any* error as a pass.
+   - All four switch roles explicitly (`set local role authenticated` plus JWT claims) and match the exact error message.
+
 ## Testing
 
 - **`supabase/tests/rls.sql`**, new blocks proving:
