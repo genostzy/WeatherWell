@@ -112,7 +112,7 @@ function Benefit({
  * The step never blocks — `onContinue` is always reachable, and choosing to
  * skip is recorded so this is asked once and not again.
  */
-export function InstallStep({ onContinue }: { onContinue: () => void }) {
+export function InstallStep({ onContinue, zoneId }: { onContinue: () => void; zoneId: string }) {
   const { lang } = useLanguage();
   const method = useInstallMethod();
   const [installed, setInstalled] = useState(false);
@@ -195,7 +195,7 @@ export function InstallStep({ onContinue }: { onContinue: () => void }) {
           <p lang={lang} className="mb-3 text-xs text-muted-foreground">
             {t(NOTIFICATIONS_DETAIL, lang)}
           </p>
-          <PushPrompt />
+          <PushPrompt zoneId={zoneId} />
         </div>
       </CardContent>
     </Card>

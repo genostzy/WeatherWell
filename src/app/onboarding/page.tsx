@@ -14,6 +14,7 @@ type Step = "consent" | "zone" | "install";
 
 export default function OnboardingPage() {
   const [step, setStep] = useState<Step>("consent");
+  const [zoneId, setZoneId] = useState<string | null>(null);
   const router = useRouter();
 
   return (
@@ -28,13 +29,15 @@ export default function OnboardingPage() {
             // the end, so a resident who closes the tab mid-flow starts again
             // rather than landing on a home screen with no zone chosen.
             setSelectedZoneId(zoneId);
+            setZoneId(zoneId);
             setStep("install");
           }}
         />
       )}
 
-      {step === "install" && (
+      {step === "install" && zoneId && (
         <InstallStep
+          zoneId={zoneId}
           onContinue={() => {
             markOnboarded();
             router.replace("/");

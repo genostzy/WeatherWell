@@ -4,6 +4,19 @@ import userEvent from "@testing-library/user-event";
 import { InstallStep } from "./install-step";
 import { LanguageProvider } from "@/features/i18n/language-provider";
 
+// Records the barangay each push-subscription hook was mounted with.
+const pushHookZones: (string | undefined)[] = [];
+vi.mock("@/lib/push-subscription", () => ({
+  usePushSubscription: (zoneId?: string) => {
+    pushHookZones.push(zoneId);
+    return {
+      state: { isSupported: true, permission: "default", subscription: null, isLoading: false },
+      subscribe: async () => {},
+      unsubscribe: async () => {},
+    };
+  },
+}));
+
 /**
  * Installing is the precondition for the app's central promise: cached alerts
  * and evacuation instructions only exist on a device that has the app before
@@ -46,13 +59,22 @@ afterEach(() => {
 function renderStep(onContinue = vi.fn()) {
   render(
     <LanguageProvider>
-      <InstallStep onContinue={onContinue} />
+      <InstallStep onContinue={onContinue} zoneId="zone-1" />
     </LanguageProvider>
   );
   return onContinue;
 }
 
 describe("InstallStep", () => {
+  it("offers notifications for the barangay chosen earlier in onboarding", () => {
+    pushHookZones.length = 0;
+    renderStep();
+    // A subscription with no barangay is refused (push_subscriptions.zone_id
+    // is NOT NULL); without the zone here, "Enable" silently does nothing.
+    expect(pushHookZones).toContain("zone-1");
+    expect(pushHookZones).not.toContain(undefined);
+  });
+
   it("makes the case for installing before the storm, not just after", () => {
     renderStep();
     expect(screen.getByText(/may not be able to download anything/i)).toBeInTheDocument();
@@ -95,7 +117,7 @@ describe("InstallStep", () => {
   it("localises the argument, since it is the reason and not decoration", () => {
     render(
       <LanguageProvider initialLang="fil">
-        <InstallStep onContinue={vi.fn()} />
+        <InstallStep onContinue={vi.fn()} zoneId="zone-1" />
       </LanguageProvider>
     );
     expect(screen.getByText(/hindi ka na makapag-download/i)).toBeInTheDocument();

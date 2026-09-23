@@ -131,7 +131,7 @@ describe("accessibility (WCAG 2.1 AA, automated subset)", () => {
   });
 
   it("install step has no violations", async () => {
-    expect(await violationsFor(<InstallStep onContinue={() => {}} />)).toEqual([]);
+    expect(await violationsFor(<InstallStep onContinue={() => {}} zoneId="zone-1" />)).toEqual([]);
   });
 
   it("alert downgrade notice has no violations", async () => {
