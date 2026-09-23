@@ -10,6 +10,11 @@ vi.mock("@/lib/supabase/user-server", () => ({
   }),
 }));
 
+const scheduled: Array<() => unknown> = [];
+vi.mock("next/server", () => ({ after: (task: () => unknown) => scheduled.push(task) }));
+const runThresholdCheck = vi.fn(async () => ({ ok: true, triggered: 0, pushSent: 0, results: [] }));
+vi.mock("@/lib/threshold-check", () => ({ runThresholdCheck: () => runThresholdCheck() }));
+
 import { submitWaterLevelReport } from "./submit-water-level-report";
 
 describe("submitWaterLevelReport", () => {
@@ -198,5 +203,31 @@ describe("submitWaterLevelReport", () => {
       reason: "too_old",
       error: "report too old",
     });
+  });
+
+  it("evaluates the alert threshold right after a report is saved, without making the resident wait", async () => {
+    // The scheduled engine ran at best every 3 hours; flood water does not wait.
+    scheduled.length = 0;
+    runThresholdCheck.mockClear();
+    getClaims.mockResolvedValue({ data: { claims: { sub: "user-1" } } });
+    insert.mockResolvedValue({ error: null });
+
+    const result = await submitWaterLevelReport({ id: "22222222-2222-2222-2222-222222222222", zoneId: "zone-1", depthLevel: "knee" });
+
+    expect(result).toEqual({ ok: true });
+    expect(runThresholdCheck).not.toHaveBeenCalled();
+    expect(scheduled).toHaveLength(1);
+    await scheduled[0]();
+    expect(runThresholdCheck).toHaveBeenCalledOnce();
+  });
+
+  it("does not run the engine for a report that was refused", async () => {
+    scheduled.length = 0;
+    getClaims.mockResolvedValue({ data: { claims: { sub: "user-1" } } });
+    insert.mockResolvedValue({ error: { code: "23514", message: "too far" } });
+
+    await submitWaterLevelReport({ id: "33333333-3333-3333-3333-333333333333", zoneId: "zone-1", depthLevel: "knee" });
+
+    expect(scheduled).toHaveLength(0);
   });
 });

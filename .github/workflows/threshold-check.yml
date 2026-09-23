@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
 
 env:
-  APP_URL: https://weatherwell-wilsondayritjrapex-5422s-projects.vercel.app
+  APP_URL: https://weatherwell.vercel.app
 
 concurrency:
   group: threshold-check

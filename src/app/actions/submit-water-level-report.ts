@@ -1,7 +1,9 @@
 "use server";
 
 import { DEPTH_LEVELS, type DepthLevel } from "@/lib/depth";
+import { after } from "next/server";
 import { createSupabaseUserClient } from "@/lib/supabase/user-server";
+import { runThresholdCheck } from "@/lib/threshold-check";
 import type { ActionResult } from "./action-result";
 
 export interface SubmitReportInput {
@@ -92,7 +94,15 @@ export async function submitWaterLevelReport(
     ...(input.lat !== undefined && input.lng !== undefined ? { lat: input.lat, lng: input.lng } : {}),
   });
 
-  if (!error) return { ok: true };
+  if (!error) {
+    // Evaluate the crowd-report threshold now, after the response is sent,
+    // rather than at the next scheduled run (every 3 hours at best).
+    after(async () => {
+      const check = await runThresholdCheck();
+      if (!check.ok) console.error(`threshold check after report failed: ${check.error}`);
+    });
+    return { ok: true };
+  }
 
   // The outbox re-sends anything it did not see confirmed, so a row that
   // already landed is a success, not a failure.
