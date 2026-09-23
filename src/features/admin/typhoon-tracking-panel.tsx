@@ -1,6 +1,7 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { BulletinAge } from "@/components/bulletin-age";
 import { Wind, AlertTriangle } from "lucide-react";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
@@ -88,6 +89,7 @@ function TyphoonDetails({ track }: { track: TyphoonTrack }) {
       <p lang={lang} className="text-sm text-muted-foreground">
         {t(track.category, lang)}
       </p>
+      <BulletinAge issuedAt={track.issued_at ?? track.fetched_at} />
 
       {track.headline && (
         <p lang={lang} className="text-sm font-medium text-severity-orange">

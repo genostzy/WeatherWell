@@ -42,6 +42,11 @@ describe("TyphoonTrackingPanel", () => {
     expect(screen.getByText(/95/)).toBeInTheDocument();
     expect(screen.getByText(/990/)).toBeInTheDocument();
   });
+
+  it("flags a days-old bulletin as possibly out of date", () => {
+    render(<TyphoonTrackingPanel />);
+    expect(screen.getByText(/may be out of date/i)).toBeInTheDocument();
+  });
 });
 
 describe("TyphoonTrackingPanel", () => {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { BulletinAge } from "@/components/bulletin-age";
 import { ChevronDown, ChevronUp, CloudRain } from "lucide-react";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
@@ -106,6 +107,7 @@ export function CurrentConditionsPanel({ zone }: { zone: Zone }) {
                 : t(NO_ACTIVE_SYSTEM, lang)}
             </span>
           </div>
+          {track && <BulletinAge issuedAt={track.issued_at ?? track.fetched_at} />}
 
           {hasSignalWarning && (
             <p lang={lang} className="font-medium text-severity-orange">
