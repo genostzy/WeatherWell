@@ -17,6 +17,7 @@ import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { isHeavyRainfall } from "@/lib/weather-thresholds";
 import { useWeatherData } from "@/lib/use-weather-data";
+import { ConfirmCentrePanel } from "@/features/evacuation/candidate-sites";
 import { useHazardsForZone, useSetCenterStatus, useZones } from "@/lib/reference-data/use-reference-data";
 import { HAZARD_LEVEL_LABEL } from "@/lib/hazards";
 import { useActiveAlertForZone, useSetZoneAlert } from "@/lib/alerts-store";
@@ -245,6 +246,8 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
             )}
           </CardContent>
         </Card>
+
+        {canManage && <ConfirmCentrePanel zone={zone} />}
 
         <RecentReportsPanel zone={zone} />
 

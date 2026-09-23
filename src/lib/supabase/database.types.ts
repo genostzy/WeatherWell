@@ -773,6 +773,16 @@ export type Database = {
         }[]
       }
       cleanup_old_weather_readings: { Args: never; Returns: undefined }
+      confirm_evacuation_center: {
+        Args: {
+          p_capacity: number
+          p_lat: number
+          p_lng: number
+          p_name: string
+          p_zone_id: string
+        }
+        Returns: undefined
+      }
       my_water_level_reports: {
         Args: never
         Returns: {

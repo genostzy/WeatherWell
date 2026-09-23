@@ -3016,6 +3016,62 @@ begin
   raise notice 'ok T5: the engine needs a combined trust of 1.0';
 end $$;
 
+-- Idea 10: confirming an evacuation centre (C1-C4).
+do $$
+declare n int; c record;
+begin
+  set local role postgres;
+  perform set_config('request.jwt.claims', '', true);
+  insert into auth.users (id) values ('e4000000-0000-4000-8000-000000000001'), ('e4000000-0000-4000-8000-000000000002');
+  insert into public.zones
+    (id, psgc_barangay_code, name, evacuation_route_text, lat, lng, evacuation_route_path, hotline_number)
+  values ('tests-fixture-zone-centre', '9900000051', 'Test Zone Centre', '{"en":"x","fil":"x"}'::jsonb, 16.0288, 120.4366, '[]'::jsonb, '000');
+  insert into public.profiles (id, role, area_code, display_name)
+    values ('e4000000-0000-4000-8000-000000000001', 'operator', '9900000051', 'Test Kapitan')
+    on conflict (id) do update set role = excluded.role, area_code = excluded.area_code, display_name = excluded.display_name;
+
+  -- C1: someone who does not manage the barangay cannot.
+  set local role authenticated;
+  perform set_config('request.jwt.claims', '{"sub":"e4000000-0000-4000-8000-000000000002","role":"authenticated"}', true);
+  begin
+    perform public.confirm_evacuation_center('tests-fixture-zone-centre', 'X', 16.0295, 120.436, 10);
+    raise exception using errcode = 'TSTFL', message = 'C1: a non-official confirmed a centre';
+  exception when insufficient_privilege then null;
+  end;
+
+  -- C2: the barangay's own official can; it is saved, trimmed and logged.
+  perform set_config('request.jwt.claims', '{"sub":"e4000000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+  perform public.confirm_evacuation_center('tests-fixture-zone-centre', '  Nilombot Elementary School ', 16.0295, 120.436, 300);
+  reset role;
+  select name, capacity into c from public.evacuation_centers where zone_id = 'tests-fixture-zone-centre';
+  if c.name is distinct from 'Nilombot Elementary School' or c.capacity <> 300 then
+    raise exception using errcode = 'TSTFL', message = format('C2: centre not saved: %s', c);
+  end if;
+  select count(*) into n from public.official_actions
+   where zone_id = 'tests-fixture-zone-centre' and action = 'centre.confirmed' and actor_name = 'Test Kapitan';
+  if n <> 1 then raise exception using errcode = 'TSTFL', message = format('C2: logged %s times', n); end if;
+
+  -- C3: a site over 5 km away, a blank name and a negative capacity are refused.
+  set local role authenticated;
+  perform set_config('request.jwt.claims', '{"sub":"e4000000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+  begin perform public.confirm_evacuation_center('tests-fixture-zone-centre', 'Far', 16.2, 120.6, 10);
+    raise exception using errcode = 'TSTFL', message = 'C3: a far site was accepted';
+  exception when invalid_parameter_value then null; end;
+  begin perform public.confirm_evacuation_center('tests-fixture-zone-centre', '   ', 16.0295, 120.436, 10);
+    raise exception using errcode = 'TSTFL', message = 'C3: a blank name was accepted';
+  exception when invalid_parameter_value then null; end;
+  begin perform public.confirm_evacuation_center('tests-fixture-zone-centre', 'X', 16.0295, 120.436, -1);
+    raise exception using errcode = 'TSTFL', message = 'C3: a negative capacity was accepted';
+  exception when invalid_parameter_value then null; end;
+  reset role;
+
+  -- C4: anon has no execute right at all.
+  if has_function_privilege('anon', 'public.confirm_evacuation_center(text,text,double precision,double precision,integer)', 'execute') then
+    raise exception using errcode = 'TSTFL', message = 'C4: anon can confirm a centre';
+  end if;
+  raise notice 'ok C1-C4: only a barangay''s own official confirms its centre';
+end $$;
+
 -- G1-G3: the per-device rate limit and the geofence on water-level reports.
 alter table public.water_level_reports enable trigger water_level_reports_geofence_and_rate_limit;
 do $$

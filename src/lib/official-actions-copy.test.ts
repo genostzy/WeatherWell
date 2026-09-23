@@ -176,3 +176,11 @@ describe("describeActor (M2)", () => {
     expect(describeActor("Juan Dela Cruz, BDRRMO Nilombot", "fil")).toBe("Juan Dela Cruz, BDRRMO Nilombot");
   });
 });
+
+describe("describeAction for a confirmed centre (idea 10)", () => {
+  it("names the confirmed centre", () => {
+    const a = action({ action: "centre.confirmed", detail: { name: "Nilombot ES", capacity: 300 } });
+    expect(describeAction(a, "en")).toBe("Evacuation centre set: Nilombot ES (300 people)");
+    expect(describeAction(a, "fil")).toBe("Itinakda ang evacuation center: Nilombot ES (300 tao)");
+  });
+});

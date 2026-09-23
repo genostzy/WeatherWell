@@ -29,6 +29,10 @@ export function describeAction(action: OfficialAction, lang: LanguageCode): stri
       return describeCentreStatus(detail, lang);
     case "centre.occupancy":
       return describeCentreOccupancy(detail, lang);
+    case "centre.confirmed":
+      return lang === "fil"
+        ? `Itinakda ang evacuation center: ${String(detail.name ?? "")} (${Number(detail.capacity ?? 0)} tao)`
+        : `Evacuation centre set: ${String(detail.name ?? "")} (${Number(detail.capacity ?? 0)} people)`;
     case "pin.removed":
       return describePinRemoved(detail, lang);
     case "pin.restored":
