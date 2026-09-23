@@ -3,7 +3,7 @@ import type { LocalizedText, Zone } from "@/lib/types";
 /**
  * Whether a zone carries safety infrastructure that actually exists.
  *
- * The nationwide barangay seed (20260917130740_nationwide_barangays.sql)
+ * The nationwide barangay seed (20260918115458_nationwide_barangays.sql)
  * filled every zone it could not source real data for with placeholders:
  * an all-zero hotline and a nameless evacuation centre pinned at the zone's
  * own centroid. Rendering those as real is the one place this project

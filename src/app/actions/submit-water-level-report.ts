@@ -11,7 +11,7 @@ export interface SubmitReportInput {
   id: string;
   zoneId: string;
   depthLevel: DepthLevel;
-  /** The device's position when the report was filed. Omitted when unavailable — never blocks the write. See the geofence trigger (20260922090000_report_geofence_and_rate_limit.sql) for why. */
+  /** The device's position when the report was filed. Omitted when unavailable — never blocks the write. See the geofence trigger (20260922094703_report_geofence_and_rate_limit.sql) for why. */
   lat?: number;
   lng?: number;
   /**

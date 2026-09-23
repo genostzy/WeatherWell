@@ -34,3 +34,29 @@ jobs:
       - run: npm run knip
 
       - run: npm run build
+
+  # Rebuilds the database from supabase/migrations alone, then runs the RLS
+  # and engine tests against it. Catches a migration that only works on the
+  # live database (M2) and any policy or grant regression. Free: the local
+  # Supabase stack runs in the runner's own Docker.
+  database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start a local Supabase from the repo's migrations and seed
+        run: supabase start -x studio,imgproxy,inbucket,edge-runtime,logflare,vector,supavisor
+
+      - name: Run the database tests
+        env:
+          DB_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+        run: |
+          for f in supabase/tests/helpers.sql supabase/tests/reference-tables.sql supabase/tests/rls.sql; do
+            echo "== $f"
+            psql "$DB_URL" -v ON_ERROR_STOP=1 -q -f "$f"
+          done
