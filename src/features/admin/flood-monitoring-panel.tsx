@@ -8,7 +8,7 @@ import { Droplet, Users, Settings2 } from "lucide-react";
 import { SeverityBadge } from "@/features/alerts/severity-badge";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
-import { REPORT_THRESHOLD } from "@/lib/weather-thresholds";
+import { MIN_REPORT_TRUST, REPORT_THRESHOLD } from "@/lib/weather-thresholds";
 import { countReportsToday } from "@/lib/reports-today";
 import {
   useWaterLevelReports,
@@ -87,6 +87,10 @@ function FloodMonitoringRow({
   const reportsToday = countReportsToday(allReports, new Set([zone.id]));
   const recent = getRecentReportsForZoneLive(allReports, zone.id);
   const agreeing = recent.filter((report) => !report.isOutlier).length;
+  // The same two conditions the engine applies (ponytail: per report here,
+  // not per reporter; the feed carries no reporter id since SP1).
+  const trust = recent.filter((report) => !report.isOutlier).reduce((sum, report) => sum + report.trustWeight, 0);
+  const met = agreeing >= REPORT_THRESHOLD && trust >= MIN_REPORT_TRUST;
 
   return (
     <div
@@ -123,12 +127,12 @@ function FloodMonitoringRow({
         </span>
         <Badge
           className={
-            agreeing >= REPORT_THRESHOLD
+            met
               ? "bg-severity-orange text-black"
               : "bg-muted text-muted-foreground"
           }
         >
-          {t(agreeing >= REPORT_THRESHOLD ? THRESHOLD_MET : BELOW_THRESHOLD, lang)} ({agreeing}/
+          {t(met ? THRESHOLD_MET : BELOW_THRESHOLD, lang)} ({agreeing}/
           {REPORT_THRESHOLD})
         </Badge>
       </div>

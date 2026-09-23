@@ -59,6 +59,22 @@ describe("FloodMonitoringPanel", () => {
     await waitFor(() => expect(screen.getAllByText(/report threshold met/i).length).toBeGreaterThan(0));
   });
 
+  it("stays below threshold when agreeing reports come only from brand-new devices (idea 3)", async () => {
+    const zone = FIXTURE_REFERENCE_DATA.zones[0];
+    const fresh = [1, 2, 3].map((n) => ({
+      id: `fresh-${n}`,
+      zoneId: zone.id,
+      depthLevel: "knee",
+      reportedAt: new Date().toISOString(),
+      trustWeight: 0.2,
+      isOutlier: false,
+    }));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => fresh }));
+    renderWithData(<FloodMonitoringPanel zones={[zone]} />);
+    await waitFor(() => expect(screen.getByText(/3 reports today/i)).toBeInTheDocument());
+    expect(screen.getByText(/below threshold/i)).toBeInTheDocument();
+  });
+
   it("counts a zone's reports today from the live feed, not invented figures", async () => {
     const zone = FIXTURE_REFERENCE_DATA.zones[0];
     const expected = countReportsToday(seededServerReports(), new Set([zone.id]));

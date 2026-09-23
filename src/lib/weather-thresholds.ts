@@ -26,3 +26,6 @@ export function hasElevatedLandslideRisk(susceptibility: HazardLevel, mmPerHour:
 
 /** Agreeing reports needed before the alert engine raises an advisory (see check_and_trigger_alerts). */
 export const REPORT_THRESHOLD = 3;
+
+/** Combined trust those reports need, each reporter's best report counted once (see report_trust_weights). */
+export const MIN_REPORT_TRUST = 1.0;
