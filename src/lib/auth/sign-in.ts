@@ -30,3 +30,47 @@ export async function startGoogleSignIn(next: string, opts: { link?: boolean } =
   const { error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo } });
   return error ? { ok: false, error: error.message } : { ok: true };
 }
+
+/**
+ * The Supabase Auth error codes meaning "this email already belongs to an
+ * account". Only these justify signing into that account instead (M11).
+ */
+const EMAIL_TAKEN_CODES = new Set(["email_exists", "user_already_exists"]);
+
+/** Sign in with email + password. */
+export async function signInWithPassword(email: string, password: string): Promise<SignInResult> {
+  const supabase = getBrowserClient();
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
+/**
+ * Create a new account with email + password. When this phone already
+ * carries an anonymous resident session, the password is ATTACHED to it
+ * (same linking rule as sendEmailSignInLink) so the anonymous history —
+ * every report and pin filed under this id — is kept rather than abandoned
+ * under a brand-new, unrelated user.
+ */
+export async function signUpWithPassword(email: string, password: string): Promise<SignInResult> {
+  const supabase = getBrowserClient();
+  const { data } = await supabase.auth.getSession();
+
+  if (data.session?.user.is_anonymous) {
+    const { error } = await supabase.auth.updateUser({ email, password });
+    if (!error) return { ok: true };
+    // Same rule as sendEmailSignInLink (M11): only a taken email justifies
+    // giving up on linking, and even then we cannot sign into that account
+    // for them — we don't have its real password — so this is reported as a
+    // failure with a pointer to sign in instead, never a silent fallback
+    // that would abandon this phone's anonymous history.
+    if (EMAIL_TAKEN_CODES.has(error.code ?? "")) {
+      return {
+        ok: false,
+        error: "That email already has an account. Sign in with its password instead of creating a new one.",
+      };
+    }
+    return { ok: false, error: error.message };
+  }
+  const { error } = await supabase.auth.signUp({ email, password });
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
