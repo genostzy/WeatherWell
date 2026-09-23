@@ -9,7 +9,7 @@ import { useZones } from "@/lib/reference-data/use-reference-data";
  * map's own initial tiles (~20-30 for one visible viewport) and this
  * precache job (~28 tiles, zoom 12-15 within 2 km) both go through the same service worker to the
  * same handful of *.tile.openstreetmap.org hosts, so they compete for the
- * same small pool of concurrent connections — starting the 500-tile job
+ * same small pool of concurrent connections — starting the precache job
  * immediately on mount let it win that race against the live map often
  * enough to read as "the map sometimes just doesn't load", worse on desktop
  * where the larger viewport needs more initial tiles to fill it. This delay
