@@ -2029,14 +2029,17 @@ declare
   v_message text;
   v_raised boolean := false;
 begin
+  -- A reporter with no earlier reports in a1: the per-device rate limit
+  -- (report_geofence_and_rate_limit) fires before the age check, and H1-H3
+  -- already reported there as 6666.
   set local role authenticated;
   perform set_config('request.jwt.claims',
-    json_build_object('sub', '66666666-6666-6666-6666-666666666666', 'role', 'authenticated')::text, true);
+    json_build_object('sub', '88888888-8888-8888-8888-888888888888', 'role', 'authenticated')::text, true);
 
   begin
     insert into public.water_level_reports (id, zone_id, depth_level, reporter_id, reported_at)
       values ('a0000000-0000-4000-8000-000000000003', 'tests-area-a1', 'ankle',
-              '66666666-6666-6666-6666-666666666666', now() - interval '7 hours');
+              '88888888-8888-8888-8888-888888888888', now() - interval '7 hours');
   exception
     when others then
       v_raised := true;
