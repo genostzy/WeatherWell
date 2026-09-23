@@ -2862,6 +2862,11 @@ begin
     (id, psgc_barangay_code, name, evacuation_route_text, lat, lng, evacuation_route_path, hotline_number)
   values
     (z, '990000002', 'Test Zone SP1b', '{"en":"x","fil":"x"}'::jsonb, 14.6, 121.6, '[]'::jsonb, '000');
+  -- Checked in here, so each weighs 0.5 and three clear the engine's
+  -- combined-trust floor of 1.0 (idea 3).
+  insert into public.evacuation_check_ins (zone_id, user_id, status)
+    select z, ('e1000000-0000-4000-8000-0000000000' || lpad(g::text, 2, '0'))::uuid, 'safe'
+      from generate_series(16, 18) g;
   insert into public.water_level_reports (zone_id, depth_level, reporter_id, lat, lng)
     select z, 'knee', ('e1000000-0000-4000-8000-0000000000' || lpad(g::text, 2, '0'))::uuid, 14.6, 121.6
       from generate_series(16, 18) g;
@@ -2927,7 +2932,7 @@ begin
     select (u || lpad(g::text, 2, '0'))::uuid from generate_series(1, 12) g;
   insert into public.zones
     (id, psgc_barangay_code, name, evacuation_route_text, lat, lng, evacuation_route_path, hotline_number)
-  values (z, '990000002', 'Test Zone Trust', '{"en":"x","fil":"x"}'::jsonb, 14.6, 121.6, '[]'::jsonb, '000');
+  values (z, '990000012', 'Test Zone Trust', '{"en":"x","fil":"x"}'::jsonb, 14.6, 121.6, '[]'::jsonb, '000');
 
   -- T1: a brand-new device counts 0.2.
   insert into public.water_level_reports (zone_id, depth_level, reporter_id, lat, lng)
