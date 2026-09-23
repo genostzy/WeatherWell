@@ -23,6 +23,7 @@ import { PhotoLightbox } from "./photo-lightbox";
 import { OverlayDialog } from "@/components/overlay-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { hasRealEvacuationCenter, NO_VERIFIED_CENTER } from "@/lib/zone-data-quality";
+import { CoverageNote } from "@/features/zones/coverage-note";
 import type { HazardType, LocalizedText, Zone } from "@/lib/types";
 
 const MapCanvas = dynamic(() => import("./map-canvas").then((m) => m.MapCanvas), {
@@ -154,6 +155,7 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
       {/* Sidebar — desktop: right column. Mobile: above map. */}
       <div className="order-first lg:order-none flex flex-col gap-2 overflow-hidden sm:gap-3 lg:col-start-2 lg:row-span-4 lg:gap-4">
         <PersonalStatusHeadline zone={zones[0]} />
+        <CoverageNote zone={zones[0]} />
 
         <QuickDepthReport zoneId={zones[0].id} />
 
