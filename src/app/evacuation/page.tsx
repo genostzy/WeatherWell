@@ -5,6 +5,7 @@ import { EvacuationInstructions } from "@/features/evacuation/evacuation-instruc
 import { EmergencyCard } from "@/features/evacuation/emergency-card";
 import { CheckInPanel } from "@/features/evacuation/check-in-panel";
 import { RelayContactsEditor } from "@/features/relay/relay";
+import { ElevationCheck } from "@/features/evacuation/elevation-check";
 import { AlertDowngradeNotice } from "@/features/alerts/alert-downgrade-notice";
 import { useSelectedZone } from "@/features/zones/use-selected-zone";
 import { useLanguage } from "@/features/i18n/language-provider";
@@ -44,7 +45,10 @@ export default function EvacuationPage() {
       )}
 
       <div className="grid w-full max-w-md gap-6 lg:max-w-3xl lg:grid-cols-2 lg:items-start">
-        <EvacuationInstructions zone={zone} />
+        <div className="space-y-6">
+          <EvacuationInstructions zone={zone} />
+          <ElevationCheck zoneId={zone.id} />
+        </div>
         <div className="space-y-6">
           <EmergencyCard zone={zone} />
           {showCheckIn && <CheckInPanel zoneId={zone.id} />}
