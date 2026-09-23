@@ -69,7 +69,9 @@ describe("HomepageMap", () => {
     renderWithData(<HomepageMap zones={FIXTURE_REFERENCE_DATA.zones} />, { lang: "fil" });
 
     // Clicking the zone-1 status marker selects it as the active evacuation route.
-    fireEvent.click(await screen.findByRole("img", { name: /Barangay Nilombot, Mapandan/i }));
+    // The map canvas is lazy-loaded; under full-suite load its first render
+    // can take longer than findBy's 1s default.
+    fireEvent.click(await screen.findByRole("img", { name: /Barangay Nilombot, Mapandan/i }, { timeout: 5000 }));
 
     // Filipino must show the localized word, not the bare English "N" code.
     // Scoped to the route-info text itself (not queryByText across the whole
