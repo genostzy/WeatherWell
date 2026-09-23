@@ -4,14 +4,26 @@ import { SignInPanel } from "./sign-in-panel";
 import { LanguageProvider } from "@/features/i18n/language-provider";
 
 const startGoogleSignIn = vi.fn();
+const signInWithPassword = vi.fn();
+const signUpWithPassword = vi.fn();
 
 vi.mock("@/lib/auth/sign-in", () => ({
   startGoogleSignIn: (...args: unknown[]) => startGoogleSignIn(...args),
+  signInWithPassword: (...args: unknown[]) => signInWithPassword(...args),
+  signUpWithPassword: (...args: unknown[]) => signUpWithPassword(...args),
+}));
+
+const push = vi.fn();
+const refresh = vi.fn();
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push, refresh }),
 }));
 
 beforeEach(() => {
   vi.clearAllMocks();
   startGoogleSignIn.mockResolvedValue({ ok: true });
+  signInWithPassword.mockResolvedValue({ ok: true });
+  signUpWithPassword.mockResolvedValue({ ok: true });
 });
 
 describe("SignInPanel", () => {
@@ -108,17 +120,15 @@ describe("SignInPanel", () => {
     expect(startGoogleSignIn).not.toHaveBeenCalled();
   });
 
-  it("offers no password account creation to residents", () => {
-    // A resident never needs an account: reports are attributed to an
-    // anonymous session. Offering sign-up is friction with no payoff, and
-    // implies the app is unusable without it.
+  it("offers password sign-in and sign-up to residents", () => {
     render(
       <LanguageProvider>
         <SignInPanel next="/" />
       </LanguageProvider>
     );
-    expect(screen.queryByRole("button", { name: /create account/i })).not.toBeInTheDocument();
-    expect(screen.queryByLabelText(/password/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^password$/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^sign in$/i })).toBeInTheDocument();
   });
 
   it("offers no email sign-in link, which cannot work without project SMTP", () => {
@@ -138,5 +148,68 @@ describe("SignInPanel", () => {
       </LanguageProvider>
     );
     expect(screen.getByRole("button", { name: /continue with google/i })).toBeInTheDocument();
+  });
+
+  describe("password sign-in", () => {
+    it("signs in with the typed email and password", async () => {
+      render(
+        <LanguageProvider>
+          <SignInPanel next="/admin" />
+        </LanguageProvider>
+      );
+
+      fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "official@weatherwell.com" } });
+      fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: "<redacted>" } });
+      fireEvent.click(screen.getByRole("button", { name: /^sign in$/i }));
+
+      await waitFor(() =>
+        expect(signInWithPassword).toHaveBeenCalledWith("official@weatherwell.com", "<redacted>")
+      );
+    });
+
+    it("switches to sign-up mode and calls signUpWithPassword instead", async () => {
+      render(
+        <LanguageProvider>
+          <SignInPanel next="/" />
+        </LanguageProvider>
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: /create account/i }));
+      fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "new@example.com" } });
+      fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: "hunter2222" } });
+      fireEvent.click(screen.getByRole("button", { name: /create account/i }));
+
+      await waitFor(() => expect(signUpWithPassword).toHaveBeenCalledWith("new@example.com", "hunter2222"));
+    });
+
+    it("shows the account-created notice after a successful sign-up", async () => {
+      render(
+        <LanguageProvider>
+          <SignInPanel next="/" />
+        </LanguageProvider>
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: /create account/i }));
+      fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "new@example.com" } });
+      fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: "hunter2222" } });
+      fireEvent.click(screen.getByRole("button", { name: /create account/i }));
+
+      expect(await screen.findByText(/check your email to confirm/i)).toBeInTheDocument();
+    });
+
+    it("shows a password sign-in error next to the form", async () => {
+      signInWithPassword.mockResolvedValue({ ok: false, error: "Invalid login credentials" });
+      render(
+        <LanguageProvider>
+          <SignInPanel next="/" />
+        </LanguageProvider>
+      );
+
+      fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "x@example.com" } });
+      fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: "wrong" } });
+      fireEvent.click(screen.getByRole("button", { name: /^sign in$/i }));
+
+      expect(await screen.findByText("Invalid login credentials")).toBeInTheDocument();
+    });
   });
 });
