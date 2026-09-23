@@ -14,27 +14,145 @@ export interface ReferenceData {
 }
 
 /**
- * The shape /data/reference-data.json actually serves: identical to
- * ReferenceData except each zone's evacuationRouteText is an index into
- * evacuationRouteTextTable rather than the text itself. Only a handful of
- * distinct strings exist across ~42k zones (mostly the same placeholder), so
- * scripts/generate-static-data.ts interns them instead of repeating the same
- * bytes 42,000 times. expandRouteText below reverses it on load.
+ * The previous file format: identical to ReferenceData except each zone's
+ * evacuationRouteText is an index into evacuationRouteTextTable. Still read,
+ * because the service worker may hold a cached copy.
  */
-export interface RawReferenceData {
+interface LegacyRawReferenceData {
   zones: (Omit<Zone, "evacuationRouteText"> & { evacuationRouteText: number })[];
   evacuationRouteTextTable: Zone["evacuationRouteText"][];
   pois: PointOfInterest[];
   hazards: HazardsByZone;
 }
 
-/** Reverses generate-static-data.ts's interning of evacuationRouteText. */
-export function expandRouteText(raw: RawReferenceData): ReferenceData {
+/**
+ * One zone as /data/reference-data.json stores it (H1). Nearly all ~42k zones
+ * are seed placeholders, so every field that holds its placeholder default is
+ * left out, and municipality/province pairs and route texts are interned into
+ * tables. That took the file from 22 MB to 4.3 MB without changing the Zone
+ * type the rest of the app reads. An omitted field means:
+ *   psgcBarangayCode  the digits after "zone-" in id
+ *   evacuationRouteText  table entry 0
+ *   evacuationRoutePath  [[lat, lng]]
+ *   hotlineNumber  "00000000000"
+ *   evacuationCenterName  "Evacuation Centre — <municipality>"
+ *   evacuationCenterLat/Lng  the zone's own point
+ *   centerStatus  "unknown";  evacuationCenterCapacity  0
+ */
+interface CompactZone {
+  id: string;
+  name: string;
+  place: number;
+  lat: number;
+  lng: number;
+  code?: string;
+  route?: number;
+  path?: Zone["evacuationRoutePath"];
+  hotline?: string;
+  down?: string;
+  centre?: string;
+  centreLat?: number;
+  centreLng?: number;
+  status?: Zone["centerStatus"];
+  capacity?: number;
+  occupancy?: number;
+}
+
+export interface CompactReferenceData {
+  format: 2;
+  zones: CompactZone[];
+  places: [municipality: string, province: string][];
+  routes: Zone["evacuationRouteText"][];
+  pois: PointOfInterest[];
+  hazards: HazardsByZone;
+}
+
+const PLACEHOLDER_HOTLINE = "00000000000";
+const placeholderCentre = (municipality: string) => `Evacuation Centre — ${municipality}`;
+
+export function compactReferenceData(data: ReferenceData): CompactReferenceData {
+  const places: [string, string][] = [];
+  const placeIndex = new Map<string, number>();
+  const routes: Zone["evacuationRouteText"][] = [];
+  const routeIndex = new Map<string, number>();
+  const intern = <T>(table: T[], index: Map<string, number>, key: string, value: T) => {
+    let i = index.get(key);
+    if (i === undefined) {
+      i = table.push(value) - 1;
+      index.set(key, i);
+    }
+    return i;
+  };
+
+  const zones = data.zones.map((z) => {
+    const c: CompactZone = {
+      id: z.id,
+      name: z.name,
+      place: intern(places, placeIndex, `${z.municipalityName}|${z.provinceName}`, [z.municipalityName, z.provinceName]),
+      lat: z.lat,
+      lng: z.lng,
+    };
+    const route = intern(routes, routeIndex, `${z.evacuationRouteText.en}|${z.evacuationRouteText.fil}`, z.evacuationRouteText);
+    if (z.id !== `zone-${z.psgcBarangayCode}`) c.code = z.psgcBarangayCode;
+    if (route !== 0) c.route = route;
+    const path = z.evacuationRoutePath;
+    if (!(path.length === 1 && path[0][0] === z.lat && path[0][1] === z.lng)) c.path = path;
+    if (z.hotlineNumber !== PLACEHOLDER_HOTLINE) c.hotline = z.hotlineNumber;
+    if (z.downstreamZoneId) c.down = z.downstreamZoneId;
+    if (z.evacuationCenterName !== placeholderCentre(z.municipalityName)) c.centre = z.evacuationCenterName;
+    if (z.evacuationCenterLat !== z.lat) c.centreLat = z.evacuationCenterLat;
+    if (z.evacuationCenterLng !== z.lng) c.centreLng = z.evacuationCenterLng;
+    if (z.centerStatus !== "unknown") c.status = z.centerStatus;
+    if (z.evacuationCenterCapacity !== 0) c.capacity = z.evacuationCenterCapacity;
+    if (z.currentOccupancy !== undefined) c.occupancy = z.currentOccupancy;
+    return c;
+  });
+
+  // hazardsForZone already reads a missing level as "unknown".
+  const hazards: HazardsByZone = {};
+  for (const [zoneId, levels] of Object.entries(data.hazards)) {
+    const known = Object.fromEntries(Object.entries(levels ?? {}).filter(([, level]) => level !== "unknown"));
+    if (Object.keys(known).length > 0) hazards[zoneId] = known;
+  }
+
+  return { format: 2, zones, places, routes, pois: data.pois, hazards };
+}
+
+/** Reverses compactReferenceData; also reads the previous interned-route format. */
+export function expandReferenceData(raw: CompactReferenceData | LegacyRawReferenceData): ReferenceData {
+  if (!("format" in raw)) {
+    return {
+      zones: raw.zones.map((zone) => ({
+        ...zone,
+        evacuationRouteText: raw.evacuationRouteTextTable[zone.evacuationRouteText],
+      })),
+      pois: raw.pois,
+      hazards: raw.hazards,
+    };
+  }
   return {
-    zones: raw.zones.map((zone) => ({
-      ...zone,
-      evacuationRouteText: raw.evacuationRouteTextTable[zone.evacuationRouteText],
-    })),
+    zones: raw.zones.map((c) => {
+      const [municipalityName, provinceName] = raw.places[c.place];
+      return {
+        id: c.id,
+        psgcBarangayCode: c.code ?? c.id.slice("zone-".length),
+        name: c.name,
+        municipalityName,
+        provinceName,
+        lat: c.lat,
+        lng: c.lng,
+        evacuationRouteText: raw.routes[c.route ?? 0],
+        evacuationRoutePath: c.path ?? [[c.lat, c.lng]],
+        hotlineNumber: c.hotline ?? PLACEHOLDER_HOTLINE,
+        ...(c.down ? { downstreamZoneId: c.down } : {}),
+        evacuationCenterName: c.centre ?? placeholderCentre(municipalityName),
+        evacuationCenterLat: c.centreLat ?? c.lat,
+        evacuationCenterLng: c.centreLng ?? c.lng,
+        centerStatus: c.status ?? "unknown",
+        evacuationCenterCapacity: c.capacity ?? 0,
+        ...(c.occupancy !== undefined ? { currentOccupancy: c.occupancy } : {}),
+      };
+    }),
     pois: raw.pois,
     hazards: raw.hazards,
   };

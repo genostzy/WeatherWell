@@ -106,10 +106,36 @@ describe("ReferenceDataProvider", () => {
     expect(await screen.findByText("Barangay Nilombot, Mapandan")).toBeInTheDocument();
   });
 
+  it("expands the compact static file (H1) before handing zones to children", async () => {
+    function Hotline() {
+      const zones = useZones();
+      return <span data-testid="hotline">{zones[0]?.hotlineNumber} {zones[0]?.municipalityName}</span>;
+    }
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        format: 2,
+        zones: [{ id: "zone-0102923008", name: "Barangay Subec, Santa Catalina", place: 0, lat: 17.58, lng: 120.34 }],
+        places: [["Santa Catalina", "Ilocos Sur"]],
+        routes: [{ en: "Go to higher ground.", fil: "Pumunta sa mataas na lugar." }],
+        pois: [],
+        hazards: {},
+      }),
+    });
+    render(
+      <LanguageProvider>
+        <ReferenceDataProvider>
+          <Hotline />
+        </ReferenceDataProvider>
+      </LanguageProvider>
+    );
+    expect(await screen.findByTestId("hotline")).toHaveTextContent("00000000000 Santa Catalina");
+  });
+
   it("expands the real static file's interned evacuationRouteText before handing zones to children", async () => {
     // The real /data/reference-data.json (unlike this file's other fixtures)
     // carries an evacuationRouteTextTable and each zone's evacuationRouteText
-    // as an index into it — see generate-static-data.ts / expandRouteText.
+    // as an index into it — the previous format, which a service worker may still have cached.
     function RouteText() {
       const zones = useZones();
       return <span data-testid="route-text">{zones[0]?.evacuationRouteText.en}</span>;

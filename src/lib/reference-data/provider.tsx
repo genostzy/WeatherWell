@@ -7,7 +7,7 @@ import { t } from "@/lib/i18n";
 import { AlertsContext, AlertsRefreshContext } from "@/lib/alerts-store";
 import { useHasOnboarded } from "@/features/onboarding/onboarding-storage";
 import type { AlertRecord, CenterStatus, LocalizedText } from "@/lib/types";
-import { expandRouteText, type ReferenceData, type RawReferenceData } from "./types";
+import { expandReferenceData, type ReferenceData } from "./types";
 
 export const ReferenceDataContext = createContext<ReferenceData | null>(null);
 
@@ -46,8 +46,8 @@ const RETRY: LocalizedText = { en: "Try again", fil: "Subukang muli" };
  * stalled-but-open connection (a captive portal, a congested cell site) would
  * otherwise leave the gate in "loading" forever with no retry button.
  *
- * 30s, not 10s: /data/reference-data.json is ~1.6MB gzipped (the nationwide
- * barangay seed) — on the "degraded network" this app's own PRD names as the
+ * 30s, not 10s: /data/reference-data.json is the nationwide barangay seed
+ * (~0.7MB gzipped once compacted, H1) — on the "degraded network" this app's own PRD names as the
  * design constraint, that legitimately takes longer than 10s to arrive while
  * still being a connection that is working, not stalled. The old 10s bound
  * turned a slow-but-successful load into a hard "can't reach WeatherWell"
@@ -174,13 +174,13 @@ export function ReferenceDataProvider({
           return;
         }
         return Promise.all([zonesResponse.json(), alertsResponse.json()]).then(([raw, alerts]) => {
-          // The real static file carries an interned evacuationRouteTextTable
-          // (see RawReferenceData's own doc comment); test fixtures across this
-          // codebase hand-write plain zone objects without one, and must keep
-          // working exactly as before.
+          // The real static file is compacted (see CompactReferenceData), or in
+          // the previous interned format if a service worker cached it; test
+          // fixtures across this codebase hand-write plain zone objects, and
+          // must keep working exactly as before.
           const data =
-            raw && typeof raw === "object" && "evacuationRouteTextTable" in raw
-              ? expandRouteText(raw as RawReferenceData)
+            raw && typeof raw === "object" && ("format" in raw || "evacuationRouteTextTable" in raw)
+              ? expandReferenceData(raw as Parameters<typeof expandReferenceData>[0])
               : (raw as ReferenceData);
           setState({
             status: "ready",
