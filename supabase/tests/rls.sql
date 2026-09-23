@@ -2559,4 +2559,131 @@ exception
     raise notice 'ok: admin_remove_official refused to touch an admin account (%): %', sqlstate, sqlerrm;
 end $$;
 
+-- ===========================================================================
+-- Sub-project 1 (2026-09-23): stop the bleeding. SP1 fixtures: one zone and
+-- twenty users, used only by the SP1 blocks below. Self-contained, so any SP1
+-- block can also run alone as: begin; <this block> <that block> rollback;
+-- ===========================================================================
+do $$
+begin
+  set local role postgres;
+  perform set_config('request.jwt.claims', '', true);
+  insert into auth.users (id)
+    select ('e1000000-0000-4000-8000-0000000000' || lpad(g::text, 2, '0'))::uuid
+      from generate_series(1, 20) g;
+  insert into public.zones
+    (id, psgc_barangay_code, name, evacuation_route_text, lat, lng, evacuation_route_path, hotline_number)
+  values
+    ('tests-fixture-zone-sp1', '990000001', 'Test Zone SP1', '{"en":"x","fil":"x"}'::jsonb,
+     14.5, 121.5, '[]'::jsonb, '000');
+  reset role;
+end $$;
+
+-- SP1 engine: only located, non-dry reports count; alerts are yellow and
+-- unverified; any active alert is left alone; reports older than the last
+-- human decision do not count.
+do $$
+declare
+  z constant text := 'tests-fixture-zone-sp1';
+  n int;
+  a record;
+begin
+  set local role postgres;
+  perform set_config('request.jwt.claims', '', true);
+  -- alerts_record_cleared is deferred to commit; this suite never commits,
+  -- so fire it at statement end instead.
+  set constraints all immediate;
+
+  -- E1: three neck-deep reports with no location never trigger.
+  insert into public.water_level_reports (zone_id, depth_level, reporter_id)
+    select z, 'neck', ('e1000000-0000-4000-8000-0000000000' || lpad(g::text, 2, '0'))::uuid
+      from generate_series(1, 3) g;
+  perform * from public.check_and_trigger_alerts();
+  if exists (select 1 from public.alerts where zone_id = z and is_active) then
+    raise exception using errcode = 'TSTFL', message = 'E1: reports without a location triggered an alert';
+  end if;
+  raise notice 'ok E1: reports without a location do not trigger';
+
+  -- E2: three located "dry" reports never trigger.
+  insert into public.water_level_reports (zone_id, depth_level, reporter_id, lat, lng)
+    select z, 'dry', ('e1000000-0000-4000-8000-0000000000' || lpad(g::text, 2, '0'))::uuid, 14.5, 121.5
+      from generate_series(4, 6) g;
+  perform * from public.check_and_trigger_alerts();
+  if exists (select 1 from public.alerts where zone_id = z and is_active) then
+    raise exception using errcode = 'TSTFL', message = 'E2: dry reports triggered an alert';
+  end if;
+  raise notice 'ok E2: dry reports do not trigger';
+
+  -- E3: three located knee-deep reports trigger one yellow, unverified alert.
+  insert into public.water_level_reports (zone_id, depth_level, reporter_id, lat, lng)
+    select z, 'knee', ('e1000000-0000-4000-8000-0000000000' || lpad(g::text, 2, '0'))::uuid, 14.5, 121.5
+      from generate_series(7, 9) g;
+  perform * from public.check_and_trigger_alerts();
+  select al.severity, al.source, al.message->>'en' as en into a
+    from public.alerts al where al.zone_id = z and al.is_active;
+  if a.severity is distinct from 'yellow'
+     or a.source is distinct from 'auto_crowdsourced'
+     or a.en is distinct from 'Advisory — 3 residents report knee-deep water (unverified).' then
+    raise exception using errcode = 'TSTFL', message = format('E3: expected an unverified yellow advisory, got %s', a);
+  end if;
+  raise notice 'ok E3: three located knee-deep reports raise an unverified yellow advisory';
+
+  -- E4: running again does not re-issue (no repeated push).
+  perform * from public.check_and_trigger_alerts();
+  select count(*) into n from public.alerts where zone_id = z;
+  if n <> 1 then
+    raise exception using errcode = 'TSTFL', message = format('E4: engine re-issued its own alert (%s rows)', n);
+  end if;
+  raise notice 'ok E4: no re-issue';
+
+  -- E5: an official's clear is not undone by the reports it has already seen.
+  perform public.set_zone_alert(z, null, null, 'manual');
+  perform * from public.check_and_trigger_alerts();
+  if exists (select 1 from public.alerts where zone_id = z and is_active) then
+    raise exception using errcode = 'TSTFL', message = 'E5: engine re-raised an alert an official just cleared';
+  end if;
+  raise notice 'ok E5: a clear holds';
+
+  -- E6: reports after the decision do count (decision moved one minute back).
+  update public.official_actions set occurred_at = now() - interval '1 minute'
+   where zone_id = z and action = 'alert.cleared';
+  perform * from public.check_and_trigger_alerts();
+  if not exists (select 1 from public.alerts where zone_id = z and is_active and severity = 'yellow') then
+    raise exception using errcode = 'TSTFL', message = 'E6: reports after the decision did not trigger';
+  end if;
+  raise notice 'ok E6: reports after a decision count';
+
+  -- E7: an official's alert is never replaced or downgraded.
+  perform public.set_zone_alert(z, 'red', '{"en":"r","fil":"r"}'::jsonb, 'manual');
+  perform * from public.check_and_trigger_alerts();
+  select al.severity, al.source into a from public.alerts al where al.zone_id = z and al.is_active;
+  if a.severity is distinct from 'red' or a.source is distinct from 'manual' then
+    raise exception using errcode = 'TSTFL', message = format('E7: engine touched an official''s alert: %s', a);
+  end if;
+  raise notice 'ok E7: official alert untouched';
+
+  -- E8: an active alert from another automatic source is left alone.
+  perform public.set_zone_alert(z, 'orange', '{"en":"c","fil":"c"}'::jsonb, 'cascade');
+  perform * from public.check_and_trigger_alerts();
+  select al.severity, al.source into a from public.alerts al where al.zone_id = z and al.is_active;
+  if a.severity is distinct from 'orange' or a.source is distinct from 'cascade' then
+    raise exception using errcode = 'TSTFL', message = format('E8: engine replaced a cascade alert: %s', a);
+  end if;
+  raise notice 'ok E8: other automatic alerts untouched';
+
+  -- E9: reports made before a decision but delivered after it do not count.
+  perform public.set_zone_alert(z, null, null, 'manual');
+  insert into public.water_level_reports (zone_id, depth_level, reporter_id, lat, lng, reported_at)
+    select z, 'knee', ('e1000000-0000-4000-8000-0000000000' || lpad(g::text, 2, '0'))::uuid,
+           14.5, 121.5, now() - interval '10 minutes'
+      from generate_series(10, 12) g;
+  perform * from public.check_and_trigger_alerts();
+  if exists (select 1 from public.alerts where zone_id = z and is_active) then
+    raise exception using errcode = 'TSTFL', message = 'E9: reports made before the decision triggered after it';
+  end if;
+  raise notice 'ok E9: offline reports made before a decision do not count';
+
+  reset role;
+end $$;
+
 rollback;

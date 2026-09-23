@@ -75,7 +75,11 @@ describe("GET and POST /api/threshold-check", () => {
     // for the reliability/security bug that HTTP hop used to be.
     expect(sendZonePush).toHaveBeenCalledTimes(1);
     expect(sendZonePush).toHaveBeenCalledWith(
-      expect.objectContaining({ zoneId: "zone-1" })
+      expect.objectContaining({
+        zoneId: "zone-1",
+        title: "WeatherWell Advisory (unverified)",
+        body: "Residents report flooding in your area. Not yet confirmed by an official.",
+      })
     );
     expect(body.triggered).toBe(1);
     expect(body.pushSent).toBe(4);

@@ -40,8 +40,10 @@ async function runThresholdCheck(): Promise<NextResponse> {
     // comment for why that used to be both a reliability and a security bug.
     const result = await sendZonePush({
       zoneId: alert.zone_id,
-      title: `WeatherWell Alert — ${alert.severity.toUpperCase()}`,
-      body: `Crowd reports indicate ${alert.severity} level flooding in your area.`,
+      // Automatic alerts are always an unverified yellow advisory (see the
+      // alert_engine_integrity migration); the push must not claim more.
+      title: "WeatherWell Advisory (unverified)",
+      body: "Residents report flooding in your area. Not yet confirmed by an official.",
       url: `/`,
     });
 
