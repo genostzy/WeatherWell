@@ -143,6 +143,9 @@ ALTER TABLE public.zones ALTER COLUMN municipality_name SET DEFAULT '';
 ALTER TABLE public.zones ALTER COLUMN province_name SET DEFAULT '';
 
 -- 6. Create trigram index for fast ILIKE search
+-- pg_trgm was enabled by hand on the live database (in schema public) before
+-- this ran; a rebuild from the repo needs it stated (found by CI, M2).
+create extension if not exists pg_trgm with schema public;
 CREATE INDEX IF NOT EXISTS idx_zones_name_trgm ON public.zones USING gin (name gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_zones_municipality ON public.zones (municipality_name);
 CREATE INDEX IF NOT EXISTS idx_zones_province ON public.zones (province_name);
