@@ -6,9 +6,11 @@ on:
   workflow_dispatch:
 
 # A failed scheduled run emails the repository owner. That email is the alert.
+# Lives on v1, the default branch: GitHub runs schedules only from there, so
+# the copy on main never ran.
 env:
-  HEALTH_URL: https://weatherwell-git-v0-wilsondayritjrapex-5422s-projects.vercel.app/api/health
-  HOME_URL: https://weatherwell-wilsondayritjrapex-5422s-projects.vercel.app/
+  HEALTH_URL: https://weatherwell.vercel.app/api/health
+  HOME_URL: https://weatherwell.vercel.app/
 
 concurrency:
   group: monitor
