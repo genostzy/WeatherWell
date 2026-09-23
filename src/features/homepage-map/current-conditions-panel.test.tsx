@@ -14,8 +14,9 @@ const LIVE = {
   fetched_at: "2026-09-23T11:00:00.000Z",
 };
 let liveReading: typeof LIVE | null = LIVE;
+let river: object | null = null;
 vi.mock("@/lib/use-weather-data", () => ({
-  useWeatherData: () => ({ current: liveReading, rainfallHistory: [], rainfallForecast: [], isLoading: false, error: null }),
+  useWeatherData: () => ({ current: liveReading, rainfallHistory: [], rainfallForecast: [], river, isLoading: false, error: null }),
 }));
 
 vi.mock("@/lib/use-typhoon", () => ({
@@ -83,5 +84,25 @@ describe("CurrentConditionsPanel with no hazard data (I3)", () => {
 
     expect(screen.getByText("Typhoon track")).toBeInTheDocument();
     expect(screen.queryByText(/landslide-prone/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("CurrentConditionsPanel river outlook (idea 1)", () => {
+  it("shows the week's river outlook and flags a rising river", async () => {
+    river = { trend: "rising", todayM3s: 50, peakM3s: 95, peakDate: "2026-09-25", worstM3s: 140 };
+    const user = userEvent.setup();
+    renderWithData(<CurrentConditionsPanel zone={FIXTURE_REFERENCE_DATA.zones[0]} />);
+    await user.click(screen.getByRole("button", { name: /current conditions/i }));
+    expect(screen.getByText(/river, next 7 days/i)).toBeInTheDocument();
+    expect(screen.getByText(/rising: up to 95 m³\/s/i)).toBeInTheDocument();
+    river = null;
+  });
+
+  it("leaves the row out where there is no river forecast", async () => {
+    river = null;
+    const user = userEvent.setup();
+    renderWithData(<CurrentConditionsPanel zone={FIXTURE_REFERENCE_DATA.zones[0]} />);
+    await user.click(screen.getByRole("button", { name: /current conditions/i }));
+    expect(screen.queryByText(/river, next 7 days/i)).not.toBeInTheDocument();
   });
 });

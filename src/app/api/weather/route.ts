@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { buildOpenMeteoUrl, parseOpenMeteo } from "@/lib/open-meteo";
+import { buildRiverUrl, summarizeRiver } from "@/lib/river-forecast";
 
 export const dynamic = "force-dynamic";
 
 /** Open-Meteo updates hourly; 30 minutes keeps it fresh without hammering a free service. */
 const REVALIDATE_SECONDS = 1800;
+/** GloFAS river forecasts update once a day. */
+const RIVER_REVALIDATE_SECONDS = 6 * 60 * 60;
 
 /**
  * GET /api/weather?zoneId=...
@@ -28,9 +31,10 @@ export async function GET(request: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!zone) return NextResponse.json({ error: "Unknown zone" }, { status: 404 });
 
-  const upstream = await fetch(buildOpenMeteoUrl(zone.lat, zone.lng), {
-    next: { revalidate: REVALIDATE_SECONDS },
-  }).catch(() => null);
+  const [upstream, riverReply] = await Promise.all([
+    fetch(buildOpenMeteoUrl(zone.lat, zone.lng), { next: { revalidate: REVALIDATE_SECONDS } }).catch(() => null),
+    fetch(buildRiverUrl(zone.lat, zone.lng), { next: { revalidate: RIVER_REVALIDATE_SECONDS } }).catch(() => null),
+  ]);
   if (!upstream?.ok) {
     return NextResponse.json({ error: "Weather service unavailable" }, { status: 502 });
   }
@@ -40,5 +44,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Weather service returned no reading" }, { status: 502 });
   }
 
-  return NextResponse.json({ zoneId, source: "open-meteo", ...parsed });
+  // Optional: the rain reading stands on its own if the river forecast fails.
+  const river = riverReply?.ok
+    ? summarizeRiver(await riverReply.json().catch(() => null), new Date().toISOString().slice(0, 10))
+    : null;
+
+  return NextResponse.json({ zoneId, source: "open-meteo", ...parsed, river });
 }

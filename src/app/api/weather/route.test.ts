@@ -57,3 +57,29 @@ describe("GET /api/weather", () => {
     expect((await get("?zoneId=zone-1")).status).toBe(502);
   });
 });
+
+describe("GET /api/weather river forecast (idea 1)", () => {
+  it("adds the river outlook from Open-Meteo's flood API", async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+    fetchMock.mockImplementation(async (url: string) => ({
+      ok: true,
+      json: async () =>
+        String(url).includes("flood-api")
+          ? { daily: { time: [today, tomorrow], river_discharge: [40, 90], river_discharge_max: [40, 130] } }
+          : REPLY,
+    }));
+    const body = await (await get("?zoneId=zone-1")).json();
+    expect(body.river).toMatchObject({ trend: "rising", todayM3s: 40, peakM3s: 90, worstM3s: 130 });
+    expect(body.current.rainfall_mm).toBe(2);
+  });
+
+  it("still returns the weather when the river forecast fails", async () => {
+    fetchMock.mockImplementation(async (url: string) =>
+      String(url).includes("flood-api") ? { ok: false, json: async () => ({}) } : { ok: true, json: async () => REPLY }
+    );
+    const res = await get("?zoneId=zone-1");
+    expect(res.status).toBe(200);
+    expect((await res.json()).river).toBeNull();
+  });
+});

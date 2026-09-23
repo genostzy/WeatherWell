@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import type { LiveWeatherReading } from "@/lib/open-meteo";
+import type { RiverSummary } from "@/lib/river-forecast";
 
 export type WeatherReading = LiveWeatherReading;
 
@@ -10,6 +11,7 @@ interface WeatherData {
   current: WeatherReading | null;
   rainfallHistory: number[];
   rainfallForecast: number[];
+  river?: RiverSummary | null;
 }
 
 const NO_HOURS: number[] = [];
@@ -23,6 +25,8 @@ export function useWeatherData(zoneId: string | undefined): {
   current: WeatherReading | null;
   rainfallHistory: number[];
   rainfallForecast: number[];
+  /** Null where no modelled river is nearby, or the forecast is unavailable. */
+  river: RiverSummary | null;
   isLoading: boolean;
   error: unknown;
 } {
@@ -68,6 +72,7 @@ export function useWeatherData(zoneId: string | undefined): {
     current: data?.current ?? null,
     rainfallHistory: data?.rainfallHistory ?? NO_HOURS,
     rainfallForecast: data?.rainfallForecast ?? NO_HOURS,
+    river: data?.river ?? null,
     isLoading,
     error,
   };

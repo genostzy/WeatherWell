@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { describeRiver } from "@/lib/river-forecast";
 import { BulletinAge } from "@/components/bulletin-age";
 import { ChevronDown, ChevronUp, CloudRain } from "lucide-react";
 import { useLanguage } from "@/features/i18n/language-provider";
@@ -15,6 +16,7 @@ import type { LocalizedText, Zone } from "@/lib/types";
 const TITLE: LocalizedText = { en: "Current Conditions", fil: "Kasalukuyang Kondisyon" };
 const RAINFALL: LocalizedText = { en: "Rainfall", fil: "Ulan" };
 const WIND: LocalizedText = { en: "Wind", fil: "Hangin" };
+const RIVER: LocalizedText = { en: "River, next 7 days", fil: "Ilog, susunod na 7 araw" };
 const TYPHOON_TRACK: LocalizedText = { en: "Typhoon track", fil: "Landas ng Bagyo" };
 const NO_ACTIVE_SYSTEM: LocalizedText = { en: "No active tropical cyclone", fil: "Walang aktibong bagyo" };
 const THUNDERSTORM_WATCH: LocalizedText = {
@@ -52,7 +54,7 @@ export function CurrentConditionsPanel({ zone }: { zone: Zone }) {
   const [expanded, setExpanded] = useState(false);
   const { track } = useTyphoon();
 
-  const { current } = useWeatherData(zone.id);
+  const { current, river } = useWeatherData(zone.id);
   const rainfall = current ? current.rainfall_mm : null;
   const wind = current ? Math.round(current.wind_kph) : null;
   const thunderstorm = current ? isThunderstorm(current.weather_code) : false;
@@ -64,7 +66,7 @@ export function CurrentConditionsPanel({ zone }: { zone: Zone }) {
   const ChevronIcon = expanded ? ChevronUp : ChevronDown;
 
   const hasSignalWarning = track && track.wind_signal > 0;
-  const hasConcern = thunderstorm || landslideCaution || heatCategory === "danger" || heatCategory === "extreme_danger" || !!hasSignalWarning;
+  const hasConcern = river?.trend === "rising" || thunderstorm || landslideCaution || heatCategory === "danger" || heatCategory === "extreme_danger" || !!hasSignalWarning;
   const iconColor = hasConcern ? "text-severity-orange" : "text-muted-foreground";
 
   return (
@@ -95,6 +97,17 @@ export function CurrentConditionsPanel({ zone }: { zone: Zone }) {
             <span className="text-muted-foreground">{t(RAINFALL, lang)}</span>
             <span className="font-medium tabular-nums">{shown(rainfall, " mm/hr")}</span>
           </div>
+          {river && (
+            <div className="flex items-start justify-between gap-2">
+              <span className="shrink-0 text-muted-foreground">{t(RIVER, lang)}</span>
+              <span
+                lang={lang}
+                className={`text-right font-medium ${river.trend === "rising" ? "text-severity-orange" : ""}`}
+              >
+                {describeRiver(river, lang)}
+              </span>
+            </div>
+          )}
           <div className="flex items-center justify-between gap-2">
             <span className="text-muted-foreground">{t(WIND, lang)}</span>
             <span className="font-medium tabular-nums">{shown(wind, " km/h")}</span>

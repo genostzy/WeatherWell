@@ -17,6 +17,7 @@ import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { isHeavyRainfall } from "@/lib/weather-thresholds";
 import { useWeatherData } from "@/lib/use-weather-data";
+import { describeRiver } from "@/lib/river-forecast";
 import { ConfirmCentrePanel } from "@/features/evacuation/candidate-sites";
 import { useHazardsForZone, useSetCenterStatus, useZones } from "@/lib/reference-data/use-reference-data";
 import { HAZARD_LEVEL_LABEL } from "@/lib/hazards";
@@ -41,6 +42,7 @@ const CLEAR: LocalizedText = { en: "Clear", fil: "Ligtas" };
 const CAPACITY: LocalizedText = { en: "Evacuation center capacity", fil: "Kapasidad ng evacuation center" };
 const RAINFALL: LocalizedText = { en: "Current rainfall", fil: "Kasalukuyang Ulan" };
 const RAINFALL_TREND: LocalizedText = { en: "Rainfall — last 12 hours", fil: "Ulan — huling 12 oras" };
+const RIVER_OUTLOOK: LocalizedText = { en: "River, next 7 days", fil: "Ilog, susunod na 7 araw" };
 const NO_READING: LocalizedText = { en: "No live weather reading right now", fil: "Walang live na ulat ng panahon ngayon" };
 const FLOOD_SUSCEPTIBILITY: LocalizedText = { en: "Flood susceptibility", fil: "Panganib ng Baha" };
 const LANDSLIDE_SUSCEPTIBILITY: LocalizedText = { en: "Landslide susceptibility", fil: "Panganib ng Guho" };
@@ -71,7 +73,7 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
   const [alertError, setAlertError] = useState(false);
   const [statusError, setStatusError] = useState(false);
   const managesZone = useManagesZone();
-  const { rainfallHistory } = useWeatherData(zoneId);
+  const { rainfallHistory, river } = useWeatherData(zoneId);
 
   const foundZone = zones.find((z) => z.id === zoneId);
   if (!foundZone) notFound();
@@ -243,6 +245,19 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
               <p lang={lang} className="text-sm text-muted-foreground">
                 {t(NO_READING, lang)}
               </p>
+            )}
+            {river && (
+              <div lang={lang} className="mt-3 space-y-1 border-t pt-3 text-sm">
+                <p className="text-muted-foreground">{t(RIVER_OUTLOOK, lang)}</p>
+                <p className={river.trend === "rising" ? "font-medium text-severity-orange" : "font-medium"}>
+                  {describeRiver(river, lang)}
+                </p>
+                {river.trend === "rising" && (
+                  <p className="text-xs text-muted-foreground">
+                    {lang === "fil" ? `Pinakamasamang posibilidad: ${river.worstM3s} m³/s` : `Worst case ${river.worstM3s} m³/s`}
+                  </p>
+                )}
+              </div>
             )}
           </CardContent>
         </Card>

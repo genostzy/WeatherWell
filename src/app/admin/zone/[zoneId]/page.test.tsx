@@ -395,6 +395,28 @@ describe("ZoneDashboardPage rainfall trend", () => {
     expect(await screen.findByRole("img", { name: /rainfall, last 12 hours: starts at 1mm\/hr, now 23mm\/hr/i })).toBeInTheDocument();
   });
 
+  it("shows the river outlook for the week (idea 1)", async () => {
+    const zone = FIXTURE_REFERENCE_DATA.zones[0];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => ({
+        ok: true,
+        json: async () =>
+          String(url).includes("/api/weather")
+            ? {
+                current: null,
+                rainfallHistory: [1, 2, 3],
+                rainfallForecast: [],
+                river: { trend: "rising", todayM3s: 50, peakM3s: 95, peakDate: "2026-09-25", worstM3s: 140 },
+              }
+            : [],
+      }))
+    );
+    renderWithData(<ZoneDashboardPage params={resolvedParams({ zoneId: zone.id })} searchParams={emptySearchParams} />);
+    expect(await screen.findByText(/rising: up to 95/i)).toBeInTheDocument();
+    expect(screen.getByText(/worst case 140/i)).toBeInTheDocument();
+  });
+
   it("says there is no reading instead of drawing a flat zero line", async () => {
     const zone = FIXTURE_REFERENCE_DATA.zones[0];
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) }));
