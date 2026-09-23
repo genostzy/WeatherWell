@@ -1511,6 +1511,13 @@ insert into auth.users (id, email, email_confirmed_at) values
 insert into auth.users (id, is_anonymous) values
   ('99999999-9999-9999-9999-999999999999', true);
 
+-- P1-P7 run as the system owner (the SQL editor, no signed-in user). This
+-- whole file is one transaction, so an earlier block's impersonation would
+-- otherwise still be set here and auth.uid() would not be null (found when
+-- CI first ran the file end to end).
+select set_config('request.jwt.claims', '', true);
+reset role;
+
 -- P1: appoint by "<Barangay>, <Town>" -- matches zone tests-area-a1
 -- ("Barangay Uno, Testtown") only, so coverage is exactly a1's barangay.
 do $$
