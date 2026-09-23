@@ -2872,4 +2872,20 @@ begin
   raise notice 'ok SP1-X1/X2/X3: automatic alerts expire, visibly, and never an official''s';
 end $$;
 
+
+-- I5: only the browsers' own push services are accepted as an endpoint.
+do $$
+declare uid uuid := (select id from auth.users limit 1);
+begin
+  begin
+    insert into public.push_subscriptions (user_id, endpoint, p256dh, auth, zone_id)
+      values (uid, 'http://169.254.169.254/x', 'p', 'a', (select id from public.zones limit 1));
+    raise exception using errcode = 'TSTFL', message = 'I5: a non-push-service endpoint was stored';
+  exception when check_violation then null;
+  end;
+  insert into public.push_subscriptions (user_id, endpoint, p256dh, auth, zone_id)
+    values (uid, 'https://fcm.googleapis.com/fcm/send/abc', 'p', 'a', (select id from public.zones limit 1));
+  raise notice 'ok I5: push endpoints limited to the browsers'' push services';
+end $$;
+
 rollback;

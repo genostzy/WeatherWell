@@ -13,6 +13,30 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
 /** Zone IDs are always "zone-" plus digits (demo) or a PSGC code (nationwide) — never punctuation a PostgREST filter string would treat specially. */
 const VALID_ZONE_ID = /^zone-[0-9A-Za-z]+$/;
 
+/**
+ * The browsers' own push services (I5). A subscription row is written by the
+ * browser, but nothing stops a caller writing any URL there, and this server
+ * would then POST to it — an internal address, or a host that never answers.
+ * Anything else is dropped unsent.
+ */
+const PUSH_SERVICE_HOSTS = [
+  /^fcm\.googleapis\.com$/,
+  /^([a-z0-9-]+\.)*push\.services\.mozilla\.com$/,
+  /^([a-z0-9-]+\.)*notify\.windows\.com$/,
+  /^([a-z0-9-]+\.)*push\.apple\.com$/,
+];
+
+function isPushServiceEndpoint(endpoint: string): boolean {
+  try {
+    const url = new URL(endpoint);
+    return url.protocol === "https:" && PUSH_SERVICE_HOSTS.some((host) => host.test(url.hostname));
+  } catch {
+    return false;
+  }
+}
+
+const SEND_TIMEOUT_MS = 10_000;
+
 export interface ZonePushPayload {
   zoneId: string;
   title: string;
@@ -72,24 +96,34 @@ export async function sendZonePush(payload: ZonePushPayload): Promise<ZonePushRe
     url: payload.url ?? "/",
   });
 
-  let sent = 0;
-  let failed = 0;
+  const dropSubscription = (endpoint: string) =>
+    supabase.from("push_subscriptions" as never).delete().eq("endpoint" as never, endpoint);
 
-  for (const sub of subscriptions) {
-    try {
-      await webPush.sendNotification(
-        { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-        message
-      );
-      sent++;
-    } catch (err) {
-      failed++;
-      // Expired/invalid subscription — stop sending to it.
-      if ((err as { statusCode?: number }).statusCode === 404 || (err as { statusCode?: number }).statusCode === 410) {
-        await supabase.from("push_subscriptions" as never).delete().eq("endpoint" as never, sub.endpoint);
+  // In parallel, each with its own timeout: one slow push service must not
+  // delay everyone after it. ponytail: unbounded concurrency, fine at
+  // barangay scale; batch it if a zone ever has thousands of subscribers.
+  const results = await Promise.allSettled(
+    subscriptions.map(async (sub) => {
+      if (!isPushServiceEndpoint(sub.endpoint)) {
+        await dropSubscription(sub.endpoint);
+        throw new Error("not a push service endpoint");
       }
-    }
-  }
+      try {
+        await webPush.sendNotification(
+          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+          message,
+          { timeout: SEND_TIMEOUT_MS }
+        );
+      } catch (err) {
+        // Expired/invalid subscription — stop sending to it.
+        const status = (err as { statusCode?: number }).statusCode;
+        if (status === 404 || status === 410) await dropSubscription(sub.endpoint);
+        throw err;
+      }
+    })
+  );
+  const sent = results.filter((r) => r.status === "fulfilled").length;
+  const failed = results.length - sent;
 
   return { ok: true, sent, failed, total: subscriptions.length };
 }
