@@ -106,6 +106,12 @@ const SUBTITLE: LocalizedText = {
 };
 const BACK_TO_DASHBOARD: LocalizedText = { en: "Back to admin dashboard", fil: "Balik sa admin dashboard" };
 const ZONE_LABEL: LocalizedText = { en: "Zone", fil: "Zone" };
+const ZONE_LIST_TRUNCATED: LocalizedText = {
+  en: "Showing the first {count} of {total} zones nationwide — search isn't available here yet.",
+  fil: "Ipinapakita ang unang {count} sa {total} na zone sa buong bansa — hindi pa available ang paghahanap dito.",
+};
+/** A native `<select>`'s options render into the DOM whether open or not, and a real admin's zone count is ~42k — same class of bug as AdminOverview's nationwide hang (found live, final review of 2026-09-22-admin-role-and-password-auth). Demo-only feature, so a plain cap is enough; no search UI was built for it. */
+const MAX_ZONE_OPTIONS = 200;
 const SCENARIO_LABEL: LocalizedText = { en: "Scenario", fil: "Senaryo" };
 const ALERT_FLOW: LocalizedText = { en: "Alert Flow", fil: "Daloy ng Alert" };
 const RETRY_IN_60S: LocalizedText = { en: "Retry in 60s", fil: "Ulitin sa loob ng 60s" };
@@ -185,6 +191,7 @@ export default function AdminSimulationPage() {
   // Only zones the signed-in official can act on; the database enforces the
   // real limit. The picker's initial selection follows suit.
   const zones = useZones().filter((zone) => isInArea(zone.psgcBarangayCode, official.areaCode));
+  const zoneOptions = zones.slice(0, MAX_ZONE_OPTIONS);
   // Typed as possibly undefined: `zones` can genuinely be empty (see
   // NoZonesNotice's doc comment), and every hook below must still be called
   // unconditionally — the empty-zones guard comes after all of them.
@@ -279,13 +286,20 @@ export default function AdminSimulationPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {zones.map((zone) => (
+                {zoneOptions.map((zone) => (
                   <SelectItem key={zone.id} value={zone.id}>
                     {zone.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            {zones.length > zoneOptions.length && (
+              <p lang={lang} className="text-xs text-muted-foreground">
+                {t(ZONE_LIST_TRUNCATED, lang)
+                  .replace("{count}", String(zoneOptions.length))
+                  .replace("{total}", String(zones.length))}
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">

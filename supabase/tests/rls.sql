@@ -2519,4 +2519,44 @@ begin
   raise notice 'ok: a non-admin still cannot read another profile row';
 end $$;
 
+-- Regression for a final-review finding (2026-09-22-admin-role-and-password-auth):
+-- an admin could use the appoint form on another admin's (or their own)
+-- email, silently demoting them. Spec: "Appoint and remove admins: No —
+-- still by hand, in Supabase, by you." Uses the fixture admin's OWN email
+-- (a self-demote attempt) rather than a real production address. The
+-- fixture admin was created with no email (Task 1's setup only inserts an
+-- id); the guard matches on email, so one is set here first. reset role
+-- first — the previous block left the session impersonating a non-admin,
+-- which cannot write auth.users.
+reset role;
+update auth.users set email = 'admin-fixture@example.com' where id = 'd0000000-0000-4000-8000-000000000001';
+
+select tests.as_user('d0000000-0000-4000-8000-000000000001');
+
+do $$
+begin
+  perform public.admin_appoint_official('admin-fixture@example.com', 'Mapandan', 'Self Demote');
+  raise exception using errcode = 'TSTFL',
+    message = 'admin_appoint_official let an admin demote another admin — should have refused';
+exception
+  when others then
+    if sqlstate = 'TSTFL' then
+      raise;
+    end if;
+    raise notice 'ok: admin_appoint_official refused to touch an admin account (%): %', sqlstate, sqlerrm;
+end $$;
+
+do $$
+begin
+  perform public.admin_remove_official('admin-fixture@example.com');
+  raise exception using errcode = 'TSTFL',
+    message = 'admin_remove_official let an admin remove another admin — should have refused';
+exception
+  when others then
+    if sqlstate = 'TSTFL' then
+      raise;
+    end if;
+    raise notice 'ok: admin_remove_official refused to touch an admin account (%): %', sqlstate, sqlerrm;
+end $$;
+
 rollback;

@@ -71,6 +71,34 @@ describe("AdminSimulationPage", () => {
     expect(screen.queryByRole("option", { name: otherZone.name })).not.toBeInTheDocument();
   });
 
+  it("caps the zone dropdown for an admin instead of rendering every zone nationwide", async () => {
+    // Real admin scale is ~42k zones, not the 4-zone fixture set — found live
+    // during 2026-09-22-admin-role-and-password-auth's final review, the same
+    // class of bug as AdminOverview's nationwide hang. A synthetic 500-zone
+    // set here proves the cap without needing 42k fixtures.
+    vi.useRealTimers();
+    const user = userEvent.setup();
+    const base = FIXTURE_REFERENCE_DATA.zones[0];
+    const manyZones = Array.from({ length: 500 }, (_, i) => ({
+      ...base,
+      id: `synthetic-zone-${i}`,
+      psgcBarangayCode: String(i).padStart(10, "0"),
+      name: `Synthetic Zone ${i}`,
+    }));
+    const admin: Official = {
+      userId: "admin-1",
+      displayName: "Test Admin",
+      areaCode: "",
+      areaName: "All areas",
+      level: "admin",
+    };
+    renderWithData(<AdminSimulationPage />, { official: admin, data: { zones: manyZones } });
+
+    await user.click(screen.getByRole("combobox", { name: /zone/i }));
+    const options = await screen.findAllByRole("option");
+    expect(options.length).toBeLessThan(manyZones.length);
+  });
+
   it("shows an empty-area notice instead of crashing when the official's area matches zero zones", () => {
     const official: Official = {
       userId: "u1",
