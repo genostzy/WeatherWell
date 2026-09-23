@@ -33,6 +33,28 @@ const UNSUPPORTED_STATE: PushSubscriptionState = {
   isLoading: false,
 };
 
+/** Saves (or re-saves) a browser push subscription under a barangay. True only when the row was written. */
+async function saveSubscription(sub: PushSubscription, zoneId: string): Promise<boolean> {
+  const userId = await ensureAnonymousSession();
+  if (!userId) return false;
+
+  const { endpoint, keys } = sub.toJSON();
+  const { error } = await getBrowserClient()
+    .from("push_subscriptions" as never)
+    .upsert(
+      {
+        user_id: userId,
+        endpoint: endpoint ?? "",
+        p256dh: keys?.p256dh ?? "",
+        auth: keys?.auth ?? "",
+        zone_id: zoneId,
+        user_agent: navigator.userAgent,
+      } as never,
+      { onConflict: "user_id,endpoint" } as never
+    );
+  return !error;
+}
+
 /**
  * Hook to manage Web Push subscription lifecycle.
  * Handles permission request, subscription creation, and server-side storage.
@@ -50,17 +72,26 @@ export function usePushSubscription(zoneId?: string): {
     "serviceWorker" in navigator &&
     "PushManager" in window;
 
-  // Check existing subscription on mount
   useEffect(() => {
     if (!isSupported) return;
+    let cancelled = false;
 
     navigator.serviceWorker.ready.then((registration) => {
       registration.pushManager.getSubscription().then((sub) => {
+        if (cancelled) return;
         setSubscription(sub);
         setPermission(Notification.permission);
+        // Re-save an existing browser subscription: heals a device whose
+        // earlier save failed or never happened, and follows a change of
+        // barangay. The upsert is idempotent.
+        if (sub && zoneId) void saveSubscription(sub, zoneId);
       });
     });
-  }, [isSupported]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isSupported, zoneId]);
 
   const subscribe = useCallback(async () => {
     // Without a barangay there is nothing to target: the column is NOT NULL,
@@ -91,21 +122,12 @@ export function usePushSubscription(zoneId?: string): {
       applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
     });
 
-    const { endpoint, keys } = sub.toJSON();
-    const { error } = await getBrowserClient()
-      .from("push_subscriptions" as never)
-      .upsert(
-        {
-          user_id: userId,
-          endpoint: endpoint ?? "",
-          p256dh: keys?.p256dh ?? "",
-          auth: keys?.auth ?? "",
-          zone_id: zoneId,
-          user_agent: navigator.userAgent,
-        } as never,
-        { onConflict: "user_id,endpoint" } as never
-      );
-    if (error) return;
+    if (!(await saveSubscription(sub, zoneId))) {
+      // Undo the browser side too: otherwise the next load finds this
+      // subscription and shows "subscribed" with no row behind it.
+      await sub.unsubscribe();
+      return;
+    }
 
     setSubscription(sub);
   }, [zoneId]);
