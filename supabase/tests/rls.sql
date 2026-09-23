@@ -2823,4 +2823,53 @@ begin
   raise notice 'ok SP1-E1/E2/E3: the error log is a 5,000-row ring buffer';
 end $$;
 
+-- SP1 automatic expiry (final-review I4): the engine withdraws its own
+-- crowd-report alert once fewer than 3 qualifying reports remain in the
+-- window, logs that as automatic (so it is not mistaken for a human
+-- decision), and never expires an official's alert. Uses its own zone so
+-- earlier blocks' decisions do not interfere.
+do $$
+declare
+  z constant text := 'tests-fixture-zone-sp1b';
+  actor text;
+begin
+  set local role postgres;
+  perform set_config('request.jwt.claims', '', true);
+  set constraints all immediate;
+  insert into public.zones
+    (id, psgc_barangay_code, name, evacuation_route_text, lat, lng, evacuation_route_path, hotline_number)
+  values
+    (z, '990000002', 'Test Zone SP1b', '{"en":"x","fil":"x"}'::jsonb, 14.6, 121.6, '[]'::jsonb, '000');
+  insert into public.water_level_reports (zone_id, depth_level, reporter_id, lat, lng)
+    select z, 'knee', ('e1000000-0000-4000-8000-0000000000' || lpad(g::text, 2, '0'))::uuid, 14.6, 121.6
+      from generate_series(16, 18) g;
+  perform * from public.check_and_trigger_alerts();
+  if not exists (select 1 from public.alerts where zone_id = z and is_active and source = 'auto_crowdsourced') then
+    raise exception using errcode = 'TSTFL', message = 'X0: setup did not raise an automatic alert';
+  end if;
+
+  -- X1: once its reports age out of the window, the engine withdraws its own alert.
+  update public.water_level_reports set reported_at = now() - interval '7 hours' where zone_id = z;
+  perform * from public.check_and_trigger_alerts();
+  if exists (select 1 from public.alerts where zone_id = z and is_active) then
+    raise exception using errcode = 'TSTFL', message = 'X1: an automatic alert outlived its reports';
+  end if;
+
+  -- X2: the withdrawal is logged as automatic, not as a human decision.
+  select o.actor_name into actor from public.official_actions o
+   where o.zone_id = z and o.action = 'alert.cleared' order by o.occurred_at desc, o.id desc limit 1;
+  if actor is distinct from 'Automatic — expired' then
+    raise exception using errcode = 'TSTFL', message = format('X2: automatic expiry logged as %s', actor);
+  end if;
+
+  -- X3: an official's alert is never expired by the engine.
+  perform public.set_zone_alert(z, 'red', '{"en":"r","fil":"r"}'::jsonb, 'manual');
+  perform * from public.check_and_trigger_alerts();
+  if not exists (select 1 from public.alerts where zone_id = z and is_active and source = 'manual') then
+    raise exception using errcode = 'TSTFL', message = 'X3: engine expired an official''s alert';
+  end if;
+  reset role;
+  raise notice 'ok SP1-X1/X2/X3: automatic alerts expire, visibly, and never an official''s';
+end $$;
+
 rollback;

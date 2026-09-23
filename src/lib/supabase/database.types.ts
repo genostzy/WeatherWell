@@ -26,6 +26,7 @@ export type Database = {
       alerts: {
         Row: {
           confidence: string
+          expired_automatically: boolean
           id: string
           is_active: boolean
           issued_at: string
@@ -40,6 +41,7 @@ export type Database = {
         }
         Insert: {
           confidence?: string
+          expired_automatically?: boolean
           id?: string
           is_active?: boolean
           issued_at?: string
@@ -54,6 +56,7 @@ export type Database = {
         }
         Update: {
           confidence?: string
+          expired_automatically?: boolean
           id?: string
           is_active?: boolean
           issued_at?: string
@@ -506,7 +509,7 @@ export type Database = {
           updated_at: string
           user_agent: string | null
           user_id: string
-          zone_id: string | null
+          zone_id: string
         }
         Insert: {
           auth: string
@@ -517,7 +520,7 @@ export type Database = {
           updated_at?: string
           user_agent?: string | null
           user_id: string
-          zone_id?: string | null
+          zone_id: string
         }
         Update: {
           auth?: string
@@ -528,7 +531,7 @@ export type Database = {
           updated_at?: string
           user_agent?: string | null
           user_id?: string
-          zone_id?: string | null
+          zone_id?: string
         }
         Relationships: [
           {
