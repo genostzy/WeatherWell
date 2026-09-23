@@ -2780,4 +2780,39 @@ begin
   reset role;
 end $$;
 
+-- SP1 error-log cap (L3, correction 5): 300/hour x 30-day retention allowed
+-- ~216,000 rows (~1 GB). A 5,000-row total cap bounds it. Fillers are two
+-- hours old so the existing hourly cap cannot be what refuses the call.
+do $$
+begin
+  set local role postgres;
+  perform set_config('request.jwt.claims', '', true);
+  delete from public.app_errors;
+  insert into public.app_errors (occurred_at, source, kind, message, route, environment, fingerprint)
+    select now() - interval '2 hours', 'client', 'unhandled', 'fill', '/', 'preview', 'sp1-fill-' || g
+      from generate_series(1, 4999) g;
+  reset role;
+end $$;
+
+select tests.as_anon();
+select tests.expect_allowed('SP1-E1: the 5,000th row is still accepted',
+  $$select public.report_app_error('client','unhandled','under cap', null,'/','preview', null,'fp-sp1-a')$$);
+select tests.expect_allowed('SP1-E2: a call past the total cap succeeds without storing',
+  $$select public.report_app_error('client','unhandled','over cap', null,'/','preview', null,'fp-sp1-b')$$);
+
+do $$
+begin
+  set local role postgres;
+  if not exists (select 1 from public.app_errors where fingerprint = 'fp-sp1-a') then
+    reset role;
+    raise exception using errcode = 'TSTFL', message = 'SP1-E1: the row under the total cap was not stored';
+  end if;
+  if exists (select 1 from public.app_errors where fingerprint = 'fp-sp1-b') then
+    reset role;
+    raise exception using errcode = 'TSTFL', message = 'SP1-E2: a row was stored beyond the 5,000-row total cap';
+  end if;
+  reset role;
+  raise notice 'ok SP1-E1/E2: the error log is capped at 5,000 rows';
+end $$;
+
 rollback;
