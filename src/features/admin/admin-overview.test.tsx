@@ -29,6 +29,13 @@ describe("AdminOverview dashboard", () => {
     expect(screen.queryByRole("button", { name: /start simulation/i })).not.toBeInTheDocument();
   });
 
+  it("opens on what needs the official's attention, before the figures (idea 5)", () => {
+    renderWithData(<AdminOverview />);
+    const inbox = screen.getByText(/needs your attention/i);
+    const glance = screen.getByText(/at a glance/i);
+    expect(inbox.compareDocumentPosition(glance) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("links out to the simulation page", () => {
     renderWithData(<AdminOverview />);
     const link = screen.getByRole("link", { name: /open simulation/i });

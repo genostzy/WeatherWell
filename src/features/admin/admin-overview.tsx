@@ -22,6 +22,7 @@ import { LandslideRiskPanel } from "@/features/admin/landslide-risk-panel";
 import { EvacuationManagementPanel } from "@/features/admin/evacuation-management-panel";
 import { CommunityPinModerationPanel } from "@/features/admin/community-pin-moderation-panel";
 import { NoZonesNotice } from "@/features/admin/no-zones-notice";
+import { OfficialInbox } from "@/features/admin/official-inbox";
 import { useWaterLevelReports } from "@/lib/water-level-reports";
 import { countReportsToday } from "@/lib/reports-today";
 import { useTyphoon } from "@/lib/use-typhoon";
@@ -113,6 +114,8 @@ export function AdminOverview() {
           <h1 className="text-2xl font-bold">{t(PAGE_TITLE, lang)}</h1>
           <p className="text-muted-foreground">{t(SUBTITLE, lang)}</p>
         </div>
+
+        <OfficialInbox zones={zones} />
 
         <section className="space-y-3">
           <h2 className="text-lg font-semibold">{t(AT_A_GLANCE, lang)}</h2>
