@@ -60,12 +60,12 @@ describe("buildShareText", () => {
     expect(firstLine.toUpperCase()).toContain("RED");
   });
 
-  it("carries the payload in a URL fragment, which never reaches the server", () => {
+  it("carries the payload in the query, so the page renders as plain HTML with no JavaScript (idea 6)", () => {
     const text = buildShareText(ALERT, "https://weatherwell.app", "en");
     const url = text.split(/\s+/).find((part) => part.startsWith("https://"));
     expect(url).toBeDefined();
-    expect(url).toContain("/a#");
-    expect(decodeAlert(url!.split("#")[1])).toEqual(ALERT);
+    expect(url).toContain("/a?d=");
+    expect(decodeAlert(new URL(url!).searchParams.get("d")!)).toEqual(ALERT);
   });
 });
 

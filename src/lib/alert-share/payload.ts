@@ -100,6 +100,15 @@ const HOTLINE: Record<LanguageCode, string> = { en: "Hotline", fil: "Hotline" };
  * carrier clips the message, what survives is the part a person with no app
  * and no signal can still act on.
  */
+/**
+ * The forwarded-alert link. In the query (idea 6), so the server renders the
+ * alert as plain HTML that reads with JavaScript off; the page still reads
+ * older #... links.
+ */
+export function alertUrl(origin: string, alert: SharedAlert): string {
+  return `${origin}/a?d=${encodeAlert(alert)}`;
+}
+
 export function buildShareText(alert: SharedAlert, origin: string, lang: LanguageCode): string {
   const time = new Date(alert.issuedAt).toLocaleTimeString(lang === "fil" ? "fil-PH" : "en-PH", {
     hour: "2-digit",
@@ -112,7 +121,7 @@ export function buildShareText(alert: SharedAlert, origin: string, lang: Languag
   ];
   if (alert.centerName) lines.push(`${EVACUATE_TO[lang]}: ${alert.centerName}`);
   if (alert.hotline) lines.push(`${HOTLINE[lang]}: ${alert.hotline}`);
-  lines.push(`${origin}/a#${encodeAlert(alert)}`);
+  lines.push(alertUrl(origin, alert));
 
   return lines.join("\n");
 }

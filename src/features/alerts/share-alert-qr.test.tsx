@@ -41,6 +41,16 @@ describe("ShareAlertQr", () => {
     await waitFor(() => expect(screen.getByRole("img")).toHaveAttribute("src", "data:image/png;base64,FAKE"));
   });
 
+  it("encodes the same no-JavaScript ?d= link a text share sends (idea 6)", async () => {
+    const qrcode = await import("qrcode");
+    const user = userEvent.setup();
+    renderQr();
+    await user.click(screen.getByRole("button", { name: /qr|show code/i }));
+    await waitFor(() => expect(qrcode.default.toDataURL).toHaveBeenCalled());
+    const url = (qrcode.default.toDataURL as ReturnType<typeof vi.fn>).mock.calls.at(-1)![0] as string;
+    expect(url).toContain("/a?d=");
+  });
+
   it("explains that the other phone scans it with its own camera", async () => {
     const user = userEvent.setup();
     renderQr();

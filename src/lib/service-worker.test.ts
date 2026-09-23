@@ -258,6 +258,24 @@ describe("service worker request routing", () => {
     expect(result?.body).toBe("CACHED EVACUATION");
   });
 
+  it("serves the cached /a page for a forwarded ?d= link while offline (idea 6)", async () => {
+    const { listeners } = loadServiceWorker({
+      caches: { [SHELL_CACHE]: { [`${ORIGIN}/a`]: "CACHED ALERT PAGE" } },
+      fetch: async () => {
+        throw new Error("offline");
+      },
+    });
+    const result = await handleFetch(listeners, { url: `${ORIGIN}/a?d=eyJ2IjoxfQ`, mode: "navigate" });
+    expect(result?.body).toBe("CACHED ALERT PAGE");
+  });
+
+  it("does not store a copy of every forwarded alert page", async () => {
+    const { listeners, store } = loadServiceWorker({ fetch: async () => response("ALERT HTML") });
+    const result = await handleFetch(listeners, { url: `${ORIGIN}/a?d=eyJ2IjoxfQ`, mode: "navigate" });
+    expect(result?.body).toBe("ALERT HTML");
+    expect(store.get(SHELL_CACHE)?.has(`${ORIGIN}/a?d=eyJ2IjoxfQ`) ?? false).toBe(false);
+  });
+
   it("serves zone data from cache first, so an outage still shows a zone", async () => {
     const { listeners } = loadServiceWorker({
       caches: { [ZONE_CACHE]: { [`${ORIGIN}/data/reference-data.json`]: "CACHED ZONES" } },

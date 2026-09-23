@@ -26,6 +26,7 @@ function renderWithHash(hash: string) {
 
 beforeEach(() => {
   window.location.hash = "";
+  window.history.replaceState(null, "", "/a");
 });
 
 describe("SharedAlertView", () => {
@@ -124,5 +125,26 @@ describe("SharedAlertView", () => {
 
     expect(screen.getByText(/Barangay Iba, Somewhere Else/)).toBeInTheDocument();
     expect(screen.queryByText(/Barangay Malimpuec, Mapandan/)).not.toBeInTheDocument();
+  });
+});
+
+describe("SharedAlertView from the query (idea 6)", () => {
+  it("renders the alert the server read from ?d=, with no fragment", () => {
+    render(
+      <LanguageProvider>
+        <SharedAlertView initialPayload={encodeAlert(ALERT)} />
+      </LanguageProvider>
+    );
+    expect(screen.getByText(/Waist-deep flooding/)).toBeInTheDocument();
+  });
+
+  it("reads ?d= itself when served the cached page offline", () => {
+    window.history.replaceState(null, "", `/a?d=${encodeAlert(ALERT)}`);
+    render(
+      <LanguageProvider>
+        <SharedAlertView />
+      </LanguageProvider>
+    );
+    expect(screen.getByText(/Waist-deep flooding/)).toBeInTheDocument();
   });
 });

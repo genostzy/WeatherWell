@@ -271,6 +271,33 @@ function networkFirst(request, cacheName, timeoutMs) {
   });
 }
 
+function sharedAlertPage(request) {
+  const shell = () => caches.match(new URL("/a", self.location.origin).href);
+  return new Promise((resolve) => {
+    let settled = false;
+    const settle = (response) => {
+      if (!settled && response) {
+        settled = true;
+        resolve(response);
+      }
+    };
+    const timer = setTimeout(() => shell().then(settle), NETWORK_TIMEOUT_MS);
+    fetch(request)
+      .then((response) => {
+        clearTimeout(timer);
+        if (response && response.status < 500) settle(response);
+        else shell().then((cached) => settle(cached || response));
+      })
+      .catch(() => {
+        clearTimeout(timer);
+        shell().then((cached) => {
+          settled = true;
+          resolve(cached || Response.error());
+        });
+      });
+  });
+}
+
 /** Serve immediately from cache, refresh in the background for next time. */
 function staleWhileRevalidate(request, cacheName) {
   return caches.open(cacheName).then((cache) =>
@@ -556,6 +583,14 @@ self.addEventListener("fetch", (event) => {
   // Content-hashed build output — a change means a new URL, so cache is safe.
   if (url.pathname.startsWith("/_next/static/")) {
     event.respondWith(cacheFirst(request, ASSET_CACHE));
+    return;
+  }
+
+  // A forwarded alert (/a?d=...): the network renders it as plain HTML
+  // (idea 6); offline or slow, the one cached /a page renders it from the
+  // query itself. Never stored per link: every alert would be its own entry.
+  if (request.mode === "navigate" && url.pathname === "/a" && url.search) {
+    event.respondWith(sharedAlertPage(request));
     return;
   }
 

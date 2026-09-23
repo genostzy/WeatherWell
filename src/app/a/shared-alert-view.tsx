@@ -41,13 +41,14 @@ function subscribeToHash(callback: () => void): () => void {
   return () => window.removeEventListener("hashchange", callback);
 }
 
-function getHash(): string {
-  return window.location.hash;
-}
-
-/** No fragment on the server, same as any URL with no `#...` in a request. */
-function getServerHash(): string {
-  return "";
+/**
+ * The payload arrives either as ?d=... (links made since idea 6, which the
+ * server can render as plain HTML) or as #... (older links, and still read).
+ * Offline, the service worker serves the cached /a page for any ?d= link, so
+ * the client reads the query itself too.
+ */
+function getPayload(): string {
+  return window.location.hash.replace(/^#/, "") || new URLSearchParams(window.location.search).get("d") || "";
 }
 
 /**
@@ -66,10 +67,12 @@ function getServerHash(): string {
  * client's real one without a synchronous setState-in-effect or an
  * artificial "not ready yet" gate.
  */
-export function SharedAlertView() {
+export function SharedAlertView({ initialPayload = "" }: { initialPayload?: string }) {
   const { lang } = useLanguage();
-  const hash = useSyncExternalStore(subscribeToHash, getHash, getServerHash);
-  const alert = decodeAlert(hash.replace(/^#/, ""));
+  // The server snapshot is what the server read from ?d=, so the page it
+  // renders (readable with no JavaScript at all) hydrates without a mismatch.
+  const payload = useSyncExternalStore(subscribeToHash, () => getPayload() || initialPayload, () => initialPayload);
+  const alert = decodeAlert(payload);
 
   if (!alert) {
     return (

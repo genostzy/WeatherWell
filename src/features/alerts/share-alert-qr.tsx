@@ -6,7 +6,7 @@ import { QrCode } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
-import { encodeAlert, type SharedAlert } from "@/lib/alert-share/payload";
+import { alertUrl, type SharedAlert } from "@/lib/alert-share/payload";
 import type { LocalizedText } from "@/lib/types";
 
 const SHOW_CODE: LocalizedText = { en: "Show QR code", fil: "Ipakita ang QR code" };
@@ -42,7 +42,7 @@ export function ShareAlertQr({ alert }: { alert: SharedAlert }) {
       return;
     }
     setFailed(false);
-    const url = `${window.location.origin}/a#${encodeAlert(alert)}`;
+    const url = alertUrl(window.location.origin, alert);
     try {
       // Medium correction: a phone screen in rain, held by someone else, is a
       // worse scanning surface than paper.
