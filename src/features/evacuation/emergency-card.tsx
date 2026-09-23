@@ -3,6 +3,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
+import { hasRealEvacuationCenter, NO_VERIFIED_CENTER } from "@/lib/zone-data-quality";
 import type { LocalizedText, Zone } from "@/lib/types";
 
 const EMERGENCY_CARD: LocalizedText = { en: "Emergency Card", fil: "Emergency Card" };
@@ -40,7 +41,13 @@ export function EmergencyCard({ zone }: { zone: Zone }) {
 
           <div>
             <p className="text-xs text-muted-foreground">{t(EVACUATION_CENTER, lang)}</p>
-            <p className="font-semibold">{zone.evacuationCenterName}</p>
+            {hasRealEvacuationCenter(zone) ? (
+              <p className="font-semibold">{zone.evacuationCenterName}</p>
+            ) : (
+              <p lang={lang} className="font-semibold">
+                {t(NO_VERIFIED_CENTER, lang)}
+              </p>
+            )}
           </div>
 
           <div>

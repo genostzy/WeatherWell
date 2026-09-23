@@ -35,3 +35,24 @@ describe("EvacuationInstructions", () => {
     );
   });
 });
+
+describe("EvacuationInstructions with the nationwide seed's placeholder centre", () => {
+  const placeholder = {
+    ...zone,
+    evacuationCenterName: "Evacuation Centre — Santa Fe",
+    evacuationCenterCapacity: 0,
+    evacuationCenterLat: zone.lat,
+    evacuationCenterLng: zone.lng,
+  };
+
+  it("never presents the placeholder as a real place to go", () => {
+    render(<EvacuationInstructions zone={placeholder} />);
+    expect(screen.queryByText("Evacuation Centre — Santa Fe")).not.toBeInTheDocument();
+    expect(screen.getByText(/no verified evacuation centre for your barangay yet/i)).toBeInTheDocument();
+  });
+
+  it("shows no capacity badge for a centre that does not exist", () => {
+    render(<EvacuationInstructions zone={placeholder} />);
+    expect(screen.queryByText(/space available|limited|full|unknown/i)).not.toBeInTheDocument();
+  });
+});

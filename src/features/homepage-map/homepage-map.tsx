@@ -22,6 +22,7 @@ import { CommunityPinForm } from "./community-pin-form";
 import { PhotoLightbox } from "./photo-lightbox";
 import { OverlayDialog } from "@/components/overlay-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { hasRealEvacuationCenter, NO_VERIFIED_CENTER } from "@/lib/zone-data-quality";
 import type { HazardType, LocalizedText, Zone } from "@/lib/types";
 
 const MapCanvas = dynamic(() => import("./map-canvas").then((m) => m.MapCanvas), {
@@ -209,11 +210,16 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
         {/* Route info — only when a route is active */}
         {routeZone && (directionToSafety || routeHazard || notice) && (
           <div className="rounded-xl border-2 border-border p-3 text-sm">
-            {routeZone && directionToSafety && (
+            {routeZone && directionToSafety && hasRealEvacuationCenter(routeZone) && (
               <p className="font-medium break-words">
                 {Math.round(directionToSafety.distanceMeters)}m{" "}
                 {t(COMPASS_LABEL[directionToSafety.compassLabel], lang)} {t(TO, lang)}{" "}
                 {routeZone.evacuationCenterName}
+              </p>
+            )}
+            {routeZone && directionToSafety && !hasRealEvacuationCenter(routeZone) && (
+              <p lang={lang} className="font-medium break-words">
+                {t(NO_VERIFIED_CENTER, lang)}
               </p>
             )}
             {routeZone && routeHazard && (

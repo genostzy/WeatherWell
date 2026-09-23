@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { CENTER_STATUS_CLASS, CENTER_STATUS_LABEL, resolveEffectiveCenterStatus } from "@/lib/center-status";
+import { hasRealEvacuationCenter, NO_VERIFIED_CENTER } from "@/lib/zone-data-quality";
 import type { LocalizedText, Zone } from "@/lib/types";
 
 const GO_HERE: LocalizedText = { en: "Go here", fil: "Pumunta rito" };
@@ -22,6 +23,7 @@ export function EvacuationInstructions({ zone }: { zone: Zone }) {
   // zone's own centerStatus.
   const occupancy = zone.currentOccupancy;
   const centerStatus = resolveEffectiveCenterStatus(zone.centerStatus, zone.evacuationCenterCapacity, occupancy);
+  const realCenter = hasRealEvacuationCenter(zone);
 
   return (
     <Card className="w-full max-w-md">
@@ -34,10 +36,17 @@ export function EvacuationInstructions({ zone }: { zone: Zone }) {
           />
           <div className="flex-1">
             <p className="text-sm text-muted-foreground">{t(GO_HERE, lang)}</p>
-            <p className="text-lg font-semibold">{zone.evacuationCenterName}</p>
+            {realCenter ? (
+              <p className="text-lg font-semibold">{zone.evacuationCenterName}</p>
+            ) : (
+              <p lang={lang} className="text-lg font-semibold">
+                {t(NO_VERIFIED_CENTER, lang)}
+              </p>
+            )}
           </div>
         </div>
 
+        {realCenter && (
         <div className="flex items-start gap-4">
           <Users
             data-testid="icon-capacity"
@@ -56,6 +65,7 @@ export function EvacuationInstructions({ zone }: { zone: Zone }) {
             )}
           </div>
         </div>
+        )}
 
         <div className="flex items-start gap-4">
           <Navigation

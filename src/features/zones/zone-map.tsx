@@ -18,10 +18,12 @@ import { getRainfallForZone, isHeavyRainfall } from "@/lib/mock-data";
 import { getZoneStatus, getZoneStatusColor, ZONE_STATUS_LABEL, type ZoneStatus } from "@/lib/zone-status";
 import { CENTER_STATUS_LABEL, CENTER_STATUS_CLASS, resolveEffectiveCenterStatus } from "@/lib/center-status";
 import { useAlerts } from "@/lib/alerts-store";
+import { hasRealEvacuationCenter } from "@/lib/zone-data-quality";
 import type { LanguageCode, LocalizedText, Zone } from "@/lib/types";
 
 const PAGE_SIZE = 20;
 
+const NO_CENTER_SHORT: LocalizedText = { en: "No verified evacuation centre", fil: "Walang beripikadong evacuation centre" };
 const YOUR_ZONE: LocalizedText = { en: "Your zone", fil: "Iyong zone" };
 const ALL_ZONES: LocalizedText = { en: "All", fil: "Lahat" };
 const VIEW_EVACUATION: LocalizedText = { en: "Evacuation", fil: "Paglikas" };
@@ -214,11 +216,15 @@ function ZoneRow({
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
             <span className="flex items-center gap-1">
               <Building2 className="h-3 w-3" />
-              <span className="truncate">{zone.evacuationCenterName}</span>
+              <span className="truncate">
+                {hasRealEvacuationCenter(zone) ? zone.evacuationCenterName : t(NO_CENTER_SHORT, lang)}
+              </span>
             </span>
-            <span className={`shrink-0 rounded px-1 py-0 text-[10px] font-medium ${CENTER_STATUS_CLASS[centerStatus]}`}>
-              {t(CENTER_STATUS_LABEL[centerStatus], lang)}
-            </span>
+            {hasRealEvacuationCenter(zone) && (
+              <span className={`shrink-0 rounded px-1 py-0 text-[10px] font-medium ${CENTER_STATUS_CLASS[centerStatus]}`}>
+                {t(CENTER_STATUS_LABEL[centerStatus], lang)}
+              </span>
+            )}
           </div>
         </div>
 

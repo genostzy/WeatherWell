@@ -23,6 +23,7 @@ import {
 } from "@/features/map/marker-icons";
 import { MarkerLegend } from "@/features/map/marker-legend";
 import { HazardTypeSelector, hazardMapTitle } from "@/features/map/hazard-type-selector";
+import { hasRealEvacuationCenter } from "@/lib/zone-data-quality";
 import type { HazardType, LocalizedText, Zone } from "@/lib/types";
 
 const MAP_ARIA_LABEL: LocalizedText = {
@@ -235,6 +236,9 @@ export function MapCanvas({
    */
   const evacVisible = showEvac || searchQuery.length > 0 || revealEvacuationCenters;
 
+  // The nationwide seed's placeholder centres are not places to send anyone.
+  const realCentreZones = useMemo(() => zones.filter(hasRealEvacuationCenter), [zones]);
+
   /**
    * Cluster by municipality across ALL zones, not just visible radius.
    * This gives accurate counts regardless of viewport.
@@ -243,7 +247,7 @@ export function MapCanvas({
   const evacClusters = useMemo(() => {
     if (!showEvacCenters || zoom >= 15) return [];
     const clusterRadius = radiusDeg * 2;
-    const nearby = zones.filter(
+    const nearby = realCentreZones.filter(
       (z) =>
         Math.abs(z.lat - viewCenter[0]) < clusterRadius &&
         Math.abs(z.lng - viewCenter[1]) < clusterRadius
@@ -267,17 +271,17 @@ export function MapCanvas({
         totalOccupancy,
       };
     });
-  }, [showEvacCenters, zoom, radiusDeg, viewCenter, zones]);
+  }, [showEvacCenters, zoom, radiusDeg, viewCenter, realCentreZones]);
 
   /** Individual evac centers shown at zoom 15+. */
   const individualEvacZones = useMemo(() => {
     if (zoom < 15) return [];
-    return zones.filter(
+    return realCentreZones.filter(
       (z) =>
         Math.abs(z.lat - viewCenter[0]) < radiusDeg &&
         Math.abs(z.lng - viewCenter[1]) < radiusDeg,
     );
-  }, [zoom, radiusDeg, viewCenter, zones]);
+  }, [zoom, radiusDeg, viewCenter, realCentreZones]);
 
   const nearestEvac = useMemo(() => {
     if (!livePosition) return null;

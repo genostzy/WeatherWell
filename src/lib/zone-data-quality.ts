@@ -1,4 +1,4 @@
-import type { Zone } from "@/lib/types";
+import type { LocalizedText, Zone } from "@/lib/types";
 
 /**
  * Whether a zone carries safety infrastructure that actually exists.
@@ -25,5 +25,16 @@ export function hasRealHotline(zone: Pick<Zone, "hotlineNumber">): boolean {
 }
 
 export function hasRealEvacuationCenter(zone: Zone): boolean {
-  return zone.evacuationCenterName.trim().length > 0;
+  if (zone.evacuationCenterName.trim().length === 0) return false;
+  // The seed's placeholders are NAMED ("Evacuation Centre — <Town>") but sit
+  // exactly on the zone's own point with no capacity; a real centre is
+  // somewhere a resident walks to.
+  const onZonePoint = zone.evacuationCenterLat === zone.lat && zone.evacuationCenterLng === zone.lng;
+  return !(onZonePoint && zone.evacuationCenterCapacity === 0);
 }
+
+/** What to tell a resident whose barangay has no verified centre. */
+export const NO_VERIFIED_CENTER: LocalizedText = {
+  en: "No verified evacuation centre for your barangay yet — go to higher ground and call your MDRRMO.",
+  fil: "Wala pang beripikadong evacuation centre para sa inyong barangay — pumunta sa mas mataas na lugar at tumawag sa inyong MDRRMO.",
+};

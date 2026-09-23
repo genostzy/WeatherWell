@@ -61,4 +61,23 @@ describe("hasRealEvacuationCenter", () => {
   it("rejects whitespace only", () => {
     expect(hasRealEvacuationCenter({ ...ZONE, evacuationCenterName: "  " })).toBe(false);
   });
+
+  it("rejects the nationwide seed's named placeholder: capacity 0, pinned on the barangay's own point", () => {
+    // 41,396 live centres look like this: "Evacuation Centre — <Town>", at the
+    // zone centroid, capacity 0. Showing one sends a resident to a random spot.
+    const placeholder: Zone = {
+      ...ZONE,
+      evacuationCenterName: "Evacuation Centre — Santa Fe",
+      evacuationCenterCapacity: 0,
+      evacuationCenterLat: ZONE.lat,
+      evacuationCenterLng: ZONE.lng,
+    };
+    expect(hasRealEvacuationCenter(placeholder)).toBe(false);
+  });
+
+  it("accepts a real centre even if its capacity has not been recorded, as long as it is somewhere else", () => {
+    expect(
+      hasRealEvacuationCenter({ ...ZONE, evacuationCenterCapacity: 0, evacuationCenterLat: ZONE.lat + 0.01 })
+    ).toBe(true);
+  });
 });
