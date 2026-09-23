@@ -2489,16 +2489,19 @@ begin
   raise notice 'ok: admin_remove_official removed the target correctly';
 end $$;
 
--- Regression for the live bug found during Task 8 verification
--- (2026-09-22-admin-role-and-password-auth): profiles' only SELECT policy
--- was self-only (profiles_read_own), so /admin/officials always returned
--- an empty list for a real admin despite real appointed officials existing.
--- Still impersonating the admin from the block above.
+-- Regression for the live bug found during 2026-09-22 Task 8 verification:
+-- profiles' only SELECT policy was self-only, so /admin/officials listed no
+-- one. tests.as_user() does not switch roles for a plain block, so these
+-- switch explicitly (repaired in sub-project 1).
 do $$
 declare
   seen boolean;
 begin
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', 'd0000000-0000-4000-8000-000000000001', 'role', 'authenticated')::text, true);
   select exists(select 1 from public.profiles where id = 'd0000000-0000-4000-8000-000000000002') into seen;
+  reset role;
   if not seen then
     raise exception using errcode = 'TSTFL',
       message = 'admin could not read another profile row (profiles_read_own_or_admin regressed)';
@@ -2506,12 +2509,15 @@ begin
   raise notice 'ok: admin can read another profile row';
 end $$;
 
-select tests.as_user('d0000000-0000-4000-8000-000000000002');
 do $$
 declare
   seen boolean;
 begin
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', 'd0000000-0000-4000-8000-000000000002', 'role', 'authenticated')::text, true);
   select exists(select 1 from public.profiles where id = 'd0000000-0000-4000-8000-000000000001') into seen;
+  reset role;
   if seen then
     raise exception using errcode = 'TSTFL',
       message = 'a non-admin could read another profile row (profiles_read_own_or_admin over-widened)';
@@ -2519,44 +2525,37 @@ begin
   raise notice 'ok: a non-admin still cannot read another profile row';
 end $$;
 
--- Regression for a final-review finding (2026-09-22-admin-role-and-password-auth):
--- an admin could use the appoint form on another admin's (or their own)
--- email, silently demoting them. Spec: "Appoint and remove admins: No —
--- still by hand, in Supabase, by you." Uses the fixture admin's OWN email
--- (a self-demote attempt) rather than a real production address. The
--- fixture admin was created with no email (Task 1's setup only inserts an
--- id); the guard matches on email, so one is set here first. reset role
--- first — the previous block left the session impersonating a non-admin,
--- which cannot write auth.users.
-reset role;
+-- Regression for a 2026-09-22 final-review finding: an admin could use the
+-- appoint form on an admin account (here, a self-demote attempt). Only the
+-- guard's own message counts as a pass; any other error fails the test.
 update auth.users set email = 'admin-fixture@example.com' where id = 'd0000000-0000-4000-8000-000000000001';
 
-select tests.as_user('d0000000-0000-4000-8000-000000000001');
-
 do $$
 begin
-  perform public.admin_appoint_official('admin-fixture@example.com', 'Mapandan', 'Self Demote');
-  raise exception using errcode = 'TSTFL',
-    message = 'admin_appoint_official let an admin demote another admin — should have refused';
-exception
-  when others then
-    if sqlstate = 'TSTFL' then
-      raise;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', 'd0000000-0000-4000-8000-000000000001', 'role', 'authenticated')::text, true);
+  begin
+    perform public.admin_appoint_official('admin-fixture@example.com', 'Mapandan', 'Self Demote');
+    raise exception using errcode = 'TSTFL',
+      message = 'admin_appoint_official let an admin demote an admin';
+  exception when others then
+    if sqlerrm not like 'That account is an admin%' then
+      raise exception using errcode = 'TSTFL',
+        message = format('admin_appoint_official failed for the wrong reason: %s', sqlerrm);
     end if;
-    raise notice 'ok: admin_appoint_official refused to touch an admin account (%): %', sqlstate, sqlerrm;
-end $$;
-
-do $$
-begin
-  perform public.admin_remove_official('admin-fixture@example.com');
-  raise exception using errcode = 'TSTFL',
-    message = 'admin_remove_official let an admin remove another admin — should have refused';
-exception
-  when others then
-    if sqlstate = 'TSTFL' then
-      raise;
+  end;
+  begin
+    perform public.admin_remove_official('admin-fixture@example.com');
+    raise exception using errcode = 'TSTFL',
+      message = 'admin_remove_official let an admin remove an admin';
+  exception when others then
+    if sqlerrm not like 'That account is an admin%' then
+      raise exception using errcode = 'TSTFL',
+        message = format('admin_remove_official failed for the wrong reason: %s', sqlerrm);
     end if;
-    raise notice 'ok: admin_remove_official refused to touch an admin account (%): %', sqlstate, sqlerrm;
+  end;
+  perform set_config('request.jwt.claims', '', true);
+  raise notice 'ok: neither admin RPC touches an admin account';
 end $$;
 
 -- ===========================================================================
