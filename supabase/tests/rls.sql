@@ -1,5 +1,11 @@
 begin;
 
+-- Most blocks below predate the per-device rate limit and geofence
+-- (report_geofence_and_rate_limit) and file several reports as one user in
+-- one zone. It is switched off here and back on for its own tests (G1-G3)
+-- at the end of this file. All of it is rolled back.
+alter table public.water_level_reports disable trigger water_level_reports_geofence_and_rate_limit;
+
 -- A resident must never be able to promote themselves. RLS on `profiles` has
 -- no UPDATE policy at all, so a self-promotion update is not denied with an
 -- error — it is silently filtered to zero rows. The security property is "a
@@ -2896,6 +2902,48 @@ begin
   insert into public.push_subscriptions (user_id, endpoint, p256dh, auth, zone_id)
     values (uid, 'https://fcm.googleapis.com/fcm/send/abc', 'p', 'a', (select id from public.zones limit 1));
   raise notice 'ok I5: push endpoints limited to the browsers'' push services';
+end $$;
+
+
+-- G1-G3: the per-device rate limit and the geofence on water-level reports.
+alter table public.water_level_reports enable trigger water_level_reports_geofence_and_rate_limit;
+do $$
+declare
+  v_zone record;
+  v_state text;
+begin
+  select id, lat, lng into v_zone from public.zones where lat is not null and lng is not null limit 1;
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', '99999999-9999-9999-9999-999999999999', 'role', 'authenticated')::text, true);
+
+  -- G1: a report at the zone's own point is accepted.
+  insert into public.water_level_reports (zone_id, depth_level, reporter_id, lat, lng)
+    values (v_zone.id, 'ankle', '99999999-9999-9999-9999-999999999999', v_zone.lat, v_zone.lng);
+
+  -- G2: a second report from the same device and zone straight after is refused.
+  begin
+    insert into public.water_level_reports (zone_id, depth_level, reporter_id)
+      values (v_zone.id, 'knee', '99999999-9999-9999-9999-999999999999');
+    raise exception using errcode = 'TSTFL', message = 'G2: a repeat report inside the rate-limit window was accepted';
+  exception when raise_exception then
+    get stacked diagnostics v_state = message_text;
+    if v_state !~ 'Too many reports' then raise; end if;
+  end;
+
+  -- G3: a report ~150 km from its zone is refused as a check violation
+  -- (another device, so the rate limit above cannot be what refuses it).
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', '88888888-8888-8888-8888-888888888888', 'role', 'authenticated')::text, true);
+  begin
+    insert into public.water_level_reports (zone_id, depth_level, reporter_id, lat, lng)
+      values (v_zone.id, 'ankle', '88888888-8888-8888-8888-888888888888', v_zone.lat + 1, v_zone.lng + 1);
+    raise exception using errcode = 'TSTFL', message = 'G3: a report 100+ km from its zone was accepted';
+  exception when check_violation then null;
+  end;
+
+  reset role;
+  raise notice 'ok G1-G3: rate limit and geofence hold';
 end $$;
 
 rollback;
