@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { fakeSupabaseFrom } from "@/test-utils/mock-supabase-query";
+import { fakeSupabaseFrom, fakeSupabaseRpc } from "@/test-utils/mock-supabase-query";
 
 /**
  * The bug this guards against: the page authenticated with the user client
@@ -22,10 +22,15 @@ vi.mock("@/lib/supabase/user-server", () => ({
     auth: { getClaims: async () => ({ data: { claims: { sub: "user-1" } } }) },
     ...fakeSupabaseFrom({
       profiles: { data: { zone_id: "zone-1" }, error: null },
-      water_level_reports: { data: null, error: null, count: 3 },
+      // The table can no longer be filtered by reporter_id; a page that still
+      // reads it would show this 99 instead of the rpc's 3 rows.
+      water_level_reports: { data: null, error: null, count: 99 },
       community_pins: { data: null, error: null, count: 1 },
       evacuation_check_ins: { data: null, error: null, count: 2 },
       zones: { data: { name: "Barangay Poblacion, Mangaldan" }, error: null },
+    }),
+    ...fakeSupabaseRpc({
+      my_water_level_reports: { data: [{ id: "r1" }, { id: "r2" }, { id: "r3" }], error: null },
     }),
   }),
 }));

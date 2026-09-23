@@ -13,7 +13,7 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from("water_level_reports")
-    .select("id, zone_id, depth_level, reporter_id, reported_at, trust_weight, is_outlier")
+    .select("id, zone_id, depth_level, reported_at, trust_weight, is_outlier")
     .order("reported_at", { ascending: false })
     .limit(200);
 
@@ -32,7 +32,6 @@ export async function GET() {
     id: row.id,
     zoneId: row.zone_id,
     depthLevel: row.depth_level as LiveWaterLevelReport["depthLevel"],
-    reporterId: row.reporter_id,
     reportedAt: row.reported_at,
     trustWeight: Number(row.trust_weight),
     isOutlier: row.is_outlier,

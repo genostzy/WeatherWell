@@ -28,3 +28,25 @@ export function fakeSupabaseFrom(resultsByTable: Record<string, FakeQueryResult>
   });
   return { from };
 }
+
+/**
+ * The `.rpc(fn)` counterpart of fakeSupabaseFrom: `order`/`limit` return the
+ * chain, and awaiting it resolves to the result configured for that
+ * function. An unconfigured function resolves to an error, so a page calling
+ * the wrong one fails loudly.
+ */
+export function fakeSupabaseRpc(resultsByFunction: Record<string, FakeQueryResult>) {
+  const rpc = vi.fn((fn: string) => {
+    const result: FakeQueryResult = resultsByFunction[fn] ?? {
+      data: null,
+      error: { message: `unexpected rpc ${fn}` },
+    };
+    const chain: Record<string, unknown> = {
+      order: () => chain,
+      limit: () => chain,
+      then: (resolve: (value: FakeQueryResult) => void) => resolve(result),
+    };
+    return chain;
+  });
+  return { rpc };
+}

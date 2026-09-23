@@ -3,13 +3,10 @@ import { ResidentReportsList, type ResidentReportRow } from "@/features/resident
 
 export default async function ResidentReportsPage() {
   const supabase = await createSupabaseUserClient();
-  const { data } = await supabase.auth.getClaims();
-  const userId = data?.claims?.sub;
-
+  // reporter_id is no longer readable (it links one device's reports
+  // together); a resident's own reports come through this function instead.
   const { data: reports } = await supabase
-    .from("water_level_reports")
-    .select("id, zone_id, depth_level, reported_at")
-    .eq("reporter_id", userId!)
+    .rpc("my_water_level_reports")
     .order("reported_at", { ascending: false })
     .limit(50);
 

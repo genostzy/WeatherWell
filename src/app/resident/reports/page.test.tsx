@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { fakeSupabaseFrom } from "@/test-utils/mock-supabase-query";
+import { fakeSupabaseFrom, fakeSupabaseRpc } from "@/test-utils/mock-supabase-query";
 
 /**
  * water_level_reports is public-read (`to anon, authenticated using (true)`),
@@ -20,11 +20,18 @@ vi.mock("@/lib/supabase/user-server", () => ({
   createSupabaseUserClient: async () => ({
     auth: { getClaims: async () => ({ data: { claims: { sub: "user-1" } } }) },
     ...fakeSupabaseFrom({
+      // A page that still reads the table directly would show "Neck-deep".
       water_level_reports: {
-        data: [{ id: "r1", zone_id: "zone-1", depth_level: "knee", reported_at: "2026-09-01T00:00:00Z" }],
+        data: [{ id: "r9", zone_id: "zone-1", depth_level: "neck", reported_at: "2026-09-01T00:00:00Z" }],
         error: null,
       },
       zones: { data: [{ id: "zone-1", name: "Barangay Nilombot" }], error: null },
+    }),
+    ...fakeSupabaseRpc({
+      my_water_level_reports: {
+        data: [{ id: "r1", zone_id: "zone-1", depth_level: "knee", reported_at: "2026-09-01T00:00:00Z" }],
+        error: null,
+      },
     }),
   }),
 }));
@@ -38,5 +45,6 @@ describe("ResidentReportsPage", () => {
     expect(screen.getByText("Knee-deep")).toBeInTheDocument();
     expect(screen.getByText("Barangay Nilombot")).toBeInTheDocument();
     expect(screen.queryByText("zone-1")).not.toBeInTheDocument();
+    expect(screen.queryByText("Neck-deep")).not.toBeInTheDocument();
   });
 });

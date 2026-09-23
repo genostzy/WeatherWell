@@ -33,11 +33,11 @@ function serverRowFor(id: string) {
     zoneId: "zone-1",
     depthLevel: "knee" as const,
     reportedAt: new Date().toISOString(),
-    trustWeight: 1,
-    isOutlier: false,
     // The one field that tells a real server row apart from an optimistic
-    // one: attribution happens at delivery, so a queued row reads "pending".
-    reporterId: "user-1",
+    // one: trust weight is server-controlled, and a queued row always starts
+    // at 1.0. (reporterId used to play this part; it is no longer public.)
+    trustWeight: 2,
+    isOutlier: false,
   };
 }
 
@@ -138,7 +138,6 @@ describe("water-level-reports", () => {
     // is confirmed or still optimistic.
     expect(report.trustWeight).toBe(1.0);
     expect(report.isOutlier).toBe(false);
-    expect(report.reporterId).toBeTruthy();
   });
 
   it("orders reports newest first", () => {
@@ -273,7 +272,7 @@ describe("water-level-reports", () => {
     const { result } = renderHook(() => useWaterLevelReports());
 
     expect(result.current).toHaveLength(1);
-    expect(result.current[0].reporterId).toBe("pending");
+    expect(result.current[0].trustWeight).toBe(1);
 
     await act(async () => {
       await drainOutbox(async () => ({ result: "delivered" }));
@@ -289,7 +288,7 @@ describe("water-level-reports", () => {
       respond([serverRowFor(entry.id)]);
       await heldRefetch;
     });
-    await vi.waitFor(() => expect(result.current[0].reporterId).toBe("user-1"));
+    await vi.waitFor(() => expect(result.current[0].trustWeight).toBe(2));
     expect(result.current).toHaveLength(1);
   });
 

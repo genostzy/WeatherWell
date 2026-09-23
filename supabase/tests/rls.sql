@@ -2715,4 +2715,53 @@ begin
   raise notice 'ok SP1-P5/P6';
 end $$;
 
+-- SP1 report privacy (widened M3): nobody reads a report's GPS position or
+-- who filed it; a resident reads their own reports through
+-- my_water_level_reports(); filing a report still works.
+do $$
+begin
+  set local role postgres;
+  perform set_config('request.jwt.claims', '', true);
+  insert into public.water_level_reports (id, zone_id, depth_level, reporter_id, lat, lng)
+    values ('e2000000-0000-4000-8000-000000000001', 'tests-fixture-zone-sp1', 'waist',
+            'e1000000-0000-4000-8000-000000000013', 14.5, 121.5);
+  reset role;
+end $$;
+
+select tests.as_anon();
+select tests.expect_denied('SP1-R1: anon cannot read report GPS',
+  $$select lat, lng from public.water_level_reports$$);
+select tests.expect_denied('SP1-R2: anon cannot read who filed a report',
+  $$select reporter_id from public.water_level_reports$$);
+select tests.expect_allowed('SP1-R3: anon still reads the public report fields',
+  $$select id, zone_id, depth_level, reported_at, trust_weight, is_outlier from public.water_level_reports$$);
+
+select tests.as_user('e1000000-0000-4000-8000-000000000014');
+select tests.expect_denied('SP1-R4: a signed-in resident cannot read report GPS either',
+  $$select lat, lng from public.water_level_reports$$);
+select tests.expect_allowed('SP1-R5: a resident can still file a located report',
+  $$insert into public.water_level_reports (zone_id, depth_level, reporter_id, lat, lng)
+    values ('tests-fixture-zone-sp1', 'ankle', 'e1000000-0000-4000-8000-000000000014', 14.5, 121.5)$$);
+
+do $$
+declare
+  mine int;
+  others int;
+begin
+  set local role authenticated;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', 'e1000000-0000-4000-8000-000000000013', 'role', 'authenticated')::text, true);
+  select count(*) into mine from public.my_water_level_reports()
+   where id = 'e2000000-0000-4000-8000-000000000001';
+  select count(*) into others from public.my_water_level_reports()
+   where id <> 'e2000000-0000-4000-8000-000000000001';
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+  if mine <> 1 or others <> 0 then
+    raise exception using errcode = 'TSTFL',
+      message = format('SP1-R6: my_water_level_reports returned own=%s others=%s, expected 1 and 0', mine, others);
+  end if;
+  raise notice 'ok SP1-R6: a resident sees exactly their own reports';
+end $$;
+
 rollback;

@@ -12,10 +12,9 @@ export default async function ResidentOverviewPage() {
     .eq("id", userId!)
     .maybeSingle();
 
-  const { count: reportCount } = await supabase
-    .from("water_level_reports")
-    .select("*", { count: "exact", head: true })
-    .eq("reporter_id", userId!);
+  // reporter_id is no longer readable (it links one device's reports
+  // together); a resident's own reports come through this function instead.
+  const { data: myReports } = await supabase.rpc("my_water_level_reports");
 
   const { count: pinCount } = await supabase
     .from("community_pins")
@@ -37,7 +36,7 @@ export default async function ResidentOverviewPage() {
   return (
     <ResidentOverview
       zoneName={zoneName}
-      reportCount={reportCount ?? 0}
+      reportCount={myReports?.length ?? 0}
       checkInCount={checkInCount ?? 0}
       pinCount={pinCount ?? 0}
     />

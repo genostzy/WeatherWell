@@ -770,15 +770,15 @@ export type Database = {
         }[]
       }
       cleanup_old_weather_readings: { Args: never; Returns: undefined }
-      get_push_subscriptions_for_zone: {
-        Args: { p_zone_id: string }
+      my_water_level_reports: {
+        Args: never
         Returns: {
-          auth: string
-          endpoint: string
-          p256dh: string
+          depth_level: string
+          id: string
+          reported_at: string
+          zone_id: string
         }[]
       }
-      get_reference_data_compact: { Args: never; Returns: Json }
       recent_app_error_count: {
         Args: { p_environment?: string }
         Returns: number

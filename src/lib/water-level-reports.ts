@@ -17,8 +17,6 @@ export interface LiveWaterLevelReport {
   /** PRD Anti-Abuse layer 6: 1.0 is an unproven device, higher is one with a track record. */
   trustWeight: number;
   isOutlier: boolean;
-  /** The authenticated (anonymous) user who filed this — see anonymous-session.ts. */
-  reporterId: string;
 }
 
 const NO_SERVER_ROWS: LiveWaterLevelReport[] = [];
@@ -183,10 +181,6 @@ export function mergeReports(
         // scoring and outlier detection are Final Phase.
         trustWeight: 1.0,
         isOutlier: false,
-        // Not yet known: attribution happens at replay (see
-        // useOutboxDrain), not at queue time. "pending" is never shown —
-        // no consumer of LiveWaterLevelReport reads reporterId today.
-        reporterId: "pending",
       };
     });
 
