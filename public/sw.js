@@ -88,7 +88,12 @@ const ALERTS_TIMEOUT_MS = 8000;
  * have done) is exactly how one resident ends up served another resident's
  * response.
  */
-const PUBLIC_API_PATHS = ["/api/reports", "/api/pins"];
+/*
+ * /api/centres qualifies the same way /api/reports does: evacuation_centers
+ * is `select using (true)`, the route uses the sessionless client, and a
+ * resident offline mid-flood is exactly who needs the last known centre.
+ */
+const PUBLIC_API_PATHS = ["/api/reports", "/api/pins", "/api/centres"];
 
 // /admin, /admin/map and /admin/simulation are deliberately NOT precached
 // here. Once /admin needs a sign-in, pre-downloading it would save the

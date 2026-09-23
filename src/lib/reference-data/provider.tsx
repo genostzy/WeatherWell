@@ -7,7 +7,7 @@ import { t } from "@/lib/i18n";
 import { AlertsContext, AlertsRefreshContext } from "@/lib/alerts-store";
 import { useHasOnboarded } from "@/features/onboarding/onboarding-storage";
 import type { AlertRecord, CenterStatus, LocalizedText } from "@/lib/types";
-import { expandReferenceData, type ReferenceData } from "./types";
+import { applyCentreOverlay, expandReferenceData, type CentreOverlayRow, type ReferenceData } from "./types";
 
 export const ReferenceDataContext = createContext<ReferenceData | null>(null);
 
@@ -161,6 +161,25 @@ export function ReferenceDataProvider({
   // from tripping the "no setState synchronously in an effect" lint rule.
   // The "loading" state on mount comes from useState's initial value instead,
   // and a retry re-arms it explicitly (see `retry` below) before calling this.
+  /**
+   * Officials' centre changes live in the database, not the static file (see
+   * applyCentreOverlay). Fetched after the gate opens and never blocks it: a
+   * failure just leaves the static centres showing.
+   */
+  const loadCentreOverlay = useCallback(() => {
+    fetchWithTimeout("/api/centres", FETCH_TIMEOUT_MS)
+      .then((response) => (response.ok ? (response.json() as Promise<CentreOverlayRow[]>) : null))
+      .then((rows) => {
+        if (!Array.isArray(rows) || rows.length === 0) return;
+        setState((current) =>
+          current.status === "ready"
+            ? { ...current, data: { ...current.data, zones: applyCentreOverlay(current.data.zones, rows) } }
+            : current
+        );
+      })
+      .catch(() => undefined);
+  }, []);
+
   const load = useCallback(() => {
     Promise.all([
       fetchWithTimeout("/data/reference-data.json", FETCH_TIMEOUT_MS),
@@ -187,12 +206,13 @@ export function ReferenceDataProvider({
             data,
             alerts: alerts as AlertRecord[],
           });
+          loadCentreOverlay();
         });
       })
       .catch(() => {
         setState({ status: "failed" });
       });
-  }, []);
+  }, [loadCentreOverlay]);
 
   /**
    * Re-reads alerts only, after an official's alert write is confirmed (C1).

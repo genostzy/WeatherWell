@@ -469,6 +469,13 @@ describe("service worker request routing", () => {
     expect(store.get(API_CACHE)?.has(`${ORIGIN}/api/reports`)).toBe(true);
   });
 
+  it("caches /api/centres, so an offline resident keeps the last known centre", async () => {
+    const { listeners, store } = loadServiceWorker({ fetch: async () => response("CENTRES") });
+    const result = await handleFetch(listeners, { url: `${ORIGIN}/api/centres` });
+    expect(result?.body).toBe("CENTRES");
+    expect(store.get(API_CACHE)?.has(`${ORIGIN}/api/centres`)).toBe(true);
+  });
+
   it("never writes a check-in response to any cache", async () => {
     // A check-in names a person and says whether they need help. RLS scopes
     // the rows; it cannot stop a shared cache handing one device's response

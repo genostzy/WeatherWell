@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { compactReferenceData, expandReferenceData } from "./types";
+import { applyCentreOverlay, compactReferenceData, expandReferenceData } from "./types";
 import type { ReferenceData } from "./types";
 import type { Zone } from "@/lib/types";
 
@@ -76,5 +76,31 @@ describe("compact reference data", () => {
       hazards: {},
     };
     expect(expandReferenceData(old).zones).toEqual([pilot]);
+  });
+});
+
+describe("applyCentreOverlay", () => {
+  it("lays live centre rows over the static zones, leaving the rest untouched", () => {
+    const zones = expandReferenceData(JSON.parse(JSON.stringify(compactReferenceData(DATA)))).zones;
+    const patched = applyCentreOverlay(zones, [
+      { zone_id: placeholder.id, name: "Subec Elementary School", lat: 17.582, lng: 120.351, capacity: 200, status: "full", current_occupancy: 190 },
+    ]);
+    const subec = patched.find((z) => z.id === placeholder.id)!;
+    expect(subec).toMatchObject({
+      evacuationCenterName: "Subec Elementary School",
+      evacuationCenterLat: 17.582,
+      evacuationCenterLng: 120.351,
+      evacuationCenterCapacity: 200,
+      centerStatus: "full",
+      currentOccupancy: 190,
+    });
+    expect(patched.find((z) => z.id === pilot.id)).toBe(zones.find((z) => z.id === pilot.id));
+  });
+
+  it("drops a stale headcount when the live row has none", () => {
+    const patched = applyCentreOverlay([pilot], [
+      { zone_id: pilot.id, name: "X", lat: 1, lng: 2, capacity: 10, status: "limited", current_occupancy: null },
+    ]);
+    expect(patched[0].currentOccupancy).toBeUndefined();
   });
 });

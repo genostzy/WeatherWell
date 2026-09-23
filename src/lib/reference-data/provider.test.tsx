@@ -97,6 +97,54 @@ describe("ReferenceDataProvider", () => {
     expect(screen.getByRole("status")).toBeInTheDocument();
   });
 
+  it("lays live centre changes over the static file, so residents see what officials set", async () => {
+    function CentreName() {
+      const zones = useZones();
+      return <span data-testid="centre">{zones[0]?.evacuationCenterName}/{zones[0]?.centerStatus}</span>;
+    }
+    (fetch as ReturnType<typeof vi.fn>).mockImplementation(async (url: string) => ({
+      ok: true,
+      json: async () =>
+        String(url).includes("/api/centres")
+          ? [{ zone_id: "zone-1", name: "Nilombot Elementary School", lat: 1, lng: 2, capacity: 300, status: "full", current_occupancy: null }]
+          : String(url).includes("/api/alerts")
+            ? []
+            : { zones: [{ id: "zone-1", name: "Barangay Nilombot, Mapandan", evacuationCenterName: "", centerStatus: "unknown" }], pois: [], hazards: {} },
+    }));
+    render(
+      <LanguageProvider>
+        <ReferenceDataProvider>
+          <CentreName />
+        </ReferenceDataProvider>
+      </LanguageProvider>
+    );
+    expect(await screen.findByText("Nilombot Elementary School/full")).toBeInTheDocument();
+  });
+
+  it("keeps the static centres when the live overlay fails", async () => {
+    function CentreName() {
+      const zones = useZones();
+      return <span data-testid="centre">{zones[0]?.evacuationCenterName}</span>;
+    }
+    (fetch as ReturnType<typeof vi.fn>).mockImplementation(async (url: string) =>
+      String(url).includes("/api/centres")
+        ? { ok: false, json: async () => ({}) }
+        : {
+            ok: true,
+            json: async () =>
+              String(url).includes("/api/alerts") ? [] : { zones: [{ id: "zone-1", name: "N", evacuationCenterName: "Static School" }], pois: [], hazards: {} },
+          }
+    );
+    render(
+      <LanguageProvider>
+        <ReferenceDataProvider>
+          <CentreName />
+        </ReferenceDataProvider>
+      </LanguageProvider>
+    );
+    expect(await screen.findByText("Static School")).toBeInTheDocument();
+  });
+
   it("renders children once the data arrives", async () => {
     (fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
