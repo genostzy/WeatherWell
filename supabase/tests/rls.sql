@@ -2764,4 +2764,20 @@ begin
   raise notice 'ok SP1-R6: a resident sees exactly their own reports';
 end $$;
 
+-- SP1 push targeting (H4): a subscription with no barangay used to receive
+-- every barangay's alerts. The database now refuses one.
+do $$
+begin
+  set local role postgres;
+  begin
+    insert into public.push_subscriptions (user_id, endpoint, p256dh, auth, zone_id)
+      values ('e1000000-0000-4000-8000-000000000015', 'https://push.example/sp1', 'k', 'a', null);
+    reset role;
+    raise exception using errcode = 'TSTFL', message = 'SP1-S1: a push subscription with no barangay was accepted';
+  exception when not_null_violation then
+    raise notice 'ok SP1-S1: a subscription must name its barangay';
+  end;
+  reset role;
+end $$;
+
 rollback;

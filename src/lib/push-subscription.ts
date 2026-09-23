@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { getBrowserClient } from "@/lib/supabase/browser";
+import { ensureAnonymousSession } from "@/lib/auth/anonymous-session";
 
 /**
  * Convert a VAPID public key from base64url to Uint8Array
@@ -62,46 +63,49 @@ export function usePushSubscription(zoneId?: string): {
   }, [isSupported]);
 
   const subscribe = useCallback(async () => {
+    // Without a barangay there is nothing to target: the column is NOT NULL,
+    // and a zone-less subscription used to receive every barangay's alerts.
+    if (!zoneId) return;
+
     const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
     if (!vapidPublicKey) {
       console.error("VAPID public key not configured");
       return;
     }
 
-    // Request permission
+    // A resident who has never filed a report has no session yet, and
+    // without one the subscription had nowhere to be saved: it was silently
+    // dropped. Asking before the permission prompt also means an offline
+    // resident is never shown "subscribed" for a subscription that was not
+    // saved.
+    const userId = await ensureAnonymousSession();
+    if (!userId) return;
+
     const perm = await Notification.requestPermission();
     setPermission(perm);
     if (perm !== "granted") return;
 
-    // Get service worker registration
     const registration = await navigator.serviceWorker.ready;
-
-    // Subscribe to push
     const sub = await registration.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
     });
 
-    // Store subscription on server
-    const supabase = getBrowserClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (user) {
-      const { endpoint, keys } = sub.toJSON();
-      await supabase.from("push_subscriptions" as never).upsert(
+    const { endpoint, keys } = sub.toJSON();
+    const { error } = await getBrowserClient()
+      .from("push_subscriptions" as never)
+      .upsert(
         {
-          user_id: user.id,
+          user_id: userId,
           endpoint: endpoint ?? "",
           p256dh: keys?.p256dh ?? "",
           auth: keys?.auth ?? "",
-          zone_id: zoneId ?? null,
+          zone_id: zoneId,
           user_agent: navigator.userAgent,
         } as never,
         { onConflict: "user_id,endpoint" } as never
       );
-    }
+    if (error) return;
 
     setSubscription(sub);
   }, [zoneId]);

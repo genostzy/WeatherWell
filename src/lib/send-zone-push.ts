@@ -25,8 +25,7 @@ export type ZonePushResult =
   | { ok: false; error: string; status: number };
 
 /**
- * Sends a Web Push notification to every subscriber of a zone (plus
- * zone-less general subscribers).
+ * Sends a Web Push notification to every subscriber of a zone.
  *
  * Called directly by the threshold-check cron rather than over HTTP: an
  * internal server-to-server fetch back into this app's own API needs a base
@@ -53,7 +52,7 @@ export async function sendZonePush(payload: ZonePushPayload): Promise<ZonePushRe
   const { data: subscriptions, error } = (await supabase
     .from("push_subscriptions" as never)
     .select("endpoint, p256dh, auth")
-    .or(`zone_id.eq.${payload.zoneId},zone_id.is.null`)) as {
+    .eq("zone_id" as never, payload.zoneId)) as {
     data: Array<{ endpoint: string; p256dh: string; auth: string }> | null;
     error: { message: string } | null;
   };

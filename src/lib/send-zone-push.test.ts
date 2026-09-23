@@ -9,9 +9,9 @@ vi.mock("web-push", () => ({
 }));
 
 const deleteEq = vi.fn();
-const or = vi.fn();
+const selectEq = vi.fn();
 const from = vi.fn(() => ({
-  select: vi.fn(() => ({ or })),
+  select: vi.fn(() => ({ eq: selectEq })),
   delete: vi.fn(() => ({ eq: deleteEq })),
 }));
 vi.mock("@supabase/supabase-js", () => ({
@@ -23,7 +23,7 @@ const VALID_PAYLOAD = { zoneId: "zone-1", title: "Alert", body: "Flooding report
 describe("sendZonePush", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    or.mockResolvedValue({ data: [], error: null });
+    selectEq.mockResolvedValue({ data: [], error: null });
     // Module-level VAPID config is read once at import time (it must stay a
     // module singleton so it configures web-push exactly once) — see
     // browser.test.ts for why that forces a fresh module per test here
@@ -44,7 +44,7 @@ describe("sendZonePush", () => {
 
   it("refuses a malformed zoneId instead of building a filter string from it", async () => {
     // Zone IDs are always "zone-" plus digits or a PSGC code. Anything else
-    // reaching the .or() filter string this builds could alter which rows
+    // reaching the query this builds could alter which rows
     // it matches — this is the input check that stands in for parameterizing
     // that call.
     const sendZonePush = await freshSendZonePush();
@@ -52,7 +52,7 @@ describe("sendZonePush", () => {
     const result = await sendZonePush({ ...VALID_PAYLOAD, zoneId: "zone-1,zone_id.eq.zone-2" });
 
     expect(result).toEqual({ ok: false, error: "Invalid zoneId", status: 400 });
-    expect(or).not.toHaveBeenCalled();
+    expect(selectEq).not.toHaveBeenCalled();
   });
 
   it("reports not-configured rather than sending with no VAPID keys", async () => {
@@ -63,11 +63,19 @@ describe("sendZonePush", () => {
     const result = await sendZonePush(VALID_PAYLOAD);
 
     expect(result).toEqual({ ok: false, error: "Push notifications not configured", status: 503 });
-    expect(or).not.toHaveBeenCalled();
+    expect(selectEq).not.toHaveBeenCalled();
+  });
+
+  it("sends only to the zone's own subscribers, never to zone-less ones", async () => {
+    const sendZonePush = await freshSendZonePush();
+
+    await sendZonePush(VALID_PAYLOAD);
+
+    expect(selectEq).toHaveBeenCalledWith("zone_id", "zone-1");
   });
 
   it("sends to every subscription returned for the zone", async () => {
-    or.mockResolvedValue({
+    selectEq.mockResolvedValue({
       data: [
         { endpoint: "https://push.example/a", p256dh: "p1", auth: "a1" },
         { endpoint: "https://push.example/b", p256dh: "p2", auth: "a2" },
@@ -84,7 +92,7 @@ describe("sendZonePush", () => {
   });
 
   it("removes a subscription that reports itself expired (410) instead of retrying it forever", async () => {
-    or.mockResolvedValue({
+    selectEq.mockResolvedValue({
       data: [{ endpoint: "https://push.example/gone", p256dh: "p1", auth: "a1" }],
       error: null,
     });
@@ -99,7 +107,7 @@ describe("sendZonePush", () => {
   });
 
   it("keeps a subscription that failed for a reason other than expiry", async () => {
-    or.mockResolvedValue({
+    selectEq.mockResolvedValue({
       data: [{ endpoint: "https://push.example/flaky", p256dh: "p1", auth: "a1" }],
       error: null,
     });
@@ -113,7 +121,7 @@ describe("sendZonePush", () => {
   });
 
   it("reports a query error instead of a false success", async () => {
-    or.mockResolvedValue({ data: null, error: { message: "connection refused" } });
+    selectEq.mockResolvedValue({ data: null, error: { message: "connection refused" } });
     const sendZonePush = await freshSendZonePush();
 
     const result = await sendZonePush(VALID_PAYLOAD);
