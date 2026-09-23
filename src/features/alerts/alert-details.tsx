@@ -3,6 +3,8 @@
 import { useSyncExternalStore } from "react";
 import { Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { RelayButton } from "@/features/relay/relay";
+import { ShareAlertButton } from "./share-alert-button";
 import { t } from "@/lib/i18n";
 import { useHasHydrated } from "@/lib/use-hydrated";
 import { minutesSinceReport } from "@/lib/water-level-reports";
@@ -62,7 +64,7 @@ function AlertAge({ issuedAt, lang }: { issuedAt: string; lang: LanguageCode }) 
   );
 }
 
-/** What a resident needs beside an active alert: how old it is, whether an official confirmed it, and a way to hear it. */
+/** What a resident needs beside an active alert: how old it is, whether an official confirmed it, a way to hear it, and ways to pass it on. */
 export function AlertDetails({ alert, zone, lang }: { alert: AlertRecord; zone: Zone; lang: LanguageCode }) {
   return (
     <div className="mt-2 space-y-1">
@@ -72,7 +74,11 @@ export function AlertDetails({ alert, zone, lang }: { alert: AlertRecord; zone: 
           {t(UNVERIFIED, lang)}
         </p>
       )}
-      <ReadAloudButton text={`${zone.name}. ${t(alert.message, lang)}`} lang={lang} />
+      <div className="flex flex-wrap items-center gap-2 pt-1">
+        <ReadAloudButton text={`${zone.name}. ${t(alert.message, lang)}`} lang={lang} />
+        <ShareAlertButton alert={alert} zone={zone} />
+        <RelayButton alert={alert} zone={zone} />
+      </div>
     </div>
   );
 }

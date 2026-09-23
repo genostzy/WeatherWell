@@ -1,4 +1,7 @@
-import type { LanguageCode } from "@/lib/types";
+import { t } from "@/lib/i18n";
+import { SEVERITY_LABEL } from "@/lib/severity";
+import { hasRealEvacuationCenter, hasRealHotline } from "@/lib/zone-data-quality";
+import type { AlertRecord, LanguageCode, Zone } from "@/lib/types";
 
 /**
  * An alert that carries everything needed to render it, so a forwarded copy
@@ -112,4 +115,23 @@ export function buildShareText(alert: SharedAlert, origin: string, lang: Languag
   lines.push(`${origin}/a#${encodeAlert(alert)}`);
 
   return lines.join("\n");
+}
+
+/**
+ * An alert as it leaves the app, in the sender's language. severity is the
+ * human label ("Evacuate Now"), not the enum: the recipient may never have
+ * seen the app. A placeholder hotline or centre is never forwarded.
+ */
+export function toSharedAlert(alert: AlertRecord, zone: Zone, lang: LanguageCode): SharedAlert {
+  return {
+    v: 1,
+    zoneId: zone.id,
+    zoneName: zone.name,
+    severity: t(SEVERITY_LABEL[alert.severity], lang),
+    severityKey: alert.severity,
+    issuedAt: alert.issuedAt,
+    message: t(alert.message, lang),
+    ...(hasRealEvacuationCenter(zone) ? { centerName: zone.evacuationCenterName } : {}),
+    ...(hasRealHotline(zone) ? { hotline: zone.hotlineNumber } : {}),
+  };
 }

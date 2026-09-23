@@ -4,6 +4,7 @@ import { BackLink } from "@/components/back-link";
 import { EvacuationInstructions } from "@/features/evacuation/evacuation-instructions";
 import { EmergencyCard } from "@/features/evacuation/emergency-card";
 import { CheckInPanel } from "@/features/evacuation/check-in-panel";
+import { RelayContactsEditor } from "@/features/relay/relay";
 import { AlertDowngradeNotice } from "@/features/alerts/alert-downgrade-notice";
 import { useSelectedZone } from "@/features/zones/use-selected-zone";
 import { useLanguage } from "@/features/i18n/language-provider";
@@ -47,6 +48,7 @@ export default function EvacuationPage() {
         <div className="space-y-6">
           <EmergencyCard zone={zone} />
           {showCheckIn && <CheckInPanel zoneId={zone.id} />}
+          <RelayContactsEditor />
         </div>
       </div>
     </main>

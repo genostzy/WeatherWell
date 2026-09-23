@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { encodeAlert, decodeAlert, buildShareText, type SharedAlert } from "./payload";
+import { encodeAlert, decodeAlert, buildShareText, toSharedAlert, type SharedAlert } from "./payload";
+import { FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
 
 const ALERT: SharedAlert = {
   v: 1,
@@ -65,5 +66,39 @@ describe("buildShareText", () => {
     expect(url).toBeDefined();
     expect(url).toContain("/a#");
     expect(decodeAlert(url!.split("#")[1])).toEqual(ALERT);
+  });
+});
+
+describe("toSharedAlert", () => {
+  const alert = {
+    id: "a1",
+    zoneId: "zone-1",
+    severity: "red" as const,
+    message: { en: "Flooding.", fil: "Baha." },
+    source: "manual" as const,
+    confidence: "validated" as const,
+    issuedAt: "2026-09-23T10:00:00Z",
+    isActive: true,
+  };
+  const zone = FIXTURE_REFERENCE_DATA.zones[0];
+
+  it("carries the localized severity and message", () => {
+    const shared = toSharedAlert(alert, { ...zone, hotlineNumber: "09171112222" }, "fil");
+    expect(shared.message).toBe("Baha.");
+    expect(shared.severityKey).toBe("red");
+    expect(shared.hotline).toBe("09171112222");
+  });
+
+  it("never forwards a placeholder hotline or centre", () => {
+    const placeholder = {
+      ...zone,
+      hotlineNumber: "00000000000",
+      evacuationCenterLat: zone.lat,
+      evacuationCenterLng: zone.lng,
+      evacuationCenterCapacity: 0,
+    };
+    const shared = toSharedAlert(alert, placeholder, "en");
+    expect(shared.hotline).toBeUndefined();
+    expect(shared.centerName).toBeUndefined();
   });
 });

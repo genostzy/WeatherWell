@@ -5,10 +5,9 @@ import { Share2, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
-import { SEVERITY_LABEL } from "@/lib/severity";
 import { generateAlertImage, downloadBlob } from "@/lib/share-image";
-import { buildShareText, type SharedAlert } from "@/lib/alert-share/payload";
-import { hasRealHotline, hasRealEvacuationCenter } from "@/lib/zone-data-quality";
+import { buildShareText, toSharedAlert } from "@/lib/alert-share/payload";
+import { hasRealEvacuationCenter, NO_VERIFIED_CENTER } from "@/lib/zone-data-quality";
 import { ShareAlertQr } from "./share-alert-qr";
 import type { AlertRecord, LocalizedText, Zone } from "@/lib/types";
 
@@ -27,23 +26,7 @@ export function ShareAlertButton({
   const [generating, setGenerating] = useState(false);
   const shareLabel = t(SHARE_ALERT, lang);
 
-  // severity carries the localized human label ("Evacuate Now" / "Lumikas
-  // Na"), the same as message — both this text and the /a route that a
-  // recipient's tap opens render it directly, and a raw enum ("evacuate")
-  // means nothing to someone who has never seen the app.
-  const shared: SharedAlert = {
-    v: 1,
-    zoneId: zone.id,
-    zoneName: zone.name,
-    severity: t(SEVERITY_LABEL[alert.severity], lang),
-    severityKey: alert.severity,
-    issuedAt: alert.issuedAt,
-    message: t(alert.message, lang),
-    // Task 1's predicates apply here too: a forwarded alert must not carry
-    // a hotline that does not ring or a centre that does not exist.
-    ...(hasRealEvacuationCenter(zone) ? { centerName: zone.evacuationCenterName } : {}),
-    ...(hasRealHotline(zone) ? { hotline: zone.hotlineNumber } : {}),
-  };
+  const shared = toSharedAlert(alert, zone, lang);
 
   const handleShare = async () => {
     // window.location.origin read here, not at render time: this component
@@ -74,7 +57,8 @@ export function ShareAlertButton({
         severity: alert.severity,
         zoneName: zone.name,
         message: t(alert.message, lang),
-        evacuationCenter: zone.evacuationCenterName,
+        // The image is forwarded like the text: never name a placeholder centre.
+        evacuationCenter: hasRealEvacuationCenter(zone) ? zone.evacuationCenterName : t(NO_VERIFIED_CENTER, lang),
         lang,
       });
       if (blob) {

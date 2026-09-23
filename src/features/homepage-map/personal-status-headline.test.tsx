@@ -159,3 +159,13 @@ describe("PersonalStatusHeadline alert details (they lived on the unused AlertCa
     vi.unstubAllGlobals();
   });
 });
+
+describe("PersonalStatusHeadline sharing (ideas 6 and 7)", () => {
+  const zone = zoneWithSeverity("red");
+
+  it("offers to share the alert and to text the resident's neighbours", () => {
+    renderHeadline(zone, "en");
+    expect(screen.getByRole("button", { name: /share alert/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /texting your neighbours/i })).toHaveAttribute("href", "/evacuation#relay");
+  });
+});
