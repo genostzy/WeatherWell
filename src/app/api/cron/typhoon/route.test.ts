@@ -136,4 +136,65 @@ describe("GET /api/cron/typhoon", () => {
     expect(body.name).toBe("AGATON");
     expect(insert).toHaveBeenCalled();
   });
+
+  describe("GDACS backup (idea 16)", () => {
+    const GDACS = {
+      features: [
+        {
+          type: "Feature",
+          geometry: { type: "Point", coordinates: [124.5, 14.2] },
+          properties: {
+            eventname: "HAGIBIS-26",
+            iscurrent: "true",
+            alertlevel: "Orange",
+            affectedcountries: [{ iso3: "PHL" }],
+            severitydata: { severity: 150, severitytext: "Typhoon" },
+            datemodified: "2026-09-23T09:00:00",
+          },
+        },
+      ],
+    };
+    const route = (pagasa: object, gdacs: object | Error) =>
+      vi.fn(async (url: string) => {
+        if (String(url).includes("gdacs.org")) {
+          if (gdacs instanceof Error) throw gdacs;
+          return { ok: true, json: async () => gdacs };
+        }
+        return pagasa;
+      });
+
+    it("stores the GDACS reading, labelled, when PAGASA cannot be reached", async () => {
+      global.fetch = route({ ok: false, status: 503, text: async () => "" }, GDACS) as never;
+      const body = await (await GET(request("Bearer test-secret"))).json();
+      expect(body.ok).toBe(true);
+      expect(body.source).toBe("GDACS");
+      expect(insert).toHaveBeenCalledWith(expect.objectContaining({ name: "HAGIBIS-26", source: "GDACS", wind_signal: 0 }));
+    });
+
+    it("uses GDACS instead of clearing everything when PAGASA's page no longer parses", async () => {
+      global.fetch = route({ ok: true, text: async () => HTML }, GDACS) as never;
+      parseBulletinHtml.mockImplementation(() => {
+        throw new BulletinParseError("layout changed");
+      });
+      const body = await (await GET(request("Bearer test-secret"))).json();
+      expect(body.source).toBe("GDACS");
+      expect(insert).toHaveBeenCalled();
+    });
+
+    it("leaves stored tracks alone when both PAGASA and GDACS are unreachable", async () => {
+      global.fetch = route({ ok: false, status: 503, text: async () => "" }, new Error("down")) as never;
+      const body = await (await GET(request("Bearer test-secret"))).json();
+      expect(body.ok).toBe(false);
+      expect(update).not.toHaveBeenCalled();
+      expect(insert).not.toHaveBeenCalled();
+    });
+
+    it("never asks GDACS when PAGASA answers", async () => {
+      const fetchMock = route({ ok: true, text: async () => HTML }, GDACS);
+      global.fetch = fetchMock as never;
+      parseBulletinHtml.mockReturnValue(null);
+      await GET(request("Bearer test-secret"));
+      expect(fetchMock.mock.calls.some(([url]) => String(url).includes("gdacs.org"))).toBe(false);
+    });
+  });
 });

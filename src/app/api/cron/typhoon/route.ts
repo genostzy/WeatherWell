@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { parseBulletinHtml, categoryLabel, BulletinParseError, type ParsedBulletin } from "@/lib/pagasa-parser";
 import { isAuthorizedCronRequest } from "@/lib/cron-auth";
+import { gdacsTrackRecord, gdacsUrl, pickPhilippineCyclone } from "@/lib/gdacs";
 
 export const dynamic = "force-dynamic";
 
@@ -45,11 +46,17 @@ export async function GET(request: Request) {
       headers: { "User-Agent": USER_AGENT },
       signal: AbortSignal.timeout(FETCH_TIMEOUT),
       redirect: "follow",
-    });
+    }).catch(() => null);
 
-    if (!res.ok) {
-      logMsg(`Bulletin fetch failed: HTTP ${res.status}`);
-      return NextResponse.json({ ok: false, log, error: `HTTP ${res.status}` });
+    if (!res?.ok) {
+      logMsg(`Bulletin fetch failed: ${res ? `HTTP ${res.status}` : "no response"}`);
+      const backup = await tryGdacs(supabase, log);
+      if (backup.outcome === "stored") return NextResponse.json({ ok: true, log, source: "GDACS", name: backup.name });
+      if (backup.outcome === "none") {
+        await deactivateAll(supabase, log);
+        return NextResponse.json({ ok: true, log, source: "GDACS", action: "deactivated_all" });
+      }
+      return NextResponse.json({ ok: false, log, error: res ? `HTTP ${res.status}` : "no response" });
     }
 
     const html = await res.text();
@@ -72,6 +79,10 @@ export async function GET(request: Request) {
       // it's visible without silently claiming a real system is active.
       if (e instanceof BulletinParseError) {
         logMsg(`Bulletin parse failed (page structure may have changed): ${e.message}`);
+        const backup = await tryGdacs(supabase, log);
+        if (backup.outcome === "stored") {
+          return NextResponse.json({ ok: true, log, source: "GDACS", name: backup.name, parseError: e.message });
+        }
         await deactivateAll(supabase, log);
         return NextResponse.json({ ok: true, log, action: "deactivated_all", parseError: e.message });
       }
@@ -93,6 +104,31 @@ export async function GET(request: Request) {
     const msg = e instanceof Error ? e.message : String(e);
     logMsg(`Fatal: ${msg}`);
     return NextResponse.json({ ok: false, log, error: msg }, { status: 500 });
+  }
+}
+
+/**
+ * The backup when PAGASA cannot be read (idea 16): a current GDACS cyclone
+ * affecting the Philippines, stored labelled as GDACS. "none" means GDACS
+ * answered and there is no such cyclone; "unavailable" means it did not.
+ */
+async function tryGdacs(
+  supabase: SupabaseClient,
+  log: string[]
+): Promise<{ outcome: "stored"; name: string } | { outcome: "none" | "unavailable" }> {
+  try {
+    const res = await fetch(gdacsUrl(new Date()), { signal: AbortSignal.timeout(FETCH_TIMEOUT) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const cyclone = pickPhilippineCyclone(await res.json());
+    if (!cyclone) {
+      log.push("GDACS: no current cyclone near the Philippines");
+      return { outcome: "none" };
+    }
+    await storeTrack(supabase, gdacsTrackRecord(cyclone, new Date().toISOString()), `${cyclone.name} (GDACS)`, log);
+    return { outcome: "stored", name: cyclone.name };
+  } catch (e) {
+    log.push(`GDACS backup unavailable: ${e instanceof Error ? e.message : String(e)}`);
+    return { outcome: "unavailable" };
   }
 }
 
@@ -156,12 +192,22 @@ async function storeBulletin(
     fetched_at: new Date().toISOString(),
   };
 
+  await storeTrack(supabase, trackRecord, `${bulletin.pagasaName} bulletin #${bulletin.bulletinNumber}`, log);
+}
+
+/** Updates the active track of the same name, or retires the old system and inserts this one. */
+async function storeTrack(
+  supabase: SupabaseClient,
+  trackRecord: { name: string } & Record<string, unknown>,
+  label: string,
+  log: string[]
+): Promise<void> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: existing } = await (supabase as any)
     .from("typhoon_tracks")
     .select("id")
     .eq("is_active", true)
-    .eq("name", bulletin.pagasaName)
+    .eq("name", trackRecord.name)
     .limit(1)
     .single();
 
@@ -174,7 +220,7 @@ async function storeBulletin(
     if (error) {
       log.push(`Update error: ${error.message}`);
     } else {
-      log.push(`Updated: ${bulletin.pagasaName} bulletin #${bulletin.bulletinNumber}`);
+      log.push(`Updated: ${label}`);
     }
   } else {
     // Deactivate all previous systems
@@ -191,7 +237,7 @@ async function storeBulletin(
     if (error) {
       log.push(`Insert error: ${error.message}`);
     } else {
-      log.push(`Inserted: ${bulletin.pagasaName} bulletin #${bulletin.bulletinNumber}`);
+      log.push(`Inserted: ${label}`);
     }
   }
 }

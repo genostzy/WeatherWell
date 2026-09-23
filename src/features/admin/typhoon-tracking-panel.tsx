@@ -89,7 +89,7 @@ function TyphoonDetails({ track }: { track: TyphoonTrack }) {
       <p lang={lang} className="text-sm text-muted-foreground">
         {t(track.category, lang)}
       </p>
-      <BulletinAge issuedAt={track.issued_at ?? track.fetched_at} />
+      <BulletinAge issuedAt={track.issued_at ?? track.fetched_at} source={track.source} />
 
       {track.headline && (
         <p lang={lang} className="text-sm font-medium text-severity-orange">

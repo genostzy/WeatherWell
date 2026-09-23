@@ -107,7 +107,7 @@ export function CurrentConditionsPanel({ zone }: { zone: Zone }) {
                 : t(NO_ACTIVE_SYSTEM, lang)}
             </span>
           </div>
-          {track && <BulletinAge issuedAt={track.issued_at ?? track.fetched_at} />}
+          {track && <BulletinAge issuedAt={track.issued_at ?? track.fetched_at} source={track.source} />}
 
           {hasSignalWarning && (
             <p lang={lang} className="font-medium text-severity-orange">

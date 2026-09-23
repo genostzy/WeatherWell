@@ -31,3 +31,14 @@ describe("BulletinAge", () => {
     expect(container).toBeEmptyDOMElement();
   });
 });
+
+describe("BulletinAge source (idea 16)", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("says when a reading came from the GDACS backup, not PAGASA", () => {
+    vi.useFakeTimers({ now: new Date("2026-09-23T12:00:00Z"), toFake: ["Date"] });
+    render(<BulletinAge issuedAt={new Date(Date.now() - 2 * HOUR).toISOString()} source="GDACS" />);
+    expect(screen.getByText(/GDACS backup reading, 2 h old/i)).toBeInTheDocument();
+    expect(screen.queryByText(/pagasa bulletin/i)).not.toBeInTheDocument();
+  });
+});
