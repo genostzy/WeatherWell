@@ -7,7 +7,7 @@ import { useZones } from "@/lib/reference-data/use-reference-data";
 /**
  * How long to wait before starting the background tile download. The live
  * map's own initial tiles (~20-30 for one visible viewport) and this
- * precache job (~500 tiles) both go through the same service worker to the
+ * precache job (~28 tiles, zoom 12-15 within 2 km) both go through the same service worker to the
  * same handful of *.tile.openstreetmap.org hosts, so they compete for the
  * same small pool of concurrent connections — starting the 500-tile job
  * immediately on mount let it win that race against the live map often
@@ -20,7 +20,7 @@ const PRECACHE_DELAY_MS = 4000;
 
 /**
  * Triggers tile pre-caching for the user's selected zone after onboarding.
- * Runs once on mount — downloads ~500 tiles (~10MB) in the background, after
+ * Runs once on mount — downloads ~28 tiles (~0.5 MB: zoom 12-15, 2 km around the zone) in the background, after
  * PRECACHE_DELAY_MS so it doesn't compete with the live map's own tiles.
  * The service worker caches them for offline use.
  */
