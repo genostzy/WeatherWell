@@ -1,7 +1,10 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
+import { Volume2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { SeverityBadge } from "./severity-badge";
 import { ShareAlertButton } from "./share-alert-button";
 import { useLanguage } from "@/features/i18n/language-provider";
@@ -17,6 +20,32 @@ const UNVERIFIED: LocalizedText = {
   en: "Unverified — based on residents' reports, not yet confirmed by an official.",
   fil: "Hindi pa kumpirmado — batay sa ulat ng mga residente, hindi pa napapatunayan ng opisyal.",
 };
+
+const READ_ALOUD: LocalizedText = { en: "Read aloud", fil: "Basahin nang malakas" };
+
+const noSubscribe = () => () => {};
+
+/** The browser's own speech (free, on-device, works offline) for residents who find reading hard. */
+function ReadAloudButton({ text, lang }: { text: string; lang: "en" | "fil" }) {
+  const canSpeak = useSyncExternalStore(noSubscribe, () => typeof window !== "undefined" && !!window.speechSynthesis, () => false);
+  if (!canSpeak) return null;
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="lg"
+      onClick={() => {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = lang === "fil" ? "fil-PH" : "en-PH";
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.speak(utterance);
+      }}
+    >
+      <Volume2 aria-hidden="true" className="h-4 w-4" />
+      <span lang={lang}>{t(READ_ALOUD, lang)}</span>
+    </Button>
+  );
+}
 
 const CONFIDENCE_LABEL = {
   en: { estimated: "Estimated", validated: "Validated", calibrated: "Calibrated" },
@@ -58,7 +87,10 @@ export function AlertCard({
               <Badge variant="outline" className="text-xs">
                 {CONFIDENCE_LABEL[lang][alert.confidence]}
               </Badge>
-              <ShareAlertButton alert={alert} zone={zone} />
+              <div className="flex flex-wrap items-center gap-2">
+                <ReadAloudButton text={`${zone.name}. ${t(alert.message, lang)}`} lang={lang} />
+                <ShareAlertButton alert={alert} zone={zone} />
+              </div>
             </div>
           </>
         ) : (

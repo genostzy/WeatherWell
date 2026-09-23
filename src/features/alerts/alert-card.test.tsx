@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { AlertCard } from "./alert-card";
 import { LanguageProvider } from "@/features/i18n/language-provider";
 import { getActiveAlertForZone } from "@/lib/mock-data";
@@ -64,5 +64,48 @@ describe("AlertCard", () => {
   it("shows a 'no active alert' state when there is no alert", () => {
     render(<AlertCard alert={undefined} zone={FIXTURE_REFERENCE_DATA.zones[2]} />);
     expect(screen.getByText(/no active alert/i)).toBeInTheDocument();
+  });
+});
+
+describe("AlertCard read-aloud", () => {
+  const speak = vi.fn();
+  const cancel = vi.fn();
+
+  beforeEach(() => {
+    speak.mockClear();
+    cancel.mockClear();
+    vi.stubGlobal("speechSynthesis", { speak, cancel });
+    vi.stubGlobal(
+      "SpeechSynthesisUtterance",
+      class {
+        text: string;
+        lang = "";
+        constructor(text: string) {
+          this.text = text;
+        }
+      }
+    );
+  });
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("reads the alert aloud in the resident's language", async () => {
+    render(
+      <LanguageProvider initialLang="fil">
+        <AlertCard alert={alert} zone={zone} />
+      </LanguageProvider>
+    );
+    fireEvent.click(screen.getByRole("button", { name: /basahin nang malakas/i }));
+    expect(speak).toHaveBeenCalledOnce();
+    const utterance = speak.mock.calls[0][0];
+    expect(utterance.text).toContain(alert.message.fil);
+    expect(utterance.lang).toBe("fil-PH");
+  });
+
+  it("offers no button where the browser cannot speak", () => {
+    vi.unstubAllGlobals();
+    vi.stubGlobal("speechSynthesis", undefined);
+    render(<AlertCard alert={alert} zone={zone} />);
+    expect(screen.queryByRole("button", { name: /read aloud/i })).not.toBeInTheDocument();
   });
 });
