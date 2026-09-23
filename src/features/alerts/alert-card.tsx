@@ -9,6 +9,8 @@ import { SeverityBadge } from "./severity-badge";
 import { ShareAlertButton } from "./share-alert-button";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
+import { useHasHydrated } from "@/lib/use-hydrated";
+import { minutesSinceReport } from "@/lib/water-level-reports";
 import type { AlertRecord, LocalizedText, Zone } from "@/lib/types";
 
 const NO_ACTIVE_ALERT: LocalizedText = {
@@ -22,6 +24,30 @@ const UNVERIFIED: LocalizedText = {
 };
 
 const READ_ALOUD: LocalizedText = { en: "Read aloud", fil: "Basahin nang malakas" };
+const ISSUED: LocalizedText = { en: "Issued", fil: "Inilabas" };
+const HOURS_AGO: LocalizedText = { en: "h ago", fil: "oras na ang nakalipas" };
+const MAYBE_STALE: LocalizedText = {
+  en: "Over a day old — may no longer be current. Check with your barangay.",
+  fil: "Mahigit isang araw na — maaaring hindi na napapanahon. Magtanong sa inyong barangay.",
+};
+const STALE_AFTER_HOURS = 24;
+
+/**
+ * An official's alert stays active until someone lowers it (idea 13), so a
+ * forgotten one can look current for days. Show its age, and say so once it
+ * is over a day old. Client-only, like TimeAgo: the age reads the clock.
+ */
+function AlertAge({ issuedAt, lang }: { issuedAt: string; lang: "en" | "fil" }) {
+  const hasHydrated = useHasHydrated();
+  if (!hasHydrated) return null;
+  const hours = Math.floor(minutesSinceReport(issuedAt) / 60);
+  return (
+    <p lang={lang} className="text-xs text-muted-foreground">
+      {t(ISSUED, lang)} {hours} {t(HOURS_AGO, lang)}
+      {hours >= STALE_AFTER_HOURS && <span className="block font-medium text-severity-orange">{t(MAYBE_STALE, lang)}</span>}
+    </p>
+  );
+}
 
 const noSubscribe = () => () => {};
 
@@ -78,6 +104,7 @@ export function AlertCard({
                 ⏱ {t(alert.predictedTiming, lang)}
               </p>
             )}
+            <AlertAge issuedAt={alert.issuedAt} lang={lang} />
             {alert.source === "auto_crowdsourced" && (
               <p lang={lang} className="text-sm text-muted-foreground">
                 {t(UNVERIFIED, lang)}

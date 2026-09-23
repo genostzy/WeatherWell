@@ -109,3 +109,25 @@ describe("AlertCard read-aloud", () => {
     expect(screen.queryByRole("button", { name: /read aloud/i })).not.toBeInTheDocument();
   });
 });
+
+describe("AlertCard age (idea 13)", () => {
+  afterEach(() => vi.useRealTimers());
+  const HOUR = 60 * 60 * 1000;
+
+  it("says how long ago the alert was issued", () => {
+    vi.useFakeTimers({ now: new Date("2026-09-23T12:00:00Z"), toFake: ["Date"] });
+    render(<AlertCard alert={{ ...alert, issuedAt: new Date(Date.now() - 3 * HOUR).toISOString() }} zone={zone} />);
+    expect(screen.getByText(/issued 3 h ago/i)).toBeInTheDocument();
+    expect(screen.queryByText(/may no longer be current/i)).not.toBeInTheDocument();
+  });
+
+  it("flags an alert over a day old as possibly out of date", () => {
+    vi.useFakeTimers({ now: new Date("2026-09-23T12:00:00Z"), toFake: ["Date"] });
+    render(
+      <LanguageProvider initialLang="fil">
+        <AlertCard alert={{ ...alert, issuedAt: new Date(Date.now() - 30 * HOUR).toISOString() }} zone={zone} />
+      </LanguageProvider>
+    );
+    expect(screen.getByText(/maaaring hindi na napapanahon/i)).toBeInTheDocument();
+  });
+});
