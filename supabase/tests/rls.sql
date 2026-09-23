@@ -2686,4 +2686,33 @@ begin
   reset role;
 end $$;
 
+-- SP1 permissions (H3): the engine and the cleanup are server-only; the two
+-- unused, publicly callable functions are gone.
+select tests.as_anon();
+select tests.expect_denied('SP1-P1: anon cannot run the alert engine',
+  $$select * from public.check_and_trigger_alerts()$$);
+select tests.expect_denied('SP1-P2: anon cannot run the weather cleanup',
+  $$select public.cleanup_old_weather_readings()$$);
+select tests.as_user('e1000000-0000-4000-8000-000000000001');
+select tests.expect_denied('SP1-P3: a signed-in resident cannot run the alert engine',
+  $$select * from public.check_and_trigger_alerts()$$);
+select tests.expect_denied('SP1-P4: a signed-in resident cannot run the weather cleanup',
+  $$select public.cleanup_old_weather_readings()$$);
+
+do $$
+begin
+  if not has_function_privilege('service_role', 'public.check_and_trigger_alerts()', 'execute')
+     or not has_function_privilege('service_role', 'public.cleanup_old_weather_readings()', 'execute') then
+    raise exception using errcode = 'TSTFL',
+      message = 'SP1-P5: the scheduled jobs (service_role) lost access to the engine or the cleanup';
+  end if;
+  if exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+              where n.nspname = 'public'
+                and p.proname in ('get_push_subscriptions_for_zone', 'get_reference_data_compact')) then
+    raise exception using errcode = 'TSTFL',
+      message = 'SP1-P6: an unused, publicly callable function still exists';
+  end if;
+  raise notice 'ok SP1-P5/P6';
+end $$;
+
 rollback;
