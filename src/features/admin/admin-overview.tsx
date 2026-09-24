@@ -35,6 +35,7 @@ import { useHazards, useZones } from "@/lib/reference-data/use-reference-data";
 import { getZoneStatus } from "@/lib/zone-status";
 import { useOfficial } from "@/lib/auth/official-context";
 import { isInArea } from "@/lib/auth/official";
+import { hasRealEvacuationCenter } from "@/lib/zone-data-quality";
 import type { LocalizedText } from "@/lib/types";
 
 const SYSTEM_TITLE: LocalizedText = { en: "System dashboard", fil: "Dashboard ng sistema" };
@@ -106,7 +107,9 @@ export function AdminOverview({ townOfficials = [] }: { townOfficials?: TownOffi
 
   const zonesUnderAlert = zones.filter((zone) => getZoneStatus(baseAlertFor(zone.id)) !== "safe").length;
   const reportsToday = countReportsToday(reports, inAreaZoneIds);
-  const constrainedCenters = zones.filter((zone) => {
+  // Verified centres only: a placeholder has capacity 0, which reads as
+  // "full" and put ~41k barangays with no centre at all in this tile.
+  const constrainedCenters = zones.filter(hasRealEvacuationCenter).filter((zone) => {
     const status = resolveEffectiveCenterStatus(zone.centerStatus, zone.evacuationCenterCapacity, zone.currentOccupancy);
     return status !== "space_available";
   }).length;

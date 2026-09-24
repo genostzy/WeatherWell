@@ -249,3 +249,15 @@ describe("AdminOverview by role (each account sees its own dashboard)", () => {
     expect(screen.queryByText(/update to every barangay/i)).not.toBeInTheDocument();
   });
 });
+
+describe("AdminOverview centres (found checking the live system dashboard: 41,396 'at capacity')", () => {
+  it("counts only verified centres, not barangays whose centre is a placeholder", () => {
+    const [real, ...rest] = FIXTURE_REFERENCE_DATA.zones;
+    // A placeholder: named, but on the barangay's own point with no capacity.
+    const placeholders = rest.map((z) => ({ ...z, evacuationCenterLat: z.lat, evacuationCenterLng: z.lng, evacuationCenterCapacity: 0 }));
+    const full = { ...real, evacuationCenterCapacity: 100, currentOccupancy: 100 };
+    renderWithData(<AdminOverview />, { data: { zones: [full, ...placeholders] } });
+    const tile = screen.getByText(/centers at capacity/i).closest("[data-slot=card]") as HTMLElement;
+    expect(tile.querySelector("p")?.textContent).toBe("1");
+  });
+});
