@@ -8,6 +8,7 @@ import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { RoleBadge } from "@/features/auth/role-badge";
+import { NAV_ACTIVE } from "@/components/nav-active";
 import type { Official } from "@/lib/auth/official";
 import type { LocalizedText } from "@/lib/types";
 
@@ -97,7 +98,7 @@ export function AdminHeader() {
           const current = isCurrent(item.href, pathname, official.level);
           const Icon = item.icon;
           return (
-            <Button key={item.href} asChild variant={current ? "secondary" : "ghost"} className="h-10 shrink-0">
+            <Button key={item.href} asChild variant="ghost" className={`h-10 shrink-0 ${current ? NAV_ACTIVE : "text-muted-foreground"}`}>
               <Link href={item.href} aria-current={current ? "page" : undefined}>
                 <Icon aria-hidden="true" />
                 <span lang={lang}>{t(item.label, lang)}</span>

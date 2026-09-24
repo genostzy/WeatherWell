@@ -12,11 +12,10 @@ import { useOfficialRole } from "@/lib/auth/use-official-role";
 import { RoleBadge } from "./role-badge";
 import type { LocalizedText } from "@/lib/types";
 
-const KEEP_REPORTS: LocalizedText = {
-  en: "Keep your reports on a new phone",
-  fil: "Panatilihin ang iyong mga ulat sa bagong telepono",
-};
-const SIGN_IN: LocalizedText = { en: "Sign in", fil: "Mag-sign in" };
+// Says what the link does and that it is optional (owner's request): a
+// guest's reports already work without it.
+const KEEP_REPORTS: LocalizedText = { en: "Back up reports (sign in)", fil: "I-back up ang ulat (mag-sign in)" };
+const SIGN_IN: LocalizedText = { en: "Sign in (optional)", fil: "Mag-sign in (opsyonal)" };
 const SIGN_OUT: LocalizedText = { en: "Sign out", fil: "Mag-sign out" };
 const ON_THIS_DEVICE: LocalizedText = {
   en: "Saved on this device",

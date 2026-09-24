@@ -43,7 +43,7 @@ describe("AccountLink", () => {
     renderWithData(<AccountLink />);
 
     expect(await screen.findByText(/saved on this device/i)).toBeInTheDocument();
-    const link = screen.getByRole("link", { name: "Sign in" });
+    const link = screen.getByRole("link", { name: "Sign in (optional)" });
     expect(link).toHaveAttribute("href", "/sign-in?next=%2Freport");
   });
 
@@ -54,7 +54,7 @@ describe("AccountLink", () => {
     renderWithData(<AccountLink />);
 
     expect(await screen.findByText(/saved on this device/i)).toBeInTheDocument();
-    const link = screen.getByRole("link", { name: "Keep your reports on a new phone" });
+    const link = screen.getByRole("link", { name: "Back up reports (sign in)" });
     expect(link).toHaveAttribute("href", "/sign-in?next=%2Freport");
   });
 

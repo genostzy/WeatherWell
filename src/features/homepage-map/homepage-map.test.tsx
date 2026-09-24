@@ -124,4 +124,22 @@ describe("HomepageMap", () => {
     renderWithData(<HomepageMap zones={FIXTURE_REFERENCE_DATA.zones} />);
     expect(screen.getByRole("region", { name: /alerts on this phone/i })).toBeInTheDocument();
   });
+
+  it("marks which quick action's route is on the map (owner's request: the selected view must stand out)", async () => {
+    const { NAV_ACTIVE } = await import("@/components/nav-active");
+    renderWithData(<HomepageMap zones={FIXTURE_REFERENCE_DATA.zones} />);
+    const safeArea = screen.getByRole("button", { name: /find safe area/i });
+    const centre = screen.getByRole("button", { name: /find safe evacuation center/i });
+    expect(safeArea).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.click(safeArea);
+    expect(safeArea).toHaveAttribute("aria-pressed", "true");
+    expect(safeArea.className).toContain(NAV_ACTIVE);
+    expect(centre).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.click(centre);
+    expect(centre).toHaveAttribute("aria-pressed", "true");
+    expect(centre.className).toContain(NAV_ACTIVE);
+    expect(safeArea.className).not.toContain(NAV_ACTIVE);
+  });
 });

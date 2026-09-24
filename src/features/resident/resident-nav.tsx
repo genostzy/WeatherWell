@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import type { LocalizedText } from "@/lib/types";
+import { NAV_ACTIVE } from "@/components/nav-active";
 
 const OVERVIEW: LocalizedText = { en: "Overview", fil: "Buod" };
 const REPORTS: LocalizedText = { en: "Reports", fil: "Mga Ulat" };
@@ -39,8 +40,8 @@ export function ResidentNav() {
             key={tab.href}
             href={tab.href}
             aria-current={active ? "page" : undefined}
-            className={`whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted hover:text-foreground ${
-              active ? "bg-muted text-foreground" : "text-muted-foreground"
+            className={`whitespace-nowrap rounded-md px-3 py-1.5 text-sm transition-colors ${
+              active ? NAV_ACTIVE : "font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
             }`}
           >
             {t(tab.label, lang)}

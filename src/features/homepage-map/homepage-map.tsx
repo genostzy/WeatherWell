@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { NAV_ACTIVE } from "@/components/nav-active";
 import { PushPrompt } from "@/features/onboarding/push-prompt";
 import { OfficialBanner } from "@/features/auth/official-banner";
 import dynamic from "next/dynamic";
@@ -79,6 +80,9 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
   // on evacVisible for why a route to a safe zone (Find safe area) does not
   // also reveal the shelter layer.
   const [revealEvacuationCenters, setRevealEvacuationCenters] = useState(false);
+  // Which quick action's route the map is showing, so its button can say so.
+  // Picking a barangay on the map replaces that route, and clears it.
+  const [activeAction, setActiveAction] = useState<"safe-area" | "evac-centre" | null>(null);
   const livePosition = useLivePosition();
   const { alert: geofenceAlert, dismiss: dismissGeofence } = useGeofenceAlert(zones, livePosition);
   const forecast = useFloodForecast(zones[0]?.id);
@@ -144,7 +148,10 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
           routeZone={routeZone}
           routeHazard={routeHazard}
           effectiveRoutePolyline={effectiveRoutePolyline}
-          onSelectZone={handleSelectZone}
+          onSelectZone={(zoneId) => {
+            handleSelectZone(zoneId);
+            setActiveAction(null);
+          }}
           isPlacingPin={isPlacingPin}
           onMapClickForPin={handleMapClickForPin}
           onEditPin={setEditingPin}
@@ -163,31 +170,34 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
 
         <QuickDepthReport zoneId={zones[0].id} />
 
-        {/* Alerts could only be turned on during first setup; this is where they live now. */}
-        <section aria-labelledby="alerts-on-phone" className="space-y-2 rounded-xl border-2 border-border p-3">
-          <h2 id="alerts-on-phone" lang={lang} className="text-sm font-medium">
-            {t(ALERTS_ON_PHONE, lang)}
-          </h2>
-          <PushPrompt zoneId={zones[0].id} />
-        </section>
 
         {/* Quick actions — primary, placed right after status so they're seen first */}
         <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
-            onClick={handleFindSafeArea}
-            className="flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-border px-3 py-3 text-center outline-none transition-colors hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50"
+            aria-pressed={activeAction === "safe-area"}
+            onClick={() => {
+              handleFindSafeArea();
+              setActiveAction("safe-area");
+            }}
+            className={`flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 px-3 py-3 text-center outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 ${
+              activeAction === "safe-area" ? `border-primary ${NAV_ACTIVE}` : "border-border hover:bg-muted/50"
+            }`}
           >
             <ShieldCheck aria-hidden="true" className="h-5 w-5 shrink-0" />
             <span className="text-xs leading-tight font-medium">{t(FIND_SAFE_AREA, lang)}</span>
           </button>
           <button
             type="button"
+            aria-pressed={activeAction === "evac-centre"}
             onClick={() => {
               handleFindSafeEvacuationCenter();
               setRevealEvacuationCenters(true);
+              setActiveAction("evac-centre");
             }}
-            className="flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-border px-3 py-3 text-center outline-none transition-colors hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50"
+            className={`flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 px-3 py-3 text-center outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 ${
+              activeAction === "evac-centre" ? `border-primary ${NAV_ACTIVE}` : "border-border hover:bg-muted/50"
+            }`}
           >
             <Building2 aria-hidden="true" className="h-5 w-5 shrink-0" />
             <span className="text-xs leading-tight font-medium">
@@ -212,6 +222,14 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
             {t(isPlacingPin ? CANCEL_ADD_PIN : ADD_FLOOD_PIN, lang)}
           </button>
         </div>
+
+        {/* Alerts could only be turned on during first setup; this is where they live now. */}
+        <section aria-labelledby="alerts-on-phone" className="space-y-2 rounded-xl border-2 border-border p-3">
+          <h2 id="alerts-on-phone" lang={lang} className="text-sm font-medium">
+            {t(ALERTS_ON_PHONE, lang)}
+          </h2>
+          <PushPrompt zoneId={zones[0].id} />
+        </section>
 
         <QuickStats />
 

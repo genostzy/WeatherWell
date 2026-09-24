@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import type { LocalizedText } from "@/lib/types";
+import { NAV_ACTIVE } from "./nav-active";
 
 const NAV_ITEMS: { href: string; icon: string; label: LocalizedText }[] = [
   {
@@ -42,10 +43,9 @@ export function BottomNav() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex flex-col items-center gap-0.5 rounded-lg px-3 py-1.5 text-[10px] font-medium transition-colors ${
-                isActive
-                  ? "text-primary"
-                  : "text-muted-foreground hover:text-foreground"
+              aria-current={isActive ? "page" : undefined}
+              className={`flex min-w-16 flex-col items-center gap-0.5 rounded-lg px-3 py-1.5 text-[10px] transition-colors ${
+                isActive ? NAV_ACTIVE : "font-medium text-muted-foreground hover:text-foreground"
               }`}
             >
               <span
