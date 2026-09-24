@@ -352,7 +352,7 @@ export function ZonePicker({ onSelect }: { onSelect: (zoneId: string) => void })
         variant="outline"
         size="lg"
         onClick={detectLocation}
-        disabled={detection.state === "detecting"}
+        loading={detection.state === "detecting"}
       >
         {t(COPY.useLocation, lang)}
       </Button>

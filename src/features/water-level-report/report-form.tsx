@@ -64,7 +64,7 @@ export function ReportForm({
         ))}
       </RadioGroup>
 
-      <Button type="submit" size="lg" disabled={submitting}>
+      <Button type="submit" size="lg" loading={submitting}>
         {t(SUBMIT_REPORT, lang)}
       </Button>
     </form>

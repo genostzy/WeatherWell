@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { describeRiver } from "@/lib/river-forecast";
 import { BulletinAge } from "@/components/bulletin-age";
 import { ChevronDown, ChevronUp, CloudRain } from "lucide-react";
@@ -13,6 +14,7 @@ import { useTyphoon } from "@/lib/use-typhoon";
 import { useHazardsForZone } from "@/lib/reference-data/use-reference-data";
 import type { LocalizedText, Zone } from "@/lib/types";
 
+const LOADING_WEATHER: LocalizedText = { en: "Loading the weather…", fil: "Kinukuha ang panahon…" };
 const TITLE: LocalizedText = { en: "Current Conditions", fil: "Kasalukuyang Kondisyon" };
 const RAINFALL: LocalizedText = { en: "Rainfall", fil: "Ulan" };
 const WIND: LocalizedText = { en: "Wind", fil: "Hangin" };
@@ -54,7 +56,7 @@ export function CurrentConditionsPanel({ zone }: { zone: Zone }) {
   const [expanded, setExpanded] = useState(false);
   const { track } = useTyphoon();
 
-  const { current, river } = useWeatherData(zone.id);
+  const { current, river, isLoading } = useWeatherData(zone.id);
   const rainfall = current ? current.rainfall_mm : null;
   const wind = current ? Math.round(current.wind_kph) : null;
   const thunderstorm = current ? isThunderstorm(current.weather_code) : false;
@@ -81,9 +83,13 @@ export function CurrentConditionsPanel({ zone }: { zone: Zone }) {
         <span className="flex min-w-0 shrink-0 items-center gap-2 text-sm font-medium">
           <CloudRain aria-hidden="true" className={`h-4 w-4 shrink-0 ${iconColor}`} />
           <span lang={lang} className="whitespace-nowrap">{t(TITLE, lang)}</span>
-          <span className="truncate font-normal text-muted-foreground">
-            · {shown(rainfall, "mm/hr")} · {shown(wind, "km/h")}
-          </span>
+          {isLoading && !current ? (
+            <Skeleton role="status" aria-label={t(LOADING_WEATHER, lang)} className="h-4 w-28" />
+          ) : (
+            <span className="truncate font-normal text-muted-foreground">
+              · {shown(rainfall, "mm/hr")} · {shown(wind, "km/h")}
+            </span>
+          )}
         </span>
         <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
           {t(expanded ? SEE_LESS : SEE_DETAILS, lang)}

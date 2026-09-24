@@ -87,7 +87,7 @@ export function ShareAlertButton({
           variant="outline"
           size="lg"
           onClick={handleDownloadImage}
-          disabled={generating}
+          loading={generating}
           className="gap-2"
           aria-label={t(DOWNLOAD_IMAGE, lang)}
         >

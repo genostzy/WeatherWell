@@ -1,6 +1,7 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SkeletonRows } from "@/components/ui/skeleton";
 import { BulletinAge } from "@/components/bulletin-age";
 import { Wind, AlertTriangle } from "lucide-react";
 import { useLanguage } from "@/features/i18n/language-provider";
@@ -20,7 +21,7 @@ const PRESSURE: LocalizedText = { en: "Pressure", fil: "Presyon" };
 const MOVEMENT: LocalizedText = { en: "Movement", fil: "Galaw" };
 const SIGNAL: LocalizedText = { en: "Wind Signal", fil: "Signal sa Hangin" };
 const BULLETIN: LocalizedText = { en: "Bulletin", fil: "Bulletin" };
-const LOADING: LocalizedText = { en: "Loading...", fil: "Naglo-load..." };
+const LOADING: LocalizedText = { en: "Loading the typhoon bulletin…", fil: "Kinukuha ang bulletin ng bagyo…" };
 const ERROR_PREFIX: LocalizedText = { en: "Error:", fil: "Error:" };
 const KMH: LocalizedText = { en: "km/h", fil: "km/h" };
 const HPA: LocalizedText = { en: "hPa", fil: "hPa" };
@@ -57,7 +58,7 @@ export function TyphoonTrackingPanel() {
       </CardHeader>
       <CardContent>
         {isLoading ? (
-          <p className="text-sm text-muted-foreground">{t(LOADING, lang)}</p>
+          <SkeletonRows label={t(LOADING, lang)} rows={3} />
         ) : error ? (
           <p className="text-sm text-destructive">
             {t(ERROR_PREFIX, lang)} {error}

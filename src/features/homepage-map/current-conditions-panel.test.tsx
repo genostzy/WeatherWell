@@ -15,8 +15,9 @@ const LIVE = {
 };
 let liveReading: typeof LIVE | null = LIVE;
 let river: object | null = null;
+let weatherLoading = false;
 vi.mock("@/lib/use-weather-data", () => ({
-  useWeatherData: () => ({ current: liveReading, rainfallHistory: [], rainfallForecast: [], river, isLoading: false, error: null }),
+  useWeatherData: () => ({ current: liveReading, rainfallHistory: [], rainfallForecast: [], river, isLoading: weatherLoading, error: null }),
 }));
 
 vi.mock("@/lib/use-typhoon", () => ({
@@ -104,5 +105,17 @@ describe("CurrentConditionsPanel river outlook (idea 1)", () => {
     renderWithData(<CurrentConditionsPanel zone={FIXTURE_REFERENCE_DATA.zones[0]} />);
     await user.click(screen.getByRole("button", { name: /current conditions/i }));
     expect(screen.queryByText(/river, next 7 days/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("CurrentConditionsPanel loading", () => {
+  it("shows a placeholder, not dashes, while the weather loads", () => {
+    liveReading = null;
+    weatherLoading = true;
+    renderWithData(<CurrentConditionsPanel zone={FIXTURE_REFERENCE_DATA.zones[0]} />);
+    expect(screen.getByRole("status", { name: /loading the weather/i })).toBeInTheDocument();
+    expect(screen.queryByText(/—/)).not.toBeInTheDocument();
+    weatherLoading = false;
+    liveReading = LIVE;
   });
 });

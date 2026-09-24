@@ -81,7 +81,7 @@ export function PushPrompt({ zoneId }: { zoneId?: string }) {
         variant={isSubscribed ? "outline" : "default"}
         size="sm"
         onClick={handleToggle}
-        disabled={isToggling}
+        loading={isToggling}
       >
         {isSubscribed ? t(DISABLE_PUSH, lang) : t(ENABLE_PUSH, lang)}
       </Button>

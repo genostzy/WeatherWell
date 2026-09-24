@@ -3,9 +3,11 @@ import { screen, fireEvent, waitFor, within } from "@testing-library/react";
 
 const setZoneAlertMock = vi.fn().mockResolvedValue({ ok: true });
 const confirmMock = vi.fn().mockResolvedValue({ ok: true });
+const setZoneAlertsMock = vi.fn(async (input: { zoneIds: string[] }) => ({ sent: input.zoneIds.length, failed: 0 }));
 vi.mock("@/app/actions/set-zone-alert", () => ({
   setZoneAlert: (...args: unknown[]) => setZoneAlertMock(...args),
   confirmAutomaticAlert: (...args: unknown[]) => confirmMock(...args),
+  setZoneAlerts: (input: { zoneIds: string[] }) => setZoneAlertsMock(input),
 }));
 
 import { OfficialInbox } from "./official-inbox";
@@ -83,6 +85,37 @@ describe("OfficialInbox (ideas 4, 5, 13)", () => {
     fireEvent.click(screen.getByRole("radio", { name: /warning/i }));
     fireEvent.click(screen.getByRole("button", { name: /send alert/i }));
     await waitFor(() => expect(setZoneAlertMock).toHaveBeenCalledWith({ zoneId: zone3.id, severity: "red" }));
+  });
+
+  it("lets a municipal official alert every barangay in town at once", async () => {
+    renderWithData(<OfficialInbox zones={FIXTURE_REFERENCE_DATA.zones} />, { alerts: [] });
+    fireEvent.change(screen.getByLabelText(/barangay/i), { target: { value: "__all__" } });
+    fireEvent.click(screen.getByRole("radio", { name: /watch/i }));
+    fireEvent.click(screen.getByRole("button", { name: /send alert/i }));
+    await waitFor(() =>
+      expect(setZoneAlertsMock).toHaveBeenCalledWith({ zoneIds: FIXTURE_REFERENCE_DATA.zones.map((z) => z.id), severity: "orange" })
+    );
+    expect(setZoneAlertMock).not.toHaveBeenCalled();
+    expect(await screen.findByText(new RegExp(`sent to ${FIXTURE_REFERENCE_DATA.zones.length} barangays`, "i"))).toBeInTheDocument();
+  });
+
+  it("offers no all-barangays choice to a barangay official with one barangay", () => {
+    renderWithData(<OfficialInbox zones={[zone1]} />, { alerts: [] });
+    expect(screen.queryByRole("option", { name: /all .* barangays/i })).not.toBeInTheDocument();
+  });
+
+  it("spins only the button that was pressed", async () => {
+    let finish: (v: { ok: true }) => void = () => {};
+    setZoneAlertMock.mockImplementationOnce(() => new Promise((resolve) => (finish = resolve)));
+    const alerts = [alertFor(zone1.id, { source: "auto_crowdsourced" })];
+    renderWithData(<OfficialInbox zones={FIXTURE_REFERENCE_DATA.zones} />, { alerts });
+    const reject = screen.getByRole("button", { name: /reject/i });
+    fireEvent.click(reject);
+    await waitFor(() => expect(reject).toHaveAttribute("aria-busy", "true"));
+    expect(screen.getByRole("button", { name: /confirm/i })).not.toHaveAttribute("aria-busy");
+    expect(screen.getByRole("button", { name: /confirm/i })).toBeDisabled();
+    finish({ ok: true });
+    await waitFor(() => expect(reject).not.toHaveAttribute("aria-busy"));
   });
 
   it("shows the post to copy by hand when the browser blocks the clipboard (found testing the live site)", async () => {

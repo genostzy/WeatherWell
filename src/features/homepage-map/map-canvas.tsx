@@ -379,18 +379,6 @@ export function MapCanvas({
             </details>
           </div>
 
-          {livePosition && (
-            <button
-              type="button"
-              onClick={() => setFlyTarget(livePosition)}
-              className="pointer-events-auto absolute bottom-14 left-2 flex items-center gap-1.5 rounded-lg border-2 border-border bg-background/95 px-2.5 py-1.5 text-xs font-medium shadow-md backdrop-blur transition-colors hover:bg-muted/50"
-              aria-label={t(LOCATE_ME, lang)}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v4m0 12v4M2 12h4m12 0h4"></path></svg>
-              {t(LOCATE_ME, lang)}
-            </button>
-          )}
-
           {/* Nearest evac center indicator */}
           {nearestEvac && (
             <button
@@ -418,7 +406,19 @@ export function MapCanvas({
             </button>
           )}
 
-          <div className="pointer-events-auto absolute bottom-2 left-2">
+          {/* One column, so "Locate me" sits above the hazard buttons instead of on them. */}
+          <div className="pointer-events-auto absolute bottom-2 left-2 flex flex-col items-start gap-2">
+            {livePosition && (
+              <button
+                type="button"
+                onClick={() => setFlyTarget(livePosition)}
+                className="flex items-center gap-1.5 rounded-lg border-2 border-border bg-background/95 px-2.5 py-1.5 text-xs font-medium shadow-md backdrop-blur transition-colors hover:bg-muted/50"
+                aria-label={t(LOCATE_ME, lang)}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v4m0 12v4M2 12h4m12 0h4"></path></svg>
+                {t(LOCATE_ME, lang)}
+              </button>
+            )}
             <HazardTypeSelector value={hazardType} onChange={onHazardTypeChange} />
           </div>
         </>

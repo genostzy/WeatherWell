@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SkeletonRows } from "@/components/ui/skeleton";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { friendlyError } from "@/lib/friendly-error";
@@ -17,6 +18,7 @@ const LIKELY: LocalizedText = {
   en: "Likely evacuation sites near you — not confirmed by your barangay",
   fil: "Posibleng evacuation site malapit sa iyo — hindi pa kumpirmado ng barangay",
 };
+const LOOKING: LocalizedText = { en: "Looking for nearby schools and halls…", fil: "Naghahanap ng malapit na paaralan at bulwagan…" };
 const SOURCE: LocalizedText = { en: "From OpenStreetMap.", fil: "Mula sa OpenStreetMap." };
 const OFFICIAL_TITLE: LocalizedText = { en: "Set your evacuation centre", fil: "Itakda ang evacuation center" };
 const OFFICIAL_HINT: LocalizedText = {
@@ -36,17 +38,20 @@ const KIND: Record<CandidateKind, LocalizedText> = {
   court: { en: "Covered court", fil: "Covered court" },
 };
 
-function useCandidateSites(zoneId: string, enabled: boolean): CandidateSite[] {
-  const [sites, setSites] = useState<CandidateSite[]>([]);
+/** null while the search is still running (it can take a few seconds). */
+function useCandidateSites(zoneId: string, enabled: boolean): CandidateSite[] | null {
+  const [sites, setSites] = useState<CandidateSite[] | null>(null);
   useEffect(() => {
     if (!enabled) return;
     let cancelled = false;
     fetch(`/api/evacuation-candidates?zoneId=${encodeURIComponent(zoneId)}`)
       .then((res) => (res.ok ? (res.json() as Promise<CandidateSite[]>) : []))
       .then((list) => {
-        if (!cancelled && Array.isArray(list)) setSites(list);
+        if (!cancelled) setSites(Array.isArray(list) ? list : []);
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (!cancelled) setSites([]);
+      });
     return () => {
       cancelled = true;
     };
@@ -61,7 +66,8 @@ export function CandidateSites({ zone }: { zone: Zone }) {
   const { lang } = useLanguage();
   const needed = !hasRealEvacuationCenter(zone);
   const sites = useCandidateSites(zone.id, needed);
-  if (!needed || sites.length === 0) return null;
+  if (!needed || sites?.length === 0) return null;
+  if (!sites) return <SkeletonRows label={t(LOOKING, lang)} className="rounded-lg border-2 border-dashed border-border p-4" />;
 
   return (
     <div className="space-y-2 rounded-lg border-2 border-dashed border-border p-4">
@@ -90,9 +96,10 @@ export function CandidateSites({ zone }: { zone: Zone }) {
 /** For an official: turn a suggestion into the barangay's real centre. */
 export function ConfirmCentrePanel({ zone }: { zone: Zone }) {
   const { lang } = useLanguage();
-  const sites = useCandidateSites(zone.id, true);
+  const sites = useCandidateSites(zone.id, true) ?? [];
   const [capacity, setCapacity] = useState<Record<string, string>>({});
-  const [busy, setBusy] = useState(false);
+  // The site being confirmed, so only its button spins.
+  const [busyKey, setBusyKey] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -100,7 +107,7 @@ export function ConfirmCentrePanel({ zone }: { zone: Zone }) {
 
   async function confirm(site: CandidateSite) {
     const key = `${site.lat},${site.lng}`;
-    setBusy(true);
+    setBusyKey(key);
     setError(null);
     setNotice(null);
     const { confirmEvacuationCenter } = await import("@/app/actions/confirm-evacuation-center");
@@ -111,7 +118,7 @@ export function ConfirmCentrePanel({ zone }: { zone: Zone }) {
       lng: site.lng,
       capacity: Number(capacity[key] ?? "0"),
     });
-    setBusy(false);
+    setBusyKey(null);
     if (result.ok) setNotice(t(SAVED, lang));
     else setError(result.error);
   }
@@ -151,7 +158,7 @@ export function ConfirmCentrePanel({ zone }: { zone: Zone }) {
                     onChange={(e) => setCapacity((c) => ({ ...c, [key]: e.target.value }))}
                   />
                 </div>
-                <Button type="button" disabled={busy} onClick={() => confirm(site)}>
+                <Button type="button" disabled={busyKey !== null} loading={busyKey === key} onClick={() => confirm(site)}>
                   {t(CONFIRM, lang)}
                 </Button>
               </div>

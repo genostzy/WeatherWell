@@ -102,7 +102,7 @@ export function OfficialsPanel({ officials }: { officials: OfficialRow[] }) {
             disabled={pending === "appoint"}
           />
         </div>
-        <Button type="submit" size="lg" disabled={pending === "appoint"}>
+        <Button type="submit" size="lg" loading={pending === "appoint"}>
           {t(APPOINT, lang)}
         </Button>
         {error && (
@@ -135,7 +135,7 @@ export function OfficialsPanel({ officials }: { officials: OfficialRow[] }) {
                 type="button"
                 variant="outline"
                 size="lg"
-                disabled={pending === official.email}
+                loading={pending === official.email}
                 onClick={() => handleRemove(official.email)}
               >
                 {t(REMOVE, lang)}

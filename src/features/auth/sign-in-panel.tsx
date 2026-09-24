@@ -113,7 +113,7 @@ export function SignInPanel({ next, notice }: { next: string; notice?: string })
               variant="outline"
               size="lg"
               className="w-full"
-              disabled={pending === "existing"}
+              loading={pending === "existing"}
               onClick={() => handleResult("existing", () => startGoogleSignIn(next, { link: false }))}
             >
               {t(SIGN_IN_EXISTING, lang)}
@@ -131,7 +131,7 @@ export function SignInPanel({ next, notice }: { next: string; notice?: string })
             type="button"
             size="lg"
             className="w-full"
-            disabled={pending === "google"}
+            loading={pending === "google"}
             onClick={() => handleResult("google", () => startGoogleSignIn(next))}
           >
             {t(CONTINUE_WITH_GOOGLE, lang)}
@@ -176,7 +176,7 @@ export function SignInPanel({ next, notice }: { next: string; notice?: string })
               disabled={pending === "password"}
             />
           </div>
-          <Button type="submit" size="lg" className="w-full" disabled={pending === "password"}>
+          <Button type="submit" size="lg" className="w-full" loading={pending === "password"}>
             {isSignUp ? t(CREATE_ACCOUNT, lang) : t(SIGN_IN_BTN, lang)}
           </Button>
           {errors.password && (

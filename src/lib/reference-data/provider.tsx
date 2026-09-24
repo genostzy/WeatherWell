@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useEffect, useState, type ReactNode } from "react";
+import { PageSkeleton } from "@/components/ui/skeleton";
 import { usePathname } from "next/navigation";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
@@ -276,9 +277,7 @@ export function ReferenceDataProvider({
         children
       )}
       {!bypassGate && state.status === "loading" && (
-        <p role="status" lang={lang} className="p-6 text-center text-sm text-muted-foreground">
-          {t(LOADING, lang)}
-        </p>
+        <PageSkeleton label={t(LOADING, lang)} />
       )}
       {!bypassGate && state.status === "failed" && (
         <div className="flex flex-col items-center gap-4 p-6">

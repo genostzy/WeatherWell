@@ -9,7 +9,7 @@ import { SeverityBadge } from "@/features/alerts/severity-badge";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { friendlyError } from "@/lib/friendly-error";
-import { useAlerts, useConfirmAutomaticAlert, useSetZoneAlert } from "@/lib/alerts-store";
+import { useAlerts, useConfirmAutomaticAlert, useSetZoneAlert, useSetZoneAlerts } from "@/lib/alerts-store";
 import { buildShareText, toSharedAlert } from "@/lib/alert-share/payload";
 import { SEVERITY_LABEL, SEVERITY_ORDER, type Severity } from "@/lib/severity";
 import { minutesSinceReport } from "@/lib/water-level-reports";
@@ -45,6 +45,20 @@ const COPY_BY_HAND: LocalizedText = {
   fil: "Hindi makakopya ang browser na ito. Piliin ang teksto sa ibaba at kopyahin.",
 };
 const POST_TO_COPY: LocalizedText = { en: "Post to copy", fil: "Post na kokopyahin" };
+const ALL_BARANGAYS: LocalizedText = { en: "All {n} barangays", fil: "Lahat ng {n} barangay" };
+const SENT_TO_ALL: LocalizedText = {
+  en: "Alert sent to {n} barangays — residents see it now.",
+  fil: "Naipadala ang alerto sa {n} barangay — nakikita na ng mga residente.",
+};
+const SOME_FAILED: LocalizedText = {
+  en: "Sent to {ok} of {n} barangays. Try again for the rest.",
+  fil: "Naipadala sa {ok} sa {n} barangay. Subukang muli para sa iba.",
+};
+
+/** The picker value for "every barangay in this list" (a municipal official). */
+const ALL = "__all__";
+
+type Result = { ok: true } | { ok: false; error: string };
 
 const STALE_AFTER_MINUTES = 24 * 60;
 /** Past this, a barangay picker is a 42k-row select; a nationwide admin uses the map instead. */
@@ -66,12 +80,15 @@ export function OfficialInbox({ zones }: { zones: Zone[] }) {
   const alerts = useAlerts();
   const setZoneAlert = useSetZoneAlert();
   const confirmAutomatic = useConfirmAutomaticAlert();
+  const setZoneAlerts = useSetZoneAlerts();
   const [manualCopy, setManualCopy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [pickedZone, setPickedZone] = useState("");
   const [pickedSeverity, setPickedSeverity] = useState<Severity>("yellow");
-  const [busy, setBusy] = useState(false);
+  // Which control is waiting on the server: that one spins, the rest wait.
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+  const busy = busyKey !== null;
 
   const zoneById = new Map(zones.map((z) => [z.id, z]));
   const active = alerts.filter((a) => a.isActive && zoneById.has(a.zoneId));
@@ -79,17 +96,28 @@ export function OfficialInbox({ zones }: { zones: Zone[] }) {
     (a) => a.source === "auto_crowdsourced" || minutesSinceReport(a.issuedAt) >= STALE_AFTER_MINUTES
   );
 
-  async function run(action: () => Promise<{ ok: true } | { ok: false; error: string }>, done: LocalizedText) {
-    setBusy(true);
+  async function run(key: string, action: () => Promise<Result>, done: LocalizedText) {
+    setBusyKey(key);
     setError(null);
     setNotice(null);
     const result = await action();
-    setBusy(false);
+    setBusyKey(null);
     if (result.ok) setNotice(t(done, lang));
     else setError(result.error);
   }
-  const send = (zoneId: string, severity: Severity | "none", done: LocalizedText) =>
-    run(() => setZoneAlert({ zoneId, severity }), done);
+  const send = (key: string, zoneId: string, severity: Severity | "none", done: LocalizedText) =>
+    run(key, () => setZoneAlert({ zoneId, severity }), done);
+
+  async function sendToAll(severity: Severity) {
+    setBusyKey("send");
+    setError(null);
+    setNotice(null);
+    const { sent, failed } = await setZoneAlerts({ zoneIds: zones.map((z) => z.id), severity });
+    setBusyKey(null);
+    const n = String(sent + failed);
+    if (failed === 0) setNotice(t(SENT_TO_ALL, lang).replace("{n}", n));
+    else setError(t(SOME_FAILED, lang).replace("{ok}", String(sent)).replace("{n}", n));
+  }
 
   async function copyPost(alert: AlertRecord, zone: Zone) {
     const text = buildShareText(toSharedAlert(alert, zone, lang), window.location.origin, lang);
@@ -138,13 +166,23 @@ export function OfficialInbox({ zones }: { zones: Zone[] }) {
                       type="button"
                       size="lg"
                       disabled={busy}
+                      loading={busyKey === `${zone.id}:keep`}
                       onClick={() =>
-                        automatic ? run(() => confirmAutomatic(zone.id), CONFIRMED) : send(zone.id, alert.severity, KEPT)
+                        automatic
+                          ? run(`${zone.id}:keep`, () => confirmAutomatic(zone.id), CONFIRMED)
+                          : send(`${zone.id}:keep`, zone.id, alert.severity, KEPT)
                       }
                     >
                       {t(automatic ? CONFIRM : STILL, lang)}
                     </Button>
-                    <Button type="button" size="lg" variant="outline" disabled={busy} onClick={() => send(zone.id, "none", LIFTED)}>
+                    <Button
+                      type="button"
+                      size="lg"
+                      variant="outline"
+                      disabled={busy}
+                      loading={busyKey === `${zone.id}:lift`}
+                      onClick={() => send(`${zone.id}:lift`, zone.id, "none", LIFTED)}
+                    >
                       {t(automatic ? REJECT : LIFT, lang)}
                     </Button>
                   </div>
@@ -159,7 +197,8 @@ export function OfficialInbox({ zones }: { zones: Zone[] }) {
             className="space-y-3"
             onSubmit={(e) => {
               e.preventDefault();
-              if (pickedZone) void send(pickedZone, pickedSeverity, SENT);
+              if (pickedZone === ALL) void sendToAll(pickedSeverity);
+              else if (pickedZone) void send("send", pickedZone, pickedSeverity, SENT);
             }}
           >
             <p lang={lang} className="text-sm font-medium">
@@ -174,6 +213,7 @@ export function OfficialInbox({ zones }: { zones: Zone[] }) {
                 className="h-11 w-full rounded-md border-2 border-border bg-background px-3 text-sm"
               >
                 <option value="">{t(CHOOSE, lang)}</option>
+                {zones.length > 1 && <option value={ALL}>{t(ALL_BARANGAYS, lang).replace("{n}", String(zones.length))}</option>}
                 {zones.map((z) => (
                   <option key={z.id} value={z.id}>
                     {z.name}
@@ -198,7 +238,7 @@ export function OfficialInbox({ zones }: { zones: Zone[] }) {
                 </label>
               ))}
             </div>
-            <Button type="submit" size="lg" className="w-full" disabled={busy || !pickedZone}>
+            <Button type="submit" size="lg" className="w-full" disabled={busy || !pickedZone} loading={busyKey === "send"}>
               <Send aria-hidden="true" className="h-4 w-4" />
               {t(SEND, lang)}
             </Button>

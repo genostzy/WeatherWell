@@ -40,7 +40,13 @@ describe("CandidateSites (idea 10)", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => [] }));
     const { container } = render(<CandidateSites zone={placeholder} />);
     await waitFor(() => expect(fetch).toHaveBeenCalled());
-    expect(container).toBeEmptyDOMElement();
+    await waitFor(() => expect(container).toBeEmptyDOMElement());
+  });
+
+  it("shows a placeholder while it looks, instead of a blank space", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
+    render(<CandidateSites zone={placeholder} />);
+    expect(await screen.findByRole("status", { name: /looking for nearby/i })).toBeInTheDocument();
   });
 });
 

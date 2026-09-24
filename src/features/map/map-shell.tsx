@@ -1,8 +1,13 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { MapContainer, TileLayer, ZoomControl, ScaleControl } from "react-leaflet";
-import { ArrowUp } from "lucide-react";
+import { ArrowUp, Loader2 } from "lucide-react";
+import { useLanguage } from "@/features/i18n/language-provider";
+import { t } from "@/lib/i18n";
+import type { LocalizedText } from "@/lib/types";
+
+const LOADING_MAP: LocalizedText = { en: "Loading map…", fil: "Kinukuha ang mapa…" };
 import "leaflet/dist/leaflet.css";
 
 /** Leaflet's own corner-positioning system — "topleft" | "topright" | "bottomleft" | "bottomright". */
@@ -57,6 +62,10 @@ export function MapShell({
    */
   controlsPosition?: ControlPosition;
 }) {
+  const { lang } = useLanguage();
+  // Until the first tiles arrive the map is a grey box, which read as
+  // "broken" when tiles were slow (or blocked); say it is loading instead.
+  const [tilesLoaded, setTilesLoaded] = useState(false);
   return (
     <div>
       {title && (
@@ -93,12 +102,25 @@ export function MapShell({
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            eventHandlers={{ load: () => setTilesLoaded(true) }}
           />
           <ZoomControl position={controlsPosition} />
           <ScaleControl position={controlsPosition} imperial={false} />
           {children}
         </MapContainer>
 
+        {!tilesLoaded && (
+          <div
+            role="status"
+            aria-label={t(LOADING_MAP, lang)}
+            className="pointer-events-none absolute inset-0 z-[999] flex items-center justify-center"
+          >
+            <span className="flex items-center gap-2 rounded-lg border-2 border-border bg-background/95 px-3 py-2 text-sm font-medium shadow-md">
+              <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin motion-reduce:animate-none" />
+              <span lang={lang}>{t(LOADING_MAP, lang)}</span>
+            </span>
+          </div>
+        )}
         {overlay && <div className="pointer-events-none absolute inset-0 z-[1000] p-2">{overlay}</div>}
       </div>
     </div>

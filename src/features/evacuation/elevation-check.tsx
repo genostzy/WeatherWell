@@ -51,7 +51,7 @@ export function ElevationCheck({ zoneId }: { zoneId: string }) {
 
   return (
     <div className="w-full space-y-2 rounded-lg border-2 border-border p-4">
-      <Button type="button" variant="outline" size="lg" className="w-full" disabled={state.kind === "checking"} onClick={check}>
+      <Button type="button" variant="outline" size="lg" className="w-full" loading={state.kind === "checking"} onClick={check}>
         <Mountain aria-hidden="true" className="h-4 w-4" />
         {t(state.kind === "checking" ? CHECKING : ASK, lang)}
       </Button>

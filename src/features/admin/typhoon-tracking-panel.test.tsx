@@ -61,3 +61,12 @@ describe("TyphoonTrackingPanel", () => {
     expect(screen.getByText(/No active tropical cyclone/)).toBeInTheDocument();
   });
 });
+
+describe("TyphoonTrackingPanel loading", () => {
+  it("shows a placeholder while the bulletin loads", async () => {
+    const { useTyphoon } = await import("@/lib/use-typhoon");
+    vi.mocked(useTyphoon).mockReturnValue({ track: null, isLoading: true, error: null });
+    render(<TyphoonTrackingPanel />);
+    expect(screen.getByRole("status", { name: /loading the typhoon bulletin/i })).toBeInTheDocument();
+  });
+});

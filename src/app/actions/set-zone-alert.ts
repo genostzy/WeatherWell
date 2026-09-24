@@ -131,3 +131,33 @@ export async function confirmAutomaticAlert(zoneId: string): Promise<ActionResul
   if (!error) return { ok: true };
   return { ok: false, permanent: true, error: error.message ?? `Database error ${error.code ?? "(no code)"}` };
 }
+
+export interface SetZoneAlertsResult {
+  sent: number;
+  failed: number;
+  /** The first database error, when any barangay failed. */
+  error?: string;
+}
+
+/** A town is a few dozen barangays; this is a ceiling, not a target. */
+const MAX_ZONES_AT_ONCE = 500;
+
+/**
+ * A municipal official alerting several barangays at once, in one call so
+ * the page refreshes alerts once rather than once per barangay. Each
+ * barangay still goes through set_zone_alert, so the database's own area
+ * check decides each one.
+ */
+export async function setZoneAlerts(input: { zoneIds: string[]; severity: Severity }): Promise<SetZoneAlertsResult> {
+  const zoneIds = [...new Set(input.zoneIds)].slice(0, MAX_ZONES_AT_ONCE);
+  let sent = 0;
+  let error: string | undefined;
+  for (let i = 0; i < zoneIds.length; i += 10) {
+    const results = await Promise.all(zoneIds.slice(i, i + 10).map((zoneId) => setZoneAlert({ zoneId, severity: input.severity })));
+    for (const result of results) {
+      if (result.ok) sent++;
+      else error ??= result.error;
+    }
+  }
+  return { sent, failed: zoneIds.length - sent, error };
+}

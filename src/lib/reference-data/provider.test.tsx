@@ -97,6 +97,13 @@ describe("ReferenceDataProvider", () => {
     expect(screen.getByRole("status")).toBeInTheDocument();
   });
 
+  it("shows the shape of the page while the data loads, not just a line of text", () => {
+    (fetch as ReturnType<typeof vi.fn>).mockReturnValue(new Promise(() => {}));
+    renderProvider();
+    const status = screen.getByRole("status", { name: /loading your zone/i });
+    expect(status.querySelectorAll("[data-slot=skeleton]").length).toBeGreaterThanOrEqual(3);
+  });
+
   it("lays live centre changes over the static file, so residents see what officials set", async () => {
     function CentreName() {
       const zones = useZones();

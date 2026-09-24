@@ -2,7 +2,8 @@
 
 import { createContext, useCallback, useContext } from "react";
 import type { AlertRecord } from "./types";
-import type { SetZoneAlertInput } from "@/app/actions/set-zone-alert";
+import type { SetZoneAlertInput, SetZoneAlertsResult } from "@/app/actions/set-zone-alert";
+import type { Severity } from "./severity";
 import type { ActionResult } from "@/app/actions/action-result";
 
 export const AlertsContext = createContext<AlertRecord[] | null>(null);
@@ -69,6 +70,24 @@ export function useSetZoneAlert(): (input: SetZoneAlertInput) => Promise<ActionR
     throw new Error("useSetZoneAlert requires ReferenceDataProvider's alerts refresh. In tests, use renderWithData().");
   }
   return setAlert;
+}
+
+/** Alerts several barangays in one call; refreshes alerts once afterwards. */
+export function useSetZoneAlerts(): (input: { zoneIds: string[]; severity: Severity }) => Promise<SetZoneAlertsResult> {
+  const refresh = useContext(AlertsRefreshContext);
+  const setAlerts = useCallback(
+    async (input: { zoneIds: string[]; severity: Severity }) => {
+      const { setZoneAlerts } = await import("@/app/actions/set-zone-alert");
+      const result = await setZoneAlerts(input);
+      if (result.sent > 0) await refresh?.();
+      return result;
+    },
+    [refresh]
+  );
+  if (!refresh) {
+    throw new Error("useSetZoneAlerts requires ReferenceDataProvider's alerts refresh. In tests, use renderWithData().");
+  }
+  return setAlerts;
 }
 
 /** Confirms the zone's automatic advisory as the official's own; refreshes alerts once the database accepts it. */
