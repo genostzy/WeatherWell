@@ -22,7 +22,9 @@ import { ConfirmCentrePanel } from "@/features/evacuation/candidate-sites";
 import { useHazardsForZone, useSetCenterStatus, useZones } from "@/lib/reference-data/use-reference-data";
 import { HAZARD_LEVEL_LABEL } from "@/lib/hazards";
 import { useActiveAlertForZone, useSetZoneAlert } from "@/lib/alerts-store";
-import { useManagesZone } from "@/lib/auth/official-context";
+import { useManagesZone, useOfficial } from "@/lib/auth/official-context";
+import { OfficialInbox } from "@/features/admin/official-inbox";
+import { hasRealEvacuationCenter, hasRealHotline } from "@/lib/zone-data-quality";
 import { SEVERITY_ORDER, SEVERITY_LABEL, SEVERITY_HEX, type Severity } from "@/lib/severity";
 import { CENTER_STATUS_LABEL, CENTER_STATUS_ORDER, resolveEffectiveCenterStatus } from "@/lib/center-status";
 import { SeverityBadge } from "@/features/alerts/severity-badge";
@@ -43,6 +45,11 @@ const CAPACITY: LocalizedText = { en: "Evacuation center capacity", fil: "Kapasi
 const RAINFALL: LocalizedText = { en: "Current rainfall", fil: "Kasalukuyang Ulan" };
 const RAINFALL_TREND: LocalizedText = { en: "Rainfall — last 12 hours", fil: "Ulan — huling 12 oras" };
 const RIVER_OUTLOOK: LocalizedText = { en: "River, next 7 days", fil: "Ilog, susunod na 7 araw" };
+const NO_CENTRE: LocalizedText = {
+  en: "No verified evacuation centre yet",
+  fil: "Wala pang beripikadong evacuation center",
+};
+const NO_HOTLINE: LocalizedText = { en: "No verified hotline", fil: "Walang beripikadong hotline" };
 const NO_READING: LocalizedText = { en: "No live weather reading right now", fil: "Walang live na ulat ng panahon ngayon" };
 const FLOOD_SUSCEPTIBILITY: LocalizedText = { en: "Flood susceptibility", fil: "Panganib ng Baha" };
 const LANDSLIDE_SUSCEPTIBILITY: LocalizedText = { en: "Landslide susceptibility", fil: "Panganib ng Guho" };
@@ -73,6 +80,7 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
   const [alertError, setAlertError] = useState(false);
   const [statusError, setStatusError] = useState(false);
   const managesZone = useManagesZone();
+  const official = useOfficial();
   const { rainfallHistory, river } = useWeatherData(zoneId);
 
   const foundZone = zones.find((z) => z.id === zoneId);
@@ -82,6 +90,9 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
   // function's own scope, even though `zone` is a const that cannot change.
   const zone = foundZone;
   const canManage = managesZone(zone);
+  // A barangay official is sent here from /admin, so this page is their home:
+  // it carries the inbox, and a link "back" to /admin would only loop here.
+  const isOwnHome = official.level === "barangay" && canManage;
 
   // Reflects the live headcount carried through reference data as
   // zone.currentOccupancy, same as every other read-only surface; falls back
@@ -110,12 +121,14 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
   return (
     <main className="flex flex-1 flex-col items-center gap-6 p-4 sm:p-6 lg:p-8">
       <div className="w-full max-w-2xl space-y-6">
-        <Button asChild variant="ghost" size="lg">
-          <Link href="/admin">
-            <ArrowLeft aria-hidden="true" />
-            {t(BACK_TO_DASHBOARD, lang)}
-          </Link>
-        </Button>
+        {!isOwnHome && (
+          <Button asChild variant="ghost" size="lg">
+            <Link href="/admin">
+              <ArrowLeft aria-hidden="true" />
+              {t(BACK_TO_DASHBOARD, lang)}
+            </Link>
+          </Button>
+        )}
 
         <div>
           <p className="text-sm text-muted-foreground">{t(MANAGE_ZONE, lang)}</p>
@@ -124,6 +137,8 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
             <p className="text-sm font-medium text-severity-orange">{t(VIEW_ONLY_NOTE, lang)}</p>
           )}
         </div>
+
+        {isOwnHome && <OfficialInbox zones={[zone]} />}
 
         <Card>
           <CardHeader>
@@ -171,17 +186,24 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Building2 aria-hidden="true" className="h-5 w-5" />
-              {zone.evacuationCenterName}
+              {hasRealEvacuationCenter(zone) ? zone.evacuationCenterName : t(NO_CENTRE, lang)}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <a
-              href={`tel:${zone.hotlineNumber}`}
-              className="flex items-center gap-2 text-sm text-muted-foreground underline-offset-2 hover:underline"
-            >
-              <Phone aria-hidden="true" className="h-4 w-4" />
-              {zone.hotlineNumber}
-            </a>
+            {hasRealHotline(zone) ? (
+              <a
+                href={`tel:${zone.hotlineNumber}`}
+                className="flex items-center gap-2 text-sm text-muted-foreground underline-offset-2 hover:underline"
+              >
+                <Phone aria-hidden="true" className="h-4 w-4" />
+                {zone.hotlineNumber}
+              </a>
+            ) : (
+              <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Phone aria-hidden="true" className="h-4 w-4" />
+                {t(NO_HOTLINE, lang)}
+              </p>
+            )}
 
             {canManage && (
               <div className="space-y-2">

@@ -28,6 +28,13 @@ describe("CheckInPanel", () => {
     vi.unstubAllGlobals();
   });
 
+  it("says who sees a check-in and where to call in an emergency", () => {
+    render(<CheckInPanel zoneId="zone-1" />);
+    expect(screen.getByText(/your barangay officials see this/i)).toBeInTheDocument();
+    expect(screen.getByText(/911/)).toBeInTheDocument();
+    expect(screen.queryByText(/phase 1/i)).not.toBeInTheDocument();
+  });
+
   it("shows no confirmation before a resident checks in", () => {
     render(<CheckInPanel zoneId="zone-1" />);
     expect(screen.queryByText(/you checked in/i)).not.toBeInTheDocument();

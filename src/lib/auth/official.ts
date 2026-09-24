@@ -22,12 +22,3 @@ export function isInArea(psgcBarangayCode: string, areaCode: string): boolean {
   return psgcBarangayCode.startsWith(areaCode);
 }
 
-/** A barangay official goes straight to their barangay; a municipal official gets the overview. */
-export function landingPathFor(
-  official: Official,
-  zones: { id: string; psgcBarangayCode: string }[]
-): string | null {
-  if (official.level !== "barangay") return null;
-  const own = zones.find((zone) => zone.psgcBarangayCode === official.areaCode);
-  return own ? `/admin/zone/${own.id}` : null;
-}

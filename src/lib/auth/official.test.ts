@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { areaLevel, isInArea, landingPathFor } from "./official";
-import type { Official } from "./official";
+import { areaLevel, isInArea } from "./official";
 
 describe("areaLevel", () => {
   it("reads a 10-digit PSGC prefix as a single barangay", () => {
@@ -35,53 +34,3 @@ describe("isInArea", () => {
   });
 });
 
-describe("landingPathFor", () => {
-  const zones = [
-    { id: "zone-1", psgcBarangayCode: "0105528012" },
-    { id: "zone-2", psgcBarangayCode: "0105526025" },
-  ];
-
-  it("sends a barangay official straight to their own zone", () => {
-    const official: Official = {
-      userId: "u1",
-      displayName: "Test",
-      areaCode: "0105528012",
-      areaName: "Barangay Nilombot",
-      level: "barangay",
-    };
-    expect(landingPathFor(official, zones)).toBe("/admin/zone/zone-1");
-  });
-
-  it("sends a municipal official to the overview (null)", () => {
-    const official: Official = {
-      userId: "u2",
-      displayName: "Test",
-      areaCode: "0105528",
-      areaName: "Mapandan",
-      level: "municipality",
-    };
-    expect(landingPathFor(official, zones)).toBeNull();
-  });
-
-  it("returns null when no zone matches the barangay official's area", () => {
-    const official: Official = {
-      userId: "u3",
-      displayName: "Test",
-      areaCode: "9999999999",
-      areaName: "Nowhere",
-      level: "barangay",
-    };
-    expect(landingPathFor(official, zones)).toBeNull();
-  });
-
-  it("sends an admin to the overview (null), same as a municipal official", () => {
-    const official: Official = {
-      userId: "u4",
-      displayName: "Test Admin",
-      areaCode: "",
-      areaName: "All areas",
-      level: "admin",
-    };
-    expect(landingPathFor(official, zones)).toBeNull();
-  });
-});

@@ -109,6 +109,51 @@ describe("ZoneDashboardPage area scoping", () => {
   });
 });
 
+describe("ZoneDashboardPage as a barangay official's home (found checking the live site)", () => {
+  const zone = FIXTURE_REFERENCE_DATA.zones[0];
+  const own: Official = { userId: "u1", displayName: "Kapitan", areaCode: zone.psgcBarangayCode, areaName: "Own", level: "barangay" };
+
+  it("puts Needs your attention at the top for the barangay's own official, with no dead Back link", () => {
+    renderWithData(<ZoneDashboardPage params={resolvedParams({ zoneId: zone.id })} searchParams={emptySearchParams} />, { official: own });
+    expect(screen.getByText(/needs your attention/i)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /back to admin dashboard/i })).not.toBeInTheDocument();
+  });
+
+  it("leaves it off a barangay the official only views", () => {
+    renderWithData(
+      <ZoneDashboardPage params={resolvedParams({ zoneId: FIXTURE_REFERENCE_DATA.zones[1].id })} searchParams={emptySearchParams} />,
+      { official: own }
+    );
+    expect(screen.queryByText(/needs your attention/i)).not.toBeInTheDocument();
+  });
+
+  it("keeps the Back link for a municipal official, whose home is the overview", () => {
+    const municipal: Official = { ...own, level: "municipality", areaCode: zone.psgcBarangayCode.slice(0, 7) };
+    renderWithData(<ZoneDashboardPage params={resolvedParams({ zoneId: zone.id })} searchParams={emptySearchParams} />, { official: municipal });
+    expect(screen.getByRole("link", { name: /back to admin dashboard/i })).toBeInTheDocument();
+    expect(screen.queryByText(/needs your attention/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("ZoneDashboardPage placeholders (found checking the live site)", () => {
+  it("says there is no verified hotline or centre instead of printing the placeholders", () => {
+    const zone = {
+      ...FIXTURE_REFERENCE_DATA.zones[0],
+      hotlineNumber: "00000000000",
+      evacuationCenterName: "",
+      evacuationCenterLat: FIXTURE_REFERENCE_DATA.zones[0].lat,
+      evacuationCenterLng: FIXTURE_REFERENCE_DATA.zones[0].lng,
+      evacuationCenterCapacity: 0,
+    };
+    renderWithData(<ZoneDashboardPage params={resolvedParams({ zoneId: zone.id })} searchParams={emptySearchParams} />, {
+      data: { zones: [zone, ...FIXTURE_REFERENCE_DATA.zones.slice(1)] },
+    });
+    expect(screen.queryByText("00000000000")).not.toBeInTheDocument();
+    expect(screen.getByText(/no verified hotline/i)).toBeInTheDocument();
+    expect(screen.getByText(/no verified evacuation centre yet/i)).toBeInTheDocument();
+  });
+});
+
 describe("ZoneDashboardPage community pin moderation gating (F6-1)", () => {
   beforeEach(() => {
     localStorage.clear();

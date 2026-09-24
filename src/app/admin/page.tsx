@@ -1,18 +1,24 @@
 import { redirect } from "next/navigation";
 import { loadOfficial } from "@/lib/auth/load-official";
-import { landingPathFor } from "@/lib/auth/official";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { AdminOverview } from "@/features/admin/admin-overview";
 
+/**
+ * A barangay official's home is their own barangay's page (which carries the
+ * "Needs your attention" inbox); everyone else gets the overview. Looks up
+ * only that one barangay: an unranged read of the zones table stops at
+ * PostgREST's 1,000-row cap, which left most barangay officials on the
+ * overview instead.
+ */
 export default async function AdminPage() {
   const gate = await loadOfficial();
   if (gate.state === "official" && gate.official.level === "barangay") {
-    const { data } = await createSupabaseServerClient().from("zones").select("id, psgc_barangay_code");
-    const path = landingPathFor(
-      gate.official,
-      (data ?? []).map((z) => ({ id: z.id, psgcBarangayCode: z.psgc_barangay_code }))
-    );
-    if (path) redirect(path);
+    const { data } = await createSupabaseServerClient()
+      .from("zones")
+      .select("id")
+      .eq("psgc_barangay_code", gate.official.areaCode)
+      .maybeSingle();
+    if (data) redirect(`/admin/zone/${data.id}`);
   }
   return <AdminOverview />;
 }

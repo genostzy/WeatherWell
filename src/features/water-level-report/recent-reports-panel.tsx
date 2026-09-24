@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Users, TriangleAlert } from "lucide-react";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
-import { REPORT_THRESHOLD } from "@/lib/weather-thresholds";
+import { countsTowardAlert, REPORT_THRESHOLD } from "@/lib/weather-thresholds";
 import { useWaterLevelReports, getRecentReportsForZoneLive } from "@/lib/water-level-reports";
 import { TimeAgo } from "@/components/time-ago";
 import { DEPTH_LABEL, DEPTH_CM, DEPTH_SEVERITY } from "@/lib/depth";
@@ -22,7 +22,7 @@ const NO_REPORTS: LocalizedText = {
   fil: "Wala pang ulat mula sa zone na ito — ikaw ang mauuna.",
 };
 const OUTLIER: LocalizedText = { en: "Outlier — downweighted", fil: "Outlier — binabaan ang timbang" };
-const AGREEING: LocalizedText = { en: "agreeing reports", fil: "magkatugmang ulat" };
+const AGREEING: LocalizedText = { en: "agreeing reports in the last 6 hours", fil: "magkatugmang ulat sa huling 6 na oras" };
 const THRESHOLD_NOTE: LocalizedText = {
   en: "reports needed before an alert can auto-trigger",
   fil: "ulat ang kailangan bago mag-auto-trigger ang alerto",
@@ -32,7 +32,7 @@ export function RecentReportsPanel({ zone }: { zone: Zone }) {
   const { lang } = useLanguage();
   const allReports = useWaterLevelReports();
   const reports = getRecentReportsForZoneLive(allReports, zone.id);
-  const agreeing = reports.filter((report) => !report.isOutlier).length;
+  const agreeing = reports.filter((report) => countsTowardAlert(report)).length;
 
   return (
     <Card>

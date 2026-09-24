@@ -11,8 +11,8 @@ import type { LocalizedText } from "@/lib/types";
 
 const TITLE: LocalizedText = { en: "Let others know you're okay", fil: "Ipaalam na ikaw ay ligtas" };
 const SUBTITLE: LocalizedText = {
-  en: "Phase 1 demo only — shown on the admin dashboard, not yet seen by real responders",
-  fil: "Demo pa lang sa Phase 1 — makikita sa admin dashboard, hindi pa ng totoong responder",
+  en: "Your barangay officials see this on WeatherWell. It is not an emergency line — in an emergency, call 911.",
+  fil: "Makikita ito ng mga opisyal ng inyong barangay sa WeatherWell. Hindi ito emergency line — sa emergency, tumawag sa 911.",
 };
 const IM_SAFE: LocalizedText = { en: "I'm safe", fil: "Ligtas ako" };
 const I_NEED_HELP: LocalizedText = { en: "I need help", fil: "Kailangan ko ng tulong" };

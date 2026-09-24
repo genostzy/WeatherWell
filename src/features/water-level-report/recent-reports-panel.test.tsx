@@ -69,6 +69,22 @@ describe("RecentReportsPanel", () => {
     expect(screen.getByText(new RegExp(`${REPORT_THRESHOLD} reports needed`, "i"))).toBeInTheDocument();
   });
 
+  it("counts only reports from the alert engine's 6-hour window as agreeing (found checking the live site)", async () => {
+    const zone = FIXTURE_REFERENCE_DATA.zones[0];
+    const row = (id: string, hoursAgo: number) => ({
+      id,
+      zoneId: zone.id,
+      depthLevel: "knee",
+      reportedAt: new Date(Date.now() - hoursAgo * 3_600_000).toISOString(),
+      trustWeight: 1,
+      isOutlier: false,
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => [row("a", 1), row("b", 5), row("c", 7), row("d", 40)] }));
+    render(<RecentReportsPanel zone={zone} />);
+    await waitFor(() => expect(screen.getByText("2")).toBeInTheDocument());
+    expect(screen.getByText(/in the last 6 hours/i)).toBeInTheDocument();
+  });
+
   it("marks an outlier as downweighted rather than hiding it", async () => {
     render(<RecentReportsPanel zone={FIXTURE_REFERENCE_DATA.zones[0]} />);
     await waitFor(() => expect(screen.getByText(/downweighted/i)).toBeInTheDocument());

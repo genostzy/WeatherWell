@@ -10,8 +10,8 @@ import type { LocalizedText } from "@/lib/types";
 
 const TITLE: LocalizedText = { en: "Resident check-ins", fil: "Check-in ng mga residente" };
 const SUBTITLE: LocalizedText = {
-  en: "Self-reported, unverified — Phase 1 demo, not a real accountability system yet",
-  fil: "Sariling ulat, hindi pa na-verify — demo pa lang sa Phase 1",
+  en: "Self-reported by residents, not verified.",
+  fil: "Sariling ulat ng mga residente, hindi beripikado.",
 };
 const SAFE_COUNT: LocalizedText = { en: "checked in safe", fil: "naka-check-in bilang ligtas" };
 const NEEDS_HELP_COUNT: LocalizedText = { en: "flagged needing help", fil: "na-flag na kailangan ng tulong" };

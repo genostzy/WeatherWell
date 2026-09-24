@@ -33,6 +33,12 @@ describe("CheckInSummaryPanel", () => {
     vi.unstubAllGlobals();
   });
 
+  it("describes check-ins accurately, with no leftover Phase 1 demo wording", () => {
+    render(<CheckInSummaryPanel zoneId="zone-1" />);
+    expect(screen.getByText(/self-reported by residents, not verified/i)).toBeInTheDocument();
+    expect(screen.queryByText(/phase 1/i)).not.toBeInTheDocument();
+  });
+
   it("shows an empty state when nobody has checked in for the zone", async () => {
     stubCheckIns([]);
     render(<CheckInSummaryPanel zoneId="zone-1" />);
