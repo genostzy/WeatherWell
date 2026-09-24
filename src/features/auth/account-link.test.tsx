@@ -58,16 +58,37 @@ describe("AccountLink", () => {
     expect(link).toHaveAttribute("href", "/sign-in?next=%2Freport");
   });
 
-  it("tells a signed-out visitor what their state means rather than labelling them", async () => {
-    // "Guest" reads as second-class for what is the correct state for
-    // almost every resident. State the consequence instead.
+  it("badges a signed-out visitor as a guest, still saying what that means (the owner asked for a visible account sign)", async () => {
     pathname = "/";
     getSession.mockResolvedValue({ data: { session: null } });
 
     renderWithData(<AccountLink />);
 
-    expect(await screen.findByText(/saved on this device/i)).toBeInTheDocument();
-    expect(screen.queryByText(/^Guest$/)).not.toBeInTheDocument();
+    expect(await screen.findByText("Guest")).toBeInTheDocument();
+    expect(screen.getByText(/saved on this device/i)).toBeInTheDocument();
+  });
+
+  it("badges an anonymous session as a guest too", async () => {
+    getSession.mockResolvedValue({ data: { session: { user: { id: "u1", is_anonymous: true } } } });
+    renderWithData(<AccountLink />);
+    expect(await screen.findByText("Guest")).toBeInTheDocument();
+  });
+
+  it("badges each kind of signed-in account plainly", async () => {
+    getSession.mockResolvedValue({ data: { session: { user: { id: "u1", is_anonymous: false } } } });
+    const resident = renderWithData(<AccountLink />);
+    expect(await screen.findByText("Resident")).toBeInTheDocument();
+    resident.unmount();
+    for (const [level, label] of [
+      ["barangay", "Barangay official"],
+      ["municipality", "Municipal official"],
+      ["admin", "System admin"],
+    ] as const) {
+      officialLevel = level;
+      const view = renderWithData(<AccountLink />);
+      expect(await screen.findByText(label)).toBeInTheDocument();
+      view.unmount();
+    }
   });
 
   it("shows a Signed in status and a Sign out form posting to /auth/signout for a permanent session", async () => {
@@ -76,7 +97,7 @@ describe("AccountLink", () => {
 
     renderWithData(<AccountLink />);
 
-    expect(await screen.findByText("Signed in")).toBeInTheDocument();
+    expect(await screen.findByText("Resident")).toBeInTheDocument();
     const button = screen.getByRole("button", { name: "Sign out" });
     const form = button.closest("form");
     expect(form).toHaveAttribute("action", "/auth/signout");
@@ -154,7 +175,7 @@ describe("AccountLink", () => {
   it("gives a signed-in resident no dashboard link", async () => {
     getSession.mockResolvedValue({ data: { session: { user: { id: "u1", is_anonymous: false } } } });
     renderWithData(<AccountLink />);
-    await screen.findByText(/signed in/i);
+    await screen.findByText("Resident");
     expect(screen.queryByRole("link", { name: /dashboard/i })).not.toBeInTheDocument();
   });
 });

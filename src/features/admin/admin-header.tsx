@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, History, Home, LayoutDashboard, Map, PlayCircle, ShieldCheck, Smartphone, Users, type LucideIcon } from "lucide-react";
+import { History, Home, LayoutDashboard, Map, PlayCircle, Smartphone, Users, type LucideIcon } from "lucide-react";
 import { useOfficial } from "@/lib/auth/official-context";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { RoleBadge } from "@/features/auth/role-badge";
 import type { Official } from "@/lib/auth/official";
 import type { LocalizedText } from "@/lib/types";
 
@@ -15,29 +15,6 @@ const SIGN_OUT: LocalizedText = { en: "Sign out", fil: "Mag-sign out" };
 const ALL_AREAS: LocalizedText = { en: "All areas", fil: "Lahat ng lugar" };
 
 type Level = Official["level"];
-
-/**
- * Who the signed-in account is, said plainly: the three levels see different
- * things, and until this badge they all looked like the same "admin" page.
- * Icon and words carry it, colour only reinforces.
- */
-const ROLE: Record<Level, { label: LocalizedText; icon: LucideIcon; tone: string }> = {
-  admin: {
-    label: { en: "System admin", fil: "System admin" },
-    icon: ShieldCheck,
-    tone: "border-violet-500/50 bg-violet-500/15 text-violet-200",
-  },
-  municipality: {
-    label: { en: "Municipal official", fil: "Opisyal ng munisipyo" },
-    icon: Building2,
-    tone: "border-sky-500/50 bg-sky-500/15 text-sky-200",
-  },
-  barangay: {
-    label: { en: "Barangay official", fil: "Opisyal ng barangay" },
-    icon: Home,
-    tone: "border-teal-500/50 bg-teal-500/15 text-teal-200",
-  },
-};
 
 interface NavItem {
   href: string;
@@ -98,20 +75,12 @@ export function AdminHeader() {
   const official = useOfficial();
   const { lang } = useLanguage();
   const pathname = usePathname();
-  const role = ROLE[official.level];
-  const RoleIcon = role.icon;
 
   return (
     <header className="border-b">
       <div className="flex flex-wrap items-center justify-between gap-3 p-3">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <span
-            lang={lang}
-            className={cn("inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold", role.tone)}
-          >
-            <RoleIcon aria-hidden="true" className="h-3.5 w-3.5" />
-            {t(role.label, lang)}
-          </span>
+          <RoleBadge kind={official.level} />
           <span className="min-w-0 truncate font-medium">
             {official.displayName} — {official.level === "admin" ? t(ALL_AREAS, lang) : official.areaName}
           </span>

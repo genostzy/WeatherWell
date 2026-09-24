@@ -44,9 +44,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             <RetiredStorageSweep />
             <ReferenceDataProvider
               chrome={
-                <header className="flex items-center justify-between gap-4 border-b border-border px-4 py-3">
+                <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-border px-4 py-3">
                   <span className="text-base font-bold tracking-tight">WeatherWell</span>
-                  <div className="flex items-center gap-2">
+                  {/* Wraps under the name on a narrow phone rather than running off the edge. */}
+                  <div className="flex flex-wrap items-center justify-end gap-2">
                     <LanguageToggle />
                     <OutboxBadge />
                     <AccountLink />

@@ -9,6 +9,7 @@ import { t } from "@/lib/i18n";
 import { getBrowserClient } from "@/lib/supabase/browser";
 import { isAdminPath } from "@/lib/auth/admin-path";
 import { useOfficialRole } from "@/lib/auth/use-official-role";
+import { RoleBadge } from "./role-badge";
 import type { LocalizedText } from "@/lib/types";
 
 const KEEP_REPORTS: LocalizedText = {
@@ -21,7 +22,6 @@ const ON_THIS_DEVICE: LocalizedText = {
   en: "Saved on this device",
   fil: "Nakatago sa device na ito",
 };
-const SIGNED_IN_LABEL: LocalizedText = { en: "Signed in", fil: "Naka-sign in" };
 const DASHBOARD: LocalizedText = { en: "Dashboard", fil: "Dashboard" };
 
 type SessionKind = "none" | "anonymous" | "permanent";
@@ -84,7 +84,7 @@ export function AccountLink() {
   if (kind === "permanent") {
     return (
       <div className="flex items-center gap-1.5">
-        <span className="text-xs text-muted-foreground">{t(SIGNED_IN_LABEL, lang)}</span>
+        <RoleBadge kind={officialRole?.level ?? "resident"} />
         {officialRole && (
           <Button asChild variant="secondary" size="sm">
             <Link href="/admin">{t(DASHBOARD, lang)}</Link>
@@ -106,7 +106,7 @@ export function AccountLink() {
   // there's nothing to "keep" yet for a visitor who has never written.
   return (
     <div className="flex items-center gap-1.5">
-      <span className="text-xs text-muted-foreground">{t(ON_THIS_DEVICE, lang)}</span>
+      <RoleBadge kind="guest" detail={t(ON_THIS_DEVICE, lang)} />
       <Button asChild variant="ghost" size="sm">
         <Link href={`/sign-in?next=${encodeURIComponent(pathname)}`}>
           {t(kind === "anonymous" ? KEEP_REPORTS : SIGN_IN, lang)}
