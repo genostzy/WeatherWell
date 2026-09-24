@@ -6,7 +6,8 @@ const ContentSecurityPolicy = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https://*.tile.openstreetmap.org https://unpkg.com",
   "font-src 'self'",
-  "connect-src 'self' https://*.supabase.co https://*.supabase.in wss://*.supabase.co",
+  // Tiles too: sw.js fetch()es them under this same policy (connect-src, not img-src).
+  "connect-src 'self' https://*.supabase.co https://*.supabase.in wss://*.supabase.co https://*.tile.openstreetmap.org",
   "worker-src 'self' blob:",
   "manifest-src 'self'",
   "frame-ancestors 'none'",
