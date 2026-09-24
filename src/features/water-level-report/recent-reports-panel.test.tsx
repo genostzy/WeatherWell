@@ -85,6 +85,14 @@ describe("RecentReportsPanel", () => {
     expect(screen.getByText(/in the last 6 hours/i)).toBeInTheDocument();
   });
 
+  it("says report, not reports, for one", async () => {
+    const zone = FIXTURE_REFERENCE_DATA.zones[0];
+    const one = [{ id: "a", zoneId: zone.id, depthLevel: "knee", reportedAt: new Date().toISOString(), trustWeight: 1, isOutlier: false }];
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => one }));
+    render(<RecentReportsPanel zone={zone} />);
+    expect(await screen.findByText(/^agreeing report in the last 6 hours$/i)).toBeInTheDocument();
+  });
+
   it("marks an outlier as downweighted rather than hiding it", async () => {
     render(<RecentReportsPanel zone={FIXTURE_REFERENCE_DATA.zones[0]} />);
     await waitFor(() => expect(screen.getByText(/downweighted/i)).toBeInTheDocument());

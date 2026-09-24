@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getHeatIndexCategory, hasElevatedLandslideRisk, isHeavyRainfall, REPORT_THRESHOLD } from "./weather-thresholds";
+import { countsTowardAlert, getHeatIndexCategory, hasElevatedLandslideRisk, isHeavyRainfall, REPORT_THRESHOLD } from "./weather-thresholds";
 
 describe("weather thresholds", () => {
   it("bands the heat index on PAGASA's published cut-offs", () => {
@@ -22,5 +22,20 @@ describe("weather thresholds", () => {
 
   it("needs three agreeing reports, the same as the alert engine", () => {
     expect(REPORT_THRESHOLD).toBe(3);
+  });
+});
+
+describe("countsTowardAlert (found testing the live site)", () => {
+  const now = Date.parse("2026-09-24T12:00:00Z");
+  const r = (depthLevel: string, hoursAgo: number, isOutlier = false) => ({
+    depthLevel,
+    isOutlier,
+    reportedAt: new Date(now - hoursAgo * 3_600_000).toISOString(),
+  });
+  it("counts recent, non-outlier flooding reports only — never dry ones, as the engine does", () => {
+    expect(countsTowardAlert(r("knee", 1), now)).toBe(true);
+    expect(countsTowardAlert(r("dry", 1), now)).toBe(false);
+    expect(countsTowardAlert(r("knee", 7), now)).toBe(false);
+    expect(countsTowardAlert(r("knee", 1, true), now)).toBe(false);
   });
 });

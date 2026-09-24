@@ -6,13 +6,14 @@ import { Badge } from "@/components/ui/badge";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { CENTER_STATUS_CLASS, CENTER_STATUS_LABEL, resolveEffectiveCenterStatus } from "@/lib/center-status";
-import { hasRealEvacuationCenter, NO_VERIFIED_CENTER } from "@/lib/zone-data-quality";
+import { hasRealEvacuationCenter, NO_VERIFIED_CENTER, hasRealHotline } from "@/lib/zone-data-quality";
 import type { LocalizedText, Zone } from "@/lib/types";
 
 const GO_HERE: LocalizedText = { en: "Go here", fil: "Pumunta rito" };
 const CAPACITY: LocalizedText = { en: "Capacity", fil: "Kapasidad" };
 const HOW_TO_GET_THERE: LocalizedText = { en: "How to get there", fil: "Paano makarating" };
 const CALL: LocalizedText = { en: "Call", fil: "Tawagan" };
+const CALL_911: LocalizedText = { en: "Call 911 — national emergency", fil: "Tumawag sa 911 — pambansang emergency" };
 const SPOTS_LEFT: LocalizedText = { en: "spots left", fil: "espasyong natitira" };
 
 export function EvacuationInstructions({ zone }: { zone: Zone }) {
@@ -81,8 +82,10 @@ export function EvacuationInstructions({ zone }: { zone: Zone }) {
           </div>
         </div>
 
+        {/* No verified hotline: 911 is the national emergency number, and a
+            resident reading this in an emergency needs something that rings. */}
         <a
-          href={`tel:${zone.hotlineNumber}`}
+          href={`tel:${hasRealHotline(zone) ? zone.hotlineNumber : "911"}`}
           className="flex items-center gap-4 rounded-md border-2 border-severity-red p-3"
         >
           <Phone
@@ -90,7 +93,9 @@ export function EvacuationInstructions({ zone }: { zone: Zone }) {
             aria-hidden="true"
             className="h-8 w-8 shrink-0"
           />
-          <span className="text-base font-medium">{t(CALL, lang)} {zone.hotlineNumber}</span>
+          <span lang={lang} className="text-base font-medium">
+            {hasRealHotline(zone) ? `${t(CALL, lang)} ${zone.hotlineNumber}` : t(CALL_911, lang)}
+          </span>
         </a>
       </CardContent>
     </Card>

@@ -66,3 +66,13 @@ describe("RelayContactsEditor", () => {
     expect(screen.queryByRole("button", { name: /add/i })).not.toBeInTheDocument();
   });
 });
+
+describe("RelayContactsEditor touch targets (found testing the live site)", () => {
+  beforeEach(() => localStorage.clear());
+  it("makes Add and Remove full 44px targets", () => {
+    saveRelayContacts([{ name: "Lola", number: "0917" }]);
+    render(<RelayContactsEditor />);
+    expect(screen.getByRole("button", { name: /^add$/i }).className).toMatch(/h-11/);
+    expect(screen.getByRole("button", { name: /remove lola/i }).className).toMatch(/size-11|h-11/);
+  });
+});

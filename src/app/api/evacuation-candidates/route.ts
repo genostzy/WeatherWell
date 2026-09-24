@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { buildOverpassQuery, parseOverpass } from "@/lib/osm-candidates";
+import { buildNominatimUrl, buildOverpassQuery, nearest, parseNominatim, parseOverpass } from "@/lib/osm-candidates";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +31,9 @@ export async function GET(request: Request) {
   for (const mirror of MIRRORS) {
     const res = await fetch(`${mirror}?data=${query}`, {
       headers: { "User-Agent": USER_AGENT },
-      signal: AbortSignal.timeout(20_000),
+      // Short: a busy Overpass server rarely recovers within a request, and
+      // Nominatim below is the next try.
+      signal: AbortSignal.timeout(8_000),
       // Not the fetch cache: Overpass reports a timeout as HTTP 200 with a
       // "remark", and caching that would mean a week of empty answers. Only
       // a real answer gets cached, by the CDN, via the header below.
@@ -45,6 +47,22 @@ export async function GET(request: Request) {
         headers: { "Cache-Control": "public, s-maxage=86400" },
       });
     }
+  }
+  // Overpass busy (it was, throughout live testing): OpenStreetMap's own
+  // search, schools then town halls, a second apart per its usage policy.
+  const fromNominatim = [];
+  for (const [amenity, kind] of [["school", "school"], ["townhall", "hall"]] as const) {
+    if (amenity === "townhall") await new Promise((r) => setTimeout(r, 1100));
+    const res = await fetch(buildNominatimUrl(zone.lat, zone.lng, amenity), {
+      headers: { "User-Agent": USER_AGENT },
+      signal: AbortSignal.timeout(8_000),
+      cache: "no-store",
+    }).catch(() => null);
+    if (!res?.ok) continue;
+    fromNominatim.push(...parseNominatim(await res.json().catch(() => null), zone.lat, zone.lng, kind));
+  }
+  if (fromNominatim.length > 0) {
+    return NextResponse.json(nearest(fromNominatim), { headers: { "Cache-Control": "public, s-maxage=86400" } });
   }
   return NextResponse.json([], { headers: { "Cache-Control": "no-store" } });
 }

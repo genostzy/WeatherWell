@@ -72,7 +72,7 @@ const STEP_EXPLANATION = {
     "alert-issued": "Alert auto-triggered based on crowd reports and prediction thresholds.",
     "push-sent": "Push notification delivered to all subscribed devices in the zone.",
     "push-failed": "Push delivery failed — retrying once after 60 seconds.",
-    "sms-sent": "SMS fallback sent to residents whose push failed (mock in Phase 1).",
+    "sms-sent": "SMS fallback sent to residents whose push failed (simulated).",
     cached: "Alert cached locally on each device for offline access.",
     cascade: "Upstream flooding detected — early warning sent to downstream zones.",
     complete: "Simulation complete. All delivery channels demonstrated.",
@@ -82,7 +82,7 @@ const STEP_EXPLANATION = {
     "alert-issued": "Auto-triggered alert batay sa crowd reports at prediction thresholds.",
     "push-sent": "Push notification na-deliver sa lahat ng subscribed devices sa zone.",
     "push-failed": "Push delivery nabigo — ni-retry pagkatapos ng 60 segundo.",
-    "sms-sent": "SMS fallback na-send sa mga resident na nabigo ang push (mock sa Phase 1).",
+    "sms-sent": "SMS fallback na-send sa mga resident na nabigo ang push (simulated).",
     cached: "Alert naka-cache sa bawat device para sa offline access.",
     cascade: "May baha sa itaas — early warning na-send sa downstream zones.",
     complete: "Simulation tapos na. Lahat ng delivery channels na-demonstrate.",
@@ -119,8 +119,8 @@ const RUN_AGAIN: LocalizedText = { en: "Run Again", fil: "Muli" };
 const START_SIMULATION: LocalizedText = { en: "Start Simulation", fil: "Simulan" };
 const RESET: LocalizedText = { en: "Reset", fil: "I-reset" };
 const DRILL_NOTE: LocalizedText = {
-  en: "Nothing here reaches a real resident — this is the PRD's drill mode, unauthenticated in Phase 1 and PIN-protected from Phase 2.",
-  fil: "Walang umaabot sa totoong residente — ito ang drill mode ng PRD, walang PIN sa Phase 1.",
+  en: "Nothing here reaches a real resident — it is a drill, open only to signed-in officials.",
+  fil: "Walang umaabot sa totoong residente — isa itong drill, para lang sa mga naka-sign in na opisyal.",
 };
 
 function isStepDone(

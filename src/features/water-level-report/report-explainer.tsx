@@ -8,8 +8,8 @@ import type { LocalizedText } from "@/lib/types";
 
 const TITLE: LocalizedText = { en: "What happens with your report", fil: "Ano ang mangyayari sa ulat mo" };
 const PHASE_NOTE: LocalizedText = {
-  en: "Your report is saved on your device the moment you tap it, and reaches the barangay record as soon as there is signal. The checks above are how the real pipeline will treat it from Phase 3.",
-  fil: "Naitatala agad sa device mo ang ulat pagpindot mo, at ipinapadala sa talaan ng barangay pagbalik ng signal. Ganito sila susuriin ng totoong pipeline mula Phase 3.",
+  en: "Your report is saved on your phone the moment you tap it, and reaches your barangay as soon as there is signal. Every report goes through the checks above.",
+  fil: "Naitatala agad sa telepono mo ang ulat pagpindot mo, at ipinapadala sa inyong barangay pagbalik ng signal. Dumadaan ang bawat ulat sa mga pagsusuring ito.",
 };
 
 const STEPS: { icon: typeof ShieldCheck; title: LocalizedText; body: LocalizedText }[] = [

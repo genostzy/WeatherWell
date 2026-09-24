@@ -121,7 +121,8 @@ export function RelayContactsEditor() {
                 <Button
                   type="button"
                   variant="ghost"
-                  size="sm"
+                  size="icon-lg"
+                  className="size-11"
                   aria-label={`${t(REMOVE, lang)} ${c.name}`}
                   onClick={() => save(contacts.filter((_, j) => j !== i))}
                 >
@@ -157,7 +158,7 @@ export function RelayContactsEditor() {
                 autoComplete="off"
               />
             </div>
-            <Button type="submit" size="sm">
+            <Button type="submit" size="lg">
               {t(ADD, lang)}
             </Button>
           </form>

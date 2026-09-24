@@ -52,6 +52,27 @@ describe("GET /api/evacuation-candidates", () => {
     expect(fetchMock.mock.calls[1][0]).not.toBe(fetchMock.mock.calls[0][0]);
   });
 
+  it("falls back to Nominatim when every Overpass server is busy", async () => {
+    fetchMock.mockImplementation(async (url: string) => {
+      if (String(url).includes("nominatim")) {
+        return {
+          ok: true,
+          json: async () =>
+            String(url).includes("amenity=school")
+              ? [{ name: "Nilombot Elementary School", type: "school", lat: "16.0281", lon: "120.4364" }]
+              : [{ name: "Mapandan Municipal Hall", type: "townhall", lat: "16.03", lon: "120.45" }],
+        };
+      }
+      return { ok: true, json: async () => ({ elements: [], remark: "runtime error: too busy" }) };
+    });
+    const res = await get("?zoneId=zone-1");
+    const body = await res.json();
+    expect(body.map((c: { name: string }) => c.name)).toEqual(["Nilombot Elementary School", "Mapandan Municipal Hall"]);
+    expect(body[1].kind).toBe("hall");
+    const nominatimCall = fetchMock.mock.calls.find(([url]) => String(url).includes("nominatim"))!;
+    expect(nominatimCall[1].headers["User-Agent"]).toMatch(/WeatherWell/);
+  }, 10_000);
+
   it("answers an empty list, not an error, when every mirror fails", async () => {
     fetchMock.mockRejectedValue(new Error("timeout"));
     const res = await get("?zoneId=zone-1");

@@ -92,3 +92,42 @@ export async function setZoneAlert(input: SetZoneAlertInput): Promise<ActionResu
   // is always "tell the operator now".
   return { ok: false, permanent: true, error: error.message ?? `Database error ${error.code ?? "(no code)"}` };
 }
+
+/**
+ * An official confirms the engine's automatic advisory (idea 4). Re-issued as
+ * theirs with the same severity and what residents reported, "unverified"
+ * swapped for "confirmed by your barangay". Read on the server rather than
+ * sent by the page, so confirming can't change the words.
+ */
+export async function confirmAutomaticAlert(zoneId: string): Promise<ActionResult> {
+  const supabase = await createSupabaseUserClient();
+  const userId = await callerId(supabase);
+  if (!userId) {
+    return { ok: false, permanent: true, error: "No session — sign in and try again." };
+  }
+
+  const { data: alert, error: readError } = (await supabase
+    .from("alerts")
+    .select("severity, source, message")
+    .eq("zone_id", zoneId)
+    .eq("is_active", true)
+    .maybeSingle()) as {
+    data: { severity: string; source: string; message: { en: string; fil: string } } | null;
+    error: { message: string } | null;
+  };
+  if (readError) return { ok: false, permanent: true, error: readError.message };
+  if (!alert || alert.source !== "auto_crowdsourced") {
+    return { ok: false, permanent: true, error: "There is no automatic advisory here to confirm." };
+  }
+
+  const { error } = await supabase.rpc("set_zone_alert", {
+    p_zone_id: zoneId,
+    p_severity: alert.severity,
+    p_message: {
+      en: alert.message.en.replace("(unverified)", "(confirmed by your barangay)"),
+      fil: alert.message.fil.replace("(hindi pa kumpirmado)", "(kinumpirma ng inyong barangay)"),
+    },
+  });
+  if (!error) return { ok: true };
+  return { ok: false, permanent: true, error: error.message ?? `Database error ${error.code ?? "(no code)"}` };
+}

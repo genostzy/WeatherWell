@@ -227,3 +227,12 @@ describe("EvacuationManagementPanel capacity control after a confirmed write (R1
     );
   });
 });
+
+describe("EvacuationManagementPanel placeholders (found testing the live site)", () => {
+  it("shows no call link for a placeholder hotline", () => {
+    const zone = { ...FIXTURE_REFERENCE_DATA.zones[0], hotlineNumber: "00000000000" };
+    renderWithData(<EvacuationManagementPanel zones={[zone]} />, { data: { zones: [zone] } });
+    expect(document.querySelector('a[href="tel:00000000000"]')).toBeNull();
+    expect(screen.getByText(/no verified hotline/i)).toBeInTheDocument();
+  });
+});

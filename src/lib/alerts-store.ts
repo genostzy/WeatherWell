@@ -70,3 +70,21 @@ export function useSetZoneAlert(): (input: SetZoneAlertInput) => Promise<ActionR
   }
   return setAlert;
 }
+
+/** Confirms the zone's automatic advisory as the official's own; refreshes alerts once the database accepts it. */
+export function useConfirmAutomaticAlert(): (zoneId: string) => Promise<ActionResult> {
+  const refresh = useContext(AlertsRefreshContext);
+  const confirm = useCallback(
+    async (zoneId: string) => {
+      const { confirmAutomaticAlert } = await import("@/app/actions/set-zone-alert");
+      const result = await confirmAutomaticAlert(zoneId);
+      if (result.ok) await refresh?.();
+      return result;
+    },
+    [refresh]
+  );
+  if (!refresh) {
+    throw new Error("useConfirmAutomaticAlert requires ReferenceDataProvider's alerts refresh. In tests, use renderWithData().");
+  }
+  return confirm;
+}

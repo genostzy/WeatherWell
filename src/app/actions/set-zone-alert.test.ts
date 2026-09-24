@@ -107,3 +107,45 @@ describe("setZoneAlert", () => {
     expect(result).toMatchObject({ ok: false, permanent: true });
   });
 });
+
+describe("confirmAutomaticAlert (found testing the live site)", () => {
+  function activeAlert(row: object | null) {
+    const maybeSingle = vi.fn().mockResolvedValue({ data: row, error: null });
+    const eq2 = vi.fn(() => ({ maybeSingle }));
+    const eq1 = vi.fn(() => ({ eq: eq2 }));
+    from.mockReturnValue({ select: vi.fn(() => ({ eq: eq1 })) });
+  }
+
+  it("re-issues the advisory as the official's, keeping what residents reported", async () => {
+    getClaims.mockResolvedValue({ data: { claims: { sub: "official-1" } } });
+    activeAlert({
+      severity: "yellow",
+      source: "auto_crowdsourced",
+      message: {
+        en: "Advisory — 3 residents report knee-deep water (unverified).",
+        fil: "Paalala — 3 residente ang nag-ulat ng tubig na hanggang tuhod (hindi pa kumpirmado).",
+      },
+    });
+    rpc.mockResolvedValue({ error: null });
+    const { confirmAutomaticAlert } = await import("./set-zone-alert");
+
+    expect(await confirmAutomaticAlert("zone-1")).toEqual({ ok: true });
+    expect(rpc).toHaveBeenCalledWith("set_zone_alert", {
+      p_zone_id: "zone-1",
+      p_severity: "yellow",
+      p_message: {
+        en: "Advisory — 3 residents report knee-deep water (confirmed by your barangay).",
+        fil: "Paalala — 3 residente ang nag-ulat ng tubig na hanggang tuhod (kinumpirma ng inyong barangay).",
+      },
+    });
+  });
+
+  it("refuses when there is no automatic advisory to confirm", async () => {
+    getClaims.mockResolvedValue({ data: { claims: { sub: "official-1" } } });
+    activeAlert({ severity: "red", source: "manual", message: { en: "x", fil: "x" } });
+    const { confirmAutomaticAlert } = await import("./set-zone-alert");
+    const result = await confirmAutomaticAlert("zone-1");
+    expect(result.ok).toBe(false);
+    expect(rpc).not.toHaveBeenCalled();
+  });
+});

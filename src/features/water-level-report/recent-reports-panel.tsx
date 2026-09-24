@@ -23,6 +23,7 @@ const NO_REPORTS: LocalizedText = {
 };
 const OUTLIER: LocalizedText = { en: "Outlier — downweighted", fil: "Outlier — binabaan ang timbang" };
 const AGREEING: LocalizedText = { en: "agreeing reports in the last 6 hours", fil: "magkatugmang ulat sa huling 6 na oras" };
+const AGREEING_ONE: LocalizedText = { en: "agreeing report in the last 6 hours", fil: "magkatugmang ulat sa huling 6 na oras" };
 const THRESHOLD_NOTE: LocalizedText = {
   en: "reports needed before an alert can auto-trigger",
   fil: "ulat ang kailangan bago mag-auto-trigger ang alerto",
@@ -52,7 +53,7 @@ export function RecentReportsPanel({ zone }: { zone: Zone }) {
           <>
             <div className="flex items-baseline gap-2">
               <span className="text-2xl font-bold tabular-nums">{agreeing}</span>
-              <span className="text-sm text-muted-foreground">{t(AGREEING, lang)}</span>
+              <span className="text-sm text-muted-foreground">{t(agreeing === 1 ? AGREEING_ONE : AGREEING, lang)}</span>
             </div>
             {/* Progress toward the multi-report threshold — PRD Anti-Abuse layer 3. */}
             <div className="flex gap-1" aria-hidden="true">

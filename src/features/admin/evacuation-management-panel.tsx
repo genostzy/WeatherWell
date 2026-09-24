@@ -28,6 +28,7 @@ import { useOfficial } from "@/lib/auth/official-context";
 import { isInArea } from "@/lib/auth/official";
 import type { CenterStatus, LanguageCode, LocalizedText, Zone } from "@/lib/types";
 import { useHeadcountCommit } from "./use-headcount-commit";
+import { hasRealHotline } from "@/lib/zone-data-quality";
 
 const TITLE: LocalizedText = { en: "Evacuation Management", fil: "Pamamahala ng Evacuation" };
 const SUBTITLE: LocalizedText = {
@@ -154,13 +155,20 @@ function EvacuationCenterRow({ zone, lang }: { zone: Zone; lang: LanguageCode })
         <div className="min-w-0">
           <p className="truncate font-medium">{zone.name}</p>
           <p className="truncate text-sm text-muted-foreground">{zone.evacuationCenterName}</p>
-          <a
-            href={`tel:${zone.hotlineNumber}`}
-            className="flex items-center gap-1 text-sm text-muted-foreground underline-offset-2 hover:underline"
-          >
-            <Phone aria-hidden="true" className="h-3.5 w-3.5" />
-            {zone.hotlineNumber}
-          </a>
+          {hasRealHotline(zone) ? (
+            <a
+              href={`tel:${zone.hotlineNumber}`}
+              className="flex items-center gap-1 text-sm text-muted-foreground underline-offset-2 hover:underline"
+            >
+              <Phone aria-hidden="true" className="h-3.5 w-3.5" />
+              {zone.hotlineNumber}
+            </a>
+          ) : (
+            <p className="flex items-center gap-1 text-sm text-muted-foreground">
+              <Phone aria-hidden="true" className="h-3.5 w-3.5" />
+              {lang === "fil" ? "Walang beripikadong hotline" : "No verified hotline"}
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span

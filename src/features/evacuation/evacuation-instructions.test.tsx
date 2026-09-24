@@ -56,3 +56,15 @@ describe("EvacuationInstructions with the nationwide seed's placeholder centre",
     expect(screen.queryByText(/space available|limited|full|unknown/i)).not.toBeInTheDocument();
   });
 });
+
+describe("EvacuationInstructions without a verified hotline (found testing the live site)", () => {
+  const zone = { ...FIXTURE_REFERENCE_DATA.zones[0], hotlineNumber: "00000000000" };
+
+  it("never offers to call the placeholder, and points to 911 instead", () => {
+    render(<EvacuationInstructions zone={zone} />);
+    expect(document.querySelector('a[href="tel:00000000000"]')).toBeNull();
+    const call = screen.getByRole("link", { name: /911/ });
+    expect(call).toHaveAttribute("href", "tel:911");
+    expect(call).toHaveTextContent(/national emergency/i);
+  });
+});

@@ -17,6 +17,7 @@ const UNVERIFIED: LocalizedText = {
 const READ_ALOUD: LocalizedText = { en: "Read aloud", fil: "Basahin nang malakas" };
 const ISSUED: LocalizedText = { en: "Issued", fil: "Inilabas" };
 const HOURS_AGO: LocalizedText = { en: "h ago", fil: "oras na ang nakalipas" };
+const UNDER_AN_HOUR: LocalizedText = { en: "less than an hour ago", fil: "wala pang isang oras ang nakalipas" };
 const MAYBE_STALE: LocalizedText = {
   en: "Over a day old — may no longer be current. Check with your barangay.",
   fil: "Mahigit isang araw na — maaaring hindi na napapanahon. Magtanong sa inyong barangay.",
@@ -58,7 +59,7 @@ function AlertAge({ issuedAt, lang }: { issuedAt: string; lang: LanguageCode }) 
   const hours = Math.floor(minutesSinceReport(issuedAt) / 60);
   return (
     <p lang={lang} className="text-xs text-muted-foreground">
-      {t(ISSUED, lang)} {hours} {t(HOURS_AGO, lang)}
+      {t(ISSUED, lang)} {hours === 0 ? t(UNDER_AN_HOUR, lang) : `${hours} ${t(HOURS_AGO, lang)}`}
       {hours >= STALE_AFTER_HOURS && <span className="block font-medium text-severity-orange">{t(MAYBE_STALE, lang)}</span>}
     </p>
   );

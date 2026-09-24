@@ -57,3 +57,12 @@ describe("AlertDetails age", () => {
     expect(screen.queryByText(/may no longer be current/i)).not.toBeInTheDocument();
   });
 });
+
+describe("AlertDetails fresh alert (found testing the live site)", () => {
+  afterEach(() => vi.useRealTimers());
+  it("says less than an hour ago rather than 0 h ago", () => {
+    vi.useFakeTimers({ now: new Date("2026-09-24T12:00:00Z"), toFake: ["Date"] });
+    render(<AlertDetails alert={{ ...alert, issuedAt: new Date(Date.now() - 20 * 60 * 1000).toISOString() }} zone={zone} lang="en" />);
+    expect(screen.getByText(/issued less than an hour ago/i)).toBeInTheDocument();
+  });
+});

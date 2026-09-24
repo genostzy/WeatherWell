@@ -53,3 +53,35 @@ export function parseOverpass(reply: unknown, lat: number, lng: number): Candida
   }
   return sites.sort((a, b) => a.distanceM - b.distanceM).slice(0, MAX_CANDIDATES);
 }
+
+/**
+ * Fallback when every Overpass server is busy (as it was throughout live
+ * testing): Nominatim, OpenStreetMap's own free search, one amenity per
+ * request inside a ~2 km box. Its usage policy allows one request a second,
+ * so callers space requests and rely on caching.
+ */
+const BOX_DEG = 0.02;
+const round4 = (n: number) => Math.round(n * 10000) / 10000;
+
+export function buildNominatimUrl(lat: number, lng: number, amenity: "school" | "townhall"): string {
+  const box = [round4(lng - BOX_DEG), round4(lat + BOX_DEG), round4(lng + BOX_DEG), round4(lat - BOX_DEG)].join(",");
+  return `https://nominatim.openstreetmap.org/search?amenity=${amenity}&viewbox=${box}&bounded=1&format=jsonv2&limit=10`;
+}
+
+export function parseNominatim(reply: unknown, lat: number, lng: number, kind: CandidateKind): CandidateSite[] {
+  if (!Array.isArray(reply)) return [];
+  const sites: CandidateSite[] = [];
+  for (const item of reply as Array<Record<string, unknown>>) {
+    const name = String(item.name ?? "").trim();
+    const pLat = Number(item.lat);
+    const pLng = Number(item.lon);
+    if (!name || !Number.isFinite(pLat) || !Number.isFinite(pLng)) continue;
+    sites.push({ name, kind, lat: pLat, lng: pLng, distanceM: Math.round(metres(lat, lng, pLat, pLng)) });
+  }
+  return sites.sort((a, b) => a.distanceM - b.distanceM);
+}
+
+/** Nearest few across several kinds. */
+export function nearest(sites: CandidateSite[]): CandidateSite[] {
+  return [...sites].sort((a, b) => a.distanceM - b.distanceM).slice(0, MAX_CANDIDATES);
+}

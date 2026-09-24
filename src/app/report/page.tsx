@@ -55,8 +55,8 @@ const SAFETY_BODY: LocalizedText = {
 };
 const THANKS: LocalizedText = { en: "Report recorded", fil: "Naitala ang ulat" };
 const THANKS_BODY: LocalizedText = {
-  en: "Thanks — your report is in. It is on your device now and reaches the barangay record as soon as you have signal; from Phase 3 it joins the threshold that can trigger a real alert.",
-  fil: "Salamat — naitala ang ulat mo. Nasa device mo na ito at makakarating sa talaan ng barangay pagkaroon ng signal; mula Phase 3 ito na ang bahagi ng threshold para sa totoong alerto.",
+  en: "Thanks — your report is in. It is saved on your phone and reaches your barangay as soon as you have signal, where it counts toward an automatic advisory.",
+  fil: "Salamat — naitala ang ulat mo. Nasa telepono mo na ito at makakarating sa inyong barangay pagkaroon ng signal, kung saan bibilangin ito para sa awtomatikong paalala.",
 };
 const NOT_SAVED: LocalizedText = {
   en: "Report not saved",

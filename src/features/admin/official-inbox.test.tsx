@@ -2,8 +2,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { screen, fireEvent, waitFor, within } from "@testing-library/react";
 
 const setZoneAlertMock = vi.fn().mockResolvedValue({ ok: true });
+const confirmMock = vi.fn().mockResolvedValue({ ok: true });
 vi.mock("@/app/actions/set-zone-alert", () => ({
   setZoneAlert: (...args: unknown[]) => setZoneAlertMock(...args),
+  confirmAutomaticAlert: (...args: unknown[]) => confirmMock(...args),
 }));
 
 import { OfficialInbox } from "./official-inbox";
@@ -28,7 +30,10 @@ function alertFor(zoneId: string, changes: Partial<AlertRecord>): AlertRecord {
 }
 
 describe("OfficialInbox (ideas 4, 5, 13)", () => {
-  beforeEach(() => setZoneAlertMock.mockClear());
+  beforeEach(() => {
+    setZoneAlertMock.mockClear();
+    confirmMock.mockClear();
+  });
 
   it("asks the official to confirm or reject an automatic advisory", async () => {
     const alerts = [alertFor(zone1.id, { source: "auto_crowdsourced", confidence: "estimated" })];
@@ -37,7 +42,10 @@ describe("OfficialInbox (ideas 4, 5, 13)", () => {
     expect(within(item).getByText(/residents report/i)).toBeInTheDocument();
 
     fireEvent.click(within(item).getByRole("button", { name: /confirm/i }));
-    await waitFor(() => expect(setZoneAlertMock).toHaveBeenCalledWith({ zoneId: zone1.id, severity: "yellow" }));
+    // Confirming keeps what residents reported (found testing the live site).
+    await waitFor(() => expect(confirmMock).toHaveBeenCalledWith(zone1.id));
+    expect(setZoneAlertMock).not.toHaveBeenCalled();
+    expect(await screen.findByText(/confirmed/i)).toBeInTheDocument();
   });
 
   it("clears an advisory the official rejects", async () => {
@@ -45,6 +53,7 @@ describe("OfficialInbox (ideas 4, 5, 13)", () => {
     renderWithData(<OfficialInbox zones={FIXTURE_REFERENCE_DATA.zones} />, { alerts });
     fireEvent.click(screen.getByRole("button", { name: /reject/i }));
     await waitFor(() => expect(setZoneAlertMock).toHaveBeenCalledWith({ zoneId: zone1.id, severity: "none" }));
+    expect(await screen.findByText(/alert lifted/i)).toBeInTheDocument();
   });
 
   it("asks about an official's own alert once it is over a day old", async () => {
@@ -74,6 +83,17 @@ describe("OfficialInbox (ideas 4, 5, 13)", () => {
     fireEvent.click(screen.getByRole("radio", { name: /warning/i }));
     fireEvent.click(screen.getByRole("button", { name: /send alert/i }));
     await waitFor(() => expect(setZoneAlertMock).toHaveBeenCalledWith({ zoneId: zone3.id, severity: "red" }));
+  });
+
+  it("shows the post to copy by hand when the browser blocks the clipboard (found testing the live site)", async () => {
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText: vi.fn().mockRejectedValue(new Error("NotAllowedError")) },
+      configurable: true,
+    });
+    renderWithData(<OfficialInbox zones={FIXTURE_REFERENCE_DATA.zones} />, { alerts: [alertFor(zone3.id, {})] });
+    fireEvent.click(screen.getByRole("button", { name: /copy post for facebook/i }));
+    const box = await screen.findByRole("textbox", { name: /post to copy/i });
+    expect((box as HTMLTextAreaElement).value).toContain(zone3.name);
   });
 
   it("copies a ready-to-paste Facebook post for an active alert", async () => {
