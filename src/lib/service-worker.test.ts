@@ -132,10 +132,20 @@ function loadServiceWorker(options: {
     caches: cacheStorage,
     fetch: (req: { url: string } | string, init?: Record<string, unknown>) =>
       fetchImpl(urlOf(req), init),
-    Response: { error: () => response("", 0) },
+    // A stand-in for the Response constructor, keeping the body as given so a
+    // test can look at the bytes the worker built.
+    Response: Object.assign(
+      function FakeResponseCtor(this: Record<string, unknown>, body: unknown, init?: { status?: number; headers?: Record<string, string> }) {
+        this.body = body;
+        this.status = init?.status ?? 200;
+        this.headers = init?.headers ?? {};
+      },
+      { error: () => response("", 0) }
+    ),
     URL,
     setTimeout,
     clearTimeout,
+    atob,
     clients: { matchAll: async () => [], openWindow: async () => {} },
     // Forwarded from the outer (jsdom/Node) realm rather than left for the vm
     // context to make its own copies, exactly like setTimeout/clearTimeout
@@ -328,6 +338,20 @@ describe("service worker request routing", () => {
     });
 
     expect(result).toBeUndefined();
+  });
+
+  it("answers a map tile it cannot fetch with a real blank image, not a broken one (found testing the live site)", async () => {
+    const { listeners } = loadServiceWorker({
+      fetch: async () => {
+        throw new TypeError("Failed to fetch");
+      },
+    });
+
+    const result = await handleFetch(listeners, { url: "https://a.tile.openstreetmap.org/14/13672/7452.png" });
+
+    const bytes = result?.body as unknown as Uint8Array;
+    expect(ArrayBuffer.isView(bytes)).toBe(true);
+    expect([...bytes.slice(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]); // PNG signature
   });
 
   it("ignores non-GET requests", async () => {

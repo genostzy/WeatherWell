@@ -20,7 +20,7 @@
  * CURRENT_CACHES, so a bump is what evicts a bad build from installed devices.
  * Leaving it unchanged is what pins users to a stale app forever.
  */
-const VERSION = "v16";
+const VERSION = "v17";
 
 const SHELL_CACHE = `weatherwell-shell-${VERSION}`;
 const ASSET_CACHE = `weatherwell-assets-${VERSION}`;
@@ -373,6 +373,11 @@ function revalidatePlainEntry(request, plainUrl, cacheName) {
 
 // --- Tile cache functions ---
 
+const TRANSPARENT_PNG = Uint8Array.from(
+  atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="),
+  (c) => c.charCodeAt(0)
+);
+
 /**
  * Evict oldest tiles when cache exceeds TILE_CACHE_MAX_ENTRIES.
  * Uses the Cache API's entries() which returns them in insertion order.
@@ -405,12 +410,10 @@ async function cacheTile(request) {
     }
     return response;
   } catch {
-    // Tile not in cache and offline — return a transparent 1x1 pixel PNG
-    // so Leaflet doesn't show a broken image icon
-    return new Response(
-      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQI12NgAAIABQABNjN9GQAAAAlwSFlzAAAWJQAAFiUBSVIk8AAAABl0RVh0U29mdHdhcmUAcGFpbnQubmV0IDQuMC41ZYUyZQAAAA1JREFUGFdjYPj/nwEABQAB/VjLQQAAAABJRU5ErkJggg==",
-      { headers: { "Content-Type": "image/png" } }
-    );
+    // Tile not in cache and offline: a real 1x1 transparent PNG, so the map
+    // shows blank ground rather than broken images. (This used to send the
+    // text of a data: URL as the body, which no browser can draw.)
+    return new Response(TRANSPARENT_PNG.slice(), { headers: { "Content-Type": "image/png" } });
   }
 }
 
