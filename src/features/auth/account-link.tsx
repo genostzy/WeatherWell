@@ -8,6 +8,7 @@ import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { getBrowserClient } from "@/lib/supabase/browser";
 import { isAdminPath } from "@/lib/auth/admin-path";
+import { useOfficialRole } from "@/lib/auth/use-official-role";
 import type { LocalizedText } from "@/lib/types";
 
 const KEEP_REPORTS: LocalizedText = {
@@ -21,6 +22,7 @@ const ON_THIS_DEVICE: LocalizedText = {
   fil: "Nakatago sa device na ito",
 };
 const SIGNED_IN_LABEL: LocalizedText = { en: "Signed in", fil: "Naka-sign in" };
+const DASHBOARD: LocalizedText = { en: "Dashboard", fil: "Dashboard" };
 
 type SessionKind = "none" | "anonymous" | "permanent";
 
@@ -50,6 +52,7 @@ export function AccountLink() {
   const { lang } = useLanguage();
   const [kind, setKind] = useState<SessionKind>("none");
   const isAdmin = isAdminPath(pathname);
+  const officialRole = useOfficialRole();
 
   useEffect(() => {
     if (isAdmin) return;
@@ -82,6 +85,11 @@ export function AccountLink() {
     return (
       <div className="flex items-center gap-1.5">
         <span className="text-xs text-muted-foreground">{t(SIGNED_IN_LABEL, lang)}</span>
+        {officialRole && (
+          <Button asChild variant="secondary" size="sm">
+            <Link href="/admin">{t(DASHBOARD, lang)}</Link>
+          </Button>
+        )}
         <form method="post" action="/auth/signout">
           <input type="hidden" name="next" value={pathname} />
           <Button type="submit" variant="ghost" size="sm">

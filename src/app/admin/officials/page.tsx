@@ -5,13 +5,25 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseUserClient } from "@/lib/supabase/user-server";
 import { toOfficialRows } from "@/lib/official-rows-mapper";
 import { OfficialsPanel } from "@/features/admin/officials-panel";
+import { TownOfficialsPanel } from "@/features/admin/town-officials-panel";
+import type { ReactNode } from "react";
+
+/** Both versions of the page share its frame and a plain title. */
+function Frame({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <main className="mx-auto w-full max-w-2xl space-y-6 p-4 sm:p-6">
+      <h1 className="text-2xl font-bold">{title}</h1>
+      {children}
+    </main>
+  );
+}
 
 /**
- * Admin-only. The /admin layout has already gated this request to a
- * signed-in, appointed official (admin or otherwise) — this page adds the
- * one further check that matters here: level === "admin". An official
- * visiting this URL directly gets a 404, not a redirect that would hint at
- * this page's existence. The row-shaping logic itself lives in
+ * An admin manages every official; a municipal official manages their own
+ * town's barangay officials. The /admin layout has already gated this
+ * request to a signed-in, appointed official — a barangay official visiting
+ * this URL directly gets a 404, not a redirect that would hint at this
+ * page's existence. The row-shaping logic itself lives in
  * official-rows-mapper.ts (see its own test) — this page is composition
  * only, same split as /admin/history and official-actions-mapper.ts.
  *
@@ -24,6 +36,17 @@ import { OfficialsPanel } from "@/features/admin/officials-panel";
  */
 export default async function OfficialsPage() {
   const gate = await loadOfficial();
+  if (gate.state === "official" && gate.official.level === "municipality") {
+    // A municipal official manages their own town's barangay officials;
+    // town_officials() answers for the caller's town only.
+    const { data } = await (await createSupabaseUserClient()).rpc("town_officials");
+    const officials = (data ?? []).map((row) => ({ userId: row.user_id, displayName: row.display_name, areaCode: row.area_code }));
+    return (
+      <Frame title="Barangay officials">
+        <TownOfficialsPanel officials={officials} />
+      </Frame>
+    );
+  }
   if (gate.state !== "official" || gate.official.level !== "admin") {
     notFound();
   }
@@ -72,5 +95,9 @@ export default async function OfficialsPage() {
     emailById
   );
 
-  return <OfficialsPanel officials={rows} />;
+  return (
+    <Frame title="Officials">
+      <OfficialsPanel officials={rows} />
+    </Frame>
+  );
 }

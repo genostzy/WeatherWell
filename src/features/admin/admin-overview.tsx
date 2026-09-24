@@ -23,6 +23,8 @@ import { EvacuationManagementPanel } from "@/features/admin/evacuation-managemen
 import { CommunityPinModerationPanel } from "@/features/admin/community-pin-moderation-panel";
 import { NoZonesNotice } from "@/features/admin/no-zones-notice";
 import { OfficialInbox } from "@/features/admin/official-inbox";
+import { OfficialMessagesPanel } from "@/features/admin/official-messages-panel";
+import { TownBarangaysPanel, type TownOfficial } from "@/features/admin/town-barangays-panel";
 import { useWaterLevelReports } from "@/lib/water-level-reports";
 import { countReportsToday } from "@/lib/reports-today";
 import { useTyphoon } from "@/lib/use-typhoon";
@@ -35,10 +37,15 @@ import { useOfficial } from "@/lib/auth/official-context";
 import { isInArea } from "@/lib/auth/official";
 import type { LocalizedText } from "@/lib/types";
 
-const PAGE_TITLE: LocalizedText = { en: "Admin Dashboard", fil: "Dashboard ng Admin" };
-const SUBTITLE: LocalizedText = {
-  en: "Live picture of every zone — hazards, crowd reports, and evacuation capacity",
-  fil: "Live na larawan ng bawat zone — panganib, ulat, at kapasidad ng evacuation",
+const SYSTEM_TITLE: LocalizedText = { en: "System dashboard", fil: "Dashboard ng sistema" };
+const SYSTEM_SUBTITLE: LocalizedText = {
+  en: "Every barangay nationwide — officials, alerts, crowd reports and evacuation capacity",
+  fil: "Bawat barangay sa buong bansa — mga opisyal, alerto, ulat at kapasidad ng evacuation",
+};
+const TOWN_TITLE: LocalizedText = { en: "{town} dashboard", fil: "Dashboard ng {town}" };
+const TOWN_SUBTITLE: LocalizedText = {
+  en: "Every barangay in {town} — alerts, centres, reports, and updates from barangay officials",
+  fil: "Bawat barangay sa {town} — alerto, center, ulat, at update mula sa mga opisyal ng barangay",
 };
 const AT_A_GLANCE: LocalizedText = { en: "At a glance", fil: "Sa isang sulyap" };
 const HAZARDS: LocalizedText = { en: "Hazard monitoring", fil: "Pagsubaybay sa panganib" };
@@ -70,7 +77,7 @@ const UNVERIFIED: LocalizedText = { en: "unverified, resident-reported", fil: "h
 const ACTIVE_CYCLONE: LocalizedText = { en: "Tropical cyclone", fil: "Bagyo" };
 const NONE_TRACKED: LocalizedText = { en: "None tracked", fil: "Wala" };
 
-export function AdminOverview() {
+export function AdminOverview({ townOfficials = [] }: { townOfficials?: TownOfficial[] } = {}) {
   const { lang } = useLanguage();
   const official = useOfficial();
   const pins = useCommunityPins();
@@ -107,6 +114,9 @@ export function AdminOverview() {
   // production): one row per zone in the panels below froze the browser tab
   // at that scale, so an admin gets a pointer to the map instead.
   const isNationwide = official.level === "admin";
+  const isTown = official.level === "municipality";
+  const title = isNationwide ? t(SYSTEM_TITLE, lang) : t(TOWN_TITLE, lang).replace("{town}", official.areaName);
+  const subtitle = isNationwide ? t(SYSTEM_SUBTITLE, lang) : t(TOWN_SUBTITLE, lang).replace("{town}", official.areaName);
   // M5: every barangay's landslide susceptibility is "unknown" until real
   // DENR-MGB data is loaded, and a panel listing "Unknown / Normal" for all
   // of them is noise. It appears on its own once any barangay has data.
@@ -119,11 +129,18 @@ export function AdminOverview() {
     <main className="flex min-h-screen flex-col items-center gap-6 p-4 sm:p-6 lg:p-8">
       <div className="w-full max-w-2xl space-y-6 lg:max-w-5xl">
         <div>
-          <h1 className="text-2xl font-bold">{t(PAGE_TITLE, lang)}</h1>
-          <p className="text-muted-foreground">{t(SUBTITLE, lang)}</p>
+          <h1 lang={lang} className="text-2xl font-bold">{title}</h1>
+          <p lang={lang} className="text-muted-foreground">{subtitle}</p>
         </div>
 
         <OfficialInbox zones={zones} />
+
+        {isTown && (
+          <div className="grid gap-4 lg:grid-cols-2">
+            <OfficialMessagesPanel />
+            <TownBarangaysPanel zones={zones} officials={townOfficials} />
+          </div>
+        )}
 
         <section className="space-y-3">
           <h2 className="text-lg font-semibold">{t(AT_A_GLANCE, lang)}</h2>

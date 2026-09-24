@@ -229,3 +229,23 @@ describe("AdminOverview for a nationwide admin", () => {
     expect(screen.getByText(/evacuation management/i)).toBeInTheDocument();
   });
 });
+
+describe("AdminOverview by role (each account sees its own dashboard)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const TOWN: Official = { userId: "t", displayName: "MDRRMO", areaCode: "0105528", areaName: "Mapandan", level: "municipality" };
+  const ADMIN: Official = { userId: "a", displayName: "Admin", areaCode: "", areaName: "All areas", level: "admin" };
+
+  it("gives a municipal official their town's dashboard: its barangays and the updates line", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => [] }));
+    renderWithData(<AdminOverview townOfficials={[]} />, { official: TOWN });
+    expect(screen.getByRole("heading", { level: 1, name: /mapandan dashboard/i })).toBeInTheDocument();
+    expect(screen.getByText(/^barangays$/i)).toBeInTheDocument();
+    expect(screen.getByText(/update to every barangay/i)).toBeInTheDocument();
+  });
+
+  it("calls an admin's the system dashboard, without a town's panels", () => {
+    renderWithData(<AdminOverview />, { official: ADMIN });
+    expect(screen.getByRole("heading", { level: 1, name: /system dashboard/i })).toBeInTheDocument();
+    expect(screen.queryByText(/update to every barangay/i)).not.toBeInTheDocument();
+  });
+});

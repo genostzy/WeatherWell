@@ -15,12 +15,17 @@ vi.mock("@/lib/supabase/server", () => ({
   }),
 }));
 vi.mock("@/features/admin/admin-overview", () => ({ AdminOverview: () => null }));
+const rpc = vi.fn();
+vi.mock("@/lib/supabase/user-server", () => ({ createSupabaseUserClient: async () => ({ rpc }) }));
 
 import AdminPage from "./page";
 
 const barangay = { userId: "u", displayName: "K", areaCode: "0105528012", areaName: "Nilombot", level: "barangay" };
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  rpc.mockResolvedValue({ data: [], error: null });
+});
 
 describe("/admin landing (found checking the live site)", () => {
   it("sends a barangay official to their own barangay, looking up only that barangay", async () => {
@@ -38,5 +43,13 @@ describe("/admin landing (found checking the live site)", () => {
     loadOfficial.mockResolvedValue({ state: "official", official: { ...barangay, level: "municipality", areaCode: "0105528" } });
     await expect(AdminPage()).resolves.toBeTruthy();
     expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it("hands a municipal official's dashboard their town's barangay officials", async () => {
+    loadOfficial.mockResolvedValue({ state: "official", official: { ...barangay, level: "municipality", areaCode: "0105528" } });
+    rpc.mockResolvedValue({ data: [{ user_id: "u2", display_name: "Kap Nilo", area_code: "0105528012" }], error: null });
+    const page = (await AdminPage()) as { props: { townOfficials: unknown } };
+    expect(rpc).toHaveBeenCalledWith("town_officials");
+    expect(page.props.townOfficials).toEqual([{ userId: "u2", displayName: "Kap Nilo", areaCode: "0105528012" }]);
   });
 });

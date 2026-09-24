@@ -119,6 +119,13 @@ describe("ZoneDashboardPage as a barangay official's home (found checking the li
     expect(screen.queryByRole("link", { name: /back to admin dashboard/i })).not.toBeInTheDocument();
   });
 
+  it("gives the barangay official the one-tap line to their town", () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => [] }));
+    renderWithData(<ZoneDashboardPage params={resolvedParams({ zoneId: zone.id })} searchParams={emptySearchParams} />, { official: own });
+    expect(screen.getByRole("button", { name: /our centre is full/i })).toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
+
   it("leaves it off a barangay the official only views", () => {
     renderWithData(
       <ZoneDashboardPage params={resolvedParams({ zoneId: FIXTURE_REFERENCE_DATA.zones[1].id })} searchParams={emptySearchParams} />,

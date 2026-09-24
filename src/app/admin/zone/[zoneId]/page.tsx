@@ -24,6 +24,7 @@ import { HAZARD_LEVEL_LABEL } from "@/lib/hazards";
 import { useActiveAlertForZone, useSetZoneAlert } from "@/lib/alerts-store";
 import { useManagesZone, useOfficial } from "@/lib/auth/official-context";
 import { OfficialInbox } from "@/features/admin/official-inbox";
+import { OfficialMessagesPanel } from "@/features/admin/official-messages-panel";
 import { hasRealEvacuationCenter, hasRealHotline } from "@/lib/zone-data-quality";
 import { SEVERITY_ORDER, SEVERITY_LABEL, SEVERITY_HEX, type Severity } from "@/lib/severity";
 import { CENTER_STATUS_LABEL, CENTER_STATUS_ORDER, resolveEffectiveCenterStatus } from "@/lib/center-status";
@@ -139,6 +140,7 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
         </div>
 
         {isOwnHome && <OfficialInbox zones={[zone]} />}
+        {isOwnHome && <OfficialMessagesPanel />}
 
         <Card>
           <CardHeader>

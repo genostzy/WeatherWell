@@ -11,6 +11,11 @@ vi.mock("@/lib/supabase/browser", () => ({
   getBrowserClient: () => ({ auth: { getSession, signInAnonymously, onAuthStateChange } }),
 }));
 
+let officialLevel: "admin" | "municipality" | "barangay" | null = null;
+vi.mock("@/lib/auth/use-official-role", () => ({
+  useOfficialRole: () => (officialLevel ? { level: officialLevel, areaCode: "0105528", displayName: "X" } : null),
+}));
+
 let pathname = "/";
 vi.mock("next/navigation", () => ({
   usePathname: () => pathname,
@@ -24,6 +29,7 @@ beforeEach(() => {
   unsubscribe.mockReset();
   onAuthStateChange.mockReset().mockReturnValue({ data: { subscription: { unsubscribe } } });
   pathname = "/";
+  officialLevel = null;
 });
 
 describe("AccountLink", () => {
@@ -136,5 +142,19 @@ describe("AccountLink", () => {
 
     unmount();
     expect(unsubscribe).toHaveBeenCalledOnce();
+  });
+
+  it("gives a signed-in official a way to their dashboard from any resident page", async () => {
+    getSession.mockResolvedValue({ data: { session: { user: { id: "u1", is_anonymous: false } } } });
+    officialLevel = "municipality";
+    renderWithData(<AccountLink />);
+    expect(await screen.findByRole("link", { name: /dashboard/i })).toHaveAttribute("href", "/admin");
+  });
+
+  it("gives a signed-in resident no dashboard link", async () => {
+    getSession.mockResolvedValue({ data: { session: { user: { id: "u1", is_anonymous: false } } } });
+    renderWithData(<AccountLink />);
+    await screen.findByText(/signed in/i);
+    expect(screen.queryByRole("link", { name: /dashboard/i })).not.toBeInTheDocument();
   });
 });

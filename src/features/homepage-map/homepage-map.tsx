@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { OfficialBanner } from "@/features/auth/official-banner";
 import dynamic from "next/dynamic";
 import { ShieldCheck, Building2, Droplet, X } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -154,6 +155,7 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
 
       {/* Sidebar — desktop: right column. Mobile: above map. */}
       <div className="order-first lg:order-none flex flex-col gap-2 overflow-hidden sm:gap-3 lg:col-start-2 lg:row-span-4 lg:gap-4">
+        <OfficialBanner />
         <PersonalStatusHeadline zone={zones[0]} />
         <CoverageNote zone={zones[0]} />
 
