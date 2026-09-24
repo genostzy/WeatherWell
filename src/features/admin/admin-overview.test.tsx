@@ -42,6 +42,12 @@ describe("AdminOverview dashboard", () => {
     expect(link).toHaveAttribute("href", "/admin/simulation");
   });
 
+  it("hides the landslide panel where no barangay has landslide data (M5)", () => {
+    renderWithData(<AdminOverview />, { data: { hazards: {} } });
+    expect(screen.queryByText(/landslide risk/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/flood monitoring/i)).toBeInTheDocument();
+  });
+
   it("covers every hazard the PRD asks the admin to monitor", () => {
     renderWithData(<AdminOverview />);
     expect(screen.getByText(/flood monitoring/i)).toBeInTheDocument();

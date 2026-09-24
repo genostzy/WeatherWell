@@ -29,7 +29,7 @@ import { useTyphoon } from "@/lib/use-typhoon";
 import { resolveEffectiveCenterStatus } from "@/lib/center-status";
 import { useAlerts } from "@/lib/alerts-store";
 import { useCommunityPins } from "@/lib/community-pins";
-import { useZones } from "@/lib/reference-data/use-reference-data";
+import { useHazards, useZones } from "@/lib/reference-data/use-reference-data";
 import { getZoneStatus } from "@/lib/zone-status";
 import { useOfficial } from "@/lib/auth/official-context";
 import { isInArea } from "@/lib/auth/official";
@@ -79,6 +79,7 @@ export function AdminOverview() {
   // every barangay in a municipal official's town.
   const allZones = useZones();
   const zones = allZones.filter((zone) => isInArea(zone.psgcBarangayCode, official.areaCode));
+  const hazards = useHazards();
   const reports = useWaterLevelReports();
   const alerts = useAlerts();
   const { track: typhoonTrack } = useTyphoon();
@@ -106,6 +107,13 @@ export function AdminOverview() {
   // production): one row per zone in the panels below froze the browser tab
   // at that scale, so an admin gets a pointer to the map instead.
   const isNationwide = official.level === "admin";
+  // M5: every barangay's landslide susceptibility is "unknown" until real
+  // DENR-MGB data is loaded, and a panel listing "Unknown / Normal" for all
+  // of them is noise. It appears on its own once any barangay has data.
+  const hasLandslideData = zones.some((zone) => {
+    const level = hazards[zone.id]?.landslide;
+    return level !== undefined && level !== "unknown";
+  });
 
   return (
     <main className="flex min-h-screen flex-col items-center gap-6 p-4 sm:p-6 lg:p-8">
@@ -175,7 +183,7 @@ export function AdminOverview() {
               <FloodMonitoringPanel zones={zones} />
               <div className="grid gap-4 lg:grid-cols-2">
                 <TyphoonTrackingPanel />
-                <LandslideRiskPanel zones={zones} />
+                {hasLandslideData && <LandslideRiskPanel zones={zones} />}
               </div>
             </section>
           </>
