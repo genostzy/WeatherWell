@@ -64,6 +64,9 @@ export function useTyphoon() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const mountedRef = useRef(true);
+  // A boolean, not the track: every fetch returns a new track object, and
+  // depending on it re-ran the effect (and its immediate fetch) in a loop.
+  const active = track !== null;
 
   useEffect(() => {
     mountedRef.current = true;
@@ -96,12 +99,12 @@ export function useTyphoon() {
     fetchTrack();
 
     // Adaptive polling: check more often during active storms
-    const interval = setInterval(fetchTrack, track ? ACTIVE_POLL_MS : IDLE_POLL_MS);
+    const interval = setInterval(fetchTrack, active ? ACTIVE_POLL_MS : IDLE_POLL_MS);
     return () => {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [track]);
+  }, [active]);
 
   return { track, isLoading, error };
 }
