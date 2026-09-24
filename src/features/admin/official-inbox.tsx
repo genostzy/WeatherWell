@@ -214,11 +214,13 @@ export function OfficialInbox({ zones }: { zones: Zone[] }) {
               >
                 <option value="">{t(CHOOSE, lang)}</option>
                 {zones.length > 1 && <option value={ALL}>{t(ALL_BARANGAYS, lang).replace("{n}", String(zones.length))}</option>}
-                {zones.map((z) => (
-                  <option key={z.id} value={z.id}>
-                    {z.name}
-                  </option>
-                ))}
+                {[...zones]
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map((z) => (
+                    <option key={z.id} value={z.id}>
+                      {z.name}
+                    </option>
+                  ))}
               </select>
             </div>
             <div role="radiogroup" aria-label="Severity" className="grid grid-cols-2 gap-2 sm:grid-cols-4">

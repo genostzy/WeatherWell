@@ -28,7 +28,7 @@ import { useOfficial } from "@/lib/auth/official-context";
 import { isInArea } from "@/lib/auth/official";
 import type { CenterStatus, LanguageCode, LocalizedText, Zone } from "@/lib/types";
 import { useHeadcountCommit } from "./use-headcount-commit";
-import { hasRealHotline } from "@/lib/zone-data-quality";
+import { hasRealEvacuationCenter, hasRealHotline } from "@/lib/zone-data-quality";
 
 const TITLE: LocalizedText = { en: "Evacuation Management", fil: "Pamamahala ng Evacuation" };
 const SUBTITLE: LocalizedText = {
@@ -47,6 +47,10 @@ const HEADCOUNT_HINT: LocalizedText = {
 const CLEAR: LocalizedText = { en: "Clear", fil: "I-clear" };
 const OF: LocalizedText = { en: "of", fil: "sa" };
 const SPOTS: LocalizedText = { en: "spots", fil: "espasyo" };
+const NO_CENTRE_YET: LocalizedText = {
+  en: "{n} barangays have no verified centre yet — set one on the barangay's page.",
+  fil: "{n} barangay ang wala pang beripikadong center — itakda sa pahina ng barangay.",
+};
 const SAVE_FAILED: LocalizedText = { en: "Could not save — try again.", fil: "Hindi na-save — subukan ulit." };
 
 const CENTER_STATUS_COLOR: Record<CenterStatus, string> = {
@@ -63,10 +67,15 @@ export function EvacuationManagementPanel({ zones }: { zones: Zone[] }) {
   // barangay, or every barangay in a municipal official's town. The database
   // enforces the real limit; this only decides what's shown here.
   const inAreaZones = zones.filter((zone) => isInArea(zone.psgcBarangayCode, official.areaCode));
+  // Verified centres only: a placeholder ("Evacuation Centre — <Town>", on
+  // the barangay's own point, capacity 0) is not somewhere to send people
+  // or count heads, and listed here it looked like fifteen real centres.
+  const centreZones = inAreaZones.filter(hasRealEvacuationCenter);
+  const withoutCentre = inAreaZones.length - centreZones.length;
 
   // Reflects each zone's live headcount, carried through reference data as
   // zone.currentOccupancy, same as every other read-only surface.
-  const effectiveStatuses = inAreaZones.map((zone) =>
+  const effectiveStatuses = centreZones.map((zone) =>
     resolveEffectiveCenterStatus(zone.centerStatus, zone.evacuationCenterCapacity, zone.currentOccupancy)
   );
   const countByStatus = (status: CenterStatus) =>
@@ -83,22 +92,29 @@ export function EvacuationManagementPanel({ zones }: { zones: Zone[] }) {
         <p className="text-xs text-muted-foreground">{t(SUBTITLE, lang)}</p>
       </CardHeader>
       <CardContent className="space-y-4">
-        <DonutChart
-          label={t(CAPACITY, lang)}
-          centerValue={`${withSpace}/${inAreaZones.length}`}
-          centerLabel={t(WITH_SPACE, lang)}
-          segments={CENTER_STATUS_ORDER.map((status) => ({
-            label: t(CENTER_STATUS_LABEL[status], lang),
-            value: countByStatus(status),
-            color: CENTER_STATUS_COLOR[status],
-          }))}
-        />
+        {centreZones.length > 0 && (
+          <DonutChart
+            label={t(CAPACITY, lang)}
+            centerValue={`${withSpace}/${centreZones.length}`}
+            centerLabel={t(WITH_SPACE, lang)}
+            segments={CENTER_STATUS_ORDER.map((status) => ({
+              label: t(CENTER_STATUS_LABEL[status], lang),
+              value: countByStatus(status),
+              color: CENTER_STATUS_COLOR[status],
+            }))}
+          />
+        )}
 
         <p className="text-xs text-muted-foreground">
-          {inAreaZones.length} {t(CENTERS, lang)}
+          {centreZones.length} {t(CENTERS, lang)}
         </p>
+        {withoutCentre > 0 && (
+          <p lang={lang} className="text-sm text-muted-foreground">
+            {t(NO_CENTRE_YET, lang).replace("{n}", String(withoutCentre))}
+          </p>
+        )}
 
-        {inAreaZones.map((zone) => (
+        {centreZones.map((zone) => (
           <EvacuationCenterRow key={zone.id} zone={zone} lang={lang} />
         ))}
       </CardContent>

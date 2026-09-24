@@ -99,6 +99,12 @@ describe("OfficialInbox (ideas 4, 5, 13)", () => {
     expect(await screen.findByText(new RegExp(`sent to ${FIXTURE_REFERENCE_DATA.zones.length} barangays`, "i"))).toBeInTheDocument();
   });
 
+  it("lists barangays alphabetically (found checking the live Mapandan dashboard)", () => {
+    renderWithData(<OfficialInbox zones={[zone3, zone1, zone2]} />, { alerts: [] });
+    const names = screen.getAllByRole("option").map((o) => o.textContent).filter((n) => n?.startsWith("Barangay"));
+    expect(names).toEqual([...names].sort((a, b) => a!.localeCompare(b!)));
+  });
+
   it("offers no all-barangays choice to a barangay official with one barangay", () => {
     renderWithData(<OfficialInbox zones={[zone1]} />, { alerts: [] });
     expect(screen.queryByRole("option", { name: /all .* barangays/i })).not.toBeInTheDocument();

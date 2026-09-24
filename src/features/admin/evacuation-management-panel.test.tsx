@@ -236,3 +236,22 @@ describe("EvacuationManagementPanel placeholders (found testing the live site)",
     expect(screen.getByText(/no verified hotline/i)).toBeInTheDocument();
   });
 });
+
+describe("EvacuationManagementPanel placeholders (found checking the live Mapandan dashboard)", () => {
+  it("lists only verified centres, and says how many barangays still have none", () => {
+    const [real, ...rest] = FIXTURE_REFERENCE_DATA.zones;
+    const placeholders = rest.map((z) => ({
+      ...z,
+      evacuationCenterName: "Evacuation Centre — Test",
+      evacuationCenterLat: z.lat,
+      evacuationCenterLng: z.lng,
+      evacuationCenterCapacity: 0,
+    }));
+    const zones = [real, ...placeholders];
+    renderWithData(<EvacuationManagementPanel zones={zones} />, { data: { zones } });
+    expect(screen.getByText(real.evacuationCenterName)).toBeInTheDocument();
+    expect(screen.queryByText("Evacuation Centre — Test")).not.toBeInTheDocument();
+    expect(screen.getByText(new RegExp(`${placeholders.length} barangays have no verified centre yet`, "i"))).toBeInTheDocument();
+    expect(screen.getByText(/1 evacuation centers?/i)).toBeInTheDocument();
+  });
+});
