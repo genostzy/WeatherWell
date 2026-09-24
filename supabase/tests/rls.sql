@@ -3118,4 +3118,111 @@ begin
   raise notice 'ok G1-G3: rate limit and geofence hold';
 end $$;
 
+-- Municipal officials manage their town's barangay officials (M1-M6), and
+-- officials in a town send each other updates (N1-N5).
+do $$
+declare
+  v_town  uuid := 'e5000000-0000-4000-8000-000000000001'; -- municipal official, town 9900071
+  v_kap   uuid := 'e5000000-0000-4000-8000-000000000002'; -- barangay official, 9900071001
+  v_res   uuid := 'e5000000-0000-4000-8000-000000000003'; -- resident, to be appointed
+  v_other uuid := 'e5000000-0000-4000-8000-000000000004'; -- official of another town, 9900072
+  n int; r record; v_msg uuid;
+begin
+  set local role postgres;
+  perform set_config('request.jwt.claims', '', true);
+  insert into auth.users (id, email, email_confirmed_at, is_anonymous) values
+    (v_town, 'town@test.invalid', now(), false), (v_kap, 'kap@test.invalid', now(), false),
+    (v_res, 'res@test.invalid', now(), false), (v_other, 'other@test.invalid', now(), false);
+  insert into public.zones (id, psgc_barangay_code, name, evacuation_route_text, lat, lng, evacuation_route_path, hotline_number) values
+    ('tests-town-a1', '9900071001', 'Test A1', '{"en":"x","fil":"x"}'::jsonb, 16.0, 120.4, '[]'::jsonb, '000'),
+    ('tests-town-a2', '9900071002', 'Test A2', '{"en":"x","fil":"x"}'::jsonb, 16.0, 120.4, '[]'::jsonb, '000'),
+    ('tests-town-b1', '9900072001', 'Test B1', '{"en":"x","fil":"x"}'::jsonb, 16.0, 120.4, '[]'::jsonb, '000');
+  insert into public.profiles (id, role, area_code, display_name) values
+    (v_town, 'operator', '9900071', 'Test MDRRMO'), (v_kap, 'operator', '9900071001', 'Test Kapitan A1'),
+    (v_res, 'resident', null, null), (v_other, 'operator', '9900072', 'Test Other Town')
+  on conflict (id) do update set role = excluded.role, area_code = excluded.area_code, display_name = excluded.display_name;
+
+  set local role authenticated;
+  -- M1: the municipal official appoints a resident to a barangay in their town.
+  perform set_config('request.jwt.claims', json_build_object('sub', v_town, 'role', 'authenticated')::text, true);
+  perform public.town_appoint_barangay_official('RES@test.invalid', 'tests-town-a2', 'Test Kapitan A2');
+  -- M2: not to a barangay in another town.
+  begin perform public.town_appoint_barangay_official('res@test.invalid', 'tests-town-b1', 'X');
+    raise exception using errcode = 'TSTFL', message = 'M2: appointed outside the town';
+  exception when insufficient_privilege then null; end;
+  -- M4: and cannot take over another town's official.
+  begin perform public.town_appoint_barangay_official('other@test.invalid', 'tests-town-a2', 'X');
+    raise exception using errcode = 'TSTFL', message = 'M4: took over another town''s official';
+  exception when insufficient_privilege then null; end;
+  -- M5: lists its own town's barangay officials only.
+  select count(*) into n from public.town_officials();
+  if n <> 2 then raise exception using errcode = 'TSTFL', message = format('M5: listed %s officials, expected 2', n); end if;
+  -- M3: a barangay official cannot appoint.
+  perform set_config('request.jwt.claims', json_build_object('sub', v_kap, 'role', 'authenticated')::text, true);
+  begin perform public.town_appoint_barangay_official('res@test.invalid', 'tests-town-a1', 'X');
+    raise exception using errcode = 'TSTFL', message = 'M3: a barangay official appointed';
+  exception when insufficient_privilege then null; end;
+  reset role;
+  select role, area_code into r from public.profiles where id = v_res;
+  if r.role <> 'operator' or r.area_code <> '9900071002' then
+    raise exception using errcode = 'TSTFL', message = format('M1: appointee is %s', r);
+  end if;
+
+  -- M6: removes its own town's barangay official, not another town's.
+  set local role authenticated;
+  perform set_config('request.jwt.claims', json_build_object('sub', v_town, 'role', 'authenticated')::text, true);
+  begin perform public.town_remove_barangay_official(v_other);
+    raise exception using errcode = 'TSTFL', message = 'M6: removed another town''s official';
+  exception when insufficient_privilege then null; end;
+  perform public.town_remove_barangay_official(v_res);
+  reset role;
+  if (select role from public.profiles where id = v_res) <> 'resident' then
+    raise exception using errcode = 'TSTFL', message = 'M6: own barangay official not removed';
+  end if;
+
+  -- N1: a barangay official's update goes up to the town.
+  set local role authenticated;
+  perform set_config('request.jwt.claims', json_build_object('sub', v_kap, 'role', 'authenticated')::text, true);
+  v_msg := public.send_official_message('centre_full', '  School is full ');
+  -- N4a: a barangay official cannot acknowledge.
+  begin perform public.acknowledge_official_message(v_msg);
+    raise exception using errcode = 'TSTFL', message = 'N4: a barangay official acknowledged';
+  exception when insufficient_privilege then null; end;
+  -- N2: the municipal official's update goes down to every barangay; blank updates are refused.
+  perform set_config('request.jwt.claims', json_build_object('sub', v_town, 'role', 'authenticated')::text, true);
+  perform public.send_official_message('update', 'Rescue boat heading to A1');
+  begin perform public.send_official_message('update', '   ');
+    raise exception using errcode = 'TSTFL', message = 'N5: a blank update was sent';
+  exception when check_violation then null; end;
+  -- N4b: the municipal official acknowledges.
+  perform public.acknowledge_official_message(v_msg);
+  -- N3: officials in the town see both, another town's official sees none, a resident none.
+  select count(*) into n from public.official_messages where town_code = '9900071';
+  if n <> 2 then raise exception using errcode = 'TSTFL', message = format('N3: municipal official sees %s', n); end if;
+  perform set_config('request.jwt.claims', json_build_object('sub', v_kap, 'role', 'authenticated')::text, true);
+  select count(*) into n from public.official_messages where town_code = '9900071';
+  if n <> 2 then raise exception using errcode = 'TSTFL', message = format('N3: barangay official sees %s', n); end if;
+  perform set_config('request.jwt.claims', json_build_object('sub', v_other, 'role', 'authenticated')::text, true);
+  select count(*) into n from public.official_messages where town_code = '9900071';
+  if n <> 0 then raise exception using errcode = 'TSTFL', message = 'N3: another town sees these'; end if;
+  perform set_config('request.jwt.claims', json_build_object('sub', v_res, 'role', 'authenticated')::text, true);
+  select count(*) into n from public.official_messages;
+  if n <> 0 then raise exception using errcode = 'TSTFL', message = 'N3: a resident sees updates'; end if;
+  -- N5: a resident cannot send.
+  begin perform public.send_official_message('need_help', 'x');
+    raise exception using errcode = 'TSTFL', message = 'N5: a resident sent an update';
+  exception when insufficient_privilege then null; end;
+  reset role;
+
+  select direction, zone_id, body, acknowledged_by_name into r from public.official_messages where id = v_msg;
+  if r.direction <> 'up' or r.zone_id <> 'tests-town-a1' or r.body <> 'School is full' or r.acknowledged_by_name <> 'Test MDRRMO' then
+    raise exception using errcode = 'TSTFL', message = format('N1/N4: message is %s', r);
+  end if;
+  if has_function_privilege('anon', 'public.send_official_message(text,text)', 'execute')
+     or has_function_privilege('anon', 'public.town_appoint_barangay_official(text,text,text)', 'execute') then
+    raise exception using errcode = 'TSTFL', message = 'N5: anon can execute';
+  end if;
+  raise notice 'ok M1-M6, N1-N5: municipal officials manage their town; updates flow both ways';
+end $$;
+
 rollback;

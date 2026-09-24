@@ -400,6 +400,53 @@ export type Database = {
         }
         Relationships: []
       }
+      official_messages: {
+        Row: {
+          acknowledged_at: string | null
+          acknowledged_by_name: string | null
+          body: string
+          created_at: string
+          direction: string
+          id: string
+          kind: string
+          sender_name: string
+          town_code: string
+          zone_id: string | null
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          acknowledged_by_name?: string | null
+          body?: string
+          created_at?: string
+          direction: string
+          id?: string
+          kind: string
+          sender_name: string
+          town_code: string
+          zone_id?: string | null
+        }
+        Update: {
+          acknowledged_at?: string | null
+          acknowledged_by_name?: string | null
+          body?: string
+          created_at?: string
+          direction?: string
+          id?: string
+          kind?: string
+          sender_name?: string
+          town_code?: string
+          zone_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "official_messages_zone_id_fkey"
+            columns: ["zone_id"]
+            isOneToOne: false
+            referencedRelation: "zones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pin_votes: {
         Row: {
           direction: number
@@ -758,6 +805,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      acknowledge_official_message: {
+        Args: { p_id: string }
+        Returns: undefined
+      }
       admin_appoint_official: {
         Args: { p_area: string; p_display_name: string; p_email: string }
         Returns: string
@@ -809,6 +860,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      send_official_message: {
+        Args: { p_body: string; p_kind: string }
+        Returns: string
+      }
       set_zone_alert: {
         Args: {
           p_message: Json
@@ -820,6 +875,22 @@ export type Database = {
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      town_appoint_barangay_official: {
+        Args: { p_display_name: string; p_email: string; p_zone_id: string }
+        Returns: string
+      }
+      town_officials: {
+        Args: never
+        Returns: {
+          area_code: string
+          display_name: string
+          user_id: string
+        }[]
+      }
+      town_remove_barangay_official: {
+        Args: { p_user_id: string }
+        Returns: string
+      }
     }
     Enums: {
       [_ in never]: never
