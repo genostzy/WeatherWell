@@ -34,4 +34,9 @@ describe("TimeAgo", () => {
     render(<TimeAgo reportedAt={EIGHT_MINUTES_AGO} prefix="· " />);
     expect(screen.getByText(/· 8 min ago/)).toBeInTheDocument();
   });
+
+  it("says days, not thousands of minutes, for an old report", () => {
+    render(<TimeAgo reportedAt={new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()} />);
+    expect(screen.getByText("3 days ago")).toBeInTheDocument();
+  });
 });

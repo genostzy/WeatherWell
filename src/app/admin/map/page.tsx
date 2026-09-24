@@ -1,9 +1,6 @@
 "use client";
 
-import Link from "next/link";
 import dynamic from "next/dynamic";
-import { ArrowLeft } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
@@ -19,7 +16,6 @@ const AdminMapCanvas = dynamic(
   }
 );
 
-const BACK_TO_DASHBOARD: LocalizedText = { en: "Back to admin dashboard", fil: "Balik sa admin dashboard" };
 const PAGE_TITLE: LocalizedText = { en: "Operations Map", fil: "Mapa ng Operasyon" };
 const SUBTITLE: LocalizedText = {
   en: "Every zone at once — override an alert, log a headcount, or moderate a pin where it actually sits",
@@ -37,13 +33,6 @@ export default function AdminMapPage() {
   return (
     <main className="flex min-h-screen flex-col items-center gap-6 p-4 sm:p-6 lg:p-8">
       <div className="w-full max-w-2xl space-y-4 lg:max-w-5xl">
-        <Button asChild variant="ghost" size="lg">
-          <Link href="/admin">
-            <ArrowLeft aria-hidden="true" />
-            {t(BACK_TO_DASHBOARD, lang)}
-          </Link>
-        </Button>
-
         <div>
           <h1 className="text-2xl font-bold">{t(PAGE_TITLE, lang)}</h1>
           <p lang={lang} className="text-muted-foreground">

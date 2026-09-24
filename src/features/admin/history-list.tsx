@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useLanguage } from "@/features/i18n/language-provider";
@@ -10,7 +9,6 @@ import { describeAction, describeActor, formatActionTime } from "@/lib/official-
 import type { OfficialAction } from "@/lib/official-actions-mapper";
 import type { LocalizedText } from "@/lib/types";
 
-const BACK_TO_DASHBOARD: LocalizedText = { en: "Back to admin dashboard", fil: "Balik sa admin dashboard" };
 const TITLE: LocalizedText = { en: "History", fil: "Kasaysayan" };
 const SUBTITLE: LocalizedText = {
   en: "Who changed what, and when — every recorded action across the system",
@@ -49,13 +47,6 @@ export function HistoryList({
   return (
     <main className="flex flex-1 flex-col items-center gap-6 p-4 sm:p-6 lg:p-8">
       <div className="w-full max-w-2xl space-y-6">
-        <Button asChild variant="ghost" size="lg">
-          <Link href="/admin">
-            <ArrowLeft aria-hidden="true" />
-            {t(BACK_TO_DASHBOARD, lang)}
-          </Link>
-        </Button>
-
         <div>
           <h1 className="text-2xl font-bold">{t(TITLE, lang)}</h1>
           <p className="text-muted-foreground">{t(SUBTITLE, lang)}</p>

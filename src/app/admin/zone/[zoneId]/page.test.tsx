@@ -116,7 +116,7 @@ describe("ZoneDashboardPage as a barangay official's home (found checking the li
   it("puts Needs your attention at the top for the barangay's own official, with no dead Back link", () => {
     renderWithData(<ZoneDashboardPage params={resolvedParams({ zoneId: zone.id })} searchParams={emptySearchParams} />, { official: own });
     expect(screen.getByText(/needs your attention/i)).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /back to admin dashboard/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /^back to dashboard$/i })).not.toBeInTheDocument();
   });
 
   it("gives the barangay official the one-tap line to their town", () => {
@@ -137,7 +137,7 @@ describe("ZoneDashboardPage as a barangay official's home (found checking the li
   it("keeps the Back link for a municipal official, whose home is the overview", () => {
     const municipal: Official = { ...own, level: "municipality", areaCode: zone.psgcBarangayCode.slice(0, 7) };
     renderWithData(<ZoneDashboardPage params={resolvedParams({ zoneId: zone.id })} searchParams={emptySearchParams} />, { official: municipal });
-    expect(screen.getByRole("link", { name: /back to admin dashboard/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^back to dashboard$/i })).toBeInTheDocument();
     expect(screen.queryByText(/needs your attention/i)).not.toBeInTheDocument();
   });
 });

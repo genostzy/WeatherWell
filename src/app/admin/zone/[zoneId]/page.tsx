@@ -36,7 +36,7 @@ import { CheckInSummaryPanel } from "@/features/admin/check-in-summary-panel";
 import { LastChangeLine } from "@/features/admin/last-change-line";
 import type { CenterStatus, LocalizedText } from "@/lib/types";
 
-const BACK_TO_DASHBOARD: LocalizedText = { en: "Back to admin dashboard", fil: "Balik sa admin dashboard" };
+const BACK_TO_DASHBOARD: LocalizedText = { en: "Back to dashboard", fil: "Balik sa dashboard" };
 const MANAGE_ZONE: LocalizedText = { en: "Manage zone", fil: "Pamahalaan ang zone" };
 const ALERT_STATUS: LocalizedText = { en: "Alert status", fil: "Katayuan ng Alerto" };
 const CLEAR_NO_ALERT: LocalizedText = { en: "Clear — no alert", fil: "Ligtas — walang alerto" };

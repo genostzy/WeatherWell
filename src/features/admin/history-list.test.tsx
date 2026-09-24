@@ -120,4 +120,9 @@ describe("HistoryList timestamps (I6)", () => {
 
     expect(screen.getByText(/Set 8, 2:14\sPM/)).toBeInTheDocument();
   });
+
+  it("has no back link of its own; the officials menu covers it (found checking the officials screen)", () => {
+    renderWithData(<HistoryList actions={[]} zones={ZONES} scope="mine" />);
+    expect(screen.queryByRole("link", { name: /back to/i })).not.toBeInTheDocument();
+  });
 });

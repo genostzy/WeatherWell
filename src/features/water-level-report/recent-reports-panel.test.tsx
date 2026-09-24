@@ -117,6 +117,6 @@ describe("RecentReportsPanel", () => {
 
     expect(screen.getByText("1")).toBeInTheDocument(); // one agreeing report
     expect(screen.getByText(/neck-deep/i)).toBeInTheDocument();
-    expect(screen.getByText(/0 min ago/i)).toBeInTheDocument();
+    expect(screen.getByText(/just now/i)).toBeInTheDocument();
   });
 });

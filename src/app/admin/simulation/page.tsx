@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,7 +13,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  ArrowLeft,
   Bell,
   MessageSquare,
   CheckCircle2,
@@ -104,7 +102,6 @@ const SUBTITLE: LocalizedText = {
   en: "Run a full alert flow end to end — training and demo only, no residents are notified",
   fil: "Patakbuhin ang buong alert flow — pagsasanay at demo lang, walang residenteng aabisuhan",
 };
-const BACK_TO_DASHBOARD: LocalizedText = { en: "Back to admin dashboard", fil: "Balik sa admin dashboard" };
 const ZONE_LABEL: LocalizedText = { en: "Zone", fil: "Zone" };
 const ZONE_LIST_TRUNCATED: LocalizedText = {
   en: "Showing the first {count} of {total} zones nationwide — search isn't available here yet.",
@@ -258,13 +255,6 @@ export default function AdminSimulationPage() {
   return (
     <main className="flex min-h-screen flex-col items-center gap-6 p-4 sm:p-6 lg:p-8">
       <div className="w-full max-w-2xl space-y-6 lg:max-w-4xl">
-        <Button asChild variant="ghost" size="lg" className="-ml-3">
-          <Link href="/admin">
-            <ArrowLeft aria-hidden="true" />
-            {t(BACK_TO_DASHBOARD, lang)}
-          </Link>
-        </Button>
-
         <div>
           <h1 className="text-2xl font-bold">{t(PAGE_TITLE, lang)}</h1>
           <p className="text-muted-foreground">{t(SUBTITLE, lang)}</p>

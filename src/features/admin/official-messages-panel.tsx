@@ -12,6 +12,7 @@ import { friendlyError } from "@/lib/friendly-error";
 import { useOfficial } from "@/lib/auth/official-context";
 import { useZones } from "@/lib/reference-data/use-reference-data";
 import { minutesSinceReport } from "@/lib/water-level-reports";
+import { formatAge } from "@/lib/format-age";
 import type { MessageKind, OfficialMessage } from "@/lib/official-messages";
 import type { LanguageCode, LocalizedText } from "@/lib/types";
 
@@ -27,8 +28,6 @@ const TO_EVERY: LocalizedText = { en: "Update to every barangay", fil: "Update s
 const SEND_TO_EVERY: LocalizedText = { en: "Send to every barangay", fil: "Ipadala sa bawat barangay" };
 const SENT_UP: LocalizedText = { en: "Sent to {town}.", fil: "Naipadala sa {town}." };
 const SENT_DOWN: LocalizedText = { en: "Sent to every barangay in {town}.", fil: "Naipadala sa bawat barangay sa {town}." };
-const AGO: LocalizedText = { en: "{n} min ago", fil: "{n} min ang nakalipas" };
-const HOURS_AGO: LocalizedText = { en: "{n} h ago", fil: "{n} oras ang nakalipas" };
 
 const KIND: Record<MessageKind, LocalizedText> = {
   centre_full: { en: "Our centre is full", fil: "Puno na ang aming center" },
@@ -74,10 +73,7 @@ function useTownMessages() {
   return { messages, reload: () => setTick((n) => n + 1) };
 }
 
-function age(createdAt: string, lang: LanguageCode): string {
-  const minutes = Math.max(0, Math.round(minutesSinceReport(createdAt)));
-  return minutes < 60 ? t(AGO, lang).replace("{n}", String(minutes)) : t(HOURS_AGO, lang).replace("{n}", String(Math.floor(minutes / 60)));
-}
+const age = (createdAt: string, lang: LanguageCode) => formatAge(minutesSinceReport(createdAt), lang);
 
 /**
  * The two-way line between a town and its barangays (RA 10121's BDRRMC and

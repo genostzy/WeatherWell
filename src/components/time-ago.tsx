@@ -1,12 +1,9 @@
 "use client";
 
 import { useLanguage } from "@/features/i18n/language-provider";
-import { t } from "@/lib/i18n";
 import { useHasHydrated } from "@/lib/use-hydrated";
 import { minutesSinceReport } from "@/lib/water-level-reports";
-import type { LocalizedText } from "@/lib/types";
-
-const MINUTES_AGO: LocalizedText = { en: "min ago", fil: "min ang nakaraan" };
+import { formatAge } from "@/lib/format-age";
 
 /**
  * How long ago a report came in — "8 min ago" — rendered only in the browser.
@@ -45,7 +42,7 @@ export function TimeAgo({
   return (
     <span className={className}>
       {prefix}
-      {minutesSinceReport(reportedAt)} {t(MINUTES_AGO, lang)}
+      {formatAge(minutesSinceReport(reportedAt), lang)}
     </span>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { CheckCircle2, HeartHandshake, ShieldCheck } from "lucide-react";
+import { formatAge } from "@/lib/format-age";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
@@ -16,7 +17,6 @@ const SUBTITLE: LocalizedText = {
 const SAFE_COUNT: LocalizedText = { en: "checked in safe", fil: "naka-check-in bilang ligtas" };
 const NEEDS_HELP_COUNT: LocalizedText = { en: "flagged needing help", fil: "na-flag na kailangan ng tulong" };
 const NO_CHECK_INS: LocalizedText = { en: "No check-ins yet for this zone.", fil: "Wala pang check-in para sa zone na ito." };
-const MIN_AGO: LocalizedText = { en: "min ago", fil: "minuto ang nakalipas" };
 
 /** Admin-facing summary of the resident-facing check-in flow (PRD Gap D) — scoped to one zone, same pattern as RecentReportsPanel. */
 export function CheckInSummaryPanel({ zoneId }: { zoneId: string }) {
@@ -62,7 +62,7 @@ export function CheckInSummaryPanel({ zoneId }: { zoneId: string }) {
               >
                 <span>{checkIn.userId.slice(0, 8)}</span>
                 <span>
-                  {minutesSinceReport(checkIn.checkedInAt)} {t(MIN_AGO, lang)}
+                  {formatAge(minutesSinceReport(checkIn.checkedInAt), lang)}
                 </span>
               </li>
             ))}
