@@ -102,3 +102,10 @@ describe("toSharedAlert", () => {
     expect(shared.centerName).toBeUndefined();
   });
 });
+
+describe("buildShareText timestamp (found checking the live screen)", () => {
+  it("carries the date, so an old alert is not read as today's", () => {
+    const text = buildShareText({ ...ALERT, issuedAt: "2026-09-23T00:26:00Z" }, "https://weatherwell.app", "en");
+    expect(text.split("\n")[0]).toMatch(/Sep 23/);
+  });
+});

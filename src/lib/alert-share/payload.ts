@@ -110,7 +110,11 @@ export function alertUrl(origin: string, alert: SharedAlert): string {
 }
 
 export function buildShareText(alert: SharedAlert, origin: string, lang: LanguageCode): string {
-  const time = new Date(alert.issuedAt).toLocaleTimeString(lang === "fil" ? "fil-PH" : "en-PH", {
+  // Date as well as time: a forwarded alert is often read a day later, and
+  // a bare "08:26" reads as today.
+  const time = new Date(alert.issuedAt).toLocaleString(lang === "fil" ? "fil-PH" : "en-PH", {
+    month: "short",
+    day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   });

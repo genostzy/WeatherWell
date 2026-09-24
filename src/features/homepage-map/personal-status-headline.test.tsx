@@ -169,3 +169,16 @@ describe("PersonalStatusHeadline sharing (ideas 6 and 7)", () => {
     expect(screen.getByRole("link", { name: /texting your neighbours/i })).toHaveAttribute("href", "/evacuation#relay");
   });
 });
+
+describe("PersonalStatusHeadline touch targets (found checking the live screen)", () => {
+  it("makes every control under an alert a full 44px target", () => {
+    vi.stubGlobal("speechSynthesis", { speak: vi.fn(), cancel: vi.fn() });
+    localStorage.setItem("weatherwell.relayContacts", JSON.stringify([{ name: "Lola", number: "0917" }]));
+    renderHeadline(zoneWithSeverity("red"), "en");
+    for (const name of [/read aloud/i, /share alert/i, /download image/i, /qr/i]) {
+      expect(screen.getByRole("button", { name }).className).toMatch(/h-11/);
+    }
+    expect(screen.getByRole("link", { name: /text 1 neighbour/i }).className).toMatch(/h-11/);
+    vi.unstubAllGlobals();
+  });
+});

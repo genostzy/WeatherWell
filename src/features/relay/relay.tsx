@@ -69,7 +69,8 @@ export function RelayButton({ alert, zone }: { alert: AlertRecord; zone: Zone })
     );
   }
 
-  const label = lang === "fil" ? `I-text ang ${contacts.length} kong kapitbahay` : `Text my ${contacts.length} contacts`;
+  const n = contacts.length;
+  const label = lang === "fil" ? `I-text ang ${n} kapitbahay` : `Text ${n} ${n === 1 ? "neighbour" : "neighbours"}`;
   // Contacts live in this browser's storage, so this branch never renders on
   // the server and window is always there. Rebuilt on click too, so the
   // message's timestamp is current when it is sent.
@@ -81,7 +82,7 @@ export function RelayButton({ alert, zone }: { alert: AlertRecord; zone: Zone })
     );
 
   return (
-    <Button asChild variant="outline" size="sm">
+    <Button asChild variant="outline" size="lg">
       <a href={href()} onClick={(e) => (e.currentTarget.href = href())}>
         <Users aria-hidden="true" className="h-4 w-4" />
         {label}

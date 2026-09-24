@@ -33,7 +33,7 @@ function ReadAloudButton({ text, lang }: { text: string; lang: LanguageCode }) {
     <Button
       type="button"
       variant="outline"
-      size="sm"
+      size="lg"
       onClick={() => {
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = lang === "fil" ? "fil-PH" : "en-PH";

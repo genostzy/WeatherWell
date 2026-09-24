@@ -18,11 +18,17 @@ describe("RelayButton", () => {
       { name: "Kapitbahay", number: "0918 000 1111" },
     ]);
     render(<RelayButton alert={alert} zone={zone} />);
-    const link = screen.getByRole("link", { name: /text my 2 contacts/i });
+    const link = screen.getByRole("link", { name: /text 2 neighbours/i });
     const href = link.getAttribute("href")!;
     expect(href).toMatch(/^sms:/);
     expect(href).toContain("09171230000,09180001111");
     expect(decodeURIComponent(href)).toContain(alert.message.en);
+  });
+
+  it("says neighbour, not neighbours, for one", () => {
+    saveRelayContacts([{ name: "Lola", number: "0917 123 0000" }]);
+    render(<RelayButton alert={alert} zone={zone} />);
+    expect(screen.getByRole("link", { name: "Text 1 neighbour" })).toBeInTheDocument();
   });
 
   it("points to setup when no contacts are saved", () => {

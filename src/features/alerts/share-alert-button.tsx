@@ -75,7 +75,7 @@ export function ShareAlertButton({
       <div className="flex gap-2">
         <Button
           variant="outline"
-          size="sm"
+          size="lg"
           onClick={handleShare}
           className="gap-2"
           aria-label={shareLabel}
@@ -85,7 +85,7 @@ export function ShareAlertButton({
         </Button>
         <Button
           variant="outline"
-          size="sm"
+          size="lg"
           onClick={handleDownloadImage}
           disabled={generating}
           className="gap-2"
