@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { PushPrompt } from "@/features/onboarding/push-prompt";
 import { OfficialBanner } from "@/features/auth/official-banner";
 import dynamic from "next/dynamic";
 import { ShieldCheck, Building2, Droplet, X } from "lucide-react";
@@ -27,6 +28,7 @@ import { hasRealEvacuationCenter, NO_VERIFIED_CENTER } from "@/lib/zone-data-qua
 import { CoverageNote } from "@/features/zones/coverage-note";
 import type { HazardType, LocalizedText, Zone } from "@/lib/types";
 
+const ALERTS_ON_PHONE: LocalizedText = { en: "Alerts on this phone", fil: "Alerto sa teleponong ito" };
 const MapCanvas = dynamic(() => import("./map-canvas").then((m) => m.MapCanvas), {
   ssr: false,
   loading: () => <Skeleton className="h-[280px] w-full rounded-xl sm:h-[400px] lg:h-[600px]" />,
@@ -160,6 +162,14 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
         <CoverageNote zone={zones[0]} />
 
         <QuickDepthReport zoneId={zones[0].id} />
+
+        {/* Alerts could only be turned on during first setup; this is where they live now. */}
+        <section aria-labelledby="alerts-on-phone" className="space-y-2 rounded-xl border-2 border-border p-3">
+          <h2 id="alerts-on-phone" lang={lang} className="text-sm font-medium">
+            {t(ALERTS_ON_PHONE, lang)}
+          </h2>
+          <PushPrompt zoneId={zones[0].id} />
+        </section>
 
         {/* Quick actions — primary, placed right after status so they're seen first */}
         <div className="grid grid-cols-2 gap-2">

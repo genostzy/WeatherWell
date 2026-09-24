@@ -56,12 +56,19 @@ async function saveSubscription(sub: PushSubscription, zoneId: string): Promise<
 }
 
 /**
+ * What subscribe() came to. Every way it can stop is named, so the button
+ * can say why instead of quietly ending its spinner (found testing push on
+ * a phone: nothing was saved and nothing was said).
+ */
+export type SubscribeResult = "subscribed" | "no-zone" | "not-configured" | "no-session" | "denied" | "failed";
+
+/**
  * Hook to manage Web Push subscription lifecycle.
  * Handles permission request, subscription creation, and server-side storage.
  */
 export function usePushSubscription(zoneId?: string): {
   state: PushSubscriptionState;
-  subscribe: () => Promise<void>;
+  subscribe: () => Promise<SubscribeResult>;
   unsubscribe: () => Promise<void>;
 } {
   const [subscription, setSubscription] = useState<PushSubscription | null>(null);
@@ -93,15 +100,15 @@ export function usePushSubscription(zoneId?: string): {
     };
   }, [isSupported, zoneId]);
 
-  const subscribe = useCallback(async () => {
+  const subscribe = useCallback(async (): Promise<SubscribeResult> => {
     // Without a barangay there is nothing to target: the column is NOT NULL,
     // and a zone-less subscription used to receive every barangay's alerts.
-    if (!zoneId) return;
+    if (!zoneId) return "no-zone";
 
     const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
     if (!vapidPublicKey) {
       console.error("VAPID public key not configured");
-      return;
+      return "not-configured";
     }
 
     // A resident who has never filed a report has no session yet, and
@@ -110,26 +117,33 @@ export function usePushSubscription(zoneId?: string): {
     // resident is never shown "subscribed" for a subscription that was not
     // saved.
     const userId = await ensureAnonymousSession();
-    if (!userId) return;
+    if (!userId) return "no-session";
 
     const perm = await Notification.requestPermission();
     setPermission(perm);
-    if (perm !== "granted") return;
+    if (perm !== "granted") return "denied";
 
-    const registration = await navigator.serviceWorker.ready;
-    const sub = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
-    });
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const sub = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+      });
 
-    if (!(await saveSubscription(sub, zoneId))) {
-      // Undo the browser side too: otherwise the next load finds this
-      // subscription and shows "subscribed" with no row behind it.
-      await sub.unsubscribe();
-      return;
+      if (!(await saveSubscription(sub, zoneId))) {
+        // Undo the browser side too: otherwise the next load finds this
+        // subscription and shows "subscribed" with no row behind it.
+        await sub.unsubscribe();
+        return "failed";
+      }
+
+      setSubscription(sub);
+      return "subscribed";
+    } catch (error) {
+      // The push service refused or is unreachable (some browsers have none).
+      console.error("Push subscription failed", error);
+      return "failed";
     }
-
-    setSubscription(sub);
   }, [zoneId]);
 
   const unsubscribe = useCallback(async () => {

@@ -88,6 +88,30 @@ describe("usePushSubscription", () => {
     expect(fakeSubscription.unsubscribe).toHaveBeenCalled();
   });
 
+  it("says why it did not subscribe, so the button never just stops (found testing push on a phone)", async () => {
+    const noZone = renderHook(() => usePushSubscription(undefined));
+    expect(await act(() => noZone.result.current.subscribe())).toBe("no-zone");
+
+    ensureAnonymousSession.mockResolvedValueOnce(null);
+    const offline = renderHook(() => usePushSubscription("zone-1"));
+    expect(await act(() => offline.result.current.subscribe())).toBe("no-session");
+
+    requestPermission.mockResolvedValueOnce("denied");
+    const denied = renderHook(() => usePushSubscription("zone-1"));
+    expect(await act(() => denied.result.current.subscribe())).toBe("denied");
+
+    upsert.mockResolvedValueOnce({ error: { message: "x" } });
+    const unsaved = renderHook(() => usePushSubscription("zone-1"));
+    expect(await act(() => unsaved.result.current.subscribe())).toBe("failed");
+
+    pushManager.subscribe.mockRejectedValueOnce(new Error("push service unavailable"));
+    const thrown = renderHook(() => usePushSubscription("zone-1"));
+    expect(await act(() => thrown.result.current.subscribe())).toBe("failed");
+
+    const ok = renderHook(() => usePushSubscription("zone-1"));
+    expect(await act(() => ok.result.current.subscribe())).toBe("subscribed");
+  });
+
   it("re-saves an existing browser subscription under the current barangay on load", async () => {
     // Heals devices whose earlier save failed or never happened (0 rows
     // existed before this fix), and follows a change of barangay.

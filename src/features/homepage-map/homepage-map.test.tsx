@@ -119,4 +119,9 @@ describe("HomepageMap", () => {
 
     expect(screen.queryByRole("img", { name: /evacuation center/i })).not.toBeInTheDocument();
   });
+
+  it("offers flood alerts on this phone from the home screen, not only during first setup (found testing push on a phone)", () => {
+    renderWithData(<HomepageMap zones={FIXTURE_REFERENCE_DATA.zones} />);
+    expect(screen.getByRole("region", { name: /alerts on this phone/i })).toBeInTheDocument();
+  });
 });
