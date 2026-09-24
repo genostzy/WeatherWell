@@ -72,7 +72,7 @@ export function ShareAlertButton({
 
   return (
     <div className="space-y-2">
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button
           variant="outline"
           size="lg"

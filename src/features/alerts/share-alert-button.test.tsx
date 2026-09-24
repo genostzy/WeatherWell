@@ -75,3 +75,11 @@ describe("ShareAlertButton image", () => {
     expect(generateAlertImage.mock.calls[0][0].evacuationCenter).toMatch(/no verified evacuation centre/i);
   });
 });
+
+describe("ShareAlertButton layout (found on the live desktop sidebar)", () => {
+  it("lets its full-size buttons wrap instead of overflowing a narrow column", () => {
+    render(<ShareAlertButton alert={alert} zone={zone} />);
+    const row = screen.getByRole("button", { name: /share alert/i }).parentElement!;
+    expect(row.className).toMatch(/flex-wrap/);
+  });
+});
