@@ -106,6 +106,7 @@ export function CommunityPinForm({
               lang={lang}
               rows={2}
               maxLength={140}
+              required
               className="w-full resize-none rounded-md border-2 border-border bg-background p-2 text-sm placeholder:text-muted-foreground"
             />
           </div>
@@ -119,7 +120,8 @@ export function CommunityPinForm({
           </p>
 
           <div className="flex gap-2">
-            <Button type="submit" size="sm">
+            {/* The server refuses a pin without a description (createPin), so the form does too. */}
+            <Button type="submit" size="sm" disabled={!caption.trim()}>
               {t(mode === "edit" ? SAVE_CHANGES : DROP_PIN, lang)}
             </Button>
             <Button type="button" variant="outline" size="sm" onClick={onCancel}>

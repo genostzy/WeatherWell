@@ -19,6 +19,23 @@ describe("CommunityPinForm", () => {
     });
   });
 
+  it("won't drop a pin without a description, which the server would refuse after the form closed", async () => {
+    // Seen on production 2026-09-25: the pin vanished and its queue entry read "This couldn't be accepted."
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(<CommunityPinForm onSubmit={onSubmit} onCancel={() => {}} />);
+
+    const drop = screen.getByRole("button", { name: /drop pin/i });
+    expect(drop).toBeDisabled();
+    await user.type(screen.getByLabelText(/short description/i), "   ");
+    expect(drop).toBeDisabled();
+    await user.click(drop);
+    expect(onSubmit).not.toHaveBeenCalled();
+
+    await user.type(screen.getByLabelText(/short description/i), "Knee-deep at the chapel");
+    expect(drop).toBeEnabled();
+  });
+
   it("prefills from the existing pin when editing, rather than starting blank", () => {
     render(
       <CommunityPinForm
