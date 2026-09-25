@@ -13,6 +13,19 @@ vi.mock("@/lib/auth/sign-in", () => ({
   signUpWithPassword: (...args: unknown[]) => signUpWithPassword(...args),
 }));
 
+const setRecoveryAnswers = vi.fn();
+vi.mock("@/app/actions/recovery", () => ({
+  setRecoveryAnswers: (...args: unknown[]) => setRecoveryAnswers(...args),
+}));
+
+/** Fills a resident's sign-up form, security answers included. */
+function fillSignUp(mobile = "0917 123 4567") {
+  fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "new@example.com" } });
+  fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: "hunter2222" } });
+  fireEvent.change(screen.getByLabelText("Answer 1"), { target: { value: "adobo" } });
+  fireEvent.change(screen.getByLabelText("Answer 2"), { target: { value: mobile } });
+}
+
 const push = vi.fn();
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -23,7 +36,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   startGoogleSignIn.mockResolvedValue({ ok: true });
   signInWithPassword.mockResolvedValue({ ok: true });
-  signUpWithPassword.mockResolvedValue({ ok: true });
+  signUpWithPassword.mockResolvedValue({ ok: true, signedIn: false });
+  setRecoveryAnswers.mockResolvedValue({ ok: true });
 });
 
 describe("SignInPanel", () => {
@@ -175,8 +189,7 @@ describe("SignInPanel", () => {
       );
 
       fireEvent.click(screen.getByRole("button", { name: /create account/i }));
-      fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "new@example.com" } });
-      fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: "hunter2222" } });
+      fillSignUp();
       fireEvent.click(screen.getByRole("button", { name: /create account/i }));
 
       await waitFor(() => expect(signUpWithPassword).toHaveBeenCalledWith("new@example.com", "hunter2222"));
@@ -190,11 +203,66 @@ describe("SignInPanel", () => {
       );
 
       fireEvent.click(screen.getByRole("button", { name: /create account/i }));
-      fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "new@example.com" } });
-      fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: "hunter2222" } });
+      fillSignUp();
       fireEvent.click(screen.getByRole("button", { name: /create account/i }));
 
       expect(await screen.findByText(/check your email to confirm/i)).toBeInTheDocument();
+    });
+
+    it("saves a resident's security questions and goes in straight away when no confirmation is needed", async () => {
+      signUpWithPassword.mockResolvedValue({ ok: true, signedIn: true });
+      render(
+        <LanguageProvider>
+          <SignInPanel next="/map" />
+        </LanguageProvider>
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: /create account/i }));
+      fillSignUp();
+      fireEvent.click(screen.getByRole("button", { name: /create account/i }));
+
+      await waitFor(() => expect(push).toHaveBeenCalledWith("/map"));
+      expect(setRecoveryAnswers).toHaveBeenCalledWith({
+        question1: "favorite_food",
+        answer1: "adobo",
+        question2: "mobile_number",
+        answer2: "0917 123 4567",
+      });
+    });
+
+    it("refuses a partial mobile number before any account is made", async () => {
+      render(
+        <LanguageProvider>
+          <SignInPanel next="/" />
+        </LanguageProvider>
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: /create account/i }));
+      fillSignUp("0917");
+      fireEvent.click(screen.getByRole("button", { name: /create account/i }));
+
+      expect(await screen.findByText(/whole mobile number/i)).toBeInTheDocument();
+      expect(signUpWithPassword).not.toHaveBeenCalled();
+    });
+
+    it("does not ask officials for security questions, since they reset through an admin", () => {
+      render(
+        <LanguageProvider>
+          <SignInPanel next="/admin" />
+        </LanguageProvider>
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: /create account/i }));
+      expect(screen.queryByLabelText("Answer 1")).not.toBeInTheDocument();
+    });
+
+    it("links to password recovery when signing in", () => {
+      render(
+        <LanguageProvider>
+          <SignInPanel next="/" />
+        </LanguageProvider>
+      );
+      expect(screen.getByRole("link", { name: /forgot password/i })).toHaveAttribute("href", "/forgot-password");
     });
 
     it("shows a password sign-in error next to the form, in the reader's language (L2)", async () => {

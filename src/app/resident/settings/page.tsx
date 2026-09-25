@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getBrowserClient } from "@/lib/supabase/browser";
 import { useLanguage } from "@/features/i18n/language-provider";
+import { EmailAlertsCard } from "@/features/resident/email-alerts-card";
+import { SecurityQuestionsCard } from "@/features/resident/security-questions-card";
 import { t } from "@/lib/i18n";
 import type { LocalizedText } from "@/lib/types";
 
@@ -22,11 +24,20 @@ export default function ResidentSettingsPage() {
   const router = useRouter();
   const { lang } = useLanguage();
   const [email, setEmail] = useState<string | null>(null);
+  // How this account signs in ("email" is a password), and whether it is a
+  // resident: officials reset their password through an admin instead.
+  const [providers, setProviders] = useState<string[]>([]);
+  const [isResident, setIsResident] = useState(false);
 
   useEffect(() => {
     const supabase = getBrowserClient();
-    supabase.auth.getSession().then(({ data }) => {
-      setEmail(data.session?.user.email ?? null);
+    supabase.auth.getSession().then(async ({ data }) => {
+      const user = data.session?.user;
+      setEmail(user?.email ?? null);
+      setProviders((user?.app_metadata?.providers as string[] | undefined) ?? []);
+      if (!user) return;
+      const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
+      setIsResident((profile?.role ?? "resident") === "resident");
     });
   }, []);
 
@@ -53,6 +64,8 @@ export default function ResidentSettingsPage() {
           </Button>
         </CardContent>
       </Card>
+      {providers.includes("email") && isResident && <SecurityQuestionsCard />}
+      {providers.includes("google") && email && <EmailAlertsCard email={email} />}
     </div>
   );
 }

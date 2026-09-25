@@ -8,8 +8,24 @@ vi.mock("@/lib/supabase/user-server", () => ({
   createSupabaseUserClient: async () => ({ auth: { getClaims }, rpc, from }),
 }));
 
+// after() runs its callback once the response is sent; here, straight away.
+vi.mock("next/server", () => ({ after: (callback: () => unknown) => void callback() }));
+const notifyResidentsOfAlertChange = vi.fn();
+vi.mock("@/lib/notify-residents", () => ({
+  notifyResidentsOfAlertChange: (...args: unknown[]) => notifyResidentsOfAlertChange(...args),
+}));
+
+/** The zone's active alert as setZoneAlert reads it before changing it. */
+function activeSeverity(severity: string | null) {
+  const maybeSingle = vi.fn().mockResolvedValue({ data: severity ? { severity } : null, error: null });
+  const eq2 = vi.fn(() => ({ maybeSingle }));
+  const eq1 = vi.fn(() => ({ eq: eq2 }));
+  from.mockReturnValue({ select: vi.fn(() => ({ eq: eq1 })) });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
+  activeSeverity(null);
 });
 
 describe("setZoneAlert", () => {
@@ -178,5 +194,47 @@ describe("rejectAutomaticAlert (layer 6)", () => {
 
     expect((await rejectAutomaticAlert("zone-1")).ok).toBe(false);
     expect(rpc).not.toHaveBeenCalled();
+  });
+});
+
+describe("telling residents about an official's change", () => {
+  beforeEach(() => {
+    getClaims.mockResolvedValue({ data: { claims: { sub: "operator-1" } } });
+    rpc.mockResolvedValue({ error: null });
+  });
+
+  it("notifies them when the severity changes", async () => {
+    activeSeverity("yellow");
+    const { setZoneAlert } = await import("./set-zone-alert");
+    await setZoneAlert({ zoneId: "zone-1", severity: "evacuate" });
+    expect(notifyResidentsOfAlertChange).toHaveBeenCalledWith("zone-1", "set");
+  });
+
+  it("notifies them when the alert is lifted", async () => {
+    activeSeverity("red");
+    const { setZoneAlert } = await import("./set-zone-alert");
+    await setZoneAlert({ zoneId: "zone-1", severity: "none" });
+    expect(notifyResidentsOfAlertChange).toHaveBeenCalledWith("zone-1", "lifted");
+  });
+
+  it("does not notify them again when the same severity is re-confirmed", async () => {
+    activeSeverity("red");
+    const { setZoneAlert } = await import("./set-zone-alert");
+    await setZoneAlert({ zoneId: "zone-1", severity: "red" });
+    expect(notifyResidentsOfAlertChange).not.toHaveBeenCalled();
+  });
+
+  it("does not notify them when the database refused the change", async () => {
+    activeSeverity("yellow");
+    rpc.mockResolvedValue({ error: { code: "42501", message: "not an official for this barangay" } });
+    const { setZoneAlert } = await import("./set-zone-alert");
+    await setZoneAlert({ zoneId: "zone-1", severity: "evacuate" });
+    expect(notifyResidentsOfAlertChange).not.toHaveBeenCalled();
+  });
+
+  it("tells them a rejected advisory is withdrawn (layer 9)", async () => {
+    const { rejectAutomaticAlert } = await import("./set-zone-alert");
+    await rejectAutomaticAlert("zone-1");
+    expect(notifyResidentsOfAlertChange).toHaveBeenCalledWith("zone-1", "withdrawn");
   });
 });

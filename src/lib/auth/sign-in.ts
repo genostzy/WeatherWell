@@ -5,6 +5,9 @@ import { safeNext } from "./safe-next";
 
 export type SignInResult = { ok: true } | { ok: false; error: string };
 
+/** `signedIn` is false while Supabase still wants the email confirmed ("Confirm email" on). */
+export type SignUpResult = { ok: true; signedIn: boolean } | { ok: false; error: string };
+
 function returnUrl(route: "/auth/callback" | "/auth/confirm", next: string): string {
   const url = new URL(route, window.location.origin);
   url.searchParams.set("next", safeNext(next));
@@ -51,13 +54,14 @@ export async function signInWithPassword(email: string, password: string): Promi
  * every report and pin filed under this id — is kept rather than abandoned
  * under a brand-new, unrelated user.
  */
-export async function signUpWithPassword(email: string, password: string): Promise<SignInResult> {
+export async function signUpWithPassword(email: string, password: string): Promise<SignUpResult> {
   const supabase = getBrowserClient();
   const { data } = await supabase.auth.getSession();
 
   if (data.session?.user.is_anonymous) {
-    const { error } = await supabase.auth.updateUser({ email, password });
-    if (!error) return { ok: true };
+    const { data: updated, error } = await supabase.auth.updateUser({ email, password });
+    // The account stops being anonymous once the email is accepted.
+    if (!error) return { ok: true, signedIn: updated?.user?.is_anonymous === false };
     // Same rule as sendEmailSignInLink (M11): only a taken email justifies
     // giving up on linking, and even then we cannot sign into that account
     // for them — we don't have its real password — so this is reported as a
@@ -71,6 +75,6 @@ export async function signUpWithPassword(email: string, password: string): Promi
     }
     return { ok: false, error: error.message };
   }
-  const { error } = await supabase.auth.signUp({ email, password });
-  return error ? { ok: false, error: error.message } : { ok: true };
+  const { data: created, error } = await supabase.auth.signUp({ email, password });
+  return error ? { ok: false, error: error.message } : { ok: true, signedIn: !!created?.session };
 }

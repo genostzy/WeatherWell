@@ -12,6 +12,10 @@ vi.mock("@/app/actions/appoint-official", () => ({
 vi.mock("@/app/actions/remove-official", () => ({
   removeOfficial: (...args: unknown[]) => removeOfficial(...args),
 }));
+const resetOfficialPassword = vi.fn();
+vi.mock("@/app/actions/recovery", () => ({
+  resetOfficialPassword: (...args: unknown[]) => resetOfficialPassword(...args),
+}));
 
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -85,5 +89,27 @@ describe("OfficialsPanel", () => {
 
     await waitFor(() => expect(removeOfficial).toHaveBeenCalledWith({ email: "juan@example.com" }));
     await waitFor(() => expect(refresh).toHaveBeenCalled());
+  });
+
+  it("sets a new password for the chosen official, and says so", async () => {
+    resetOfficialPassword.mockResolvedValue({ ok: true });
+    renderPanel();
+    fireEvent.change(screen.getByLabelText("Official"), { target: { value: "juan@example.com" } });
+    fireEvent.change(screen.getByLabelText("New password"), { target: { value: "newpass123" } });
+    fireEvent.click(screen.getByRole("button", { name: "Set password" }));
+
+    expect(await screen.findByText("Password set.")).toBeInTheDocument();
+    expect(resetOfficialPassword).toHaveBeenCalledWith({ email: "juan@example.com", password: "newpass123" });
+  });
+
+  it("shows the database's refusal instead of claiming success", async () => {
+    resetOfficialPassword.mockResolvedValue({ ok: false, permanent: true, error: "No official has that email." });
+    renderPanel();
+    fireEvent.change(screen.getByLabelText("Official"), { target: { value: "juan@example.com" } });
+    fireEvent.change(screen.getByLabelText("New password"), { target: { value: "newpass123" } });
+    fireEvent.click(screen.getByRole("button", { name: "Set password" }));
+
+    expect(await screen.findByText("No official has that email.")).toBeInTheDocument();
+    expect(screen.queryByText("Password set.")).not.toBeInTheDocument();
   });
 });

@@ -1,6 +1,7 @@
 import "server-only";
 import { createClient } from "@supabase/supabase-js";
 import { sendUsersPush } from "@/lib/send-zone-push";
+import { emailUsers } from "@/lib/email-alerts";
 import { advisoryRecipients, messageNotification, messageRecipients, type OfficialArea } from "@/lib/official-recipients";
 import type { MessageDirection, MessageKind } from "@/lib/official-messages";
 
@@ -10,6 +11,12 @@ const service = () => createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, proces
 async function officialsInTown(supabase: ReturnType<typeof service>, townCode: string): Promise<OfficialArea[]> {
   const { data } = await supabase.from("profiles").select("id, area_code").eq("role", "operator").like("area_code", `${townCode}%`);
   return (data ?? []).filter((row) => row.area_code).map((row) => ({ id: row.id as string, areaCode: row.area_code as string }));
+}
+
+/** By push, and by email to those who turned email alerts on. */
+async function tellOfficials(userIds: string[], title: string, body: string): Promise<void> {
+  await sendUsersPush({ userIds, title, body });
+  await emailUsers(userIds, { subject: `WeatherWell: ${title}`, text: body, path: "/admin" });
 }
 
 /**
@@ -38,7 +45,7 @@ export async function notifyOfficialsOfMessage(messageId: string): Promise<void>
       { direction, kind: msg.kind as MessageKind, body: msg.body, senderName: msg.sender_name },
       barangayName
     );
-    await sendUsersPush({ userIds: messageRecipients({ direction, townCode: msg.town_code }, officials), title, body });
+    await tellOfficials(messageRecipients({ direction, townCode: msg.town_code }, officials), title, body);
   } catch (error) {
     console.error("notifyOfficialsOfMessage failed", error);
   }
@@ -51,11 +58,11 @@ export async function notifyOfficialsOfAdvisory(zoneId: string): Promise<void> {
     const { data: zone } = await supabase.from("zones").select("name, psgc_barangay_code").eq("id", zoneId).maybeSingle();
     if (!zone) return;
     const officials = await officialsInTown(supabase, zone.psgc_barangay_code.slice(0, 7));
-    await sendUsersPush({
-      userIds: advisoryRecipients(zone.psgc_barangay_code, officials),
-      title: `${zone.name}: residents report flooding`,
-      body: "An automatic advisory is up, marked unverified. Confirm or reject it on your dashboard.",
-    });
+    await tellOfficials(
+      advisoryRecipients(zone.psgc_barangay_code, officials),
+      `${zone.name}: residents report flooding`,
+      "An automatic advisory is up, marked unverified. Confirm or reject it on your dashboard."
+    );
   } catch (error) {
     console.error("notifyOfficialsOfAdvisory failed", error);
   }

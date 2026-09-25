@@ -12,6 +12,8 @@ import { EmergencyCard } from "@/features/evacuation/emergency-card";
 import { ReportForm } from "@/features/water-level-report/report-form";
 import { ZoneMap } from "@/features/zones/zone-map";
 import { ConsentNotice } from "@/features/onboarding/consent-notice";
+import { ForgotPasswordPanel } from "@/features/auth/forgot-password-panel";
+import { EMPTY_RECOVERY_ANSWERS, RecoveryQuestionFields } from "@/features/auth/recovery-question-fields";
 import { ZonePicker } from "@/features/onboarding/zone-picker";
 import { InstallStep } from "@/features/onboarding/install-step";
 import { AlertDowngradeNotice } from "@/features/alerts/alert-downgrade-notice";
@@ -70,6 +72,20 @@ describe("accessibility (WCAG 2.1 AA, automated subset)", () => {
 
   it("zone map has no violations", async () => {
     expect(await violationsFor(<ZoneMap zones={zones} />)).toEqual([]);
+  });
+
+  it("forgot-password form has no violations", async () => {
+    expect(await violationsFor(<ForgotPasswordPanel />)).toEqual([]);
+  });
+
+  it("security question fields have no violations", async () => {
+    expect(
+      await violationsFor(
+        <form>
+          <RecoveryQuestionFields value={EMPTY_RECOVERY_ANSWERS} onChange={() => {}} lang="en" />
+        </form>
+      )
+    ).toEqual([]);
   });
 
   it("consent notice has no violations", async () => {

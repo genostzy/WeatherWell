@@ -1,6 +1,8 @@
 "use server";
 
+import { after } from "next/server";
 import { manualAlertMessage, SEVERITY_ORDER, type Severity } from "@/lib/severity";
+import { notifyResidentsOfAlertChange } from "@/lib/notify-residents";
 import { createSupabaseUserClient } from "@/lib/supabase/user-server";
 import type { ActionResult } from "./action-result";
 
@@ -72,6 +74,15 @@ export async function setZoneAlert(input: SetZoneAlertInput): Promise<ActionResu
   const severity = input.severity === "none" ? null : input.severity;
   const message = input.severity === "none" ? null : manualAlertMessage(input.severity);
 
+  // What residents were last told: re-confirming the same severity (Still
+  // in effect, or confirming an advisory) does not notify them again.
+  const { data: previous } = await supabase
+    .from("alerts")
+    .select("severity")
+    .eq("zone_id", input.zoneId)
+    .eq("is_active", true)
+    .maybeSingle();
+
   const { error } = await supabase.rpc("set_zone_alert", {
     p_zone_id: input.zoneId,
     // Postgres has no NOT NULL for function parameters, so the generated
@@ -84,7 +95,13 @@ export async function setZoneAlert(input: SetZoneAlertInput): Promise<ActionResu
     p_message: message,
   });
 
-  if (!error) return { ok: true };
+  if (!error) {
+    // After the response, so the official is not kept waiting on push and email.
+    if ((previous?.severity ?? null) !== severity) {
+      after(() => notifyResidentsOfAlertChange(input.zoneId, severity ? "set" : "lifted"));
+    }
+    return { ok: true };
+  }
 
   // Every code is permanent here, not just 42501 (an RLS denial). There is no
   // queue to retry into, so classifying anything transient would just be a
@@ -146,7 +163,11 @@ export async function rejectAutomaticAlert(zoneId: string): Promise<ActionResult
   }
 
   const { error } = await supabase.rpc("reject_automatic_alert", { p_zone_id: zoneId });
-  if (!error) return { ok: true };
+  if (!error) {
+    // Residents were told about the advisory, so they hear it is withdrawn (layer 9).
+    after(() => notifyResidentsOfAlertChange(zoneId, "withdrawn"));
+    return { ok: true };
+  }
   return { ok: false, permanent: true, error: error.message ?? `Database error ${error.code ?? "(no code)"}` };
 }
 

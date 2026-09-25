@@ -12,7 +12,9 @@ import { t } from "@/lib/i18n";
 import { friendlyError } from "@/lib/friendly-error";
 import { startGoogleSignIn, signInWithPassword, signUpWithPassword, type SignInResult } from "@/lib/auth/sign-in";
 import { isAdminPath } from "@/lib/auth/admin-path";
+import { recoveryAnswersProblem } from "@/lib/recovery-questions";
 import type { LocalizedText } from "@/lib/types";
+import { EMPTY_RECOVERY_ANSWERS, RecoveryQuestionFields, type RecoveryAnswers } from "./recovery-question-fields";
 
 const OFFICIAL_HEADING: LocalizedText = { en: "Sign in as an official", fil: "Mag-sign in bilang opisyal" };
 const RESIDENT_HEADING: LocalizedText = {
@@ -40,6 +42,15 @@ const ACCOUNT_CREATED: LocalizedText = {
   en: "Account created! Check your email to confirm, then sign in.",
   fil: "Nalikha ang account! I-confirm sa email, pagkatapos mag-sign in.",
 };
+const QUESTIONS_HEADING: LocalizedText = {
+  en: "Security questions, in case you forget your password",
+  fil: "Mga tanong pangseguridad, kung sakaling makalimutan mo ang password",
+};
+const QUESTIONS_NOT_SAVED: LocalizedText = {
+  en: "Your account was made, but the security questions were not saved. Set them in Settings.",
+  fil: "Nagawa ang account mo, pero hindi na-save ang mga tanong pangseguridad. Itakda ang mga ito sa Settings.",
+};
+const FORGOT_PASSWORD: LocalizedText = { en: "Forgot password?", fil: "Nakalimutan ang password?" };
 const NO_ACCOUNT: LocalizedText = { en: "Don't have an account?", fil: "Wala pang account?" };
 const HAVE_ACCOUNT: LocalizedText = { en: "Already have an account?", fil: "May account na?" };
 const CONTINUE_WITHOUT_ACCOUNT: LocalizedText = {
@@ -56,11 +67,15 @@ export function SignInPanel({ next, notice }: { next: string; notice?: string })
   const [password, setPassword] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
   const [accountCreated, setAccountCreated] = useState(false);
+  const [answers, setAnswers] = useState<RecoveryAnswers>(EMPTY_RECOVERY_ANSWERS);
+  const [signUpProblem, setSignUpProblem] = useState<LocalizedText | null>(null);
   const [pending, setPending] = useState<Control | null>(null);
   const [errors, setErrors] = useState<Partial<Record<Control, string>>>({});
 
   const isOfficial = isAdminPath(next);
   const failed = notice === "failed";
+  // Officials reset their password through an admin, so they are not asked.
+  const asksQuestions = isSignUp && !isOfficial;
 
   async function handleResult(control: Control, run: () => Promise<SignInResult>) {
     setPending(control);
@@ -72,22 +87,49 @@ export function SignInPanel({ next, notice }: { next: string; notice?: string })
       return;
     }
     if (control === "password") {
-      if (isSignUp) {
-        // signUpWithPassword may still need an email-confirmation click
-        // before the session is live (Supabase project setting), so this
-        // stays on the page and tells the resident to sign in once
-        // confirmed, the same as the email-link flow's "check your email".
-        setAccountCreated(true);
-      } else {
-        // Google leaves the page itself (an OAuth redirect); password
-        // sign-in resolves in place, so this is the only control that has
-        // to navigate itself.
-        router.push(next);
-        router.refresh();
-      }
+      // Google leaves the page itself (an OAuth redirect); password sign-in
+      // resolves in place, so this is the only control that has to navigate
+      // itself.
+      router.push(next);
+      router.refresh();
     }
     // "google"/"existing" leave the page themselves on success (an OAuth
     // redirect), so there is nothing left to do here for them.
+  }
+
+  async function handleSignUp() {
+    setErrors((prev) => ({ ...prev, password: undefined }));
+    setAccountCreated(false);
+    const problem = asksQuestions ? recoveryAnswersProblem(answers) : null;
+    setSignUpProblem(problem);
+    if (problem) return;
+
+    setPending("password");
+    const result = await signUpWithPassword(email, password);
+    if (!result.ok) {
+      setPending(null);
+      setErrors((prev) => ({ ...prev, password: result.error }));
+      return;
+    }
+    if (!result.signedIn) {
+      // Supabase still wants the email confirmed ("Confirm email" is on), so
+      // the questions wait for Settings.
+      setPending(null);
+      setAccountCreated(true);
+      return;
+    }
+    // Imported on use, like the alerts store's actions, so the form loads
+    // without the server-side modules behind it.
+    const saved = asksQuestions
+      ? await (await import("@/app/actions/recovery")).setRecoveryAnswers(answers)
+      : { ok: true };
+    setPending(null);
+    if (!saved.ok) {
+      setSignUpProblem(QUESTIONS_NOT_SAVED);
+      return;
+    }
+    router.push(next);
+    router.refresh();
   }
 
   return (
@@ -147,10 +189,11 @@ export function SignInPanel({ next, notice }: { next: string; notice?: string })
           className="space-y-3"
           onSubmit={(event) => {
             event.preventDefault();
-            const run = isSignUp
-              ? () => signUpWithPassword(email, password)
-              : () => signInWithPassword(email, password);
-            void handleResult("password", run);
+            if (isSignUp) {
+              void handleSignUp();
+            } else {
+              void handleResult("password", () => signInWithPassword(email, password));
+            }
           }}
         >
           <div className="space-y-1">
@@ -176,6 +219,19 @@ export function SignInPanel({ next, notice }: { next: string; notice?: string })
               disabled={pending === "password"}
             />
           </div>
+          {asksQuestions && (
+            <fieldset className="space-y-2">
+              <legend lang={lang} className="text-sm font-medium">
+                {t(QUESTIONS_HEADING, lang)}
+              </legend>
+              <RecoveryQuestionFields
+                value={answers}
+                onChange={setAnswers}
+                disabled={pending === "password"}
+                lang={lang}
+              />
+            </fieldset>
+          )}
           <Button type="submit" size="lg" className="w-full" loading={pending === "password"}>
             {isSignUp ? t(CREATE_ACCOUNT, lang) : t(SIGN_IN_BTN, lang)}
           </Button>
@@ -184,9 +240,21 @@ export function SignInPanel({ next, notice }: { next: string; notice?: string })
               {friendlyError(errors.password, lang)}
             </p>
           )}
+          {signUpProblem && (
+            <p role="alert" lang={lang} className="text-sm text-destructive">
+              {t(signUpProblem, lang)}
+            </p>
+          )}
           {accountCreated && (
             <p role="status" lang={lang} className="text-sm text-green-500">
               {t(ACCOUNT_CREATED, lang)}
+            </p>
+          )}
+          {!isSignUp && (
+            <p className="text-center text-xs">
+              <Link href="/forgot-password" className="underline text-muted-foreground hover:text-foreground">
+                {t(FORGOT_PASSWORD, lang)}
+              </Link>
             </p>
           )}
           <p className="text-center text-xs text-muted-foreground">
@@ -198,6 +266,7 @@ export function SignInPanel({ next, notice }: { next: string; notice?: string })
                 setIsSignUp(!isSignUp);
                 setErrors({});
                 setAccountCreated(false);
+                setSignUpProblem(null);
               }}
             >
               {isSignUp ? t(SIGN_IN_BTN, lang) : t(CREATE_ACCOUNT, lang)}

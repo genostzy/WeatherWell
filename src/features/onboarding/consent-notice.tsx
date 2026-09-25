@@ -49,6 +49,28 @@ export const CONSENT_ITEMS: ConsentItem[] = [
     },
   },
   {
+    id: "emailAlerts",
+    text: {
+      en: "If you sign in with Google and turn on email alerts, WeatherWell emails your barangay's alerts to that Gmail address, sent from WeatherWell's own Gmail account. Every email has a link to stop them.",
+      fil: "Kung mag-sign in ka gamit ang Google at i-on ang mga alerto sa email, ipapadala ng WeatherWell sa Gmail address na iyon ang mga alerto ng iyong barangay, mula sa sariling Gmail account ng WeatherWell. May link sa bawat email para itigil ang mga ito.",
+    },
+    ifYouSayNo: {
+      en: "You still see alerts in the app, and on your phone if you turn alerts on.",
+      fil: "Makikita mo pa rin ang mga alerto sa app, at sa iyong telepono kung i-on mo ang mga alerto.",
+    },
+  },
+  {
+    id: "securityQuestions",
+    text: {
+      en: "If you make an account with a password, you answer two security questions. The answers are stored scrambled and used only to let you set a new password if you forget yours.",
+      fil: "Kung gagawa ka ng account na may password, sasagutin mo ang dalawang tanong pangseguridad. Iniimbak nang naka-scramble ang mga sagot at ginagamit lamang para makapagtakda ka ng bagong password kung makalimutan mo ang iyo.",
+    },
+    ifYouSayNo: {
+      en: "Sign in with Google instead, or keep using the app without an account.",
+      fil: "Mag-sign in na lang gamit ang Google, o gamitin ang app nang walang account.",
+    },
+  },
+  {
     id: "neighbours",
     text: {
       en: "Numbers you add for 'Text my neighbours' stay on this phone; WeatherWell never receives them. Texts go from your own phone.",

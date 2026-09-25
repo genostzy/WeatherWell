@@ -10,6 +10,7 @@ import { t } from "@/lib/i18n";
 import { friendlyError } from "@/lib/friendly-error";
 import { appointOfficial } from "@/app/actions/appoint-official";
 import { removeOfficial } from "@/app/actions/remove-official";
+import { resetOfficialPassword } from "@/app/actions/recovery";
 import type { LocalizedText } from "@/lib/types";
 
 const EMAIL_LABEL: LocalizedText = { en: "Email", fil: "Email" };
@@ -22,6 +23,16 @@ const APPOINT: LocalizedText = { en: "Appoint", fil: "Italaga" };
 const REMOVE: LocalizedText = { en: "Remove", fil: "Alisin" };
 const CURRENT_OFFICIALS: LocalizedText = { en: "Current officials", fil: "Kasalukuyang mga opisyal" };
 const NO_OFFICIALS: LocalizedText = { en: "No officials appointed yet.", fil: "Wala pang itinalagang opisyal." };
+const RESET_HEADING: LocalizedText = { en: "Set a new password for an official", fil: "Magtakda ng bagong password para sa opisyal" };
+const RESET_EXPLAIN: LocalizedText = {
+  en: "For an official who forgot theirs. Give them the new password in person or by phone, never by text or chat.",
+  fil: "Para sa opisyal na nakalimot ng password. Ibigay ang bago nang personal o sa tawag, hindi sa text o chat.",
+};
+const OFFICIAL_LABEL: LocalizedText = { en: "Official", fil: "Opisyal" };
+const CHOOSE: LocalizedText = { en: "Choose…", fil: "Pumili…" };
+const NEW_PASSWORD_LABEL: LocalizedText = { en: "New password", fil: "Bagong password" };
+const SET_PASSWORD: LocalizedText = { en: "Set password", fil: "Itakda ang password" };
+const PASSWORD_SET: LocalizedText = { en: "Password set.", fil: "Naitakda ang password." };
 
 export interface OfficialRow {
   email: string;
@@ -37,6 +48,10 @@ export function OfficialsPanel({ officials }: { officials: OfficialRow[] }) {
   const [displayName, setDisplayName] = useState("");
   const [pending, setPending] = useState<"appoint" | string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetPassword, setResetPassword] = useState("");
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [resetDone, setResetDone] = useState(false);
 
   async function handleAppoint(event: React.FormEvent) {
     event.preventDefault();
@@ -64,6 +79,21 @@ export function OfficialsPanel({ officials }: { officials: OfficialRow[] }) {
       return;
     }
     router.refresh();
+  }
+
+  async function handleReset(event: React.FormEvent) {
+    event.preventDefault();
+    setPending("reset");
+    setResetError(null);
+    setResetDone(false);
+    const result = await resetOfficialPassword({ email: resetEmail, password: resetPassword });
+    setPending(null);
+    if (!result.ok) {
+      setResetError(result.error);
+      return;
+    }
+    setResetPassword("");
+    setResetDone(true);
   }
 
   return (
@@ -144,6 +174,61 @@ export function OfficialsPanel({ officials }: { officials: OfficialRow[] }) {
           ))}
         </ul>
       </div>
+
+      {officials.length > 0 && (
+        <form onSubmit={handleReset} className="space-y-3">
+          <h2 lang={lang} className="text-sm font-medium">
+            {t(RESET_HEADING, lang)}
+          </h2>
+          <p lang={lang} className="text-sm text-muted-foreground">
+            {t(RESET_EXPLAIN, lang)}
+          </p>
+          <div className="space-y-1">
+            <Label htmlFor="reset-official">{t(OFFICIAL_LABEL, lang)}</Label>
+            <select
+              id="reset-official"
+              required
+              value={resetEmail}
+              onChange={(event) => setResetEmail(event.target.value)}
+              disabled={pending === "reset"}
+              className="h-11 w-full rounded-md border-2 border-border bg-background px-3 text-sm"
+            >
+              <option value="">{t(CHOOSE, lang)}</option>
+              {officials.map((official) => (
+                <option key={official.email} value={official.email}>
+                  {official.displayName} — {official.email}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="reset-password">{t(NEW_PASSWORD_LABEL, lang)}</Label>
+            <Input
+              id="reset-password"
+              type="password"
+              required
+              minLength={6}
+              autoComplete="new-password"
+              value={resetPassword}
+              onChange={(event) => setResetPassword(event.target.value)}
+              disabled={pending === "reset"}
+            />
+          </div>
+          <Button type="submit" size="lg" loading={pending === "reset"}>
+            {t(SET_PASSWORD, lang)}
+          </Button>
+          {resetDone && (
+            <p role="status" lang={lang} className="text-sm text-green-500">
+              {t(PASSWORD_SET, lang)}
+            </p>
+          )}
+          {resetError && (
+            <p role="alert" className="text-sm text-destructive">
+              {friendlyError(resetError, lang)}
+            </p>
+          )}
+        </form>
+      )}
     </div>
   );
 }

@@ -120,22 +120,32 @@ describe("signUpWithPassword", () => {
     getSession.mockResolvedValue({ data: { session: { user: { is_anonymous: true } } } });
     const { signUpWithPassword } = await import("./sign-in");
 
+    updateUser.mockResolvedValue({ data: { user: { is_anonymous: false } }, error: null });
     const result = await signUpWithPassword("resident@example.com", "hunter22");
 
     expect(updateUser).toHaveBeenCalledWith({ email: "resident@example.com", password: "hunter22" });
     expect(signUp).not.toHaveBeenCalled();
-    expect(result).toEqual({ ok: true });
+    expect(result).toEqual({ ok: true, signedIn: true });
+  });
+
+  it("reports not yet signed in while the linked email still waits for confirmation", async () => {
+    getSession.mockResolvedValue({ data: { session: { user: { is_anonymous: true } } } });
+    updateUser.mockResolvedValue({ data: { user: { is_anonymous: true } }, error: null });
+    const { signUpWithPassword } = await import("./sign-in");
+
+    expect(await signUpWithPassword("resident@example.com", "hunter22")).toEqual({ ok: true, signedIn: false });
   });
 
   it("signs up fresh when there is no anonymous session to preserve", async () => {
     getSession.mockResolvedValue({ data: { session: null } });
     const { signUpWithPassword } = await import("./sign-in");
 
+    signUp.mockResolvedValue({ data: { session: { access_token: "t" } }, error: null });
     const result = await signUpWithPassword("official@example.com", "hunter22");
 
     expect(signUp).toHaveBeenCalledWith({ email: "official@example.com", password: "hunter22" });
     expect(updateUser).not.toHaveBeenCalled();
-    expect(result).toEqual({ ok: true });
+    expect(result).toEqual({ ok: true, signedIn: true });
   });
 
   it("refuses to fall back to a fresh signUp when linking fails because the email is taken (would abandon this phone's history)", async () => {
