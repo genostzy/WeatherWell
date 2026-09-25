@@ -54,10 +54,13 @@ async function fetchRealRoute(
   toLng: number
 ): Promise<RealRoute> {
   try {
-    const res = await fetch(
-      `/api/route?from=${fromLat},${fromLng}&to=${toLat},${toLng}`,
-      { signal: AbortSignal.timeout(8_000) }
-    );
+    // In the body, never the address: `from` is where the resident stands.
+    const res = await fetch("/api/route", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ from: [fromLat, fromLng], to: [toLat, toLng] }),
+      signal: AbortSignal.timeout(8_000),
+    });
     if (!res.ok) throw new Error("Route fetch failed");
     return await res.json();
   } catch {

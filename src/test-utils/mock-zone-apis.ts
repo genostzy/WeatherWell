@@ -22,12 +22,12 @@ interface ZoneLike {
  * own doc comment on why). This is what stands in for that network in tests.
  */
 export function mockZoneApis(zones: readonly ZoneLike[]) {
-  global.fetch = vi.fn((input: string | URL | Request) => {
+  global.fetch = vi.fn((input: string | URL | Request, init?: RequestInit) => {
     const url = new URL(String(input instanceof Request ? input.url : input), "https://weatherwell.test");
 
     if (url.pathname === "/api/zones/nearest") {
-      const lat = Number(url.searchParams.get("lat"));
-      const lng = Number(url.searchParams.get("lng"));
+      // Posted, never in the address (privacy review).
+      const { lat, lng } = JSON.parse(String(init?.body ?? "{}")) as { lat: number; lng: number };
       const match = findNearestZone({ lat, lng }, zones);
       return Promise.resolve(
         new Response(

@@ -23,27 +23,32 @@ interface OSRMResponse {
   routes: OSRMRoute[];
 }
 
+/** A [lat, lng] pair of numbers, or null. */
+function point(value: unknown): [number, number] | null {
+  return Array.isArray(value) && value.length === 2 && value.every((v) => typeof v === "number" && Number.isFinite(v))
+    ? [value[0], value[1]]
+    : null;
+}
+
 /**
- * GET /api/route?from=lat,lng&to=lat,lng
+ * POST /api/route with { from: [lat, lng], to: [lat, lng] }
  *
  * Returns a real road-network route from OSRM.
- * Falls back to a straight line if OSRM is unavailable.
+ * Falls back to a straight line if OSRM is unavailable. A POST body, never a
+ * query string: `from` is where the resident stands, and request logs and
+ * browser history keep an address.
  */
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const from = searchParams.get("from");
-  const to = searchParams.get("to");
+export async function POST(request: Request) {
+  const body = (await request.json().catch(() => null)) as { from?: unknown; to?: unknown } | null;
+  const from = point(body?.from);
+  const to = point(body?.to);
 
   if (!from || !to) {
-    return NextResponse.json({ error: "from and to required (lat,lng)" }, { status: 400 });
+    return NextResponse.json({ error: "from and to required as [lat, lng]" }, { status: 400 });
   }
 
-  const [fromLat, fromLng] = from.split(",").map(Number);
-  const [toLat, toLng] = to.split(",").map(Number);
-
-  if ([fromLat, fromLng, toLat, toLng].some((v) => isNaN(v))) {
-    return NextResponse.json({ error: "Invalid coordinates" }, { status: 400 });
-  }
+  const [fromLat, fromLng] = from;
+  const [toLat, toLng] = to;
 
   try {
     // OSRM uses lng,lat order (GeoJSON convention)

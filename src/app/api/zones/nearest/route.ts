@@ -21,21 +21,22 @@ interface ZoneRow {
 }
 
 /**
- * GET /api/zones/nearest?lat=..&lng=..
+ * POST /api/zones/nearest with { lat, lng }
  *
  * Server-side replacement for onboarding's old client-side findNearestZone()
  * scan, which required every one of ~42k zones already loaded in the
  * browser. This does the same nearest-centroid search (see nearest-zone.ts's
  * own doc comment on why centroids, not boundaries) without the client ever
  * holding more than one zone's worth of data.
+ *
+ * A POST body, never a query string: an address is kept by request logs and
+ * browser history, and this one would hold where the resident is standing.
  */
-export async function GET(request: NextRequest) {
-  // Number(null) is 0, not NaN — a missing param would otherwise silently
-  // resolve to Null Island instead of being rejected.
-  const latParam = request.nextUrl.searchParams.get("lat");
-  const lngParam = request.nextUrl.searchParams.get("lng");
-  const lat = latParam === null ? NaN : Number(latParam);
-  const lng = lngParam === null ? NaN : Number(lngParam);
+export async function POST(request: NextRequest) {
+  // Numbers only — a missing one must be rejected, not read as 0 (Null Island).
+  const body = (await request.json().catch(() => null)) as { lat?: unknown; lng?: unknown } | null;
+  const lat = typeof body?.lat === "number" ? body.lat : NaN;
+  const lng = typeof body?.lng === "number" ? body.lng : NaN;
 
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
     return NextResponse.json({ error: "lat and lng required" }, { status: 400 });

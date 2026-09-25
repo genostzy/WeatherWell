@@ -8,19 +8,19 @@ export const dynamic = "force-dynamic";
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
 
 /**
- * GET /api/elevation?zoneId=...&lat=...&lng=...
+ * POST /api/elevation with { zoneId, lat, lng }
  *
  * The height of where the resident stands and of their barangay centre, from
  * Open-Meteo (free, no key). Proxied because the page may only talk to this
- * site; the position is rounded, passed through and never stored.
+ * site; the position is rounded, passed through and never stored. A POST
+ * body, never a query string, which request logs and browser history keep.
  */
-export async function GET(request: Request) {
-  const params = new URL(request.url).searchParams;
-  const zoneId = params.get("zoneId");
-  const lat = Number(params.get("lat"));
-  const lng = Number(params.get("lng"));
-  if (!zoneId || !params.get("lat") || !params.get("lng") || !Number.isFinite(lat) || !Number.isFinite(lng)
-      || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+export async function POST(request: Request) {
+  const body = (await request.json().catch(() => null)) as { zoneId?: unknown; lat?: unknown; lng?: unknown } | null;
+  const zoneId = typeof body?.zoneId === "string" ? body.zoneId : null;
+  const lat = typeof body?.lat === "number" ? body.lat : NaN;
+  const lng = typeof body?.lng === "number" ? body.lng : NaN;
+  if (!zoneId || !Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
     return NextResponse.json({ error: "zoneId, lat and lng required" }, { status: 400 });
   }
 

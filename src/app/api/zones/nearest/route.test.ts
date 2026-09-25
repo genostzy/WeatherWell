@@ -22,26 +22,36 @@ vi.mock("@/lib/supabase/server", () => ({
   createSupabaseServerClient: () => ({ from }),
 }));
 
-import { GET } from "./route";
+import { POST } from "./route";
 
-function request(qs: string): NextRequest {
-  return new NextRequest(`${ORIGIN}/api/zones/nearest${qs}`);
+/** The old query strings, sent the way the route now takes them: in a POST body (privacy review). */
+function bodyOf(qs: string): string {
+  const pairs = [...new URLSearchParams(qs)].map(([key, value]) => [key, Number.isFinite(Number(value)) ? Number(value) : value]);
+  return JSON.stringify(Object.fromEntries(pairs));
 }
 
-describe("GET /api/zones/nearest", () => {
+function request(qs: string): NextRequest {
+  return new NextRequest(`${ORIGIN}/api/zones/nearest`, { method: "POST", body: bodyOf(qs) });
+}
+
+describe("POST /api/zones/nearest", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
+  it("has no GET, so a position never sits in an address that logs and history keep (privacy review)", async () => {
+    expect(await import("./route")).not.toHaveProperty("GET");
+  });
+
   it("rejects a request missing lat or lng", async () => {
-    const response = await GET(request("?lat=16.08"));
+    const response = await POST(request("?lat=16.08"));
 
     expect(response.status).toBe(400);
     expect(from).not.toHaveBeenCalled();
   });
 
   it("rejects non-numeric coordinates", async () => {
-    const response = await GET(request("?lat=abc&lng=120"));
+    const response = await POST(request("?lat=abc&lng=120"));
 
     expect(response.status).toBe(400);
   });
@@ -51,7 +61,7 @@ describe("GET /api/zones/nearest", () => {
     // zone-picker.test.tsx's own fixed-point expectation for this position.
     from.mockReturnValue(makeBuilder({ data: [NILOMBOT, MANGALDAN], error: null }));
 
-    const response = await GET(request("?lat=16.08&lng=120.4038"));
+    const response = await POST(request("?lat=16.08&lng=120.4038"));
     const body = await response.json();
 
     expect(body.zone.id).toBe("zone-2");
@@ -64,7 +74,7 @@ describe("GET /api/zones/nearest", () => {
     from.mockReturnValue(makeBuilder({ data: [NILOMBOT], error: null }));
 
     // Manila — tens of km from Pangasinan.
-    const response = await GET(request("?lat=14.5995&lng=120.9842"));
+    const response = await POST(request("?lat=14.5995&lng=120.9842"));
     const body = await response.json();
 
     expect(body.zone.id).toBe("zone-1");
@@ -78,7 +88,7 @@ describe("GET /api/zones/nearest", () => {
       .mockReturnValueOnce(makeBuilder({ data: [], error: null }))
       .mockReturnValueOnce(makeBuilder({ data: [NILOMBOT], error: null }));
 
-    const response = await GET(request("?lat=7.19&lng=125.45"));
+    const response = await POST(request("?lat=7.19&lng=125.45"));
     const body = await response.json();
 
     expect(from).toHaveBeenCalledTimes(2);
@@ -91,7 +101,7 @@ describe("GET /api/zones/nearest", () => {
       .mockReturnValueOnce(makeBuilder({ data: [], error: null }))
       .mockReturnValueOnce(makeBuilder({ data: [], error: null }));
 
-    const response = await GET(request("?lat=16.08&lng=120.4038"));
+    const response = await POST(request("?lat=16.08&lng=120.4038"));
     const body = await response.json();
 
     expect(body).toEqual({ zone: null, distanceMeters: null, isNear: false });
@@ -100,7 +110,7 @@ describe("GET /api/zones/nearest", () => {
   it("reports a query error instead of a false result", async () => {
     from.mockReturnValue(makeBuilder({ data: null, error: { message: "connection refused" } }));
 
-    const response = await GET(request("?lat=16.08&lng=120.4038"));
+    const response = await POST(request("?lat=16.08&lng=120.4038"));
 
     expect(response.status).toBe(502);
   });

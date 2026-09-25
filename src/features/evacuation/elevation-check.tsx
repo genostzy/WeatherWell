@@ -38,9 +38,12 @@ export function ElevationCheck({ zoneId }: { zoneId: string }) {
     setState({ kind: "checking" });
     navigator.geolocation.getCurrentPosition(
       async ({ coords }) => {
-        const res = await fetch(
-          `/api/elevation?zoneId=${encodeURIComponent(zoneId)}&lat=${coords.latitude}&lng=${coords.longitude}`
-        ).catch(() => null);
+        // In the body, never the address, which logs and history keep.
+        const res = await fetch("/api/elevation", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ zoneId, lat: coords.latitude, lng: coords.longitude }),
+        }).catch(() => null);
         const body = res?.ok ? ((await res.json()) as { here: number; centre: number }) : null;
         setState(body ? { kind: "done", text: describeElevation(body.here, body.centre) } : { kind: "error", text: FAILED });
       },

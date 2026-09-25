@@ -27,7 +27,11 @@ describe("ElevationCheck (idea 8)", () => {
     render(<ElevationCheck zoneId="zone-1" />);
     fireEvent.click(screen.getByRole("button", { name: /how high am i/i }));
     expect(await screen.findByText(/about 6 m lower than your barangay centre/i)).toBeInTheDocument();
-    expect(fetchMock.mock.calls[0][0]).toBe("/api/elevation?zoneId=zone-1&lat=16.029&lng=120.431");
+    // In the body, never the address (privacy review).
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/elevation",
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ zoneId: "zone-1", lat: 16.029, lng: 120.431 }) })
+    );
   });
 
   it("says so when location is refused, without calling the service", async () => {

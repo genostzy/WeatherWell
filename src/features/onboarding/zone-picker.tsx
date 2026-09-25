@@ -289,7 +289,12 @@ export function ZonePicker({ onSelect }: { onSelect: (zoneId: string) => void })
     // promise. The fix only ever proposes; the resident still confirms.
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
-        fetch(`/api/zones/nearest?lat=${coords.latitude}&lng=${coords.longitude}`)
+        // In the body, never the address, which logs and history keep.
+        fetch("/api/zones/nearest", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ lat: coords.latitude, lng: coords.longitude }),
+        })
           .then((res) => (res.ok ? res.json() : null))
           .then((body: { zone: ZoneSummary | null; distanceMeters: number | null; isNear: boolean } | null) => {
             if (!settle()) return;
