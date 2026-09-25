@@ -35,6 +35,10 @@ const DRY_HELPS: LocalizedText = {
   en: "Thanks. This tells officials it is dry where you are.",
   fil: "Salamat. Ipinapaalam nito sa mga opisyal na tuyo sa kinaroroonan mo.",
 };
+const NO_LOCATION: LocalizedText = {
+  en: "Sent without your location, so it can't count toward an automatic advisory. Officials still see it.",
+  fil: "Naipadala nang walang lokasyon mo, kaya hindi ito mabibilang para sa awtomatikong paalala. Nakikita pa rin ito ng mga opisyal.",
+};
 const UNDO: LocalizedText = { en: "Undo", fil: "Bawiin" };
 const NOT_SAVED: LocalizedText = {
   en: "Report not saved — your phone's storage is full or blocked.",
@@ -54,7 +58,7 @@ const UNDO_WINDOW_MS = 3000;
 
 type State =
   | { kind: "idle" }
-  | { kind: "reported"; entryId: string; depthLevel: DepthLevel }
+  | { kind: "reported"; entryId: string; depthLevel: DepthLevel; located: boolean }
   | { kind: "undone" }
   | { kind: "too-late" }
   | { kind: "failed" };
@@ -73,9 +77,11 @@ export function QuickDepthReport({ zoneId }: { zoneId: string }) {
   const reports = useWaterLevelReports();
   const activeAlert = useActiveAlertForZone(zoneId);
   const agreeing = reports.filter((r) => r.zoneId === zoneId && countsTowardAlert(r)).length;
-  const counts = (depth: DepthLevel): LocalizedText => {
+  const counts = (depth: DepthLevel, located: boolean): LocalizedText => {
     if (depth === "dry") return DRY_HELPS;
     if (activeAlert) return HAS_ALERT;
+    // The engine counts only located reports (countsTowardAlert), so never promise one it won't.
+    if (!located) return NO_LOCATION;
     const needed = REPORT_THRESHOLD - agreeing;
     return needed > 0 ? { en: NEED_MORE.en.replace("{n}", String(needed)), fil: NEED_MORE.fil.replace("{n}", String(needed)) } : ENOUGH;
   };
@@ -96,7 +102,7 @@ export function QuickDepthReport({ zoneId }: { zoneId: string }) {
     if (state.kind === "reported") discardEntry(state.entryId);
     try {
       const entry = addWaterLevelReport(zoneId, depthLevel, position, UNDO_WINDOW_MS);
-      setState({ kind: "reported", entryId: entry.id, depthLevel });
+      setState({ kind: "reported", entryId: entry.id, depthLevel, located: position !== null });
       timer.current = setTimeout(() => setState({ kind: "idle" }), UNDO_WINDOW_MS);
     } catch {
       // enqueue throws OutboxWriteFailed when local storage is full or
@@ -161,7 +167,7 @@ export function QuickDepthReport({ zoneId }: { zoneId: string }) {
               </Button>
             </span>
             <span lang={lang} className="block text-muted-foreground">
-              {t(counts(state.depthLevel), lang)}
+              {t(counts(state.depthLevel, state.located), lang)}
             </span>
           </span>
         )}

@@ -95,6 +95,16 @@ describe("ReportPage when the report cannot be saved", () => {
     expect(screen.getByText(/report recorded/i)).toBeInTheDocument();
     expect(screen.queryByText(/report not saved/i)).not.toBeInTheDocument();
   });
+
+  it("doesn't tell a report sent without a location that it counts toward an automatic advisory (privacy review)", () => {
+    // This page's geolocation never answers, so the report goes without a position.
+    renderWithData(<ReportPage />);
+
+    submitAReport();
+
+    expect(screen.getByText(/without your location/i)).toHaveTextContent(/can't count toward an automatic advisory/i);
+    expect(screen.queryByText(/where it counts toward an automatic advisory/i)).not.toBeInTheDocument();
+  });
 });
 
 describe("ReportPage evacuation centre line", () => {

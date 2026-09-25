@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { QuickDepthReport } from "./quick-depth-report";
 import { renderWithData } from "@/test-utils/render-with-data";
 import { readOutbox } from "@/lib/outbox/outbox";
+import { markConsented } from "@/features/onboarding/onboarding-storage";
 
 // Filing a report triggers a drain, which calls ensureAnonymousSession —
 // stubbed to the offline answer so this file never constructs the real
@@ -149,10 +150,30 @@ describe("QuickDepthReport", () => {
 
   describe("says what the report counts toward (so residents know it mattered)", () => {
     it("tells how many more neighbours are needed before an advisory", async () => {
+      // Only a located report counts, so this one has a position (and the consent it needs).
+      markConsented();
+      Object.defineProperty(navigator, "geolocation", {
+        configurable: true,
+        value: {
+          watchPosition: vi.fn((success) => {
+            success({ coords: { latitude: 16.0288, longitude: 120.4366 } });
+            return 1;
+          }),
+          clearWatch: vi.fn(),
+        },
+      });
       const user = userEvent.setup();
       renderWithData(<QuickDepthReport zoneId="zone-1" />, { alerts: [] });
       await user.click(screen.getByRole("button", { name: /knee-deep/i }));
       expect(await screen.findByText(/at least 2 more neighbours/i)).toBeInTheDocument();
+    });
+
+    it("never tells a report sent without a location that it counts toward an advisory (privacy review)", async () => {
+      const user = userEvent.setup();
+      renderWithData(<QuickDepthReport zoneId="zone-1" />, { alerts: [] });
+      await user.click(screen.getByRole("button", { name: /knee-deep/i }));
+      expect(await screen.findByText(/without your location/i)).toHaveTextContent(/can't count toward an automatic advisory/i);
+      expect(screen.queryByText(/more neighbours need to report/i)).not.toBeInTheDocument();
     });
 
     it("says a dry report tells officials it is dry", async () => {

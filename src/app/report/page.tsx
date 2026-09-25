@@ -58,6 +58,11 @@ const THANKS_BODY: LocalizedText = {
   en: "Thanks — your report is in. It is saved on your phone and reaches your barangay as soon as you have signal, where it counts toward an automatic advisory.",
   fil: "Salamat — naitala ang ulat mo. Nasa telepono mo na ito at makakarating sa inyong barangay pagkaroon ng signal, kung saan bibilangin ito para sa awtomatikong paalala.",
 };
+// The engine counts only located reports, so one without a position must not be promised it counts.
+const THANKS_BODY_NO_LOCATION: LocalizedText = {
+  en: "Thanks — your report is in. It is saved on your phone and reaches your barangay as soon as you have signal. It was sent without your location, so it can't count toward an automatic advisory; officials still see it.",
+  fil: "Salamat — naitala ang ulat mo. Nasa telepono mo na ito at makakarating sa inyong barangay pagkaroon ng signal. Naipadala ito nang walang lokasyon mo, kaya hindi ito mabibilang para sa awtomatikong paalala; nakikita pa rin ito ng mga opisyal.",
+};
 const NOT_SAVED: LocalizedText = {
   en: "Report not saved",
   fil: "Hindi naitala ang ulat",
@@ -75,6 +80,7 @@ const REPORT_AGAIN: LocalizedText = { en: "Report again", fil: "Mag-ulat muli" }
 
 export default function ReportPage() {
   const [submitted, setSubmitted] = useState<DepthLevel | null>(null);
+  const [submittedLocated, setSubmittedLocated] = useState(false);
   const [saveFailed, setSaveFailed] = useState(false);
   const zone = useSelectedZone();
   const { lang } = useLanguage();
@@ -102,6 +108,7 @@ export default function ReportPage() {
     }
     setSaveFailed(false);
     setSubmitted(depthLevel);
+    setSubmittedLocated(position !== null);
     return true;
   }
 
@@ -211,7 +218,7 @@ export default function ReportPage() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <p role="status" lang={lang} className="text-sm">
-                    {t(THANKS_BODY, lang)}
+                    {t(submittedLocated ? THANKS_BODY : THANKS_BODY_NO_LOCATION, lang)}
                   </p>
 
                   <div className="rounded-md border-2 border-border p-3">
