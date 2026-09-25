@@ -8,6 +8,10 @@ import { SeverityBadge } from "@/features/alerts/severity-badge";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { useAlerts } from "@/lib/alerts-store";
+import { useWaterLevelReports } from "@/lib/water-level-reports";
+import { countsTowardAlert } from "@/lib/weather-thresholds";
+import { useHazards } from "@/lib/reference-data/use-reference-data";
+import { HAZARD_LEVEL_LABEL } from "@/lib/hazards";
 import { CENTER_STATUS_CLASS, CENTER_STATUS_LABEL, resolveEffectiveCenterStatus } from "@/lib/center-status";
 import { hasRealEvacuationCenter } from "@/lib/zone-data-quality";
 import { SEVERITY_ORDER } from "@/lib/severity";
@@ -24,6 +28,8 @@ const TITLE: LocalizedText = { en: "Barangays", fil: "Mga barangay" };
 const NO_ALERT: LocalizedText = { en: "No alert", fil: "Walang alerto" };
 const NO_OFFICIAL: LocalizedText = { en: "No barangay official", fil: "Walang opisyal ng barangay" };
 const NO_CENTRE: LocalizedText = { en: "No verified centre", fil: "Walang beripikadong center" };
+const REPORTS: LocalizedText = { en: "{n} reports (6 h)", fil: "{n} ulat (6 oras)" };
+const FLOOD_RISK: LocalizedText = { en: "Flood risk: {level}", fil: "Panganib ng baha: {level}" };
 const MANAGE: LocalizedText = { en: "Manage", fil: "Pamahalaan" };
 const MISSING: LocalizedText = {
   en: "{n} of {total} barangays have no official yet — appoint them under Barangay officials.",
@@ -33,11 +39,15 @@ const MISSING: LocalizedText = {
 /**
  * A municipal official's barangays at a glance: which are under alert (first),
  * whose centre is filling, and which have nobody appointed to act on them.
- * The flood panel below has the reports; this is the coordination view.
+ * Each row also carries the barangay's recent agreeing reports.
  */
 export function TownBarangaysPanel({ zones, officials }: { zones: Zone[]; officials: TownOfficial[] }) {
   const { lang } = useLanguage();
   const alerts = useAlerts();
+  const reports = useWaterLevelReports();
+  const hazards = useHazards();
+  // The flood panel used to list every barangay again just for this count.
+  const reportsIn = (zoneId: string) => reports.filter((r) => r.zoneId === zoneId && countsTowardAlert(r)).length;
   const alertFor = (zoneId: string) => alerts.find((a) => a.zoneId === zoneId && a.isActive);
   const officialFor = (zone: Zone) => officials.find((o) => o.areaCode === zone.psgcBarangayCode);
   const rank = (zone: Zone) => {
@@ -76,6 +86,16 @@ export function TownBarangaysPanel({ zones, officials }: { zones: Zone[]; offici
                     ) : (
                       <span lang={lang} className="text-muted-foreground">
                         {t(NO_ALERT, lang)}
+                      </span>
+                    )}
+                    {reportsIn(zone.id) > 0 && (
+                      <span lang={lang} className="font-medium text-severity-orange">
+                        {t(REPORTS, lang).replace("{n}", String(reportsIn(zone.id)))}
+                      </span>
+                    )}
+                    {hazards[zone.id]?.flood && hazards[zone.id]?.flood !== "unknown" && (
+                      <span lang={lang}>
+                        {t(FLOOD_RISK, lang).replace("{level}", t(HAZARD_LEVEL_LABEL[hazards[zone.id]!.flood!], lang).toLowerCase())}
                       </span>
                     )}
                     {hasRealEvacuationCenter(zone) ? (

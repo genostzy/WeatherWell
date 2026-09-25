@@ -200,7 +200,8 @@ export function AdminOverview({ townOfficials = [] }: { townOfficials?: TownOffi
           <>
             <section className="space-y-4">
               <h2 className="text-lg font-semibold">{t(HAZARDS, lang)}</h2>
-              <FloodMonitoringPanel zones={zones} />
+              {/* A town's barangays, with their reports, are already listed above. */}
+              {!isTown && <FloodMonitoringPanel zones={zones} />}
               <div className="grid gap-4 lg:grid-cols-2">
                 <TyphoonTrackingPanel />
                 {hasLandslideData && <LandslideRiskPanel zones={zones} />}

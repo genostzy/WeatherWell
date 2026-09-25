@@ -17,6 +17,9 @@ import { renderWithData, FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with
 import { addCommunityPin } from "@/lib/community-pins";
 import type { Official } from "@/lib/auth/official";
 
+// The flood panel lists barangays one by one; a town sees them in its Barangays list instead.
+const ONE_AREA: Official = { userId: "b", displayName: "Kap", areaCode: "", areaName: "All test zones", level: "barangay" };
+
 describe("AdminOverview dashboard", () => {
   afterEach(() => vi.unstubAllGlobals());
 
@@ -43,13 +46,13 @@ describe("AdminOverview dashboard", () => {
   });
 
   it("hides the landslide panel where no barangay has landslide data (M5)", () => {
-    renderWithData(<AdminOverview />, { data: { hazards: {} } });
+    renderWithData(<AdminOverview />, { data: { hazards: {} }, official: ONE_AREA });
     expect(screen.queryByText(/landslide risk/i)).not.toBeInTheDocument();
     expect(screen.getByText(/flood monitoring/i)).toBeInTheDocument();
   });
 
   it("covers every hazard the PRD asks the admin to monitor", () => {
-    renderWithData(<AdminOverview />);
+    renderWithData(<AdminOverview />, { official: ONE_AREA });
     expect(screen.getByText(/flood monitoring/i)).toBeInTheDocument();
     expect(screen.getByText(/typhoon tracking/i)).toBeInTheDocument();
     expect(screen.getByText(/landslide risk/i)).toBeInTheDocument();
@@ -162,7 +165,7 @@ describe("AdminOverview dashboard", () => {
 
 describe("AdminOverview with missing hazard data (I3)", () => {
   it("renders when no zone has hazard rows", () => {
-    renderWithData(<AdminOverview />, { data: { hazards: {} } });
+    renderWithData(<AdminOverview />, { data: { hazards: {} }, official: ONE_AREA });
 
     expect(screen.getAllByText("Susceptibility unknown").length).toBeGreaterThan(0);
   });
@@ -241,6 +244,12 @@ describe("AdminOverview by role (each account sees its own dashboard)", () => {
     expect(screen.getByRole("heading", { level: 1, name: /mapandan dashboard/i })).toBeInTheDocument();
     expect(screen.getByText(/^barangays$/i)).toBeInTheDocument();
     expect(screen.getByText(/update to every barangay/i)).toBeInTheDocument();
+  });
+
+  it("lists the town's barangays once, not again under Flood Monitoring", () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => [] }));
+    renderWithData(<AdminOverview townOfficials={[]} />, { official: TOWN });
+    expect(screen.queryByText(/^flood monitoring$/i)).not.toBeInTheDocument();
   });
 
   it("calls an admin's the system dashboard, without a town's panels", () => {
