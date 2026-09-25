@@ -3254,4 +3254,47 @@ begin
   raise notice 'ok S1-S3: Supabase starts the scheduled workflows';
 end $$;
 
+-- P1-P3 (privacy review, 2026-09-25): a phone's alert address follows the
+-- account using the phone. It used to stay with the account that first saved
+-- it, so alerts and officials' updates for that account still reached the
+-- phone after someone else signed in on it.
+do $$
+declare
+  a constant uuid := 'f1000000-0000-4000-8000-000000000001';
+  c constant uuid := 'f1000000-0000-4000-8000-000000000002';
+  z text := (select id from public.zones limit 1);
+  phone constant text := 'https://fcm.googleapis.com/fcm/send/privacy-review-phone';
+  other constant text := 'https://fcm.googleapis.com/fcm/send/privacy-review-other-phone';
+  n int;
+begin
+  set local role postgres;
+  perform set_config('request.jwt.claims', '', true);
+  insert into auth.users (id) values (a), (c);
+  insert into public.push_subscriptions (user_id, endpoint, p256dh, auth, zone_id)
+    values (a, phone, 'p', 'a', z), (a, other, 'p', 'a', z);
+
+  -- P1: C signs in on A's old phone, and the page saves the phone's address.
+  set local role authenticated;
+  perform set_config('request.jwt.claims', json_build_object('sub', c, 'role', 'authenticated')::text, true);
+  perform public.save_push_subscription(phone, 'p2', 'a2', z, 'ua');
+  perform public.save_push_subscription(phone, 'p2', 'a2', z, 'ua');
+  reset role;
+  if exists (select 1 from public.push_subscriptions where endpoint = phone and user_id = a) then
+    raise exception using errcode = 'TSTFL', message = 'P1: the old account kept the phone''s alert address';
+  end if;
+  select count(*) into n from public.push_subscriptions where endpoint = phone and user_id = c and p256dh = 'p2';
+  if n <> 1 then
+    raise exception using errcode = 'TSTFL', message = format('P1: the account using the phone has %s rows for it', n);
+  end if;
+  -- P2: only that phone's address moves; the old account's other phone keeps its alerts.
+  if not exists (select 1 from public.push_subscriptions where endpoint = other and user_id = a) then
+    raise exception using errcode = 'TSTFL', message = 'P2: the old account''s other phone lost its address';
+  end if;
+  -- P3: saving needs a session.
+  if has_function_privilege('anon', 'public.save_push_subscription(text,text,text,text,text)', 'execute') then
+    raise exception using errcode = 'TSTFL', message = 'P3: anon can save an alert address';
+  end if;
+  raise notice 'ok P1-P3: a phone''s alert address follows the account using it';
+end $$;
+
 rollback;

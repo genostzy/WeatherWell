@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 
-const upsert = vi.fn();
+// Saved through save_push_subscription, which hands the phone's address to whoever uses it now.
+const rpc = vi.fn();
 vi.mock("@/lib/supabase/browser", () => ({
-  getBrowserClient: () => ({ from: () => ({ upsert }) }),
+  getBrowserClient: () => ({ rpc }),
 }));
 
 const ensureAnonymousSession = vi.fn();
@@ -26,7 +27,7 @@ beforeEach(() => {
   pushManager.subscribe.mockResolvedValue(fakeSubscription);
   pushManager.getSubscription.mockResolvedValue(null);
   requestPermission.mockResolvedValue("granted");
-  upsert.mockResolvedValue({ error: null });
+  rpc.mockResolvedValue({ error: null });
   ensureAnonymousSession.mockResolvedValue("user-1");
   vi.stubEnv("NEXT_PUBLIC_VAPID_PUBLIC_KEY", "AAAA");
   Object.defineProperty(navigator, "serviceWorker", {
@@ -49,7 +50,7 @@ describe("usePushSubscription", () => {
     await act(() => result.current.subscribe());
 
     expect(pushManager.subscribe).not.toHaveBeenCalled();
-    expect(upsert).not.toHaveBeenCalled();
+    expect(rpc).not.toHaveBeenCalled();
   });
 
   it("signs in anonymously if needed and saves the subscription under its barangay", async () => {
@@ -58,9 +59,9 @@ describe("usePushSubscription", () => {
     await act(() => result.current.subscribe());
 
     expect(ensureAnonymousSession).toHaveBeenCalled();
-    expect(upsert).toHaveBeenCalledWith(
-      expect.objectContaining({ user_id: "user-1", zone_id: "zone-1", endpoint: "https://push.example/1" }),
-      { onConflict: "user_id,endpoint" }
+    expect(rpc).toHaveBeenCalledWith(
+      "save_push_subscription",
+      expect.objectContaining({ p_zone_id: "zone-1", p_endpoint: "https://push.example/1", p_p256dh: "p", p_auth: "a" })
     );
     expect(result.current.state.subscription).toBe(fakeSubscription);
   });
@@ -72,12 +73,12 @@ describe("usePushSubscription", () => {
     await act(() => result.current.subscribe());
 
     expect(pushManager.subscribe).not.toHaveBeenCalled();
-    expect(upsert).not.toHaveBeenCalled();
+    expect(rpc).not.toHaveBeenCalled();
     expect(result.current.state.subscription).toBeNull();
   });
 
   it("does not report subscribed when saving fails, and undoes the browser subscription", async () => {
-    upsert.mockResolvedValue({ error: { message: "permission denied" } });
+    rpc.mockResolvedValue({ error: { message: "permission denied" } });
     const { result } = renderHook(() => usePushSubscription("zone-1"));
 
     await act(() => result.current.subscribe());
@@ -100,7 +101,7 @@ describe("usePushSubscription", () => {
     const denied = renderHook(() => usePushSubscription("zone-1"));
     expect(await act(() => denied.result.current.subscribe())).toBe("denied");
 
-    upsert.mockResolvedValueOnce({ error: { message: "x" } });
+    rpc.mockResolvedValueOnce({ error: { message: "x" } });
     const unsaved = renderHook(() => usePushSubscription("zone-1"));
     expect(await act(() => unsaved.result.current.subscribe())).toBe("failed");
 
@@ -112,17 +113,18 @@ describe("usePushSubscription", () => {
     expect(await act(() => ok.result.current.subscribe())).toBe("subscribed");
   });
 
-  it("re-saves an existing browser subscription under the current barangay on load", async () => {
+  it("re-saves an existing browser subscription on load, under the current barangay and account", async () => {
     // Heals devices whose earlier save failed or never happened (0 rows
-    // existed before this fix), and follows a change of barangay.
+    // existed before this fix), follows a change of barangay, and (privacy
+    // review) hands the address to whoever uses the phone now.
     pushManager.getSubscription.mockResolvedValue(fakeSubscription);
 
     const { result } = renderHook(() => usePushSubscription("zone-2"));
 
     await vi.waitFor(() =>
-      expect(upsert).toHaveBeenCalledWith(
-        expect.objectContaining({ user_id: "user-1", zone_id: "zone-2", endpoint: "https://push.example/1" }),
-        { onConflict: "user_id,endpoint" }
+      expect(rpc).toHaveBeenCalledWith(
+        "save_push_subscription",
+        expect.objectContaining({ p_zone_id: "zone-2", p_endpoint: "https://push.example/1" })
       )
     );
     expect(result.current.state.subscription).toBe(fakeSubscription);

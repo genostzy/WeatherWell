@@ -33,25 +33,25 @@ const UNSUPPORTED_STATE: PushSubscriptionState = {
   isLoading: false,
 };
 
-/** Saves (or re-saves) a browser push subscription under a barangay. True only when the row was written. */
+/**
+ * Saves (or re-saves) a browser push subscription under a barangay, for the
+ * account using this phone now. save_push_subscription takes the address from
+ * any other account that saved it (a sign-out, a sign-in, a shared phone), so
+ * the old account's alerts stop reaching this phone. True only when the row
+ * was written.
+ */
 async function saveSubscription(sub: PushSubscription, zoneId: string): Promise<boolean> {
   const userId = await ensureAnonymousSession();
   if (!userId) return false;
 
   const { endpoint, keys } = sub.toJSON();
-  const { error } = await getBrowserClient()
-    .from("push_subscriptions" as never)
-    .upsert(
-      {
-        user_id: userId,
-        endpoint: endpoint ?? "",
-        p256dh: keys?.p256dh ?? "",
-        auth: keys?.auth ?? "",
-        zone_id: zoneId,
-        user_agent: navigator.userAgent,
-      } as never,
-      { onConflict: "user_id,endpoint" } as never
-    );
+  const { error } = await getBrowserClient().rpc("save_push_subscription", {
+    p_endpoint: endpoint ?? "",
+    p_p256dh: keys?.p256dh ?? "",
+    p_auth: keys?.auth ?? "",
+    p_zone_id: zoneId,
+    p_user_agent: navigator.userAgent,
+  });
   return !error;
 }
 

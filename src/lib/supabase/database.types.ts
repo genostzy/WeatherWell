@@ -927,6 +927,16 @@ export type Database = {
         }
         Returns: undefined
       }
+      save_push_subscription: {
+        Args: {
+          p_auth: string
+          p_endpoint: string
+          p_p256dh: string
+          p_user_agent?: string
+          p_zone_id: string
+        }
+        Returns: undefined
+      }
       send_official_message: {
         Args: { p_body: string; p_kind: string }
         Returns: string
