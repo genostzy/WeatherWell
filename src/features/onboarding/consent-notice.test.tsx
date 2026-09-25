@@ -66,4 +66,10 @@ describe("ConsentNotice", () => {
       screen.getByText(/isang hindi nagpapakilalang ulat ng error — walang pangalan, lokasyon, o account/)
     ).toBeInTheDocument();
   });
+
+  it("says you can decline any of them, now that it lists more than two (found checking the live site)", () => {
+    render(<ConsentNotice onAccept={() => {}} />);
+    expect(screen.getByText(/decline any of these/i)).toBeInTheDocument();
+    expect(screen.queryByText(/decline either/i)).not.toBeInTheDocument();
+  });
 });

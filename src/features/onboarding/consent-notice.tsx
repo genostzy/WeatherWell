@@ -40,8 +40,8 @@ const CONSENT_COPY = {
     fil: "Kung ma-crash ang app, isang hindi nagpapakilalang ulat ng error — walang pangalan, lokasyon, o account — ay ipinapadala upang maisaayos ito.",
   },
   decline: {
-    en: "You can decline either and still see public alerts for your area.",
-    fil: "Maaari mong tanggihan ang alinman sa dalawa at makikita mo pa rin ang mga pampublikong alerto para sa iyong lugar.",
+    en: "You can decline any of these and still see public alerts for your area.",
+    fil: "Maaari mong tanggihan ang alinman sa mga ito at makikita mo pa rin ang mga pampublikong alerto para sa iyong lugar.",
   },
   legalBasis: {
     en: "Collected under the Data Privacy Act of 2012 (RA 10173) with your consent.",
