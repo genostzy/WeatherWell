@@ -33,7 +33,7 @@ describe("consent is versioned (privacy review)", () => {
     // old one sees the new one, then record the new fingerprint here.
     expect({ version: CONSENT_VERSION, text: fingerprint(JSON.stringify(CONSENT_ITEMS)) }).toEqual({
       version: "2026-09-25",
-      text: "b2270b4b",
+      text: "a8085da0",
     });
   });
 });

@@ -23,6 +23,13 @@ describe("ConsentNotice", () => {
     expect(screen.getByText(/don't send reports, pins or check-ins/i)).toBeInTheDocument();
   });
 
+  it("names OSRM, the route planner that receives the position when it works out directions (privacy review)", () => {
+    render(<ConsentNotice onAccept={() => {}} />);
+    expect(screen.getByText(/uses your location to suggest your barangay/i)).toHaveTextContent(
+      /OSRM.*receives your position/i
+    );
+  });
+
   it("cites the Data Privacy Act so the legal basis is visible", () => {
     render(<ConsentNotice onAccept={() => {}} />);
     expect(screen.getByText(/RA 10173/i)).toBeInTheDocument();
