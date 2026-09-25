@@ -2,22 +2,23 @@
 
 ## State
 
-- Branch `mvp`, cut from `v1` at `912a5cb`, is pushed to GitHub. CI is green on `a21a213` ([run #108](https://github.com/genostzy/WeatherWell/actions/runs/36136540730)): both the `check` job (lint, typecheck, tests, knip, build) and the `database` job (rls, abuse, accounts) pass.
+- Branch `mvp`, cut from `v1` at `912a5cb`, is pushed to GitHub, and CI passes on it: both the `check` job (lint, typecheck, tests, knip, build) and the `database` job (rls, abuse, accounts).
+- On 25 September the branch's commits were rewritten with Wilson as their only author and no Claude trailers, then force-pushed. Their files did not change. The ids below are the rewritten ones. Reset any copy of `mvp` made before the rewrite to `origin/mvp` before committing on it.
 - Both migrations are applied to the live database (25 September) as `20260925123429_reputation_and_identity_age` and `20260925123519_password_recovery_and_email_alerts`. The files are renamed to match, and the live migration list now matches `supabase/migrations` one for one. Types generated from live match `database.types.ts`, and Supabase's security advisor raised nothing new beyond the existing pattern for official RPCs.
 - Production (`v1`) now runs the new engine rules, because it shares the database: the day-old reporter gate, layer 6 weights, the `received_at` rate limit and the per-reporter outlier consensus. Until `mvp` is merged, `v1`'s Reject button still does a plain clear, which records no verdict.
 - `v1` and `main` code are unchanged. Nothing was changed in Vercel or Google.
 
 | Commit | What |
 |---|---|
-| `5b08eda` | Consent notice split into "You choose" and "Always on" (review findings 1, 5, 6, 14, 15) |
-| `9ef012b` | DB: layer 6 reputation, identity age, rate-limit and outlier fixes; `supabase/tests/abuse.sql` |
-| `4d8289f` | Reject records a rejection; the app's own count mirrors the engine |
-| `a850407` | Stage 4 plan, README |
-| `faeb553` | DB: security questions, admin password reset, email-alert opt-ins; `supabase/tests/accounts.sql` |
-| `073e22a` | Sign-up without confirmation, `/forgot-password`, Settings cards, email alerts, push on official alert changes |
-| `eaa7869` | `scripts/reset-test-accounts.ts`; PRD Setup steps 8 and 9 |
-| `a8c6cb4` | This handoff |
-| `a21a213` | Migration files renamed to their live versions |
+| `df80a93` | Consent notice split into "You choose" and "Always on" (review findings 1, 5, 6, 14, 15) |
+| `702ca9e` | DB: layer 6 reputation, identity age, rate-limit and outlier fixes; `supabase/tests/abuse.sql` |
+| `2561c4f` | Reject records a rejection; the app's own count mirrors the engine |
+| `c3e40d2` | Stage 4 plan, README |
+| `ed4e3dc` | DB: security questions, admin password reset, email-alert opt-ins; `supabase/tests/accounts.sql` |
+| `3962220` | Sign-up without confirmation, `/forgot-password`, Settings cards, email alerts, push on official alert changes |
+| `3799e1f` | `scripts/reset-test-accounts.ts`; PRD Setup steps 8 and 9 |
+| `6771221` | This handoff |
+| `6986dbe` | Migration files renamed to their live versions |
 
 ## Owner's decisions (25 September)
 
