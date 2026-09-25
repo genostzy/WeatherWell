@@ -5,6 +5,7 @@ import { EvacuationInstructions } from "@/features/evacuation/evacuation-instruc
 import { EmergencyCard } from "@/features/evacuation/emergency-card";
 import { CheckInPanel } from "@/features/evacuation/check-in-panel";
 import { RelayContactsEditor } from "@/features/relay/relay";
+import { FloodPlanLink } from "@/features/evacuation/flood-plan";
 import { ElevationCheck } from "@/features/evacuation/elevation-check";
 import { CandidateSites } from "@/features/evacuation/candidate-sites";
 import { AlertDowngradeNotice } from "@/features/alerts/alert-downgrade-notice";
@@ -55,6 +56,7 @@ export default function EvacuationPage() {
           <EmergencyCard zone={zone} />
           {showCheckIn && <CheckInPanel zoneId={zone.id} />}
           <RelayContactsEditor />
+          <FloodPlanLink zoneId={zone.id} />
         </div>
       </div>
     </main>

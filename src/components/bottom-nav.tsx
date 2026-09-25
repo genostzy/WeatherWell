@@ -35,7 +35,7 @@ export function BottomNav() {
   const { lang } = useLanguage();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-[999] border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:hidden">
+    <nav className="fixed bottom-0 left-0 right-0 z-[999] border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:hidden print:hidden">
       <div className="flex items-center justify-around px-2 py-1">
         {NAV_ITEMS.map((item) => {
           const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));

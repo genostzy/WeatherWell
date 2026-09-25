@@ -19,6 +19,7 @@ import { isHeavyRainfall } from "@/lib/weather-thresholds";
 import { useWeatherData } from "@/lib/use-weather-data";
 import { describeRiver } from "@/lib/river-forecast";
 import { ConfirmCentrePanel } from "@/features/evacuation/candidate-sites";
+import { FloodPlanLink } from "@/features/evacuation/flood-plan";
 import { useHazardsForZone, useSetCenterStatus, useZones } from "@/lib/reference-data/use-reference-data";
 import { HAZARD_LEVEL_LABEL } from "@/lib/hazards";
 import { useActiveAlertForZone, useSetZoneAlert } from "@/lib/alerts-store";
@@ -287,6 +288,7 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
         </Card>
 
         {canManage && <ConfirmCentrePanel zone={zone} />}
+        {canManage && <FloodPlanLink zoneId={zone.id} />}
 
         <RecentReportsPanel zone={zone} />
 
