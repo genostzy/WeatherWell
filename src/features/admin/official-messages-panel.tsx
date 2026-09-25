@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { SkeletonRows } from "@/components/ui/skeleton";
+import { PushPrompt } from "@/features/onboarding/push-prompt";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { friendlyError } from "@/lib/friendly-error";
@@ -28,6 +29,11 @@ const TO_EVERY: LocalizedText = { en: "Update to every barangay", fil: "Update s
 const SEND_TO_EVERY: LocalizedText = { en: "Send to every barangay", fil: "Ipadala sa bawat barangay" };
 const SENT_UP: LocalizedText = { en: "Sent to {town}.", fil: "Naipadala sa {town}." };
 const SENT_DOWN: LocalizedText = { en: "Sent to every barangay in {town}.", fil: "Naipadala sa bawat barangay sa {town}." };
+
+const ON_PHONE: LocalizedText = {
+  en: "Get these on your phone, the moment they are sent",
+  fil: "Matanggap ang mga ito sa telepono mo, sa sandaling ipadala",
+};
 
 const KIND: Record<MessageKind, LocalizedText> = {
   centre_full: { en: "Our centre is full", fil: "Puno na ang aming center" },
@@ -97,6 +103,9 @@ export function OfficialMessagesPanel() {
   const townCode = official.areaCode.slice(0, 7);
   const townName = zones.find((z) => z.psgcBarangayCode.startsWith(townCode))?.municipalityName ?? official.areaName;
   const zoneName = (zoneId: string | null) => zones.find((z) => z.id === zoneId)?.name ?? "";
+  // A phone subscription needs a barangay; an official's own (or their town's first) will do,
+  // since officials' notifications go to their account whichever barangay the phone follows.
+  const phoneZoneId = zones.find((z) => z.psgcBarangayCode.startsWith(official.areaCode))?.id;
 
   async function act(key: string, action: () => Promise<{ ok: true } | { ok: false; error: string }>, done?: string) {
     setBusyKey(key);
@@ -142,6 +151,14 @@ export function OfficialMessagesPanel() {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {phoneZoneId && (
+          <div className="space-y-2 rounded-md border-2 border-dashed border-border p-3">
+            <p lang={lang} className="text-sm font-medium">
+              {t(ON_PHONE, lang)}
+            </p>
+            <PushPrompt zoneId={phoneZoneId} />
+          </div>
+        )}
         {isTown ? (
           <form
             className="space-y-2"

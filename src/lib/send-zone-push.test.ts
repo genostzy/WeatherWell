@@ -10,8 +10,9 @@ vi.mock("web-push", () => ({
 
 const deleteEq = vi.fn();
 const selectEq = vi.fn();
+const selectIn = vi.fn();
 const from = vi.fn(() => ({
-  select: vi.fn(() => ({ eq: selectEq })),
+  select: vi.fn(() => ({ eq: selectEq, in: selectIn })),
   delete: vi.fn(() => ({ eq: deleteEq })),
 }));
 vi.mock("@supabase/supabase-js", () => ({
@@ -164,5 +165,37 @@ describe("sendZonePush", () => {
     const result = await sendZonePush(VALID_PAYLOAD);
 
     expect(result).toEqual({ ok: false, error: "connection refused", status: 500 });
+  });
+});
+
+describe("sendUsersPush (officials notified on their phones)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubEnv("NEXT_PUBLIC_VAPID_PUBLIC_KEY", "test-public-key");
+    vi.stubEnv("VAPID_PRIVATE_KEY", "test-private-key");
+    sendNotification.mockResolvedValue({ statusCode: 201 });
+  });
+  afterEach(() => vi.unstubAllEnvs());
+
+  async function fresh() {
+    vi.resetModules();
+    return (await import("./send-zone-push")).sendUsersPush;
+  }
+
+  it("sends once to each device of the chosen accounts", async () => {
+    const sub = { endpoint: "https://fcm.googleapis.com/fcm/send/a", p256dh: "p", auth: "a" };
+    // The same phone subscribed under two barangays is still one phone.
+    selectIn.mockResolvedValue({ data: [sub, { ...sub }], error: null });
+    const sendUsersPush = await fresh();
+    const result = await sendUsersPush({ userIds: ["u1"], title: "T", body: "B" });
+    expect(selectIn).toHaveBeenCalledWith("user_id", ["u1"]);
+    expect(sendNotification).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ ok: true, sent: 1, failed: 0, total: 1 });
+  });
+
+  it("does nothing, and asks nothing, with nobody to tell", async () => {
+    const sendUsersPush = await fresh();
+    expect(await sendUsersPush({ userIds: [], title: "T", body: "B" })).toEqual({ ok: true, sent: 0, failed: 0, total: 0 });
+    expect(selectIn).not.toHaveBeenCalled();
   });
 });

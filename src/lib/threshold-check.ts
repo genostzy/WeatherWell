@@ -1,6 +1,7 @@
 import "server-only";
 import { createClient } from "@supabase/supabase-js";
 import { sendZonePush } from "@/lib/send-zone-push";
+import { notifyOfficialsOfAdvisory } from "@/lib/notify-officials";
 
 type EngineRow = { zone_id: string; severity: string; report_count: number; triggered: boolean };
 
@@ -44,6 +45,8 @@ export async function runThresholdCheck(): Promise<ThresholdCheckResult> {
       // must not stop the loop from reaching the rest.
       console.error(`sendZonePush failed for zone ${alert.zone_id}: ${result.error}`);
     }
+    // The officials who must confirm or reject it hear about it too.
+    await notifyOfficialsOfAdvisory(alert.zone_id);
   }
 
   return { ok: true, triggered: triggeredAlerts.length, pushSent, results: triggeredAlerts };

@@ -1,6 +1,6 @@
 import "server-only";
 import webPush from "web-push";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
@@ -89,12 +89,21 @@ export async function sendZonePush(payload: ZonePushPayload): Promise<ZonePushRe
     return { ok: true, sent: 0, failed: 0, total: 0 };
   }
 
-  const message = JSON.stringify({
+  return deliver(supabase, subscriptions, {
     title: payload.title,
     body: payload.body,
     zone: payload.zoneId,
     url: payload.url ?? "/",
   });
+}
+
+type Subscription = { endpoint: string; p256dh: string; auth: string };
+type ServiceClient = SupabaseClient;
+
+/** Sends one message to each subscription (one per endpoint), dropping any that are dead or not a push service. */
+async function deliver(supabase: ServiceClient, subscriptions: Subscription[], payload: object): Promise<ZonePushResult> {
+  const unique = [...new Map(subscriptions.map((sub) => [sub.endpoint, sub])).values()];
+  const message = JSON.stringify(payload);
 
   const dropSubscription = (endpoint: string) =>
     supabase.from("push_subscriptions" as never).delete().eq("endpoint" as never, endpoint);
@@ -103,7 +112,7 @@ export async function sendZonePush(payload: ZonePushPayload): Promise<ZonePushRe
   // delay everyone after it. ponytail: unbounded concurrency, fine at
   // barangay scale; batch it if a zone ever has thousands of subscribers.
   const results = await Promise.allSettled(
-    subscriptions.map(async (sub) => {
+    unique.map(async (sub) => {
       if (!isPushServiceEndpoint(sub.endpoint)) {
         await dropSubscription(sub.endpoint);
         throw new Error("not a push service endpoint");
@@ -123,7 +132,28 @@ export async function sendZonePush(payload: ZonePushPayload): Promise<ZonePushRe
     })
   );
   const sent = results.filter((r) => r.status === "fulfilled").length;
-  const failed = results.length - sent;
-
-  return { ok: true, sent, failed, total: subscriptions.length };
+  return { ok: true, sent, failed: results.length - sent, total: unique.length };
 }
+
+/**
+ * Sends to every device of the given accounts, whichever barangay each
+ * device follows: how officials hear about updates and advisories that need
+ * them (see official-recipients.ts for who).
+ */
+export async function sendUsersPush(payload: { userIds: string[]; title: string; body: string; url?: string }): Promise<ZonePushResult> {
+  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
+    return { ok: false, error: "Push notifications not configured", status: 503 };
+  }
+  if (payload.userIds.length === 0) return { ok: true, sent: 0, failed: 0, total: 0 };
+
+  const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+  const { data, error } = (await supabase
+    .from("push_subscriptions" as never)
+    .select("endpoint, p256dh, auth")
+    .in("user_id" as never, payload.userIds as never)) as { data: Subscription[] | null; error: { message: string } | null };
+  if (error) return { ok: false, error: error.message, status: 500 };
+  if (!data || data.length === 0) return { ok: true, sent: 0, failed: 0, total: 0 };
+
+  return deliver(supabase, data, { title: payload.title, body: payload.body, zone: "", url: payload.url ?? "/admin" });
+}
+

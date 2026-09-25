@@ -2,6 +2,7 @@
 
 import { createSupabaseUserClient } from "@/lib/supabase/user-server";
 import type { MessageKind } from "@/lib/official-messages";
+import { notifyOfficialsOfMessage } from "@/lib/notify-officials";
 import type { ActionResult } from "./action-result";
 
 const NO_SESSION: ActionResult = { ok: false, permanent: true, error: "No session — sign in and try again." };
@@ -15,8 +16,12 @@ export async function sendOfficialMessage(input: { kind: MessageKind; body: stri
   const supabase = await createSupabaseUserClient();
   const { data } = await supabase.auth.getClaims();
   if (!data?.claims?.sub) return NO_SESSION;
-  const { error } = await supabase.rpc("send_official_message", { p_kind: input.kind, p_body: input.body });
-  if (!error) return { ok: true };
+  const { data: id, error } = await supabase.rpc("send_official_message", { p_kind: input.kind, p_body: input.body });
+  if (!error) {
+    // To the recipients' phones as well as their dashboards; never fails the send.
+    if (id) await notifyOfficialsOfMessage(id);
+    return { ok: true };
+  }
   return { ok: false, permanent: true, error: error.message };
 }
 

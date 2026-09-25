@@ -8,6 +8,8 @@ vi.mock("@/app/actions/official-messages", () => ({
   acknowledgeOfficialMessage: (...args: unknown[]) => ackMock(...args),
 }));
 
+vi.mock("@/features/onboarding/push-prompt", () => ({ PushPrompt: ({ zoneId }: { zoneId?: string }) => <button>Turn on alerts for {zoneId}</button> }));
+
 import { OfficialMessagesPanel } from "./official-messages-panel";
 import { renderWithData } from "@/test-utils/render-with-data";
 import type { Official } from "@/lib/auth/official";
@@ -107,5 +109,14 @@ describe("OfficialMessagesPanel — municipal official", () => {
     fireEvent.change(await screen.findByLabelText(/update to every barangay/i), { target: { value: "x" } });
     fireEvent.click(screen.getByRole("button", { name: /send to every barangay/i }));
     expect(await screen.findByRole("alert")).toBeInTheDocument();
+  });
+});
+
+describe("OfficialMessagesPanel phone notifications", () => {
+  it("offers to send these updates to the official's phone too", () => {
+    serve([]);
+    renderWithData(<OfficialMessagesPanel />, { official: KAPITAN });
+    expect(screen.getByText(/get these on your phone/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /turn on alerts for zone-1/i })).toBeInTheDocument();
   });
 });
