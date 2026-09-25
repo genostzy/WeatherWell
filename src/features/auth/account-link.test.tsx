@@ -178,4 +178,14 @@ describe("AccountLink", () => {
     await screen.findByText("Resident");
     expect(screen.queryByRole("link", { name: /dashboard/i })).not.toBeInTheDocument();
   });
+
+  it("keeps the account actions in a menu under the badge, so the top bar fits one row (owner request)", async () => {
+    getSession.mockResolvedValue({ data: { session: null } });
+    const { container } = renderWithData(<AccountLink />);
+    await screen.findByText("Guest");
+    const menu = container.querySelector("details");
+    expect(menu).not.toBeNull();
+    expect(menu!.querySelector("summary")).toHaveTextContent("Guest");
+    expect(menu!.querySelector("a[href^=\"/sign-in\"]")).toHaveTextContent("Sign in (optional)");
+  });
 });

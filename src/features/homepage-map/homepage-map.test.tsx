@@ -142,4 +142,21 @@ describe("HomepageMap", () => {
     expect(centre.className).toContain(NAV_ACTIVE);
     expect(safeArea.className).not.toContain(NAV_ACTIVE);
   });
+
+  it("on a phone, reads status, then the safety actions, then the map, then the rest (owner: tidy phone layout)", () => {
+    const { container } = renderWithData(<HomepageMap zones={FIXTURE_REFERENCE_DATA.zones} />);
+    const order = (el: Element | null) => [...container.querySelectorAll("*")].indexOf(el as Element);
+    const status = screen.getByRole("heading", { level: 1 });
+    const safeArea = screen.getByRole("button", { name: /find safe area/i });
+    const map = container.querySelector("[data-home-map]");
+    const alertsCard = screen.getByRole("region", { name: /alerts on this phone/i });
+    expect(order(status)).toBeLessThan(order(safeArea));
+    expect(order(safeArea)).toBeLessThan(order(map));
+    expect(order(map)).toBeLessThan(order(alertsCard));
+  });
+
+  it("fits the single phone column to the screen instead of growing to the map's width", () => {
+    const { container } = renderWithData(<HomepageMap zones={FIXTURE_REFERENCE_DATA.zones} />);
+    expect((container.querySelector("[data-home-grid]") as HTMLElement).className).toContain("grid-cols-[minmax(0,1fr)]");
+  });
 });

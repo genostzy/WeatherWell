@@ -141,4 +141,9 @@ describe("QuickDepthReport", () => {
 
     expect(screen.getByRole("status").textContent).toMatch(/already sent|already reached/i);
   });
+
+  it("keeps no empty line under the buttons until there is something to say (owner: uneven gaps on the phone)", () => {
+    renderWithData(<QuickDepthReport zoneId="zone-1" />);
+    expect(screen.getByRole("status")).toHaveClass("sr-only");
+  });
 });

@@ -44,7 +44,7 @@ export function BottomNav() {
               key={item.href}
               href={item.href}
               aria-current={isActive ? "page" : undefined}
-              className={`flex min-w-16 flex-col items-center gap-0.5 rounded-lg px-3 py-1.5 text-[10px] transition-colors ${
+              className={`flex min-h-12 min-w-16 flex-col items-center justify-center gap-0.5 rounded-lg px-3 py-1.5 text-xs transition-colors ${
                 isActive ? NAV_ACTIVE : "font-medium text-muted-foreground hover:text-foreground"
               }`}
             >

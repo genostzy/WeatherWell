@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { ChevronDown } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,43 @@ const ON_THIS_DEVICE: LocalizedText = {
   fil: "Nakatago sa device na ito",
 };
 const DASHBOARD: LocalizedText = { en: "Dashboard", fil: "Dashboard" };
+const ACCOUNT: LocalizedText = { en: "Account", fil: "Account" };
+
+/**
+ * The badge opens a small menu with the account's actions, so the top bar
+ * fits one row on a phone (owner's request). A native <details>: keyboard
+ * and screen-reader support for free; it closes on a tap outside or on
+ * choosing an action.
+ */
+function AccountMenu({ label, badge, children }: { label: string; badge: ReactNode; children: ReactNode }) {
+  const ref = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    function close(event: PointerEvent) {
+      if (ref.current?.open && !ref.current.contains(event.target as Node)) ref.current.open = false;
+    }
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, []);
+  return (
+    <details ref={ref} className="relative">
+      <summary
+        aria-label={label}
+        className="flex min-h-9 cursor-pointer list-none items-center gap-1 rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden"
+      >
+        {badge}
+        <ChevronDown aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
+      </summary>
+      <div
+        onClick={() => {
+          if (ref.current) ref.current.open = false;
+        }}
+        className="absolute right-0 top-full z-[1100] mt-2 flex w-56 flex-col gap-1 rounded-xl border-2 border-border bg-background p-2 shadow-lg"
+      >
+        {children}
+      </div>
+    </details>
+  );
+}
 
 type SessionKind = "none" | "anonymous" | "permanent";
 
@@ -80,22 +118,26 @@ export function AccountLink() {
 
   if (isAdmin) return null;
 
+  const menuLabel = (name: string) => `${t(ACCOUNT, lang)}: ${name}`;
+
   if (kind === "permanent") {
     return (
-      <div className="flex items-center gap-1.5">
-        <RoleBadge kind={officialRole?.level ?? "resident"} />
+      <AccountMenu
+        label={menuLabel(officialRole ? officialRole.level : "resident")}
+        badge={<RoleBadge kind={officialRole?.level ?? "resident"} />}
+      >
         {officialRole && (
-          <Button asChild variant="secondary" size="sm">
+          <Button asChild variant="secondary" className="h-10 w-full justify-start">
             <Link href="/admin">{t(DASHBOARD, lang)}</Link>
           </Button>
         )}
         <form method="post" action="/auth/signout">
           <input type="hidden" name="next" value={pathname} />
-          <Button type="submit" variant="ghost" size="sm">
+          <Button type="submit" variant="ghost" className="h-10 w-full justify-start">
             {t(SIGN_OUT, lang)}
           </Button>
         </form>
-      </div>
+      </AccountMenu>
     );
   }
 
@@ -104,13 +146,15 @@ export function AccountLink() {
   // an implementation detail. Only the sign-in link's own label changes:
   // there's nothing to "keep" yet for a visitor who has never written.
   return (
-    <div className="flex items-center gap-1.5">
-      <RoleBadge kind="guest" detail={t(ON_THIS_DEVICE, lang)} />
-      <Button asChild variant="ghost" size="sm">
+    <AccountMenu label={menuLabel("guest")} badge={<RoleBadge kind="guest" />}>
+      <p lang={lang} className="px-2 py-1 text-xs text-muted-foreground">
+        {t(ON_THIS_DEVICE, lang)}
+      </p>
+      <Button asChild variant="secondary" className="h-10 w-full justify-start">
         <Link href={`/sign-in?next=${encodeURIComponent(pathname)}`}>
           {t(kind === "anonymous" ? KEEP_REPORTS : SIGN_IN, lang)}
         </Link>
       </Button>
-    </div>
+    </AccountMenu>
   );
 }

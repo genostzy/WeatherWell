@@ -9,7 +9,7 @@ import type { LocalizedText } from "@/lib/types";
 /**
  * RA 10173 requires consent to be informed, which means informed in a
  * language the person actually reads. The Filipino text discloses the same
- * two collections, the same retention limits, and the same right to decline
+ * collections, the same retention limits, and the same right to decline
  * as the English — it is a translation of the disclosure, not a summary of it.
  */
 const CONSENT_COPY = {
@@ -25,9 +25,15 @@ const CONSENT_COPY = {
     en: "Separately, while the homepage map is open, WeatherWell also tracks your device's position continuously (at a low frequency) to show your direction and distance to your evacuation center. This is never stored — it exists only while the map is on screen.",
     fil: "Bukod dito, habang bukas ang mapa sa homepage, sinusubaybayan din ng WeatherWell ang posisyon ng iyong device nang tuloy-tuloy (sa mababang dalas) upang ipakita ang direksyon at layo mo papunta sa iyong evacuation center. Hindi ito iniimbak — umiiral lamang ito habang nakabukas ang mapa.",
   },
-  phone: {
-    en: "WeatherWell also asks for your phone number so it can send SMS alerts if your internet connection drops. It is stored securely and never shared.",
-    fil: "Hinihingi rin ng WeatherWell ang iyong numero ng telepono upang makapagpadala ng SMS alert kung mawalan ka ng koneksyon sa internet. Ligtas itong iniimbak at hindi kailanman ibinabahagi.",
+  // This used to promise SMS alerts from a phone number the app never asked
+  // for and could not send to. It now says what really happens.
+  alerts: {
+    en: "If you turn on alerts, your browser gives WeatherWell a notification address for this phone. It is stored with your barangay only to send you its alerts, and deleted when you turn alerts off.",
+    fil: "Kung i-on mo ang mga alerto, magbibigay ang browser mo sa WeatherWell ng address para sa abiso ng teleponong ito. Iniimbak ito kasama ng iyong barangay para lamang padalhan ka ng alerto nito, at binubura kapag in-off mo ang alerto.",
+  },
+  neighbours: {
+    en: "Numbers you add for 'Text my neighbours' stay on this phone; WeatherWell never receives them. Texts go from your own phone.",
+    fil: "Ang mga numerong idinagdag mo para sa 'I-text ang kapitbahay' ay nananatili sa teleponong ito; hindi ito natatanggap ng WeatherWell. Galing sa sarili mong telepono ang mga text.",
   },
   errors: {
     en: "If the app crashes, an anonymous error report — with no name, location or account — is sent so it can be fixed.",
@@ -58,7 +64,8 @@ export function ConsentNotice({ onAccept }: { onAccept: () => void }) {
       <CardContent lang={lang} className="space-y-4 text-sm">
         <p>{t(CONSENT_COPY.location, lang)}</p>
         <p>{t(CONSENT_COPY.liveLocation, lang)}</p>
-        <p>{t(CONSENT_COPY.phone, lang)}</p>
+        <p>{t(CONSENT_COPY.alerts, lang)}</p>
+        <p>{t(CONSENT_COPY.neighbours, lang)}</p>
         <p>{t(CONSENT_COPY.errors, lang)}</p>
         <p>{t(CONSENT_COPY.decline, lang)}</p>
         <p className="text-muted-foreground">{t(CONSENT_COPY.legalBasis, lang)}</p>

@@ -131,47 +131,21 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
         onDismiss={dismissGeofence}
       />
     )}
-    <div className="grid w-full gap-2 sm:gap-3 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-5">
-      {/* Mobile: status + actions + map + conditions. Desktop: map left, sidebar right. */}
-
-      {/* Map — desktop: left column. Mobile: below actions. */}
-      <div className="order-last lg:order-first lg:col-start-1 lg:row-span-4">
-        {isPlacingPin && (
-          <div className="mb-2 rounded-md border-2 border-border bg-muted/50 px-3 py-1.5 text-center text-xs font-medium">
-            {t(TAP_MAP_TO_PLACE, lang)}
-          </div>
-        )}
-        <MapCanvas
-          zones={zones}
-          hazardType={hazardType}
-          onHazardTypeChange={setHazardType}
-          routeZone={routeZone}
-          routeHazard={routeHazard}
-          effectiveRoutePolyline={effectiveRoutePolyline}
-          onSelectZone={(zoneId) => {
-            handleSelectZone(zoneId);
-            setActiveAction(null);
-          }}
-          isPlacingPin={isPlacingPin}
-          onMapClickForPin={handleMapClickForPin}
-          onEditPin={setEditingPin}
-          onDeletePin={setDeletingPin}
-          onViewPhoto={setPhotoPin}
-          livePosition={livePosition}
-          revealEvacuationCenters={revealEvacuationCenters}
-        />
-      </div>
-
-      {/* Sidebar — desktop: right column. Mobile: above map. */}
-      <div className="order-first lg:order-none flex flex-col gap-2 overflow-hidden sm:gap-3 lg:col-start-2 lg:row-span-4 lg:gap-4">
+    {/*
+      One column on a phone, sized to the screen (minmax(0,1fr)): an unsized
+      column grew to the map's width and pushed everything 7px right.
+      Phone order is status, safety actions, map, then the rest; on desktop
+      the map takes the left column and the two stacks share the right.
+    */}
+    <div
+      data-home-grid
+      className="grid w-full grid-cols-[minmax(0,1fr)] gap-3 sm:gap-4 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-5"
+    >
+      <div className="flex min-w-0 flex-col gap-3 sm:gap-4 lg:col-start-2 lg:row-start-1">
         <OfficialBanner />
         <PersonalStatusHeadline zone={zones[0]} />
-        <CoverageNote zone={zones[0]} />
 
-        <QuickDepthReport zoneId={zones[0].id} />
-
-
-        {/* Quick actions — primary, placed right after status so they're seen first */}
+        {/* The two safety actions come straight after the status. */}
         <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
@@ -180,12 +154,12 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
               handleFindSafeArea();
               setActiveAction("safe-area");
             }}
-            className={`flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 px-3 py-3 text-center outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 ${
+            className={`flex min-h-16 flex-col items-center justify-center gap-1.5 rounded-xl border-2 px-3 py-3 text-center outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 ${
               activeAction === "safe-area" ? `border-primary ${NAV_ACTIVE}` : "border-border hover:bg-muted/50"
             }`}
           >
             <ShieldCheck aria-hidden="true" className="h-5 w-5 shrink-0" />
-            <span className="text-xs leading-tight font-medium">{t(FIND_SAFE_AREA, lang)}</span>
+            <span className="text-sm leading-tight font-medium">{t(FIND_SAFE_AREA, lang)}</span>
           </button>
           <button
             type="button"
@@ -195,51 +169,16 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
               setRevealEvacuationCenters(true);
               setActiveAction("evac-centre");
             }}
-            className={`flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 px-3 py-3 text-center outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 ${
+            className={`flex min-h-16 flex-col items-center justify-center gap-1.5 rounded-xl border-2 px-3 py-3 text-center outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 ${
               activeAction === "evac-centre" ? `border-primary ${NAV_ACTIVE}` : "border-border hover:bg-muted/50"
             }`}
           >
             <Building2 aria-hidden="true" className="h-5 w-5 shrink-0" />
-            <span className="text-xs leading-tight font-medium">
-              {t(FIND_SAFE_EVACUATION_CENTER, lang)}
-            </span>
-          </button>
-          <button
-            type="button"
-            aria-pressed={isPlacingPin}
-            onClick={() => setIsPlacingPin((v) => !v)}
-            className={`col-span-2 flex items-center justify-center gap-2 rounded-xl border-2 px-3 py-2.5 text-sm font-medium outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 ${
-              isPlacingPin
-                ? "border-primary bg-primary text-primary-foreground hover:bg-primary/80"
-                : "border-border hover:bg-muted/50"
-            }`}
-          >
-            {isPlacingPin ? (
-              <X aria-hidden="true" className="h-4 w-4 shrink-0" />
-            ) : (
-              <Droplet aria-hidden="true" className="h-4 w-4 shrink-0" />
-            )}
-            {t(isPlacingPin ? CANCEL_ADD_PIN : ADD_FLOOD_PIN, lang)}
+            <span className="text-sm leading-tight font-medium">{t(FIND_SAFE_EVACUATION_CENTER, lang)}</span>
           </button>
         </div>
 
-        {/* Alerts could only be turned on during first setup; this is where they live now. */}
-        <section aria-labelledby="alerts-on-phone" className="space-y-2 rounded-xl border-2 border-border p-3">
-          <h2 id="alerts-on-phone" lang={lang} className="text-sm font-medium">
-            {t(ALERTS_ON_PHONE, lang)}
-          </h2>
-          <PushPrompt zoneId={zones[0].id} />
-        </section>
-
-        <QuickStats />
-
-        {/* Weather + forecast — collapsible, lower priority */}
-        <CurrentConditionsPanel zone={zones[0]} />
-        {forecast && forecast.steps.length > 0 && (
-          <PredictionTimeline steps={forecast.steps} zoneName={zones[0].name} />
-        )}
-
-        {/* Route info — only when a route is active */}
+        {/* Route info — only when a route is active, right under the action that made it */}
         {routeZone && (directionToSafety || routeHazard || notice) && (
           <div className="rounded-xl border-2 border-border p-3 text-sm">
             {routeZone && directionToSafety && hasRealEvacuationCenter(routeZone) && (
@@ -263,6 +202,71 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
           </div>
         )}
 
+        <QuickDepthReport zoneId={zones[0].id} />
+      </div>
+
+      {/* Map — desktop: the whole left column. */}
+      <div data-home-map className="min-w-0 space-y-2 lg:col-start-1 lg:row-span-2 lg:row-start-1">
+        {isPlacingPin && (
+          <div className="rounded-md border-2 border-border bg-muted/50 px-3 py-1.5 text-center text-xs font-medium">
+            {t(TAP_MAP_TO_PLACE, lang)}
+          </div>
+        )}
+        <MapCanvas
+          zones={zones}
+          hazardType={hazardType}
+          onHazardTypeChange={setHazardType}
+          routeZone={routeZone}
+          routeHazard={routeHazard}
+          effectiveRoutePolyline={effectiveRoutePolyline}
+          onSelectZone={(zoneId) => {
+            handleSelectZone(zoneId);
+            setActiveAction(null);
+          }}
+          isPlacingPin={isPlacingPin}
+          onMapClickForPin={handleMapClickForPin}
+          onEditPin={setEditingPin}
+          onDeletePin={setDeletingPin}
+          onViewPhoto={setPhotoPin}
+          livePosition={livePosition}
+          revealEvacuationCenters={revealEvacuationCenters}
+        />
+        {/* Adding a pin is a map action, so it sits with the map. */}
+        <button
+          type="button"
+          aria-pressed={isPlacingPin}
+          onClick={() => setIsPlacingPin((v) => !v)}
+          className={`flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border-2 px-3 py-2.5 text-sm font-medium outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 ${
+            isPlacingPin
+              ? "border-primary bg-primary text-primary-foreground hover:bg-primary/80"
+              : "border-border hover:bg-muted/50"
+          }`}
+        >
+          {isPlacingPin ? (
+            <X aria-hidden="true" className="h-4 w-4 shrink-0" />
+          ) : (
+            <Droplet aria-hidden="true" className="h-4 w-4 shrink-0" />
+          )}
+          {t(isPlacingPin ? CANCEL_ADD_PIN : ADD_FLOOD_PIN, lang)}
+        </button>
+      </div>
+
+      {/* The rest: useful, not urgent. */}
+      <div className="flex min-w-0 flex-col gap-3 sm:gap-4 lg:col-start-2 lg:row-start-2">
+        {/* Alerts could only be turned on during first setup; this is where they live now. */}
+        <section aria-labelledby="alerts-on-phone" className="space-y-2 rounded-xl border-2 border-border p-3">
+          <h2 id="alerts-on-phone" lang={lang} className="text-sm font-medium">
+            {t(ALERTS_ON_PHONE, lang)}
+          </h2>
+          <PushPrompt zoneId={zones[0].id} />
+        </section>
+
+        <CurrentConditionsPanel zone={zones[0]} />
+        {forecast && forecast.steps.length > 0 && (
+          <PredictionTimeline steps={forecast.steps} zoneName={zones[0].name} />
+        )}
+        <CoverageNote zone={zones[0]} />
+        <QuickStats />
       </div>
 
       {/* Dialogs — both open over the map */}

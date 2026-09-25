@@ -118,7 +118,9 @@ export function QuickDepthReport({ zoneId }: { zoneId: string }) {
         ))}
       </div>
 
-      <div role="status" aria-live="polite" className="min-h-9 text-sm">
+      {/* Stays in the page (a live region must exist before it speaks) but takes
+          no room until it has a message: a reserved empty line read as a gap. */}
+      <div role="status" aria-live="polite" className={state.kind === "idle" ? "sr-only" : "text-sm"}>
         {state.kind === "reported" && (
           <span className="flex items-center gap-2">
             <span lang={lang} className="text-green-500">

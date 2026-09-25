@@ -1,40 +1,36 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { LANGUAGES, LANGUAGE_LABEL, t } from "@/lib/i18n";
-import type { LocalizedText } from "@/lib/types";
+import type { LanguageCode, LocalizedText } from "@/lib/types";
 import { useLanguage } from "./language-provider";
 
 const LANGUAGE_GROUP: LocalizedText = { en: "Language", fil: "Wika" };
-const SWITCH_TO: LocalizedText = { en: "Switch to", fil: "Lumipat sa" };
+/** Short enough that the top bar fits one row on a phone; the full name is the button's accessible name. */
+const SHORT: Record<LanguageCode, string> = { en: "EN", fil: "FIL" };
 
+/** One segmented switch rather than two separate buttons. */
 export function LanguageToggle() {
   const { lang, setLang } = useLanguage();
 
   return (
-    <div className="flex gap-2" role="group" aria-label={t(LANGUAGE_GROUP, lang)}>
+    <div
+      className="flex shrink-0 rounded-full border-2 border-border p-0.5"
+      role="group"
+      aria-label={t(LANGUAGE_GROUP, lang)}
+    >
       {LANGUAGES.map((code) => (
-        <Tooltip key={code}>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              size="sm"
-              variant={code === lang ? "default" : "outline"}
-              aria-pressed={code === lang}
-              onClick={() => setLang(code)}
-            >
-              {LANGUAGE_LABEL[code]}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            {t(SWITCH_TO, lang)} {LANGUAGE_LABEL[code]}
-          </TooltipContent>
-        </Tooltip>
+        <button
+          key={code}
+          type="button"
+          aria-label={LANGUAGE_LABEL[code]}
+          aria-pressed={code === lang}
+          onClick={() => setLang(code)}
+          className={`min-h-8 min-w-10 rounded-full px-2.5 text-xs font-semibold transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${
+            code === lang ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          {SHORT[code]}
+        </button>
       ))}
     </div>
   );

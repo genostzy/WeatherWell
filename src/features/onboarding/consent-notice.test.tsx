@@ -5,10 +5,13 @@ import { ConsentNotice } from "./consent-notice";
 import { LanguageProvider } from "@/features/i18n/language-provider";
 
 describe("ConsentNotice", () => {
-  it("names both kinds of personal data it collects", () => {
+  it("names the data it really collects, and promises no SMS it does not send (found reviewing the app)", () => {
     render(<ConsentNotice onAccept={() => {}} />);
     expect(screen.getByText(/asks for your location/i)).toBeInTheDocument();
-    expect(screen.getByText(/phone number/i)).toBeInTheDocument();
+    expect(screen.getByText(/if you turn on alerts/i)).toBeInTheDocument();
+    expect(screen.getByText(/neighbours.*stay on this phone/i)).toBeInTheDocument();
+    expect(screen.queryByText(/sms alert/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/your phone number/i)).not.toBeInTheDocument();
   });
 
   it("cites the Data Privacy Act so the legal basis is visible", () => {
@@ -30,7 +33,8 @@ describe("ConsentNotice", () => {
       </LanguageProvider>
     );
     expect(screen.getByText(/Hinihingi ng WeatherWell ang iyong lokasyon/)).toBeInTheDocument();
-    expect(screen.getByText(/numero ng telepono/)).toBeInTheDocument();
+    expect(screen.getByText(/Kung i-on mo ang mga alerto/)).toBeInTheDocument();
+    expect(screen.queryByText(/SMS alert/)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /naiintindihan ko/i })).toBeInTheDocument();
     expect(screen.queryByText(/WeatherWell asks for your location/)).not.toBeInTheDocument();
   });
