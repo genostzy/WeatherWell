@@ -56,6 +56,7 @@ export function CheckInPanel({ zoneId }: { zoneId: string }) {
         <div className="flex flex-wrap gap-2">
           <Button
             type="button"
+            size="lg"
             variant={ownCheckIn?.status === "safe" ? "default" : "outline"}
             onClick={() => recordCheckIn(zoneId, "safe")}
           >
@@ -64,6 +65,7 @@ export function CheckInPanel({ zoneId }: { zoneId: string }) {
           </Button>
           <Button
             type="button"
+            size="lg"
             variant={ownCheckIn?.status === "needs_help" ? "default" : "outline"}
             className={ownCheckIn?.status === "needs_help" ? undefined : "border-severity-red text-severity-red"}
             onClick={() => recordCheckIn(zoneId, "needs_help")}

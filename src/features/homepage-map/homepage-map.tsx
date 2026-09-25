@@ -16,6 +16,7 @@ import { usePinFlow } from "./use-pin-flow";
 import { useGeofenceAlert } from "./use-geofence-alert";
 import { GeofenceAlertBanner } from "./geofence-alert-banner";
 import { PersonalStatusHeadline } from "./personal-status-headline";
+import { FloodModeActions } from "./flood-mode-actions";
 import { CurrentConditionsPanel } from "./current-conditions-panel";
 import { QuickStats } from "./quick-stats";
 import { QuickDepthReport } from "@/features/water-level-report/quick-depth-report";
@@ -144,6 +145,7 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
       <div className="flex min-w-0 flex-col gap-3 sm:gap-4 lg:col-start-2 lg:row-start-1">
         <OfficialBanner />
         <PersonalStatusHeadline zone={zones[0]} />
+        <FloodModeActions zone={zones[0]} />
 
         {/* The two safety actions come straight after the status. */}
         <div className="grid grid-cols-2 gap-2">

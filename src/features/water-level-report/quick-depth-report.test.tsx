@@ -146,4 +146,34 @@ describe("QuickDepthReport", () => {
     renderWithData(<QuickDepthReport zoneId="zone-1" />);
     expect(screen.getByRole("status")).toHaveClass("sr-only");
   });
+
+  describe("says what the report counts toward (so residents know it mattered)", () => {
+    it("tells how many more neighbours are needed before an advisory", async () => {
+      const user = userEvent.setup();
+      renderWithData(<QuickDepthReport zoneId="zone-1" />, { alerts: [] });
+      await user.click(screen.getByRole("button", { name: /knee-deep/i }));
+      expect(await screen.findByText(/at least 2 more neighbours/i)).toBeInTheDocument();
+    });
+
+    it("says a dry report tells officials it is dry", async () => {
+      const user = userEvent.setup();
+      renderWithData(<QuickDepthReport zoneId="zone-1" />, { alerts: [] });
+      await user.click(screen.getByRole("button", { name: /^dry/i }));
+      expect(await screen.findByText(/dry where you are/i)).toBeInTheDocument();
+    });
+
+    it("says the report shows how deep it is when the barangay already has an alert", async () => {
+      const user = userEvent.setup();
+      renderWithData(<QuickDepthReport zoneId="zone-1" />, {
+        alerts: [
+          {
+            id: "a", zoneId: "zone-1", severity: "red", message: { en: "x", fil: "x" }, source: "manual",
+            confidence: "validated", issuedAt: new Date().toISOString(), isActive: true,
+          },
+        ],
+      });
+      await user.click(screen.getByRole("button", { name: /knee-deep/i }));
+      expect(await screen.findByText(/already has an alert/i)).toBeInTheDocument();
+    });
+  });
 });

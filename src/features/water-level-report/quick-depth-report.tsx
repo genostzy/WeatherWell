@@ -6,7 +6,9 @@ import { useLanguage } from "@/features/i18n/language-provider";
 import { useLivePosition } from "@/features/homepage-map/use-live-position";
 import { t } from "@/lib/i18n";
 import { DEPTH_LEVELS, DEPTH_LABEL, DEPTH_CM, type DepthLevel } from "@/lib/depth";
-import { addWaterLevelReport } from "@/lib/water-level-reports";
+import { addWaterLevelReport, useWaterLevelReports } from "@/lib/water-level-reports";
+import { useActiveAlertForZone } from "@/lib/alerts-store";
+import { countsTowardAlert, REPORT_THRESHOLD } from "@/lib/weather-thresholds";
 import { discardEntry, readOutbox } from "@/lib/outbox/outbox";
 import type { LocalizedText } from "@/lib/types";
 
@@ -15,6 +17,24 @@ const HOW_DEEP: LocalizedText = {
   fil: "Gaano kalalim ang tubig kung nasaan ka?",
 };
 const RECORDED: LocalizedText = { en: "Reported", fil: "Naiulat" };
+// What the report counts toward, so a resident knows it mattered. "At least":
+// the engine also weighs how trusted each device is, so three can be not yet enough.
+const NEED_MORE: LocalizedText = {
+  en: "At least {n} more neighbours need to report before your barangay gets an advisory.",
+  fil: "Kailangan pa ng hindi bababa sa {n} kapitbahay na mag-ulat bago magkaroon ng abiso ang inyong barangay.",
+};
+const ENOUGH: LocalizedText = {
+  en: "Enough neighbours have reported; your barangay gets an advisory once their reports are checked.",
+  fil: "Sapat na ang mga kapitbahay na nag-ulat; magkakaroon ng abiso ang inyong barangay kapag nasuri ang mga ulat.",
+};
+const HAS_ALERT: LocalizedText = {
+  en: "Your barangay already has an alert. Your report shows officials how deep it is.",
+  fil: "May alerto na ang inyong barangay. Ipinapakita ng ulat mo sa mga opisyal kung gaano kalalim.",
+};
+const DRY_HELPS: LocalizedText = {
+  en: "Thanks. This tells officials it is dry where you are.",
+  fil: "Salamat. Ipinapaalam nito sa mga opisyal na tuyo sa kinaroroonan mo.",
+};
 const UNDO: LocalizedText = { en: "Undo", fil: "Bawiin" };
 const NOT_SAVED: LocalizedText = {
   en: "Report not saved — your phone's storage is full or blocked.",
@@ -50,6 +70,15 @@ type State =
  * mistake cost rather than the everyone cost.
  */
 export function QuickDepthReport({ zoneId }: { zoneId: string }) {
+  const reports = useWaterLevelReports();
+  const activeAlert = useActiveAlertForZone(zoneId);
+  const agreeing = reports.filter((r) => r.zoneId === zoneId && countsTowardAlert(r)).length;
+  const counts = (depth: DepthLevel): LocalizedText => {
+    if (depth === "dry") return DRY_HELPS;
+    if (activeAlert) return HAS_ALERT;
+    const needed = REPORT_THRESHOLD - agreeing;
+    return needed > 0 ? { en: NEED_MORE.en.replace("{n}", String(needed)), fil: NEED_MORE.fil.replace("{n}", String(needed)) } : ENOUGH;
+  };
   const { lang } = useLanguage();
   const position = useLivePosition();
   const [state, setState] = useState<State>({ kind: "idle" });
@@ -122,13 +151,18 @@ export function QuickDepthReport({ zoneId }: { zoneId: string }) {
           no room until it has a message: a reserved empty line read as a gap. */}
       <div role="status" aria-live="polite" className={state.kind === "idle" ? "sr-only" : "text-sm"}>
         {state.kind === "reported" && (
-          <span className="flex items-center gap-2">
-            <span lang={lang} className="text-green-500">
-              {t(RECORDED, lang)}: {t(DEPTH_LABEL[state.depthLevel], lang)}
+          <span className="block space-y-1">
+            <span className="flex items-center gap-2">
+              <span lang={lang} className="text-green-500">
+                {t(RECORDED, lang)}: {t(DEPTH_LABEL[state.depthLevel], lang)}
+              </span>
+              <Button type="button" variant="ghost" size="lg" onClick={() => undo(state.entryId)}>
+                {t(UNDO, lang)}
+              </Button>
             </span>
-            <Button type="button" variant="ghost" size="lg" onClick={() => undo(state.entryId)}>
-              {t(UNDO, lang)}
-            </Button>
+            <span lang={lang} className="block text-muted-foreground">
+              {t(counts(state.depthLevel), lang)}
+            </span>
           </span>
         )}
         {state.kind === "undone" && (
