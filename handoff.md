@@ -2,7 +2,7 @@
 
 ## State
 
-- Branch `mvp`, cut from `v1` at `912a5cb`. **Not pushed:** the Claude GitHub App can read this repo but not write to it (`403 Resource not accessible by integration`). To publish, either install the app with access to `genostzy/WeatherWell` (https://claude.ai/connect-github), or push from a clone using the bundle sent in chat: `git fetch weatherwell-mvp.bundle mvp:mvp && git push -u origin mvp`.
+- Branch `mvp`, cut from `v1` at `912a5cb`, is pushed to GitHub. CI is green on `a8c6cb4` ([run #106](https://github.com/genostzy/WeatherWell/actions/runs/36133180076)): both the `check` job (lint, typecheck, tests, knip, build) and the `database` job (rls, abuse, accounts) pass.
 - `v1` (production) and `main` are unchanged. Nothing was changed in the live Supabase project, Vercel or Google.
 
 | Commit | What |
@@ -14,6 +14,7 @@
 | `faeb553` | DB: security questions, admin password reset, email-alert opt-ins; `supabase/tests/accounts.sql` |
 | `073e22a` | Sign-up without confirmation, `/forgot-password`, Settings cards, email alerts, push on official alert changes |
 | `eaa7869` | `scripts/reset-test-accounts.ts`; PRD Setup steps 8 and 9 |
+| `a8c6cb4` | This handoff |
 
 ## Owner's decisions (25 September)
 
@@ -28,15 +29,14 @@
 
 ## Owner steps, in order
 
-1. Publish the branch (see State).
-2. Apply the migrations to the live database in this order, with the Supabase MCP `apply_migration`. Then rename each file to its live version (the M2 rule). Both only add things. Until they are applied, the `mvp` preview cannot load reports or use the new features.
+1. Apply the migrations to the live database in this order, with the Supabase MCP `apply_migration`. Then rename each file to its live version (the M2 rule). Both only add things. Until they are applied, the `mvp` preview cannot load reports or use the new features.
    - `supabase/migrations/20260925100000_reputation_and_identity_age.sql`
    - `supabase/migrations/20260925120000_password_recovery_and_email_alerts.sql`
-3. In Supabase, go to Authentication → Sign In / Providers → Email and turn off "Confirm email".
-4. Create a Gmail account and an app password. Set `GMAIL_USER` and `GMAIL_APP_PASSWORD` in Vercel for Production and Preview (PRD Setup step 8).
-5. Put the four `TEST_*_PASSWORD` variables in `.env.local` and run `npx tsx scripts/reset-test-accounts.ts` to see the plan. Run it again with `--yes` to do it (PRD Setup step 9).
-6. After testing, change the test passwords. They were shared in chat and are easy to guess, and the admin account controls the live system.
-7. Merge `mvp` into `v1` once CI is green.
+2. In Supabase, go to Authentication → Sign In / Providers → Email and turn off "Confirm email".
+3. Create a Gmail account and an app password. Set `GMAIL_USER` and `GMAIL_APP_PASSWORD` in Vercel for Production and Preview (PRD Setup step 8).
+4. Put the four `TEST_*_PASSWORD` variables in `.env.local` and run `npx tsx scripts/reset-test-accounts.ts` to see the plan. Run it again with `--yes` to do it (PRD Setup step 9).
+5. After testing, change the test passwords. They were shared in chat and are easy to guess, and the admin account controls the live system.
+6. Merge `mvp` into `v1` once steps 1–5 are done and CI is still green.
 
 ## Risks to keep in mind
 
@@ -72,7 +72,7 @@
 
 - App: `npm run lint`, `npm run typecheck`, `npm test`, `npm run knip`, `npm run build`.
 - Database: start Supabase the way CI does, then run `helpers.sql`, `reference-tables.sql`, `rls.sql`, `abuse.sql` and `accounts.sql` with `psql` (see `.github/workflows/ci.yml`). In the cloud sandbox Docker Hub was rate-limited; pulling the images from `mirror.gcr.io` and retagging them worked.
-- Last run, 25 September:
+- Last run, 25 September, both locally and in CI run #106:
   - 1,596 app tests pass.
   - Database checks: rls 207, abuse 13, accounts 8, all passing.
   - Lint, typecheck, knip and build are clean.
