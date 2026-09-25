@@ -218,6 +218,76 @@
       }
     },
     {
+      "name": "permanent too_far marks stuck as too_far, so the resident is told they are outside the barangay",
+      "entry": {
+        "id": "e-permanent-too-far",
+        "operation": "submitWaterLevelReport",
+        "payload": { "zoneId": "zone-1", "depthLevel": "knee" },
+        "queuedAt": "2026-09-16T11:00:00.000Z",
+        "attempts": 0,
+        "userId": "user-1",
+        "status": "pending",
+        "nextAttemptAt": null,
+        "updatedAt": "2026-09-16T11:00:00.000Z"
+      },
+      "outcome": { "result": "permanent", "reason": "too_far" },
+      "now": "2026-09-16T12:00:00.000Z",
+      "expect": {
+        "status": "stuck",
+        "stuckReason": "too_far",
+        "lastError": "too_far",
+        "nextAttemptAt": null,
+        "updatedAt": "2026-09-16T12:00:00.000Z"
+      }
+    },
+    {
+      "name": "retry rate_limited stays pending and records why it waits",
+      "entry": {
+        "id": "e-retry-rate-limited",
+        "operation": "submitWaterLevelReport",
+        "payload": { "zoneId": "zone-1", "depthLevel": "waist" },
+        "queuedAt": "2026-09-16T11:59:00.000Z",
+        "attempts": 1,
+        "userId": "user-1",
+        "status": "pending",
+        "nextAttemptAt": "2026-09-16T12:00:00.000Z",
+        "updatedAt": "2026-09-16T11:59:00.000Z"
+      },
+      "outcome": { "result": "retry", "reason": "rate_limited" },
+      "now": "2026-09-16T12:00:00.000Z",
+      "expect": {
+        "status": "pending",
+        "attempts": 2,
+        "waitReason": "rate_limited",
+        "nextAttemptAt": "2026-09-16T12:01:00.000Z",
+        "updatedAt": "2026-09-16T12:00:00.000Z"
+      }
+    },
+    {
+      "name": "retry without a reason clears an earlier rate limit",
+      "entry": {
+        "id": "e-retry-clears-wait",
+        "operation": "submitWaterLevelReport",
+        "payload": { "zoneId": "zone-1", "depthLevel": "waist" },
+        "queuedAt": "2026-09-16T11:59:00.000Z",
+        "attempts": 2,
+        "userId": "user-1",
+        "status": "pending",
+        "waitReason": "rate_limited",
+        "nextAttemptAt": "2026-09-16T12:00:00.000Z",
+        "updatedAt": "2026-09-16T11:59:00.000Z"
+      },
+      "outcome": { "result": "retry" },
+      "now": "2026-09-16T12:00:00.000Z",
+      "expect": {
+        "status": "pending",
+        "attempts": 3,
+        "waitReason": null,
+        "nextAttemptAt": "2026-09-16T12:05:00.000Z",
+        "updatedAt": "2026-09-16T12:00:00.000Z"
+      }
+    },
+    {
       "name": "permanent with another reason marks stuck as permanent",
       "entry": {
         "id": "e-permanent-other",

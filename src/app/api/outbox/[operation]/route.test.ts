@@ -411,6 +411,25 @@ describe("POST /api/outbox/[operation]", () => {
     expect(await response.json()).toEqual({ result: "retry" });
   });
 
+  it("passes a transient refusal's reason on with the 503, so the phone can say why it waits", async () => {
+    submitWaterLevelReport.mockResolvedValue({
+      ok: false,
+      permanent: false,
+      reason: "rate_limited",
+      error: "Too many reports for this zone from this device",
+    });
+
+    const response = await post("submitWaterLevelReport", {
+      id: "e1",
+      userId: "user-1",
+      queuedAt: "2026-09-16T00:00:00.000Z",
+      payload: reportPayload,
+    });
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ result: "retry", reason: "rate_limited" });
+  });
+
   it("maps a thrown error to 503 retry, leaking no error text into the body", async () => {
     submitWaterLevelReport.mockRejectedValue(new Error("db connection reset: password=hunter2"));
 

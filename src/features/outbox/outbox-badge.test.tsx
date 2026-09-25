@@ -242,6 +242,33 @@ describe("OutboxBadge", () => {
     ).toBeInTheDocument();
   });
 
+  it("tells a resident outside the barangay why their report was refused (too_far)", async () => {
+    const user = userEvent.setup();
+    auth.set("user-a");
+    seed(entry({ userId: "user-a", status: "stuck", stuckReason: "too_far", lastError: "too_far" }));
+    renderWithData(<OutboxBadge />);
+    await user.click(screen.getByRole("button", { name: "1 couldn't send" }));
+
+    expect(
+      screen.getByText(
+        "Couldn't send: Your location is outside this barangay. Reports only count from inside it — if you've moved, change your barangay."
+      )
+    ).toBeInTheDocument();
+  });
+
+  it("says a report is waiting for the 5-minute limit, not for a connection (rate_limited)", async () => {
+    const user = userEvent.setup();
+    auth.set("user-a");
+    seed(entry({ userId: "user-a", status: "pending", waitReason: "rate_limited" }));
+    renderWithData(<OutboxBadge />);
+    await user.click(screen.getByRole("button", { name: "1 waiting to send" }));
+
+    expect(
+      screen.getByText("Waiting: one report per barangay every 5 minutes. It will send by itself.")
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Will send when online")).not.toBeInTheDocument();
+  });
+
   it("shows the gave_up reason text for a gave_up stuck entry", async () => {
     const user = userEvent.setup();
     auth.set("user-a");

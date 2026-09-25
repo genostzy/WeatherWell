@@ -53,6 +53,10 @@ export async function sendEntry(entry: OutboxEntry): Promise<SendOutcome> {
       const body = (await response.json().catch(() => ({}))) as { reason?: unknown };
       return { result: "permanent", reason: typeof body.reason === "string" ? body.reason : undefined };
     }
+    case 503: {
+      const body = (await response.json().catch(() => ({}))) as { reason?: unknown };
+      return typeof body.reason === "string" ? { result: "retry", reason: body.reason } : { result: "retry" };
+    }
     default:
       return { result: "retry" };
   }

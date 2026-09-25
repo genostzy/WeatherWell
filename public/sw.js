@@ -20,7 +20,7 @@
  * CURRENT_CACHES, so a bump is what evicts a bad build from installed devices.
  * Leaving it unchanged is what pins users to a stale app forever.
  */
-const VERSION = "v17";
+const VERSION = "v18";
 
 const SHELL_CACHE = `weatherwell-shell-${VERSION}`;
 const ASSET_CACHE = `weatherwell-assets-${VERSION}`;
@@ -845,7 +845,8 @@ function applyOutcome(entry, outcome, now) {
     }
 
     case "permanent": {
-      const stuckReason = outcome.reason === "too_old" ? "too_old" : "permanent";
+      const stuckReason =
+        outcome.reason === "too_old" || outcome.reason === "too_far" ? outcome.reason : "permanent";
       return Object.assign({}, entry, {
         status: "stuck",
         stuckReason,
@@ -873,6 +874,7 @@ function applyOutcome(entry, outcome, now) {
         attempts,
         status: "pending",
         lastError: outcome.error,
+        waitReason: outcome.reason === "rate_limited" ? "rate_limited" : null,
         nextAttemptAt: new Date(now.getTime() + minutes * 60000).toISOString(),
         updatedAt,
       });
@@ -916,6 +918,11 @@ function outboxOutcomeFromResponse(response) {
           result: "permanent",
           reason: typeof body.reason === "string" ? body.reason : undefined,
         }));
+    case 503:
+      return response
+        .json()
+        .catch(() => ({}))
+        .then((body) => (typeof body.reason === "string" ? { result: "retry", reason: body.reason } : { result: "retry" }));
     default:
       return Promise.resolve({ result: "retry" });
   }

@@ -97,6 +97,11 @@ describe("sendEntry", () => {
     await expect(sendEntry(entry)).resolves.toEqual({ result: "permanent", reason: "unknown_operation" });
   });
 
+  it("maps a 503 that names its reason to retry with that reason", async () => {
+    vi.stubGlobal("fetch", fetchResolving(503, { result: "retry", reason: "rate_limited" }));
+    await expect(sendEntry(entry)).resolves.toEqual({ result: "retry", reason: "rate_limited" });
+  });
+
   it("maps an unexpected status to retry", async () => {
     vi.stubGlobal("fetch", fetchResolving(500, {}));
     await expect(sendEntry(entry)).resolves.toEqual({ result: "retry" });

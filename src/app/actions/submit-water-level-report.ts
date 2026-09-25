@@ -35,6 +35,9 @@ const CHECK_VIOLATION = "23514";
 const FOREIGN_KEY_VIOLATION = "23503";
 /** private.honest_report_time() raises this for a report more than 6 hours old. */
 const REPORT_TOO_OLD = "22023";
+/** private.enforce_report_geofence_and_rate_limit()'s two refusals, in its own words. */
+const TOO_FAR = /too far from the zone/i;
+const RATE_LIMITED = /too many reports for this zone/i;
 
 /**
  * Files a resident's water-level report.
@@ -114,6 +117,16 @@ export async function submitWaterLevelReport(
   // queued indefinitely.
   if (error.code === REPORT_TOO_OLD) {
     return { ok: false, permanent: true, reason: "too_old", error: error.message };
+  }
+
+  // Named, so the phone can say why instead of "This couldn't be accepted".
+  // A position outside the barangay never passes on retry...
+  if (error.code === CHECK_VIOLATION && TOO_FAR.test(error.message)) {
+    return { ok: false, permanent: true, reason: "too_far", error: error.message };
+  }
+  // ...but one report per barangay every 5 minutes does, once the window passes.
+  if (RATE_LIMITED.test(error.message)) {
+    return { ok: false, permanent: false, reason: "rate_limited", error: error.message };
   }
 
   const permanent =

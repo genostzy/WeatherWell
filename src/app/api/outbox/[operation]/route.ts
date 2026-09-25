@@ -140,7 +140,8 @@ export async function POST(
     const result = await run(body.id, body.payload as Record<string, unknown>, madeAt);
     if (result.ok) return reply(200, { result: "delivered" });
     if (result.permanent) return reply(422, { result: "permanent", reason: result.reason ?? result.error });
-    return reply(503, { result: "retry" });
+    // Only a named reason, never the error text: the phone shows why it waits.
+    return reply(503, result.reason ? { result: "retry", reason: result.reason } : { result: "retry" });
   } catch (error) {
     // Every resident write comes through here, and this catch turns any
     // throw into a retry, so without a report a crash on the write path

@@ -12,7 +12,7 @@ export type SendOutcome =
   | { result: "held" }
   | { result: "signed_out" }
   | { result: "permanent"; reason?: string }
-  | { result: "retry"; error?: string };
+  | { result: "retry"; error?: string; reason?: string };
 
 /**
  * Minutes to wait before attempts 1 through 5 respectively; attempts beyond
@@ -130,7 +130,8 @@ export function applyOutcome(entry: OutboxEntry, outcome: SendOutcome, now: Date
     }
 
     case "permanent": {
-      const stuckReason: StuckReason = outcome.reason === "too_old" ? "too_old" : "permanent";
+      const stuckReason: StuckReason =
+        outcome.reason === "too_old" || outcome.reason === "too_far" ? outcome.reason : "permanent";
       return {
         ...entry,
         status: "stuck",
@@ -162,6 +163,7 @@ export function applyOutcome(entry: OutboxEntry, outcome: SendOutcome, now: Date
         attempts,
         status: "pending",
         lastError: outcome.error,
+        waitReason: outcome.reason === "rate_limited" ? "rate_limited" : null,
         nextAttemptAt: new Date(now.getTime() + minutes * 60_000).toISOString(),
         updatedAt,
       };

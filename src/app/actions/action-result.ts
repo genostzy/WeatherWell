@@ -19,4 +19,4 @@
  */
 export type ActionResult =
   | { ok: true }
-  | { ok: false; permanent: boolean; error: string; reason?: "too_old" };
+  | { ok: false; permanent: boolean; error: string; reason?: "too_old" | "too_far" | "rate_limited" };

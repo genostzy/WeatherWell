@@ -1146,6 +1146,18 @@ describe("service worker outbox drain", () => {
     expect(byId.get("e-401")).toMatchObject({ status: "pending", attempts: 1 });
   });
 
+  it("keeps a 503's reason, so a rate-limited report reads as waiting, not as offline", async () => {
+    await seedOutbox([outboxEntry("e-rate-limited", { queuedAt: "2026-09-16T11:59:00.000Z" })]);
+    const { listeners } = loadServiceWorker({
+      fetch: async () => response(JSON.stringify({ result: "retry", reason: "rate_limited" }), 503),
+    });
+
+    await expect(fireOutboxSync(listeners)).rejects.toThrow();
+
+    const [entry] = await idbGetAll();
+    expect(entry).toMatchObject({ status: "pending", attempts: 1, waitReason: "rate_limited" });
+  });
+
   it("sends the device's clock at send time as sentAt, next to the entry's own queuedAt (R6)", async () => {
     await seedOutbox([outboxEntry("e-sent-at", { queuedAt: "2026-09-16T11:20:00.000Z" })]);
 

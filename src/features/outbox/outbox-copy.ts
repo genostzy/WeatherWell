@@ -50,6 +50,16 @@ const GAVE_UP_REASON: LocalizedText = {
   en: "Tried many times without success.",
   fil: "Sinubukan nang maraming beses nang walang tagumpay.",
 };
+/** Not from the spec table: the geofence's refusal, which read as "This couldn't be accepted." */
+const TOO_FAR_REASON: LocalizedText = {
+  en: "Your location is outside this barangay. Reports only count from inside it — if you've moved, change your barangay.",
+  fil: "Nasa labas ka ng barangay na ito. Tinatanggap lang ang ulat mula sa loob nito — kung lumipat ka, palitan ang iyong barangay.",
+};
+/** Not from the spec table: the 5-minute limit, which read as "Will send when online" to a resident who was online. */
+const RATE_LIMITED: LocalizedText = {
+  en: "Waiting: one report per barangay every 5 minutes. It will send by itself.",
+  fil: "Naghihintay: isang ulat bawat barangay kada 5 minuto. Kusa itong maipapadala.",
+};
 
 /**
  * Not from the spec table. `stuckReason: "permanent"` (design doc
@@ -136,11 +146,12 @@ export function entryDescription(entry: OutboxEntry, zones: Zone[], lang: Langua
 function stuckReasonText(entry: OutboxEntry, lang: LanguageCode): string {
   if (entry.stuckReason === "too_old") return t(TOO_OLD_REASON, lang);
   if (entry.stuckReason === "gave_up") return t(GAVE_UP_REASON, lang);
+  if (entry.stuckReason === "too_far") return t(TOO_FAR_REASON, lang);
   return t(NOT_ACCEPTED, lang);
 }
 
-/** "Will send when online", or "Couldn't send: {reason}" for a stuck entry. */
+/** "Will send when online" (or why else it waits), or "Couldn't send: {reason}" for a stuck entry. */
 export function entryStatusText(entry: OutboxEntry, lang: LanguageCode): string {
-  if (entry.status !== "stuck") return t(WILL_SEND_WHEN_ONLINE, lang);
+  if (entry.status !== "stuck") return t(entry.waitReason === "rate_limited" ? RATE_LIMITED : WILL_SEND_WHEN_ONLINE, lang);
   return t(COULD_NOT_SEND_REASON, lang).replace("{reason}", stuckReasonText(entry, lang));
 }

@@ -205,6 +205,44 @@ describe("submitWaterLevelReport", () => {
     });
   });
 
+  it("names a report from outside the barangay too_far, so the resident is told why it was refused", async () => {
+    // The geofence trigger's refusal (check_violation). Seen on production 2026-09-25 as "This couldn't be accepted."
+    getClaims.mockResolvedValue({ data: { claims: { sub: "user-1" } } });
+    insert.mockResolvedValue({
+      error: { code: "23514", message: "Report location is too far from the zone being reported." },
+    });
+
+    const result = await submitWaterLevelReport({
+      id: "11111111-1111-1111-1111-111111111111",
+      zoneId: "zone-1",
+      depthLevel: "knee",
+      lat: 18.2,
+      lng: 120.6,
+    });
+
+    expect(result).toMatchObject({ ok: false, permanent: true, reason: "too_far" });
+  });
+
+  it("keeps a report sent within 5 minutes of the last one queued, and names it rate_limited", async () => {
+    // The rate-limit trigger's refusal (raise_exception). The outbox sends it once the window passes;
+    // the reason lets the phone say so instead of "Will send when online".
+    getClaims.mockResolvedValue({ data: { claims: { sub: "user-1" } } });
+    insert.mockResolvedValue({
+      error: {
+        code: "P0001",
+        message: "Too many reports for this zone from this device — wait a few minutes before reporting again.",
+      },
+    });
+
+    const result = await submitWaterLevelReport({
+      id: "11111111-1111-1111-1111-111111111111",
+      zoneId: "zone-1",
+      depthLevel: "knee",
+    });
+
+    expect(result).toMatchObject({ ok: false, permanent: false, reason: "rate_limited" });
+  });
+
   it("evaluates the alert threshold right after a report is saved, without making the resident wait", async () => {
     // The scheduled engine ran at best every 3 hours; flood water does not wait.
     scheduled.length = 0;
