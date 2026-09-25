@@ -3231,4 +3231,27 @@ begin
   raise notice 'ok M1-M6, N1-N5: municipal officials manage their town; updates flow both ways';
 end $$;
 
+-- S1-S3 (2026-09-25): Supabase starts the scheduled GitHub workflows, since
+-- GitHub delays its own schedules by hours.
+do $$
+begin
+  -- S1: both jobs run at the workflows' own cadence.
+  if (select count(*) from cron.job where (jobname, schedule, command) in (
+        ('dispatch-monitor', '*/15 * * * *', 'select private.dispatch_workflow(''monitor.yml'')'),
+        ('dispatch-threshold-check', '0 */3 * * *', 'select private.dispatch_workflow(''threshold-check.yml'')'))) <> 2 then
+    raise exception using errcode = 'TSTFL', message = 'S1: the two dispatch jobs are not scheduled';
+  end if;
+  -- S2: no client can start a workflow.
+  if has_function_privilege('anon', 'private.dispatch_workflow(text)', 'execute')
+     or has_function_privilege('authenticated', 'private.dispatch_workflow(text)', 'execute') then
+    raise exception using errcode = 'TSTFL', message = 'S2: a client can start a workflow';
+  end if;
+  -- S3: without a token in Vault it sends nothing (this database has none).
+  perform private.dispatch_workflow('monitor.yml');
+  if exists (select 1 from net.http_request_queue) then
+    raise exception using errcode = 'TSTFL', message = 'S3: a request went out without a token';
+  end if;
+  raise notice 'ok S1-S3: Supabase starts the scheduled workflows';
+end $$;
+
 rollback;
