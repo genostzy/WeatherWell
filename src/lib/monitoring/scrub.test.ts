@@ -189,3 +189,31 @@ describe("scrub — privacy hardening (review round 1)", () => {
     expect(r.message).toContain("[token]");
   });
 });
+
+describe("scrub — code the app did not ship", () => {
+  const thrownAt = (stack: string) => Object.assign(new TypeError("boom"), { stack });
+
+  it("drops an error thrown inside a Chrome extension's script", () => {
+    // Seen on production 2026-09-25: three a second, counted as app crashes, failing the monitor.
+    const stack = [
+      "TypeError: Cannot read properties of undefined (reading 'M_ID')",
+      "    at Y (chrome-extension://abcdefghijklmnopabcdefghijklmnop/executors/200.js:1:761)",
+      "    at E (chrome-extension://abcdefghijklmnopabcdefghijklmnop/executors/200.js:1:1442)",
+    ].join("\n");
+    expect(scrub(thrownAt(stack), "/")).toBeNull();
+  });
+
+  it("drops a Firefox or Safari extension's error, whose frames read fn@url", () => {
+    expect(scrub(thrownAt("Y@moz-extension://1b2c3d4e/content.js:1:761\nE@moz-extension://1b2c3d4e/content.js:1:1442"), "/")).toBeNull();
+    expect(scrub(thrownAt("Y@safari-web-extension://1b2c3d4e/content.js:1:761"), "/")).toBeNull();
+  });
+
+  it("still reports the app's own error when an extension frame is further down the stack", () => {
+    const stack = [
+      "TypeError: boom",
+      "    at render (https://weatherwell.vercel.app/_next/static/chunks/app.js:1:10)",
+      "    at wrapped (chrome-extension://abcdefghijklmnopabcdefghijklmnop/inject.js:1:5)",
+    ].join("\n");
+    expect(scrub(thrownAt(stack), "/")).not.toBeNull();
+  });
+});

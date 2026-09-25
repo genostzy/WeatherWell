@@ -3,7 +3,8 @@
  * or the server (RA 10173). A report says what broke and where in the code —
  * never who it happened to, where they were, or what they had submitted.
  * Returns null for failures that are expected, not bugs: refusals the
- * database is designed to give, being offline, and Next's control-flow throws.
+ * database is designed to give, being offline, Next's control-flow throws,
+ * and errors thrown inside a browser extension's own script.
  *
  * Privacy beats debuggability throughout `redact()` below: every rule is
  * deliberately broad, and some (the "key" trigger word, the 8+ hex-char rule)
@@ -28,6 +29,15 @@ const DROP_PATTERNS = [
   /NEXT_REDIRECT/,
   /NEXT_NOT_FOUND/,
 ];
+
+// A browser extension's own script: code the app never shipped, so its
+// crashes are not the app's to fix, and one noisy extension fails the monitor.
+const EXTENSION_URL = /\b(?:chrome|moz|safari|safari-web|ms-browser)-extension:\/\//;
+
+/** The frame that threw: V8 writes "    at fn (url:1:2)", Gecko and WebKit "fn@url:1:2". */
+function throwingFrame(stack: string): string {
+  return stack.split("\n").find((line) => /^\s*at\s/.test(line) || /@\S*:\d+:\d+$/.test(line.trim())) ?? "";
+}
 
 // Keys whose value is a secret, however it is joined to the key
 // ("token=x", "token: x", "Bearer x"). "key" and "code" are deliberately
@@ -121,6 +131,7 @@ export function scrub(error: unknown, route: string): ScrubbedReport | null {
   const rawMessage = isError ? error.message : String(error);
   const name = isError ? error.name : "";
   if (name === "AbortError" || DROP_PATTERNS.some((p) => p.test(rawMessage))) return null;
+  if (isError && error.stack && EXTENSION_URL.test(throwingFrame(error.stack))) return null;
 
   const message = redact(rawMessage);
   const stack = isError && error.stack ? redact(error.stack) : null;
