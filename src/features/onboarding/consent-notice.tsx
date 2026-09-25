@@ -35,6 +35,17 @@ export const CONSENT_ITEMS: ConsentItem[] = [
       fil: "Piliin ang iyong barangay mula sa listahan. Makakarating pa rin sa inyong barangay ang iyong mga ulat, pero kung walang lokasyon, hindi ito bibilangin para sa awtomatikong paalala.",
     },
   },
+  {
+    id: "anonymousAccount",
+    text: {
+      en: "The first time you send a report, a pin or a check-in, or turn on alerts, WeatherWell gives this phone an anonymous account: a random ID with no name, email or number. It keeps your reports apart from other people's, and lets the database check them and weigh them by how this phone's earlier reports turned out.",
+      fil: "Sa unang pagpapadala mo ng ulat, pin o check-in, o pag-on ng alerto, bibigyan ng WeatherWell ang teleponong ito ng account na walang pangalan: isang random na ID na walang pangalan, email o numero. Pinapanatili nitong hiwalay ang iyong mga ulat sa ulat ng iba, at hinahayaan nitong masuri at matimbang ng database ang mga ito ayon sa kinalabasan ng mga naunang ulat ng teleponong ito.",
+    },
+    ifYouSayNo: {
+      en: "Don't send reports, pins or check-ins, or turn on alerts. You still see every alert when you open the app.",
+      fil: "Huwag magpadala ng ulat, pin o check-in, o mag-on ng alerto. Makikita mo pa rin ang bawat alerto tuwing bubuksan mo ang app.",
+    },
+  },
   // This used to promise SMS alerts from a phone number the app never asked
   // for and could not send to. It now says what really happens.
   {

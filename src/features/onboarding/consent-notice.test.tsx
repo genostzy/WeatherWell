@@ -14,6 +14,15 @@ describe("ConsentNotice", () => {
     expect(screen.queryByText(/your phone number/i)).not.toBeInTheDocument();
   });
 
+  it("discloses the anonymous account a report, pin, check-in or alerts gives this phone (privacy review)", () => {
+    render(<ConsentNotice onAccept={() => {}} />);
+    const item = screen.getByText(/anonymous account/i);
+    expect(item).toHaveTextContent(/no name, email or number/i);
+    expect(item).toHaveTextContent(/report, a pin or a check-in, or turn on alerts/i);
+    // It can be avoided, so it sits under "You choose" with what saying no costs.
+    expect(screen.getByText(/don't send reports, pins or check-ins/i)).toBeInTheDocument();
+  });
+
   it("cites the Data Privacy Act so the legal basis is visible", () => {
     render(<ConsentNotice onAccept={() => {}} />);
     expect(screen.getByText(/RA 10173/i)).toBeInTheDocument();

@@ -2,15 +2,47 @@ import { useSyncExternalStore } from "react";
 
 export const ONBOARDED_KEY = "weatherwell.onboarded";
 const SELECTED_ZONE_KEY = "weatherwell.selectedZoneId";
+const CONSENT_KEY = "weatherwell.consent";
+
+/**
+ * The consent notice's version: the day its text last changed what is
+ * collected (CONSENT_ITEMS). A resident who accepted an older one counts as
+ * not onboarded, so the gate shows them the new one: RA 10173 consent is to
+ * what is collected now, not to what used to be.
+ */
+export const CONSENT_VERSION = "2026-09-25";
+
+function read(key: string): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
 
 /** Browser-only; safe to call from effects. Returns false during SSR. */
 export function hasOnboarded(): boolean {
-  if (typeof window === "undefined") return false;
+  return read(ONBOARDED_KEY) === "true" && hasConsented();
+}
+
+/** Accepted the current consent notice on this device. */
+export function hasConsented(): boolean {
+  return read(CONSENT_KEY) === CONSENT_VERSION;
+}
+
+export function markConsented(): void {
+  if (typeof window === "undefined") return;
   try {
-    return window.localStorage.getItem(ONBOARDED_KEY) === "true";
+    window.localStorage.setItem(CONSENT_KEY, CONSENT_VERSION);
   } catch {
-    return false;
+    // Private-mode or blocked storage: the user simply sees the notice again.
   }
+}
+
+/** Picked a barangay under an earlier notice: accepting the new one is all that is left. */
+export function hasFinishedSetupBefore(): boolean {
+  return read(ONBOARDED_KEY) === "true" && getSelectedZoneId() !== null;
 }
 
 /**

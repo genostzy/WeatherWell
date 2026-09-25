@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render } from "@testing-library/react";
 import { OnboardingGate } from "./onboarding-gate";
-import { ONBOARDED_KEY } from "./onboarding-storage";
+import { ONBOARDED_KEY, markConsented } from "./onboarding-storage";
 
 const { replace } = vi.hoisted(() => ({ replace: vi.fn() }));
 vi.mock("next/navigation", () => ({
@@ -21,6 +21,7 @@ describe("OnboardingGate", () => {
 
   it("leaves an already-onboarded visitor alone", () => {
     window.localStorage.setItem(ONBOARDED_KEY, "true");
+    markConsented();
     render(<OnboardingGate />);
     expect(replace).not.toHaveBeenCalled();
   });

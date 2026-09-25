@@ -5,7 +5,13 @@ import OnboardingPage from "@/app/onboarding/page";
 import Home from "@/app/page";
 import { renderWithData, FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
 import { mockZoneApis } from "@/test-utils/mock-zone-apis";
-import { ONBOARDED_KEY } from "@/features/onboarding/onboarding-storage";
+import {
+  ONBOARDED_KEY,
+  getSelectedZoneId,
+  hasOnboarded,
+  markConsented,
+  setSelectedZoneId,
+} from "@/features/onboarding/onboarding-storage";
 
 const { replace } = vi.hoisted(() => ({ replace: vi.fn() }));
 vi.mock("next/navigation", () => ({
@@ -80,11 +86,26 @@ describe("onboarding → home zone threading", () => {
       // skeleton instead, which is a different test (see the flow tests
       // above and OnboardingGate's own test file).
       window.localStorage.setItem(ONBOARDED_KEY, "true");
+      markConsented();
       renderWithData(<Home />);
 
       const zoneNames = screen.getAllByText(new RegExp(FIXTURE_REFERENCE_DATA.zones.map((z) => z.name).join("|")));
       expect(zoneNames[0]).toHaveTextContent(FIXTURE_REFERENCE_DATA.zones[0].name);
     });
+  });
+
+  it("sends a returning resident who accepts a changed notice straight home, keeping their barangay", async () => {
+    // Set up under an older notice: the gate brings them back here for the new one.
+    window.localStorage.setItem(ONBOARDED_KEY, "true");
+    setSelectedZoneId(FIXTURE_REFERENCE_DATA.zones[1].id);
+    expect(hasOnboarded()).toBe(false);
+
+    renderWithData(<OnboardingPage />);
+    await userEvent.click(screen.getByRole("button", { name: /i understand/i }));
+
+    expect(replace).toHaveBeenCalledWith("/");
+    expect(hasOnboarded()).toBe(true);
+    expect(getSelectedZoneId()).toBe(FIXTURE_REFERENCE_DATA.zones[1].id);
   });
 
   it("does not send an onboarded visitor back to onboarding", async () => {

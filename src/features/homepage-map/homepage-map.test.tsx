@@ -4,6 +4,7 @@ import { screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HomepageMap } from "./homepage-map";
 import { renderWithData, FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
+import { markConsented } from "@/features/onboarding/onboarding-storage";
 import type { Zone } from "@/lib/types";
 
 /**
@@ -65,6 +66,8 @@ describe("HomepageMap", () => {
         clearWatch: vi.fn(),
       },
     });
+    // The home screen only mounts after the consent notice, which the position needs.
+    markConsented();
 
     renderWithData(<HomepageMap zones={FIXTURE_REFERENCE_DATA.zones} />, { lang: "fil" });
 

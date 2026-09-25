@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { hasConsented } from "@/features/onboarding/onboarding-storage";
 
 /**
  * Low-frequency/low-accuracy watch per PRD Non-Functional Requirements
@@ -14,6 +15,8 @@ export function useLivePosition(): { lat: number; lng: number } | null {
 
   useEffect(() => {
     if (typeof navigator === "undefined" || !navigator.geolocation) return;
+    // Never before the consent notice: /report opened from a link used to ask first.
+    if (!hasConsented()) return;
 
     const watchId = navigator.geolocation.watchPosition(
       (pos) => setPosition({ lat: pos.coords.latitude, lng: pos.coords.longitude }),

@@ -4,7 +4,7 @@ import { ReferenceDataProvider, FETCH_TIMEOUT_MS } from "./provider";
 import { useZones, usePois, useHazardsForZone } from "./use-reference-data";
 import { useAlerts } from "@/lib/alerts-store";
 import { LanguageProvider } from "@/features/i18n/language-provider";
-import { ONBOARDED_KEY } from "@/features/onboarding/onboarding-storage";
+import { ONBOARDED_KEY, markConsented } from "@/features/onboarding/onboarding-storage";
 import type { AlertRecord } from "@/lib/types";
 
 const { mockUsePathname } = vi.hoisted(() => ({ mockUsePathname: vi.fn(() => "/") }));
@@ -82,6 +82,7 @@ beforeEach(() => {
   // so bypassGate stays false for them. The bypassGate describe block below
   // clears this itself for the cases that need "not yet onboarded".
   window.localStorage.setItem(ONBOARDED_KEY, "true");
+  markConsented();
 });
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -334,6 +335,7 @@ describe("ReferenceDataProvider's bypassGate", () => {
   it("does not bypass on / once the visitor is confirmed onboarded", () => {
     mockUsePathname.mockReturnValue("/");
     window.localStorage.setItem(ONBOARDED_KEY, "true");
+    markConsented();
     (fetch as ReturnType<typeof vi.fn>).mockReturnValue(new Promise(() => {}));
     renderBypassable();
     expect(screen.queryByText("plain content")).not.toBeInTheDocument();

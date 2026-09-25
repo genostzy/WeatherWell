@@ -6,6 +6,8 @@ import { ConsentNotice } from "@/features/onboarding/consent-notice";
 import { ZonePicker } from "@/features/onboarding/zone-picker";
 import { InstallStep } from "@/features/onboarding/install-step";
 import {
+  hasFinishedSetupBefore,
+  markConsented,
   markOnboarded,
   setSelectedZoneId,
 } from "@/features/onboarding/onboarding-storage";
@@ -19,7 +21,16 @@ export default function OnboardingPage() {
 
   return (
     <main className="flex flex-1 flex-col items-center justify-center gap-8 p-4 sm:p-6 lg:p-8">
-      {step === "consent" && <ConsentNotice onAccept={() => setStep("zone")} />}
+      {step === "consent" && (
+        <ConsentNotice
+          onAccept={() => {
+            markConsented();
+            // Set up under an older notice: they keep their barangay.
+            if (hasFinishedSetupBefore()) router.replace("/");
+            else setStep("zone");
+          }}
+        />
+      )}
 
       {step === "zone" && (
         <ZonePicker
