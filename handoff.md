@@ -2,8 +2,8 @@
 
 ## State
 
-- Branch `mvp`, cut from `v1` at `912a5cb`, is pushed to GitHub. CI is green on `a8c6cb4` ([run #106](https://github.com/genostzy/WeatherWell/actions/runs/36133180076)): both the `check` job (lint, typecheck, tests, knip, build) and the `database` job (rls, abuse, accounts) pass.
-- Both migrations are applied to the live database (25 September) as `20260925123429_reputation_and_identity_age` and `20260925123519_password_recovery_and_email_alerts`. The files are renamed to match. Types generated from live match `database.types.ts`, and Supabase's security advisor raised nothing new beyond the existing pattern for official RPCs.
+- Branch `mvp`, cut from `v1` at `912a5cb`, is pushed to GitHub. CI is green on `a21a213` ([run #108](https://github.com/genostzy/WeatherWell/actions/runs/36136540730)): both the `check` job (lint, typecheck, tests, knip, build) and the `database` job (rls, abuse, accounts) pass.
+- Both migrations are applied to the live database (25 September) as `20260925123429_reputation_and_identity_age` and `20260925123519_password_recovery_and_email_alerts`. The files are renamed to match, and the live migration list now matches `supabase/migrations` one for one. Types generated from live match `database.types.ts`, and Supabase's security advisor raised nothing new beyond the existing pattern for official RPCs.
 - Production (`v1`) now runs the new engine rules, because it shares the database: the day-old reporter gate, layer 6 weights, the `received_at` rate limit and the per-reporter outlier consensus. Until `mvp` is merged, `v1`'s Reject button still does a plain clear, which records no verdict.
 - `v1` and `main` code are unchanged. Nothing was changed in Vercel or Google.
 
@@ -17,6 +17,7 @@
 | `073e22a` | Sign-up without confirmation, `/forgot-password`, Settings cards, email alerts, push on official alert changes |
 | `eaa7869` | `scripts/reset-test-accounts.ts`; PRD Setup steps 8 and 9 |
 | `a8c6cb4` | This handoff |
+| `a21a213` | Migration files renamed to their live versions |
 
 ## Owner's decisions (25 September)
 
@@ -71,7 +72,7 @@
 
 - App: `npm run lint`, `npm run typecheck`, `npm test`, `npm run knip`, `npm run build`.
 - Database: start Supabase the way CI does, then run `helpers.sql`, `reference-tables.sql`, `rls.sql`, `abuse.sql` and `accounts.sql` with `psql` (see `.github/workflows/ci.yml`). In the cloud sandbox Docker Hub was rate-limited; pulling the images from `mirror.gcr.io` and retagging them worked.
-- Last run, 25 September, both locally and in CI run #106:
+- Last run, 25 September, both locally and in CI run #108:
   - 1,596 app tests pass.
   - Database checks: rls 207, abuse 13, accounts 8, all passing.
   - Lint, typecheck, knip and build are clean.
