@@ -70,6 +70,9 @@ beyond the project's own.
 4. Residents see the alert with its age, whether an official confirmed it,
    read-aloud, share, and one-tap SMS to up to 5 saved neighbours. Forwarded
    links (`/a?d=…`) render as plain HTML with JavaScript off.
+5. Residents who turned alerts on get a push when an advisory is raised and
+   whenever an official sets, changes, lifts or rejects their barangay's
+   alert; those signed in with Google can also turn on email alerts.
 
 ## Getting started
 
@@ -87,6 +90,8 @@ npm run dev
 | `SUPABASE_SERVICE_ROLE_KEY` | Server-only: alert engine, push, cron jobs |
 | `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Web push (generate with `npx tsx scripts/generate-vapid-keys.ts`) |
 | `CRON_SECRET` | Guards the cron routes (also a GitHub Actions secret) |
+| `GMAIL_USER`, `GMAIL_APP_PASSWORD` | Email alerts, sent from WeatherWell's own Gmail account (PRD Setup step 8) |
+| `APP_URL` | Optional: where links in emails point (defaults to production) |
 | `OSRM_BASE_URL` | Optional routing server (defaults to the public one) |
 
 Then open http://localhost:3000. The first visit runs onboarding.
@@ -102,6 +107,7 @@ Then open http://localhost:3000. The first visit runs onboarding.
 | `npm test` | Vitest, single run |
 | `npm run knip` | Unused files, exports and dependencies |
 | `npm run generate-data` | Rebuild `public/data/reference-data.json` from the database |
+| `npx tsx scripts/reset-test-accounts.ts` | Replace the test accounts (shows the plan; `--yes` does it) |
 
 ## Screens
 
@@ -109,6 +115,8 @@ Then open http://localhost:3000. The first visit runs onboarding.
 | --- | --- | --- |
 | `/` | Resident | Status, alert details, live weather and river outlook, report, map |
 | `/onboarding` | Resident | Consent and barangay selection |
+| `/forgot-password` | Resident | New password after answering two security questions |
+| `/unsubscribe` | Anyone | Stops email alerts, from the link in an email |
 | `/map` | Resident | Multi-barangay overview |
 | `/report` | Resident | Water-level report (ankle / knee / waist / neck) |
 | `/evacuation` | Resident | Instructions, likely sites, "How high am I?", emergency card, neighbours to text, check-in |
@@ -129,7 +137,7 @@ react-leaflet, Supabase for data and auth.
 src/app/         Routes, API routes, server actions
 src/features/    Feature modules
 src/lib/         Domain logic, data access, stores
-supabase/        Migrations (match the live history), tests/rls.sql, tests/abuse.sql
+supabase/        Migrations (match the live history), tests/ (RLS, abuse, accounts)
 public/sw.js     Service worker: offline shell, caches, outbox drain
 ```
 
@@ -160,7 +168,9 @@ Conventions worth knowing before editing:
   RLS, the alert engine, trust weights, centre confirmation, push endpoints,
   and the rate limit and geofence. Then
   [supabase/tests/abuse.sql](supabase/tests/abuse.sql): one documented attack
-  per anti-abuse layer, and what stops it.
+  per anti-abuse layer, and what stops it. And
+  [supabase/tests/accounts.sql](supabase/tests/accounts.sql): password
+  recovery and email alerts.
 
 ## Deployment
 

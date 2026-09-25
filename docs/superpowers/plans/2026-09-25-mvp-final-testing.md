@@ -6,8 +6,8 @@
 
 ## Global constraints
 
-- **The migration on this branch is not applied to the live database.** Before merging, apply `supabase/migrations/20260925100000_reputation_and_identity_age.sql` with the Supabase MCP `apply_migration`, then rename the file to the live version (the M2 rule in `2026-09-23-stop-the-bleeding.md`). It only adds things, so it can go live before the app code.
-- Until it is applied, the `mvp` Vercel preview cannot read reports (`/api/reports` selects `reporter_established`) or reject advisories. Production is unaffected.
+- **The migrations on this branch are not applied to the live database.** Before merging, apply `20260925100000_reputation_and_identity_age.sql` and then `20260925120000_password_recovery_and_email_alerts.sql` with the Supabase MCP `apply_migration`, and rename each file to its live version (the M2 rule in `2026-09-23-stop-the-bleeding.md`). They only add things, so they can go live before the app code.
+- Until they are applied, the `mvp` Vercel preview cannot read reports (`/api/reports` selects `reporter_established`), reject advisories, save security questions or email anyone. Production is unaffected.
 - Every database rule is tested in `supabase/tests/`: `rls.sql` for access and the engine, `abuse.sql` for attacks. Both run in CI against a database rebuilt from the migrations.
 
 ## Status by exit criterion
@@ -31,6 +31,13 @@ The other Stage 4 items: reputation scoring, outlier downweighting and device-fi
 - [x] **Layer 4 hole found by the suite.** The outlier consensus counted reports, not reporters, so one device repeating "dry" could push real flood reports out. It now takes each reporter's latest report, from established reporters only.
 - [x] **Suite:** `supabase/tests/abuse.sql`. Blocks A1–A5 (layers 1–5), H1–H3 (identity age) and R1–R6 (layer 6). Each block was checked against the old code and fails there. Its header lists the known limits nothing in the database can stop.
 - [x] **App:** Reject is a recorded rejection, and the inbox warns what it costs. `countsTowardAlert` leaves out weight-0 devices, and the officials' threshold badge needs an established reporter.
+
+### Owner request, 25 September: accounts and email — built
+
+- [x] Password sign-up without email confirmation: the account signs in at once, once "Confirm email" is off in Supabase (PRD Setup, the note after step 6).
+- [x] Forgot password by two security questions, residents only, answers stored as bcrypt hashes, 5 tries an hour; officials get a new password from an admin at `/admin/officials`.
+- [x] Opt-in email alerts for Google accounts, sent from a Gmail app password (PRD Setup step 8), with one-click unsubscribe. Residents now also hear, by push and email, when an official sets, changes, lifts or rejects their barangay's alert.
+- [x] `scripts/reset-test-accounts.ts` replaces the test accounts (PRD Setup step 9).
 
 ### Task 2: Refresh the PRD's Build Status
 
