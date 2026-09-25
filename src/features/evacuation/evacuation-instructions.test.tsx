@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { EvacuationInstructions } from "./evacuation-instructions";
 import { FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
 
@@ -10,6 +10,30 @@ describe("EvacuationInstructions", () => {
     render(<EvacuationInstructions zone={zone} />);
     expect(screen.getByText(zone.evacuationCenterName)).toBeInTheDocument();
     expect(screen.getByText(zone.evacuationRouteText.en)).toBeInTheDocument();
+  });
+
+  it("reads the instructions aloud: where to go, how to get there, who to call (Stage 4 Task 5)", () => {
+    const speak = vi.fn();
+    vi.stubGlobal("speechSynthesis", { speak, cancel: vi.fn(), getVoices: () => [] });
+    vi.stubGlobal(
+      "SpeechSynthesisUtterance",
+      class {
+        text: string;
+        lang = "";
+        constructor(value: string) {
+          this.text = value;
+        }
+      }
+    );
+    render(<EvacuationInstructions zone={zone} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /read aloud/i }));
+
+    const spoken = speak.mock.calls[0][0].text as string;
+    expect(spoken).toContain(zone.evacuationCenterName);
+    expect(spoken).toContain(zone.evacuationRouteText.en);
+    expect(spoken).toMatch(/call/i);
+    vi.unstubAllGlobals();
   });
 
   it("pairs each instruction with a pictogram cue, never text alone", () => {

@@ -3,6 +3,7 @@
 import { Building2, Navigation, Phone, Users } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ReadAloudButton } from "@/features/alerts/read-aloud-button";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { CENTER_STATUS_CLASS, CENTER_STATUS_LABEL, resolveEffectiveCenterStatus } from "@/lib/center-status";
@@ -25,10 +26,18 @@ export function EvacuationInstructions({ zone }: { zone: Zone }) {
   const occupancy = zone.currentOccupancy;
   const centerStatus = resolveEffectiveCenterStatus(zone.centerStatus, zone.evacuationCenterCapacity, occupancy);
   const realCenter = hasRealEvacuationCenter(zone);
+  // What the card says, in the order it says it, for a resident who can't read it.
+  const spoken = (language: "en" | "fil") =>
+    [
+      `${t(GO_HERE, language)}: ${realCenter ? zone.evacuationCenterName : t(NO_VERIFIED_CENTER, language)}`,
+      `${t(HOW_TO_GET_THERE, language)}: ${t(zone.evacuationRouteText, language)}`,
+      hasRealHotline(zone) ? `${t(CALL, language)} ${zone.hotlineNumber}` : t(CALL_911, language),
+    ].join(". ");
 
   return (
     <Card className="w-full max-w-md">
       <CardContent className="space-y-6 pt-6">
+        <ReadAloudButton text={{ en: spoken("en"), fil: spoken("fil") }} lang={lang} />
         <div className="flex items-start gap-4">
           <Building2
             data-testid="icon-evacuation-center"
