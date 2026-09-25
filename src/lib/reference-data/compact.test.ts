@@ -58,9 +58,27 @@ describe("compact reference data", () => {
     expect(expandReferenceData(raw).zones).toEqual(DATA.zones);
   });
 
-  it("stores a placeholder zone without its default fields", () => {
+  it("stores a placeholder zone as a bare list: code, short name, town, position (half the old file)", () => {
     const [compact] = compactReferenceData(DATA).zones;
-    expect(Object.keys(compact).sort()).toEqual(["id", "lat", "lng", "name", "place"]);
+    expect(compact).toEqual(["0102923008", "Subec", 0, 17.5808, 120.3497]);
+  });
+
+  it("keeps an id or a name that the pattern cannot rebuild", () => {
+    const odd = { ...placeholder, id: "zone-x", name: "Poblacion (Ward 1)" };
+    const raw = JSON.parse(JSON.stringify(compactReferenceData({ ...DATA, zones: [odd] })));
+    expect(expandReferenceData(raw).zones).toEqual([odd]);
+  });
+
+  it("still reads format 2, which phones may have cached", () => {
+    const format2 = {
+      format: 2,
+      zones: [{ id: placeholder.id, name: placeholder.name, place: 0, lat: placeholder.lat, lng: placeholder.lng }],
+      places: [[placeholder.municipalityName, placeholder.provinceName]],
+      routes: [ROUTE],
+      pois: [],
+      hazards: {},
+    };
+    expect(expandReferenceData(format2 as never).zones).toEqual([placeholder]);
   });
 
   it("drops unknown hazard levels, which read back as unknown anyway", () => {

@@ -65,3 +65,26 @@ describe("ZoneMap", () => {
     expect(screen.getByText(firstZone.name)).toBeInTheDocument();
   });
 });
+
+describe("ZoneMap order (it opened on Adams, Ilocos Norte, for everyone)", () => {
+  it("lists your barangay, then barangays under alert, then the rest of your town, then the others", () => {
+    const [nilombot, mangaldan, manaoag, santaBarbara] = FIXTURE_REFERENCE_DATA.zones;
+    const neighbour = { ...nilombot, id: "zone-9", psgcBarangayCode: "0105528099", name: "Barangay Apaya, Mapandan" };
+    window.localStorage.setItem("weatherwell.selectedZoneId", nilombot.id);
+    const zones = [mangaldan, manaoag, santaBarbara, neighbour, nilombot];
+    const { container } = renderWithData(<ZoneMap zones={zones} />, {
+      data: { zones },
+      alerts: [
+        {
+          id: "a", zoneId: santaBarbara.id, severity: "red", message: { en: "x", fil: "x" }, source: "manual",
+          confidence: "validated", issuedAt: new Date().toISOString(), isActive: true,
+        },
+      ],
+    });
+    const order = [...container.querySelectorAll('[data-testid="zone-region"]')].map((el) =>
+      zones.find((z) => el.textContent?.includes(z.name))?.id
+    );
+    expect(order).toEqual([nilombot.id, santaBarbara.id, neighbour.id, manaoag.id, mangaldan.id]);
+    window.localStorage.clear();
+  });
+});

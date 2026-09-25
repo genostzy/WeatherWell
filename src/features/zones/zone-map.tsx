@@ -16,6 +16,7 @@ import { t } from "@/lib/i18n";
 import { getZoneStatus, getZoneStatusColor, ZONE_STATUS_LABEL, type ZoneStatus } from "@/lib/zone-status";
 import { CENTER_STATUS_LABEL, CENTER_STATUS_CLASS, resolveEffectiveCenterStatus } from "@/lib/center-status";
 import { useAlerts } from "@/lib/alerts-store";
+import { SEVERITY_ORDER } from "@/lib/severity";
 import { hasRealEvacuationCenter } from "@/lib/zone-data-quality";
 import type { LanguageCode, LocalizedText, Zone } from "@/lib/types";
 
@@ -74,8 +75,22 @@ export function ZoneMap({ zones }: { zones: Zone[] }) {
           z.provinceName.toLowerCase().includes(q)
       );
     }
-    return list;
-  }, [zones, statusFilter, searchQuery, alertMap]);
+    // Your barangay first, then any under alert (most severe first), then
+    // the rest of your town, then everyone else. It used to open on Adams,
+    // Ilocos Norte, for every resident in the country.
+    const townCode = selectedZone.psgcBarangayCode.slice(0, 7);
+    const rank = (zone: Zone) => {
+      if (zone.id === selectedZone.id) return 0;
+      const alert = alertMap.get(zone.id);
+      if (alert) return 1 + (SEVERITY_ORDER.length - SEVERITY_ORDER.indexOf(alert.severity)) / 10;
+      if (zone.psgcBarangayCode.startsWith(townCode)) return 2;
+      return 3;
+    };
+    return list
+      .map((zone) => ({ zone, r: rank(zone) }))
+      .sort((a, b) => a.r - b.r || a.zone.name.localeCompare(b.zone.name))
+      .map(({ zone }) => zone);
+  }, [zones, statusFilter, searchQuery, alertMap, selectedZone]);
 
   const visibleZones = filteredZones.slice(0, visibleCount);
   const hasMore = visibleCount < filteredZones.length;

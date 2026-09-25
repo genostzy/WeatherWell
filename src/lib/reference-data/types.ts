@@ -58,9 +58,31 @@ interface CompactZone {
   occupancy?: number;
 }
 
-export interface CompactReferenceData {
+/** Format 2, still read because phones may hold a cached copy. */
+interface Format2ReferenceData {
   format: 2;
   zones: CompactZone[];
+  places: [municipality: string, province: string][];
+  routes: Zone["evacuationRouteText"][];
+  pois: PointOfInterest[];
+  hazards: HazardsByZone;
+}
+
+/**
+ * Format 3: each zone is a list, [PSGC code, short name, place, lat, lng],
+ * with a sixth element only for the few that differ from the seed
+ * placeholder. The id is "zone-" + code and the name "Barangay <short>,
+ * <municipality>" unless the extras say otherwise. Half the size of format 2
+ * (4.5 MB to 2.0 MB), which phones download and parse on first open.
+ */
+type ZoneExtras = Omit<CompactZone, "id" | "name" | "place" | "lat" | "lng" | "code"> & { id?: string; name?: string };
+type ZoneTuple =
+  | [code: string, shortName: string, place: number, lat: number, lng: number]
+  | [code: string, shortName: string, place: number, lat: number, lng: number, extras: ZoneExtras];
+
+export interface CompactReferenceData {
+  format: 3;
+  zones: ZoneTuple[];
   places: [municipality: string, province: string][];
   routes: Zone["evacuationRouteText"][];
   pois: PointOfInterest[];
@@ -84,16 +106,16 @@ export function compactReferenceData(data: ReferenceData): CompactReferenceData 
     return i;
   };
 
-  const zones = data.zones.map((z) => {
-    const c: CompactZone = {
-      id: z.id,
-      name: z.name,
-      place: intern(places, placeIndex, `${z.municipalityName}|${z.provinceName}`, [z.municipalityName, z.provinceName]),
-      lat: z.lat,
-      lng: z.lng,
-    };
+  const zones = data.zones.map((z): ZoneTuple => {
+    const place = intern(places, placeIndex, `${z.municipalityName}|${z.provinceName}`, [z.municipalityName, z.provinceName]);
+    const c: ZoneExtras = {};
     const route = intern(routes, routeIndex, `${z.evacuationRouteText.en}|${z.evacuationRouteText.fil}`, z.evacuationRouteText);
-    if (z.id !== `zone-${z.psgcBarangayCode}`) c.code = z.psgcBarangayCode;
+    if (z.id !== `zone-${z.psgcBarangayCode}`) c.id = z.id;
+    const prefix = "Barangay ";
+    const suffix = `, ${z.municipalityName}`;
+    const patterned = z.name.startsWith(prefix) && z.name.endsWith(suffix) && z.name.length > prefix.length + suffix.length;
+    const shortName = patterned ? z.name.slice(prefix.length, -suffix.length) : "";
+    if (!patterned) c.name = z.name;
     if (route !== 0) c.route = route;
     const path = z.evacuationRoutePath;
     if (!(path.length === 1 && path[0][0] === z.lat && path[0][1] === z.lng)) c.path = path;
@@ -105,7 +127,8 @@ export function compactReferenceData(data: ReferenceData): CompactReferenceData 
     if (z.centerStatus !== "unknown") c.status = z.centerStatus;
     if (z.evacuationCenterCapacity !== 0) c.capacity = z.evacuationCenterCapacity;
     if (z.currentOccupancy !== undefined) c.occupancy = z.currentOccupancy;
-    return c;
+    const base: [string, string, number, number, number] = [z.psgcBarangayCode, shortName, place, z.lat, z.lng];
+    return Object.keys(c).length > 0 ? [...base, c] : base;
   });
 
   // hazardsForZone already reads a missing level as "unknown".
@@ -115,11 +138,29 @@ export function compactReferenceData(data: ReferenceData): CompactReferenceData 
     if (Object.keys(known).length > 0) hazards[zoneId] = known;
   }
 
-  return { format: 2, zones, places, routes, pois: data.pois, hazards };
+  return { format: 3, zones, places, routes, pois: data.pois, hazards };
 }
 
 /** Reverses compactReferenceData; also reads the previous interned-route format. */
-export function expandReferenceData(raw: CompactReferenceData | LegacyRawReferenceData): ReferenceData {
+export function expandReferenceData(raw: CompactReferenceData | Format2ReferenceData | LegacyRawReferenceData): ReferenceData {
+  if ("format" in raw && raw.format === 3) {
+    return {
+      zones: raw.zones.map(([code, shortName, place, lat, lng, extras = {}]) => {
+        const [municipalityName] = raw.places[place];
+        return zoneFrom(raw, {
+          ...extras,
+          id: extras.id ?? `zone-${code}`,
+          code,
+          name: extras.name ?? `Barangay ${shortName}, ${municipalityName}`,
+          place,
+          lat,
+          lng,
+        });
+      }),
+      pois: raw.pois,
+      hazards: raw.hazards,
+    };
+  }
   if (!("format" in raw)) {
     return {
       zones: raw.zones.map((zone) => ({
@@ -130,31 +171,30 @@ export function expandReferenceData(raw: CompactReferenceData | LegacyRawReferen
       hazards: raw.hazards,
     };
   }
+  return { zones: raw.zones.map((c) => zoneFrom(raw, c)), pois: raw.pois, hazards: raw.hazards };
+}
+
+/** One compact zone, back to the Zone the app reads (formats 2 and 3 share this). */
+function zoneFrom(raw: { places: [string, string][]; routes: Zone["evacuationRouteText"][] }, c: CompactZone): Zone {
+  const [municipalityName, provinceName] = raw.places[c.place];
   return {
-    zones: raw.zones.map((c) => {
-      const [municipalityName, provinceName] = raw.places[c.place];
-      return {
-        id: c.id,
-        psgcBarangayCode: c.code ?? c.id.slice("zone-".length),
-        name: c.name,
-        municipalityName,
-        provinceName,
-        lat: c.lat,
-        lng: c.lng,
-        evacuationRouteText: raw.routes[c.route ?? 0],
-        evacuationRoutePath: c.path ?? [[c.lat, c.lng]],
-        hotlineNumber: c.hotline ?? PLACEHOLDER_HOTLINE,
-        ...(c.down ? { downstreamZoneId: c.down } : {}),
-        evacuationCenterName: c.centre ?? placeholderCentre(municipalityName),
-        evacuationCenterLat: c.centreLat ?? c.lat,
-        evacuationCenterLng: c.centreLng ?? c.lng,
-        centerStatus: c.status ?? "unknown",
-        evacuationCenterCapacity: c.capacity ?? 0,
-        ...(c.occupancy !== undefined ? { currentOccupancy: c.occupancy } : {}),
-      };
-    }),
-    pois: raw.pois,
-    hazards: raw.hazards,
+    id: c.id,
+    psgcBarangayCode: c.code ?? c.id.slice("zone-".length),
+    name: c.name,
+    municipalityName,
+    provinceName,
+    lat: c.lat,
+    lng: c.lng,
+    evacuationRouteText: raw.routes[c.route ?? 0],
+    evacuationRoutePath: c.path ?? [[c.lat, c.lng]],
+    hotlineNumber: c.hotline ?? PLACEHOLDER_HOTLINE,
+    ...(c.down ? { downstreamZoneId: c.down } : {}),
+    evacuationCenterName: c.centre ?? placeholderCentre(municipalityName),
+    evacuationCenterLat: c.centreLat ?? c.lat,
+    evacuationCenterLng: c.centreLng ?? c.lng,
+    centerStatus: c.status ?? "unknown",
+    evacuationCenterCapacity: c.capacity ?? 0,
+    ...(c.occupancy !== undefined ? { currentOccupancy: c.occupancy } : {}),
   };
 }
 
