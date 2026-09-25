@@ -74,6 +74,17 @@ describe("MapCanvas", () => {
     expect(screen.getByRole("radio", { name: /flood/i })).toBeInTheDocument();
   });
 
+  it("gathers hazard, layers and legend into one Map options panel, leaving the map clear (owner: tidy phone layout)", () => {
+    const { container } = renderWithData(<MapCanvas {...baseProps} />);
+    const options = [...container.querySelectorAll("details")].find((d) => /map options/i.test(d.querySelector("summary")?.textContent ?? ""));
+    expect(options).toBeDefined();
+    expect(options!.querySelector("[role=radiogroup]")).not.toBeNull();
+    expect(options!.textContent).toMatch(/map legend/i);
+    expect(options!.querySelectorAll("input[type=checkbox]").length).toBeGreaterThan(0);
+    // Nothing else floats over the map for these.
+    expect(container.querySelectorAll("[role=radiogroup]")).toHaveLength(1);
+  });
+
   describe("evacuation center visibility", () => {
     it("does not show evacuation centers on the map by default", () => {
       // Showing every evacuation center up front reveals shelter capacity

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import { SlidersHorizontal } from "lucide-react";
 import { Marker, Polyline, Popup, Tooltip, useMapEvents, useMap } from "react-leaflet";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
@@ -45,6 +46,7 @@ const EDIT_PIN: LocalizedText = { en: "Edit", fil: "I-edit" };
 const DELETE_PIN: LocalizedText = { en: "Delete", fil: "Burahin" };
 const YOUR_PIN: LocalizedText = { en: "Your pin", fil: "Iyong pin" };
 const VIEW_PHOTO: LocalizedText = { en: "View full photo", fil: "Tingnan ang buong larawan" };
+const MAP_OPTIONS: LocalizedText = { en: "Map options", fil: "Opsyon ng mapa" };
 const LOCATE_ME: LocalizedText = { en: "Locate me", fil: "Hanapin ako" };
 const YOUR_LOCATION: LocalizedText = { en: "Your location", fil: "Iyong lokasyon" };
 const SEARCH_PLACEHOLDER: LocalizedText = { en: "Search zone…", fil: "Maghanap ng zone…" };
@@ -307,13 +309,13 @@ export function MapCanvas({
       controlsPosition="bottomright"
       overlay={
         <>
-          <div className="pointer-events-auto absolute top-2 right-2">
-            <MarkerLegend />
-          </div>
-
-          {/* Search bar */}
-          <div className="pointer-events-auto absolute top-2 left-2 w-52">
-            <div className="relative">
+          {/*
+            One row across the top: search, and Map options (hazard, layers,
+            legend). These used to float in four places and covered a third
+            of a phone-sized map.
+          */}
+          <div className="pointer-events-auto absolute top-2 right-2 left-2 flex items-start gap-2">
+            <div className="relative min-w-0 flex-1">
               <input
                 type="text"
                 value={searchQuery}
@@ -321,9 +323,9 @@ export function MapCanvas({
                 onFocus={() => setShowSearch(true)}
                 onBlur={() => setTimeout(() => setShowSearch(false), 200)}
                 placeholder={t(SEARCH_PLACEHOLDER, lang)}
-                className="w-full rounded-lg border-2 border-border bg-background/95 px-3 py-1.5 pr-8 text-xs font-medium shadow-md backdrop-blur placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                className="h-10 w-full rounded-lg border-2 border-border bg-background/95 px-3 pr-8 text-sm font-medium shadow-md backdrop-blur placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               />
-              <svg className="absolute right-2 top-1.5 h-3.5 w-3.5 text-muted-foreground" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+              <svg className="absolute right-2.5 top-3 h-4 w-4 text-muted-foreground" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
               {searchResults.length > 0 && showSearch && (
                 <div className="absolute left-0 top-full z-[1001] mt-1 w-full max-h-48 overflow-y-auto rounded-lg border-2 border-border bg-background shadow-lg">
                   {searchResults.map((z) => (
@@ -347,16 +349,16 @@ export function MapCanvas({
                 </div>
               )}
             </div>
-          </div>
 
-          {/* Layer toggle panel */}
-          <div className="pointer-events-auto absolute top-12 left-2">
-            <details className="group">
-              <summary className="flex cursor-pointer items-center gap-1 rounded-lg border-2 border-border bg-background/95 px-2 py-1 text-xs font-medium shadow-md backdrop-blur hover:bg-muted/50">
-                <svg className="h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-                {t(LAYERS_TITLE, lang)}
+            <details className="group relative shrink-0">
+              <summary className="flex h-10 cursor-pointer list-none items-center gap-1.5 rounded-lg border-2 border-border bg-background/95 px-3 text-sm font-medium shadow-md backdrop-blur hover:bg-muted/50 [&::-webkit-details-marker]:hidden">
+                <SlidersHorizontal aria-hidden="true" className="h-4 w-4" />
+                <span lang={lang}>{t(MAP_OPTIONS, lang)}</span>
               </summary>
-              <div className="mt-1 space-y-1 rounded-lg border-2 border-border bg-background/95 p-2 shadow-md backdrop-blur">
+              <div className="absolute right-0 top-full z-[1001] mt-2 max-h-52 w-[min(18rem,calc(100vw-3rem))] sm:max-h-80 lg:max-h-[32rem] space-y-3 overflow-y-auto rounded-xl border-2 border-border bg-background p-3 shadow-lg">
+                <HazardTypeSelector value={hazardType} onChange={onHazardTypeChange} labelled />
+                <div className="space-y-1.5 border-t border-border pt-3">
+                  <p lang={lang} className="text-xs font-semibold">{t(LAYERS_TITLE, lang)}</p>
                 {[
                   { label: t(LAYER_STATUS, lang), value: showStatus, setter: setShowStatus },
                   { label: t(LAYER_EVAC, lang), value: showEvac, setter: setShowEvac },
@@ -365,16 +367,20 @@ export function MapCanvas({
                   { label: t(LAYER_HAZARD, lang), value: showHazard, setter: setShowHazard },
                   { label: t(LAYER_HISTORICAL, lang), value: showHistorical, setter: setShowHistorical },
                 ].map((layer) => (
-                  <label key={layer.label} className="flex cursor-pointer items-center gap-2 text-xs">
+                  <label key={layer.label} className="flex min-h-8 cursor-pointer items-center gap-2 text-sm">
                     <input
                       type="checkbox"
                       checked={layer.value}
                       onChange={(e) => layer.setter(e.target.checked)}
-                      className="h-3.5 w-3.5 rounded border-border"
+                      className="h-4 w-4 rounded border-border"
                     />
                     {layer.label}
                   </label>
                 ))}
+                </div>
+                <div className="border-t border-border pt-3">
+                  <MarkerLegend />
+                </div>
               </div>
             </details>
           </div>
@@ -406,9 +412,8 @@ export function MapCanvas({
             </button>
           )}
 
-          {/* One column, so "Locate me" sits above the hazard buttons instead of on them. */}
-          <div className="pointer-events-auto absolute bottom-2 left-2 flex flex-col items-start gap-2">
-            {livePosition && (
+          {livePosition && (
+            <div className="pointer-events-auto absolute bottom-2 left-2">
               <button
                 type="button"
                 onClick={() => setFlyTarget(livePosition)}
@@ -418,9 +423,8 @@ export function MapCanvas({
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v4m0 12v4M2 12h4m12 0h4"></path></svg>
                 {t(LOCATE_ME, lang)}
               </button>
-            )}
-            <HazardTypeSelector value={hazardType} onChange={onHazardTypeChange} />
-          </div>
+            </div>
+          )}
         </>
       }
     >

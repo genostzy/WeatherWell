@@ -53,9 +53,12 @@ const HAZARD_TYPE_SELECTOR_LABEL: LocalizedText = {
 export function HazardTypeSelector({
   value,
   onChange,
+  labelled = false,
 }: {
   value: HazardType;
   onChange: (type: HazardType) => void;
+  /** A row of chips with visible names, for a panel; otherwise a compact column of icons over the map. */
+  labelled?: boolean;
 }) {
   const { lang } = useLanguage();
 
@@ -63,7 +66,7 @@ export function HazardTypeSelector({
     <RadioGroup
       value={value}
       onValueChange={(v) => onChange(v as HazardType)}
-      className="flex w-auto flex-col gap-1"
+      className={labelled ? "grid grid-cols-2 gap-2" : "flex w-auto flex-col gap-1"}
       aria-label={t(HAZARD_TYPE_SELECTOR_LABEL, lang)}
     >
       {HAZARD_TYPE_ORDER.map((type) => {
@@ -91,10 +94,14 @@ export function HazardTypeSelector({
             />
             <Label
               htmlFor={`hazard-type-${type}`}
-              className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border-2 border-border bg-background/90 text-foreground shadow-md peer-aria-checked:border-severity-orange peer-aria-checked:bg-severity-orange/20 peer-aria-checked:text-severity-orange"
+              className={`flex cursor-pointer items-center justify-center border-2 border-border bg-background/90 text-foreground peer-aria-checked:border-severity-orange peer-aria-checked:bg-severity-orange/20 peer-aria-checked:text-severity-orange ${
+                labelled ? "min-h-11 justify-start gap-2 rounded-lg px-3 text-sm" : "h-11 w-11 rounded-full shadow-md"
+              }`}
             >
-              <Icon aria-hidden="true" className="h-5 w-5" />
-              <span className="sr-only">{t(HAZARD_TYPE_LABEL[type], lang)}</span>
+              <Icon aria-hidden="true" className="h-5 w-5 shrink-0" />
+              <span lang={lang} className={labelled ? "" : "sr-only"}>
+                {t(HAZARD_TYPE_LABEL[type], lang)}
+              </span>
             </Label>
           </div>
         );
