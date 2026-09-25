@@ -57,7 +57,7 @@ jobs:
         env:
           DB_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
         run: |
-          for f in supabase/tests/helpers.sql supabase/tests/reference-tables.sql supabase/tests/rls.sql supabase/tests/abuse.sql; do
+          for f in supabase/tests/helpers.sql supabase/tests/reference-tables.sql supabase/tests/rls.sql supabase/tests/abuse.sql supabase/tests/accounts.sql; do
             echo "== $f"
             psql "$DB_URL" -v ON_ERROR_STOP=1 -q -f "$f"
           done

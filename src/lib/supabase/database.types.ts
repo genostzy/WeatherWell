@@ -171,6 +171,35 @@ export type Database = {
           },
         ]
       }
+      email_alert_subscriptions: {
+        Row: {
+          created_at: string
+          unsubscribe_token: string
+          user_id: string
+          zone_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          unsubscribe_token?: string
+          user_id: string
+          zone_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          unsubscribe_token?: string
+          user_id?: string
+          zone_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_alert_subscriptions_zone_id_fkey"
+            columns: ["zone_id"]
+            isOneToOne: false
+            referencedRelation: "zones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       evacuation_centers: {
         Row: {
           capacity: number
@@ -822,6 +851,10 @@ export type Database = {
         Args: { p_area: string; p_display_name: string; p_email: string }
         Returns: string
       }
+      admin_authorize_password_reset: {
+        Args: { p_email: string }
+        Returns: string
+      }
       admin_remove_official: { Args: { p_email: string }; Returns: string }
       check_and_trigger_alerts: {
         Args: never
@@ -843,6 +876,20 @@ export type Database = {
         }
         Returns: undefined
       }
+      email_alert_recipients: {
+        Args: { p_user_ids?: string[]; p_zone_id?: string }
+        Returns: {
+          email: string
+          unsubscribe_token: string
+        }[]
+      }
+      my_recovery_questions: {
+        Args: never
+        Returns: {
+          question_1: string
+          question_2: string
+        }[]
+      }
       my_water_level_reports: {
         Args: never
         Returns: {
@@ -855,6 +902,13 @@ export type Database = {
       recent_app_error_count: {
         Args: { p_environment?: string }
         Returns: number
+      }
+      recovery_questions_for: {
+        Args: { p_email: string }
+        Returns: {
+          question_1: string
+          question_2: string
+        }[]
       }
       reject_automatic_alert: {
         Args: { p_zone_id: string }
@@ -877,6 +931,15 @@ export type Database = {
         Args: { p_body: string; p_kind: string }
         Returns: string
       }
+      set_recovery_answers: {
+        Args: {
+          p_answer_1: string
+          p_answer_2: string
+          p_question_1: string
+          p_question_2: string
+        }
+        Returns: undefined
+      }
       set_zone_alert: {
         Args: {
           p_message: Json
@@ -888,6 +951,10 @@ export type Database = {
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      subscribe_email_alerts: {
+        Args: { p_zone_id: string }
+        Returns: undefined
+      }
       town_appoint_barangay_official: {
         Args: { p_display_name: string; p_email: string; p_zone_id: string }
         Returns: string
@@ -902,6 +969,11 @@ export type Database = {
       }
       town_remove_barangay_official: {
         Args: { p_user_id: string }
+        Returns: string
+      }
+      unsubscribe_email_alerts: { Args: { p_token: string }; Returns: boolean }
+      verify_recovery_answers: {
+        Args: { p_answer_1: string; p_answer_2: string; p_email: string }
         Returns: string
       }
     }
