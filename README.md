@@ -52,16 +52,21 @@ beyond the project's own.
 
 ## How alerts work
 
-1. Residents report water depth. Each report is scored by the database at
-   insert: a new device counts 0.2; a prior check-in in that barangay, a
-   history older than a day, and past reports others corroborated raise it
-   (max 1.0). A report three depth levels off the consensus is an outlier.
+1. Residents report water depth, at most once per barangay every 5 minutes.
+   Each report is scored by the database at insert: any device counts 0.2.
+   An identity over a day old gains for a prior check-in in that barangay, a
+   history older than a day, and past reports others corroborated; a device
+   whose advisories officials confirmed gains 0.3 (max 1.0), and one whose
+   advisories they rejected more often counts 0. A report three depth levels
+   off what established neighbours report is an outlier.
 2. The engine raises an **unverified yellow advisory** when at least 3 located
-   reporters with combined trust ≥ 1.0 report flooding. It withdraws its own
-   advisory when the evidence ages out.
+   reporters with combined trust ≥ 1.0 report flooding, at least one of them
+   with an identity over a day old. It withdraws its own advisory when the
+   evidence ages out.
 3. Officials see it under **Needs your attention** and confirm it (re-issued
-   as theirs) or reject it. Their own alerts never expire, but are listed for
-   review once a day old.
+   as theirs) or reject it as false, which counts against the devices that
+   raised it. Their own alerts never expire, but are listed for review once a
+   day old.
 4. Residents see the alert with its age, whether an official confirmed it,
    read-aloud, share, and one-tap SMS to up to 5 saved neighbours. Forwarded
    links (`/a?d=…`) render as plain HTML with JavaScript off.
@@ -124,7 +129,7 @@ react-leaflet, Supabase for data and auth.
 src/app/         Routes, API routes, server actions
 src/features/    Feature modules
 src/lib/         Domain logic, data access, stores
-supabase/        Migrations (match the live history), tests/rls.sql
+supabase/        Migrations (match the live history), tests/rls.sql, tests/abuse.sql
 public/sw.js     Service worker: offline shell, caches, outbox drain
 ```
 
@@ -153,7 +158,9 @@ Conventions worth knowing before editing:
 - CI also rebuilds the database from `supabase/migrations` in Docker
   (`supabase start`) and runs [supabase/tests/rls.sql](supabase/tests/rls.sql):
   RLS, the alert engine, trust weights, centre confirmation, push endpoints,
-  and the rate limit and geofence.
+  and the rate limit and geofence. Then
+  [supabase/tests/abuse.sql](supabase/tests/abuse.sql): one documented attack
+  per anti-abuse layer, and what stops it.
 
 ## Deployment
 
