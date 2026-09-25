@@ -8,6 +8,7 @@ const report = (zoneId: string, reportedAt: string) => ({
   reportedAt,
   trustWeight: 1,
   isOutlier: false,
+  reporterEstablished: false,
 });
 
 describe("countReportsToday", () => {

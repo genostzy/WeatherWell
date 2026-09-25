@@ -14,9 +14,11 @@ export interface LiveWaterLevelReport {
   depthLevel: DepthLevel;
   /** Absolute timestamp rather than a static "minutes ago" — see minutesSinceReport. */
   reportedAt: string;
-  /** PRD Anti-Abuse layer 6: 1.0 is an unproven device, higher is one with a track record. */
+  /** PRD Anti-Abuse layers 5-6: 0.2 for a new device, up to 1.0 with a track record, 0 once officials rejected its advisories. */
   trustWeight: number;
   isOutlier: boolean;
+  /** The reporter's identity was over a day old; the engine needs at least one such reporter. */
+  reporterEstablished: boolean;
 }
 
 const NO_SERVER_ROWS: LiveWaterLevelReport[] = [];
@@ -177,10 +179,11 @@ export function mergeReports(
         zoneId: payload.zoneId,
         depthLevel: payload.depthLevel,
         reportedAt: entry.queuedAt,
-        // Same starting values addWaterLevelReport always used: reputation
-        // scoring and outlier detection are Final Phase.
+        // Stand-ins until the server row arrives with the database's own
+        // scores (report_trust_weights, reputation_and_identity_age).
         trustWeight: 1.0,
         isOutlier: false,
+        reporterEstablished: false,
       };
     });
 

@@ -27,6 +27,7 @@ function seededServerReports() {
     reportedAt: new Date(Date.now() - report.minutesAgo * 60 * 1000).toISOString(),
     trustWeight: report.trustWeight,
     isOutlier: report.isOutlier,
+    reporterEstablished: true,
   }));
 }
 

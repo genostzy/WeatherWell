@@ -22,6 +22,7 @@ function seededServerReports() {
     reportedAt: new Date(Date.now() - report.minutesAgo * 60 * 1000).toISOString(),
     trustWeight: report.trustWeight,
     isOutlier: report.isOutlier,
+    reporterEstablished: true,
   }));
 }
 
@@ -68,11 +69,35 @@ describe("FloodMonitoringPanel", () => {
       reportedAt: new Date().toISOString(),
       trustWeight: 0.2,
       isOutlier: false,
+      reporterEstablished: false,
     }));
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => fresh }));
     renderWithData(<FloodMonitoringPanel zones={[zone]} />);
     await waitFor(() => expect(screen.getByText(/3 reports today/i)).toBeInTheDocument());
     expect(screen.getByText(/below threshold/i)).toBeInTheDocument();
+  });
+
+  it("needs a reporter whose identity is over a day old, as the engine does", async () => {
+    const zone = FIXTURE_REFERENCE_DATA.zones[0];
+    const reports = (established: boolean) =>
+      [1, 2, 3, 4, 5].map((n) => ({
+        id: `r-${n}`,
+        zoneId: zone.id,
+        depthLevel: "knee",
+        reportedAt: new Date().toISOString(),
+        trustWeight: 0.2,
+        isOutlier: false,
+        reporterEstablished: established && n === 1,
+      }));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => reports(false) }));
+    const { unmount } = renderWithData(<FloodMonitoringPanel zones={[zone]} />);
+    await waitFor(() => expect(screen.getByText(/5 reports today/i)).toBeInTheDocument());
+    expect(screen.getByText(/below threshold/i)).toBeInTheDocument();
+    unmount();
+
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => reports(true) }));
+    renderWithData(<FloodMonitoringPanel zones={[zone]} />);
+    await waitFor(() => expect(screen.getByText(/report threshold met/i)).toBeInTheDocument());
   });
 
   it("counts a zone's reports today from the live feed, not invented figures", async () => {

@@ -3,10 +3,12 @@ import { screen, fireEvent, waitFor, within } from "@testing-library/react";
 
 const setZoneAlertMock = vi.fn().mockResolvedValue({ ok: true });
 const confirmMock = vi.fn().mockResolvedValue({ ok: true });
+const rejectMock = vi.fn().mockResolvedValue({ ok: true });
 const setZoneAlertsMock = vi.fn(async (input: { zoneIds: string[] }) => ({ sent: input.zoneIds.length, failed: 0 }));
 vi.mock("@/app/actions/set-zone-alert", () => ({
   setZoneAlert: (...args: unknown[]) => setZoneAlertMock(...args),
   confirmAutomaticAlert: (...args: unknown[]) => confirmMock(...args),
+  rejectAutomaticAlert: (...args: unknown[]) => rejectMock(...args),
   setZoneAlerts: (input: { zoneIds: string[] }) => setZoneAlertsMock(input),
 }));
 
@@ -35,6 +37,7 @@ describe("OfficialInbox (ideas 4, 5, 13)", () => {
   beforeEach(() => {
     setZoneAlertMock.mockClear();
     confirmMock.mockClear();
+    rejectMock.mockClear();
   });
 
   it("asks the official to confirm or reject an automatic advisory", async () => {
@@ -50,12 +53,14 @@ describe("OfficialInbox (ideas 4, 5, 13)", () => {
     expect(await screen.findByText(/confirmed/i)).toBeInTheDocument();
   });
 
-  it("clears an advisory the official rejects", async () => {
+  it("records a rejection rather than a plain clear, and warns what it costs (layer 6)", async () => {
     const alerts = [alertFor(zone1.id, { source: "auto_crowdsourced" })];
     renderWithData(<OfficialInbox zones={FIXTURE_REFERENCE_DATA.zones} />, { alerts });
+    expect(screen.getByText(/reject it only if it is false/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /reject/i }));
-    await waitFor(() => expect(setZoneAlertMock).toHaveBeenCalledWith({ zoneId: zone1.id, severity: "none" }));
-    expect(await screen.findByText(/alert lifted/i)).toBeInTheDocument();
+    await waitFor(() => expect(rejectMock).toHaveBeenCalledWith(zone1.id));
+    expect(setZoneAlertMock).not.toHaveBeenCalled();
+    expect(await screen.findByText(/advisory rejected/i)).toBeInTheDocument();
   });
 
   it("asks about an official's own alert once it is over a day old", async () => {
@@ -112,7 +117,7 @@ describe("OfficialInbox (ideas 4, 5, 13)", () => {
 
   it("spins only the button that was pressed", async () => {
     let finish: (v: { ok: true }) => void = () => {};
-    setZoneAlertMock.mockImplementationOnce(() => new Promise((resolve) => (finish = resolve)));
+    rejectMock.mockImplementationOnce(() => new Promise((resolve) => (finish = resolve)));
     const alerts = [alertFor(zone1.id, { source: "auto_crowdsourced" })];
     renderWithData(<OfficialInbox zones={FIXTURE_REFERENCE_DATA.zones} />, { alerts });
     const reject = screen.getByRole("button", { name: /reject/i });

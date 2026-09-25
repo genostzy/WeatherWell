@@ -88,10 +88,13 @@ function FloodMonitoringRow({
   const recent = getRecentReportsForZoneLive(allReports, zone.id);
   const counted = recent.filter((report) => countsTowardAlert(report));
   const agreeing = counted.length;
-  // The same two conditions the engine applies (ponytail: per report here,
+  // The same three conditions the engine applies (ponytail: per report here,
   // not per reporter; the feed carries no reporter id since SP1).
   const trust = counted.reduce((sum, report) => sum + report.trustWeight, 0);
-  const met = agreeing >= REPORT_THRESHOLD && trust >= MIN_REPORT_TRUST;
+  const met =
+    agreeing >= REPORT_THRESHOLD &&
+    trust >= MIN_REPORT_TRUST &&
+    counted.some((report) => report.reporterEstablished);
 
   return (
     <div

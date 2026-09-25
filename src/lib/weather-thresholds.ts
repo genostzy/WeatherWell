@@ -33,14 +33,19 @@ export const MIN_REPORT_TRUST = 1.0;
 /** The alert engine only counts reports from the last 6 hours (check_and_trigger_alerts' v_window). */
 export const REPORT_WINDOW_HOURS = 6;
 
-/** True when a report still counts toward an automatic advisory, as the engine counts it: recent, not dry, not an outlier. */
+/**
+ * True when a report still counts toward an automatic advisory, as the engine
+ * counts it: recent, not dry, not an outlier, and from a device that still
+ * counts (weight above 0).
+ */
 export function countsTowardAlert(
-  report: { reportedAt: string; isOutlier: boolean; depthLevel: string },
+  report: { reportedAt: string; isOutlier: boolean; depthLevel: string; trustWeight: number },
   now: number = Date.now()
 ): boolean {
   return (
     report.depthLevel !== "dry" &&
     !report.isOutlier &&
+    report.trustWeight > 0 &&
     now - Date.parse(report.reportedAt) <= REPORT_WINDOW_HOURS * 3_600_000
   );
 }

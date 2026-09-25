@@ -149,3 +149,34 @@ describe("confirmAutomaticAlert (found testing the live site)", () => {
     expect(rpc).not.toHaveBeenCalled();
   });
 });
+
+describe("rejectAutomaticAlert (layer 6)", () => {
+  it("asks the database to reject, so the verdict is recorded rather than a plain clear", async () => {
+    getClaims.mockResolvedValue({ data: { claims: { sub: "official-1" } } });
+    rpc.mockResolvedValue({ error: null });
+    const { rejectAutomaticAlert } = await import("./set-zone-alert");
+
+    expect(await rejectAutomaticAlert("zone-1")).toEqual({ ok: true });
+    expect(rpc).toHaveBeenCalledWith("reject_automatic_alert", { p_zone_id: "zone-1" });
+  });
+
+  it("passes the database's refusal on to the official", async () => {
+    getClaims.mockResolvedValue({ data: { claims: { sub: "official-1" } } });
+    rpc.mockResolvedValue({ error: { code: "P0002", message: "There is no automatic advisory here to reject." } });
+    const { rejectAutomaticAlert } = await import("./set-zone-alert");
+
+    expect(await rejectAutomaticAlert("zone-1")).toEqual({
+      ok: false,
+      permanent: true,
+      error: "There is no automatic advisory here to reject.",
+    });
+  });
+
+  it("refuses without a session", async () => {
+    getClaims.mockResolvedValue({ data: null });
+    const { rejectAutomaticAlert } = await import("./set-zone-alert");
+
+    expect((await rejectAutomaticAlert("zone-1")).ok).toBe(false);
+    expect(rpc).not.toHaveBeenCalled();
+  });
+});

@@ -9,7 +9,13 @@ import { SeverityBadge } from "@/features/alerts/severity-badge";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { friendlyError } from "@/lib/friendly-error";
-import { useAlerts, useConfirmAutomaticAlert, useSetZoneAlert, useSetZoneAlerts } from "@/lib/alerts-store";
+import {
+  useAlerts,
+  useConfirmAutomaticAlert,
+  useRejectAutomaticAlert,
+  useSetZoneAlert,
+  useSetZoneAlerts,
+} from "@/lib/alerts-store";
 import { buildShareText, toSharedAlert } from "@/lib/alert-share/payload";
 import { SEVERITY_LABEL, SEVERITY_ORDER, type Severity } from "@/lib/severity";
 import { minutesSinceReport } from "@/lib/water-level-reports";
@@ -17,9 +23,11 @@ import type { AlertRecord, LocalizedText, Zone } from "@/lib/types";
 
 const TITLE: LocalizedText = { en: "Needs your attention", fil: "Kailangan ng iyong pansin" };
 const NOTHING: LocalizedText = { en: "Nothing needs you right now.", fil: "Walang kailangan sa iyo ngayon." };
+// Rejecting costs the reporters their say (layer 6), so it is for a false
+// advisory only; an all-clear goes through the barangay's own page.
 const AUTO_NOTE: LocalizedText = {
-  en: "Residents report flooding. Already shown as an unverified advisory.",
-  fil: "May ulat ng baha mula sa mga residente. Nakalabas na bilang hindi pa kumpirmadong paalala.",
+  en: "Residents report flooding. Already shown as an unverified advisory. Reject it only if it is false: the phones that reported it stop counting toward automatic advisories.",
+  fil: "May ulat ng baha mula sa mga residente. Nakalabas na bilang hindi pa kumpirmadong paalala. Tanggihan lamang kung mali ito: hindi na bibilangin ang mga teleponong nag-ulat nito para sa awtomatikong paalala.",
 };
 const STALE_NOTE: LocalizedText = { en: "Your alert is over a day old. Is it still in effect?", fil: "Mahigit isang araw na ang alerto mo. May bisa pa ba?" };
 const CONFIRM: LocalizedText = { en: "Confirm", fil: "Kumpirmahin" };
@@ -40,6 +48,7 @@ const CONFIRMED: LocalizedText = {
 };
 const KEPT: LocalizedText = { en: "Re-confirmed — the alert stays up.", fil: "Nakumpirma muli — mananatili ang alerto." };
 const LIFTED: LocalizedText = { en: "Alert lifted.", fil: "Naalis ang alerto." };
+const REJECTED: LocalizedText = { en: "Advisory rejected and withdrawn.", fil: "Tinanggihan at binawi ang paalala." };
 const COPY_BY_HAND: LocalizedText = {
   en: "This browser won't copy for you. Select the text below and copy it.",
   fil: "Hindi makakopya ang browser na ito. Piliin ang teksto sa ibaba at kopyahin.",
@@ -80,6 +89,7 @@ export function OfficialInbox({ zones }: { zones: Zone[] }) {
   const alerts = useAlerts();
   const setZoneAlert = useSetZoneAlert();
   const confirmAutomatic = useConfirmAutomaticAlert();
+  const rejectAutomatic = useRejectAutomaticAlert();
   const setZoneAlerts = useSetZoneAlerts();
   const [manualCopy, setManualCopy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -181,7 +191,11 @@ export function OfficialInbox({ zones }: { zones: Zone[] }) {
                       variant="outline"
                       disabled={busy}
                       loading={busyKey === `${zone.id}:lift`}
-                      onClick={() => send(`${zone.id}:lift`, zone.id, "none", LIFTED)}
+                      onClick={() =>
+                        automatic
+                          ? run(`${zone.id}:lift`, () => rejectAutomatic(zone.id), REJECTED)
+                          : send(`${zone.id}:lift`, zone.id, "none", LIFTED)
+                      }
                     >
                       {t(automatic ? REJECT : LIFT, lang)}
                     </Button>

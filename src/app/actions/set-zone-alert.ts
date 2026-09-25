@@ -132,6 +132,24 @@ export async function confirmAutomaticAlert(zoneId: string): Promise<ActionResul
   return { ok: false, permanent: true, error: error.message ?? `Database error ${error.code ?? "(no code)"}` };
 }
 
+/**
+ * An official rejects the engine's automatic advisory as false. The database
+ * clears it and records the verdict, and the devices whose reports raised it
+ * stop counting toward automatic advisories (layer 6). An all-clear after
+ * the water goes down is setZoneAlert with "none", which records no verdict.
+ */
+export async function rejectAutomaticAlert(zoneId: string): Promise<ActionResult> {
+  const supabase = await createSupabaseUserClient();
+  const userId = await callerId(supabase);
+  if (!userId) {
+    return { ok: false, permanent: true, error: "No session — sign in and try again." };
+  }
+
+  const { error } = await supabase.rpc("reject_automatic_alert", { p_zone_id: zoneId });
+  if (!error) return { ok: true };
+  return { ok: false, permanent: true, error: error.message ?? `Database error ${error.code ?? "(no code)"}` };
+}
+
 export interface SetZoneAlertsResult {
   sent: number;
   failed: number;

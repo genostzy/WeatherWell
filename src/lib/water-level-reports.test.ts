@@ -116,6 +116,7 @@ describe("water-level-reports", () => {
       reportedAt: new Date().toISOString(),
       trustWeight: 1,
       isOutlier: false,
+      reporterEstablished: false,
       reporterId: "user-1",
     };
 

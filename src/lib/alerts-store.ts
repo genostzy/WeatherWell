@@ -107,3 +107,21 @@ export function useConfirmAutomaticAlert(): (zoneId: string) => Promise<ActionRe
   }
   return confirm;
 }
+
+/** Rejects the zone's automatic advisory as false; refreshes alerts once the database accepts it. */
+export function useRejectAutomaticAlert(): (zoneId: string) => Promise<ActionResult> {
+  const refresh = useContext(AlertsRefreshContext);
+  const reject = useCallback(
+    async (zoneId: string) => {
+      const { rejectAutomaticAlert } = await import("@/app/actions/set-zone-alert");
+      const result = await rejectAutomaticAlert(zoneId);
+      if (result.ok) await refresh?.();
+      return result;
+    },
+    [refresh]
+  );
+  if (!refresh) {
+    throw new Error("useRejectAutomaticAlert requires ReferenceDataProvider's alerts refresh. In tests, use renderWithData().");
+  }
+  return reject;
+}
