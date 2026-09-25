@@ -91,8 +91,14 @@ const HEX_RUN = /\b[0-9a-f]{8,}\b/gi;
 
 const LONG_TOKEN = /[A-Za-z0-9_-]{24,}/g;
 
+// A barangay's id (zone-1, zone-0105528012): the barangay a resident follows
+// is, near enough, where they live. Digits only, so a code name like
+// "zone-map" is left alone.
+const ZONE_ID = /\bzone-\d+\b/g;
+
 function redact(text: string): string {
   return text
+    .replace(ZONE_ID, "[zone]")
     .replace(SECRET_KEY_VALUE, "[token]")
     .replace(COORD_KEY_VALUE, "[coords]")
     .replace(JWT_LIKE, "[token]")
@@ -136,5 +142,10 @@ export function scrub(error: unknown, route: string): ScrubbedReport | null {
   const message = redact(rawMessage);
   const stack = isError && error.stack ? redact(error.stack) : null;
   const firstFrame = stack?.split("\n").find((line) => line.trim().startsWith("at ")) ?? "";
-  return { message, stack, route: pathOnly(route), fingerprint: hash(`${message}\n${firstFrame.trim()}`) };
+  return {
+    message,
+    stack,
+    route: pathOnly(route).replace(ZONE_ID, "[zone]"),
+    fingerprint: hash(`${message}\n${firstFrame.trim()}`),
+  };
 }

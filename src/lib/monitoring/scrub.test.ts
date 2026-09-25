@@ -217,3 +217,24 @@ describe("scrub — code the app did not ship", () => {
     expect(scrub(thrownAt(stack), "/")).not.toBeNull();
   });
 });
+
+describe("scrub — no barangay in a crash report (privacy review)", () => {
+  it("keeps the barangay out of the route, which is where the resident lives", () => {
+    expect(scrub(new Error("boom"), "/plan/zone-0105528012?lang=fil")!.route).toBe("/plan/[zone]");
+    expect(scrub(new Error("boom"), "/admin/zone/zone-1")!.route).toBe("/admin/zone/[zone]");
+  });
+
+  it("keeps a barangay id out of the message and stack too", () => {
+    const error = new Error("No centre for zone-1 or zone-0105528012");
+    error.stack = "Error: No centre for zone-1 or zone-0105528012\n    at load (https://weatherwell.vercel.app/_next/app.js:1:2)";
+    const report = scrub(error, "/")!;
+    expect(report.message).toBe("No centre for [zone] or [zone]");
+    expect(report.stack).not.toMatch(/zone-\d/);
+  });
+
+  it("leaves code names that merely start with zone- alone", () => {
+    const error = new Error("boom");
+    error.stack = "Error: boom\n    at render (https://weatherwell.vercel.app/_next/static/chunks/zone-map.js:1:2)";
+    expect(scrub(error, "/")!.stack).toContain("zone-map.js");
+  });
+});
