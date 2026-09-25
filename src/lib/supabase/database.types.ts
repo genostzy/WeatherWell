@@ -37,6 +37,7 @@ export type Database = {
           source: string
           superseded_at: string | null
           superseded_severity: string | null
+          verdict: string | null
           zone_id: string
         }
         Insert: {
@@ -52,6 +53,7 @@ export type Database = {
           source: string
           superseded_at?: string | null
           superseded_severity?: string | null
+          verdict?: string | null
           zone_id: string
         }
         Update: {
@@ -67,6 +69,7 @@ export type Database = {
           source?: string
           superseded_at?: string | null
           superseded_severity?: string | null
+          verdict?: string | null
           zone_id?: string
         }
         Relationships: [
@@ -669,7 +672,9 @@ export type Database = {
           is_outlier: boolean
           lat: number | null
           lng: number | null
+          received_at: string
           reported_at: string
+          reporter_established: boolean
           reporter_id: string
           trust_weight: number
           zone_id: string
@@ -680,7 +685,9 @@ export type Database = {
           is_outlier?: boolean
           lat?: number | null
           lng?: number | null
+          received_at?: string
           reported_at?: string
+          reporter_established?: boolean
           reporter_id: string
           trust_weight?: number
           zone_id: string
@@ -691,7 +698,9 @@ export type Database = {
           is_outlier?: boolean
           lat?: number | null
           lng?: number | null
+          received_at?: string
           reported_at?: string
+          reporter_established?: boolean
           reporter_id?: string
           trust_weight?: number
           zone_id?: string
@@ -846,6 +855,10 @@ export type Database = {
       recent_app_error_count: {
         Args: { p_environment?: string }
         Returns: number
+      }
+      reject_automatic_alert: {
+        Args: { p_zone_id: string }
+        Returns: undefined
       }
       report_app_error: {
         Args: {

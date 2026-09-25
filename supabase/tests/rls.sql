@@ -2583,8 +2583,10 @@ do $$
 begin
   set local role postgres;
   perform set_config('request.jwt.claims', '', true);
-  insert into auth.users (id)
-    select ('e1000000-0000-4000-8000-0000000000' || lpad(g::text, 2, '0'))::uuid
+  -- Made two days ago: an identity under a day old earns no bonuses and
+  -- cannot raise an advisory on its own (reputation_and_identity_age).
+  insert into auth.users (id, created_at)
+    select ('e1000000-0000-4000-8000-0000000000' || lpad(g::text, 2, '0'))::uuid, now() - interval '2 days'
       from generate_series(1, 20) g;
   insert into public.zones
     (id, psgc_barangay_code, name, evacuation_route_text, lat, lng, evacuation_route_path, hotline_number)
@@ -2928,8 +2930,11 @@ begin
   set local role postgres;
   perform set_config('request.jwt.claims', '', true);
   set constraints all immediate;
-  insert into auth.users (id)
-    select (u || lpad(g::text, 2, '0'))::uuid from generate_series(1, 12) g;
+  -- 02-06 were made two days ago; the rest are brand new.
+  insert into auth.users (id, created_at)
+    select (u || lpad(g::text, 2, '0'))::uuid,
+           case when g between 2 and 6 then now() - interval '2 days' else now() end
+      from generate_series(1, 12) g;
   insert into public.zones
     (id, psgc_barangay_code, name, evacuation_route_text, lat, lng, evacuation_route_path, hotline_number)
   values (z, '990000012', 'Test Zone Trust', '{"en":"x","fil":"x"}'::jsonb, 14.6, 121.6, '[]'::jsonb, '000');
@@ -2941,7 +2946,7 @@ begin
     raise exception using errcode = 'TSTFL', message = format('T1: new device weighed %s, expected 0.2', w);
   end if;
 
-  -- T2: a device that has checked in to this barangay counts 0.5.
+  -- T2: an established device that has checked in to this barangay counts 0.5.
   insert into public.evacuation_check_ins (zone_id, user_id, status) values (z, (u || '02')::uuid, 'safe');
   insert into public.water_level_reports (zone_id, depth_level, reporter_id, lat, lng)
     values (z, 'knee', (u || '02')::uuid, 14.6, 121.6) returning trust_weight into w;
@@ -2992,7 +2997,8 @@ begin
   raise notice 'ok T4: outliers are three levels off the located consensus';
 end $$;
 
--- T5: three brand-new devices (0.6) do not trigger; five (1.0) do.
+-- T5: three brand-new devices (0.6) do not trigger; five, two of them established
+-- (1.0), do.
 do $$
 declare
   z constant text := 'tests-fixture-zone-trust-2';
@@ -3013,10 +3019,10 @@ begin
   end if;
 
   insert into public.water_level_reports (zone_id, depth_level, reporter_id, lat, lng)
-    select z, 'knee', (u || lpad(g::text, 2, '0'))::uuid, 14.7, 121.7 from generate_series(10, 11) g;
+    select z, 'knee', (u || lpad(g::text, 2, '0'))::uuid, 14.7, 121.7 from generate_series(5, 6) g;
   perform * from public.check_and_trigger_alerts();
   if not exists (select 1 from public.alerts where zone_id = z and is_active and source = 'auto_crowdsourced') then
-    raise exception using errcode = 'TSTFL', message = 'T5: five brand-new devices did not trigger';
+    raise exception using errcode = 'TSTFL', message = 'T5: five devices with a combined trust of 1.0 did not trigger';
   end if;
   raise notice 'ok T5: the engine needs a combined trust of 1.0';
 end $$;
