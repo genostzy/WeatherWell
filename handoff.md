@@ -3,7 +3,9 @@
 ## State
 
 - Branch `mvp`, cut from `v1` at `912a5cb`, is pushed to GitHub. CI is green on `a8c6cb4` ([run #106](https://github.com/genostzy/WeatherWell/actions/runs/36133180076)): both the `check` job (lint, typecheck, tests, knip, build) and the `database` job (rls, abuse, accounts) pass.
-- `v1` (production) and `main` are unchanged. Nothing was changed in the live Supabase project, Vercel or Google.
+- Both migrations are applied to the live database (25 September) as `20260925123429_reputation_and_identity_age` and `20260925123519_password_recovery_and_email_alerts`. The files are renamed to match. Types generated from live match `database.types.ts`, and Supabase's security advisor raised nothing new beyond the existing pattern for official RPCs.
+- Production (`v1`) now runs the new engine rules, because it shares the database: the day-old reporter gate, layer 6 weights, the `received_at` rate limit and the per-reporter outlier consensus. Until `mvp` is merged, `v1`'s Reject button still does a plain clear, which records no verdict.
+- `v1` and `main` code are unchanged. Nothing was changed in Vercel or Google.
 
 | Commit | What |
 |---|---|
@@ -29,14 +31,11 @@
 
 ## Owner steps, in order
 
-1. Apply the migrations to the live database in this order, with the Supabase MCP `apply_migration`. Then rename each file to its live version (the M2 rule). Both only add things. Until they are applied, the `mvp` preview cannot load reports or use the new features.
-   - `supabase/migrations/20260925100000_reputation_and_identity_age.sql`
-   - `supabase/migrations/20260925120000_password_recovery_and_email_alerts.sql`
-2. In Supabase, go to Authentication → Sign In / Providers → Email and turn off "Confirm email".
-3. Create a Gmail account and an app password. Set `GMAIL_USER` and `GMAIL_APP_PASSWORD` in Vercel for Production and Preview (PRD Setup step 8).
-4. Put the four `TEST_*_PASSWORD` variables in `.env.local` and run `npx tsx scripts/reset-test-accounts.ts` to see the plan. Run it again with `--yes` to do it (PRD Setup step 9).
-5. After testing, change the test passwords. They were shared in chat and are easy to guess, and the admin account controls the live system.
-6. Merge `mvp` into `v1` once steps 1–5 are done and CI is still green.
+1. In Supabase, go to Authentication → Sign In / Providers → Email and turn off "Confirm email".
+2. Create a Gmail account and an app password. Set `GMAIL_USER` and `GMAIL_APP_PASSWORD` in Vercel for Production and Preview (PRD Setup step 8).
+3. Put the four `TEST_*_PASSWORD` variables in `.env.local` and run `npx tsx scripts/reset-test-accounts.ts` to see the plan. Run it again with `--yes` to do it (PRD Setup step 9).
+4. After testing, change the test passwords. They were shared in chat and are easy to guess, and the admin account controls the live system.
+5. Merge `mvp` into `v1` once steps 1–4 are done and CI is still green.
 
 ## Risks to keep in mind
 
@@ -79,7 +78,7 @@
 
 ## Where things live
 
-- Anti-abuse: the `20260925100000` migration, and `supabase/tests/abuse.sql`.
-- Recovery: the `20260925120000` migration, `src/app/actions/recovery.ts`, `src/features/auth/forgot-password-panel.tsx`, `src/features/resident/security-questions-card.tsx`, and the admin reset in `src/features/admin/officials-panel.tsx`.
+- Anti-abuse: the `20260925123429` migration, and `supabase/tests/abuse.sql`.
+- Recovery: the `20260925123519` migration, `src/app/actions/recovery.ts`, `src/features/auth/forgot-password-panel.tsx`, `src/features/resident/security-questions-card.tsx`, and the admin reset in `src/features/admin/officials-panel.tsx`.
 - Email: `src/lib/send-email.ts`, `src/lib/email-alerts.ts`, `src/lib/notify-residents.ts`, `src/app/api/email/unsubscribe/route.ts`, `src/app/unsubscribe/page.tsx` and `src/features/resident/email-alerts-card.tsx`.
 - Consent notice: `CONSENT_ITEMS` in `src/features/onboarding/consent-notice.tsx`.

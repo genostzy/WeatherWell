@@ -6,15 +6,14 @@
 
 ## Global constraints
 
-- **The migrations on this branch are not applied to the live database.** Before merging, apply `20260925100000_reputation_and_identity_age.sql` and then `20260925120000_password_recovery_and_email_alerts.sql` with the Supabase MCP `apply_migration`, and rename each file to its live version (the M2 rule in `2026-09-23-stop-the-bleeding.md`). They only add things, so they can go live before the app code.
-- Until they are applied, the `mvp` Vercel preview cannot read reports (`/api/reports` selects `reporter_established`), reject advisories, save security questions or email anyone. Production is unaffected.
+- **Both migrations are applied to the live database** (25 September): `20260925123429_reputation_and_identity_age` and `20260925123519_password_recovery_and_email_alerts`, with the files renamed to the live versions (the M2 rule in `2026-09-23-stop-the-bleeding.md`). Production shares the database, so it already runs the new engine rules.
 - Every database rule is tested in `supabase/tests/`: `rls.sql` for access and the engine, `abuse.sql` for attacks. Both run in CI against a database rebuilt from the migrations.
 
 ## Status by exit criterion
 
 | Exit criterion | Status |
 |---|---|
-| Anti-abuse layers 1–6 live, documented abuse-attempt suite passes | Built on `mvp` (Task 1). Live once the migration is applied |
+| Anti-abuse layers 1–6 live, documented abuse-attempt suite passes | Built (Task 1). The database side is live; the app side ships when `mvp` merges |
 | Calibration loop run against at least one real event | Not started (Task 3) |
 | WCAG 2.1 AA audit with no outstanding violations | Not started (Task 4). The automated axe sweep already runs in CI |
 | Pilot barangay completes a drill; feedback incorporated or deferred | The owner's task. Drill mode exists at `/admin/simulation` |
