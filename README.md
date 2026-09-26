@@ -59,16 +59,19 @@ beyond the project's own.
    whose advisories officials confirmed gains 0.3 (max 1.0), and one whose
    advisories they rejected more often counts 0. A report three depth levels
    off what established neighbours report is an outlier.
-2. The engine raises an **unverified yellow advisory** when at least 3 located
-   reporters with combined trust ≥ 1.0 report flooding, at least one of them
-   with an identity over a day old. It withdraws its own advisory when the
-   evidence ages out.
+2. The engine raises an **unverified yellow advisory** when enough located
+   reporters report flooding within 6 hours, at least one of them with an
+   identity over a day old. Each barangay has its own bar: 3 reporters with
+   combined trust ≥ 1.0 to start. The calibration loop raises it a step
+   (to at most 5 and 2.0) when officials keep rejecting its advisories, and
+   lowers it again after a flood the engine missed. The engine withdraws its
+   own advisory when the evidence ages out.
 3. Officials see it under **Needs your attention** and confirm it (re-issued
    as theirs) or reject it as false, which counts against the devices that
    raised it. Their own alerts never expire, but are listed for review once a
    day old.
 4. Residents see the alert with its age, whether an official confirmed it,
-   read-aloud, share, and one-tap SMS to up to 5 saved neighbours. Forwarded
+   its confidence (Estimated, Validated, Calibrated), read-aloud, share, and one-tap SMS to up to 5 saved neighbours. Forwarded
    links (`/a?d=…`) render as plain HTML with JavaScript off.
 5. Residents who turned alerts on get a push when an advisory is raised and
    whenever an official sets, changes, lifts or rejects their barangay's
@@ -137,7 +140,7 @@ react-leaflet, Supabase for data and auth.
 src/app/         Routes, API routes, server actions
 src/features/    Feature modules
 src/lib/         Domain logic, data access, stores
-supabase/        Migrations (match the live history), tests/ (RLS, abuse, accounts)
+supabase/        Migrations (match the live history), tests/ (RLS, abuse, accounts, calibration)
 public/sw.js     Service worker: offline shell, caches, outbox drain
 ```
 
@@ -170,7 +173,9 @@ Conventions worth knowing before editing:
   [supabase/tests/abuse.sql](supabase/tests/abuse.sql): one documented attack
   per anti-abuse layer, and what stops it. And
   [supabase/tests/accounts.sql](supabase/tests/accounts.sql): password
-  recovery and email alerts.
+  recovery and email alerts. And
+  [supabase/tests/calibration.sql](supabase/tests/calibration.sql): the
+  calibration loop and confidence tags.
 
 ## Deployment
 
@@ -179,7 +184,9 @@ Conventions worth knowing before editing:
   production.
 - Scheduled jobs (GitHub Actions, from `v1`): the threshold engine and
   typhoon refresh every 3 hours, and a production health check every 15
-  minutes.
+  minutes. GitHub starts scheduled runs late, so Supabase's `pg_cron`
+  also starts them on time, once a GitHub token is in Vault (PRD Setup
+  step 10).
 - Migrations apply to the one live database immediately: ship app code
   before any migration that removes something the deployed code reads.
 - Older branches are kept as tags: `archive/hi-fi` (phase 1 UI), `archive/v0`,

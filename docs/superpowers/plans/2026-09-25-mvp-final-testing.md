@@ -14,11 +14,11 @@
 | Exit criterion | Status |
 |---|---|
 | Anti-abuse layers 1–6 live, documented abuse-attempt suite passes | Built (Task 1). The database side is live; the app side ships when `mvp` merges |
-| Calibration loop run against at least one real event | Not started (Task 3) |
-| WCAG 2.1 AA audit with no outstanding violations | Not started (Task 4). The automated axe sweep already runs in CI |
+| Calibration loop run against at least one real event | Built and recording (Task 3). Waits for a real flood: on 26 September the live database held 5 automatic advisories, all from labelled test data, and no calibration outcomes |
+| WCAG 2.1 AA audit with no outstanding violations | Passed on 26 September (Task 4), after the fixes in `1e63060` |
 | Pilot barangay completes a drill; feedback incorporated or deferred | The owner's task. Drill mode exists at `/admin/simulation` |
 
-The other Stage 4 items: reputation scoring, outlier downweighting and device-fingerprint hardening are in Task 1. TTS is Task 5.
+The other Stage 4 items: reputation scoring, outlier downweighting and device-fingerprint hardening are in Task 1. TTS is Task 5. Privacy fixes from the consent review landed between them (`a402774`–`8fa9dd9`).
 
 ---
 
@@ -38,22 +38,32 @@ The other Stage 4 items: reputation scoring, outlier downweighting and device-fi
 - [x] Opt-in email alerts for Google accounts, sent from a Gmail app password (PRD Setup step 8), with one-click unsubscribe. Residents now also hear, by push and email, when an official sets, changes, lifts or rejects their barangay's alert.
 - [x] `scripts/reset-test-accounts.ts` replaces the test accounts (PRD Setup step 9).
 
-### Task 2: Refresh the PRD's Build Status
+### Task 2: Refresh the PRD's Build Status — done
 
-- [ ] The table is dated 15 September and still describes Stage 2 (for example, geofence and rate limit as "Not started"). Rewrite it from the code, and add the Task 1 rows.
+- [x] Rewritten from the code and the live database on 26 September, in five groups (residents, alerts, officials, anti-abuse, platform). It records what Stage 3 left undone (hazard data, self-hosted routing, the prediction engine, the cascade heads-up), what was removed (the risk score, built on invented numbers), and two privacy items not started: data export and deletion, and clean-up of unused anonymous identities.
+- [x] PRD Setup step 10: the GitHub token in Vault that lets `pg_cron` start the scheduled workflows on time.
 
-### Task 3: Calibration loop
+### Task 3: Calibration loop — built; the real-event run is open
 
-- [ ] Record prediction against outcome for each event. Verdicts already give the outcome for automatic advisories. Add predicted timing against observed reports for the prediction timeline.
-- [ ] Confidence tags: Estimated → Validated → Calibrated, shown wherever an alert is (the `alerts.confidence` column exists).
-- [ ] Tune thresholds within guardrails: too many rejected advisories raise the engine's floors, missed events lower them. Log every change to the action record.
-- [ ] Run it against at least one real event, and record the result here.
+- [x] Each automatic advisory's outcome is recorded in `calibration_events`: confirmed, rejected, expired without a verdict, or missed (an official raised the alert while located flood reports were arriving and the engine had stayed quiet). Migration `20260926010743_calibration_loop`, tests `supabase/tests/calibration.sql` C1–C8.
+- [x] Confidence tags, set at insert: *Estimated*, *Validated* once the barangay has 3 confirmed advisories, *Calibrated* once 10 are settled and the bar has moved. Shown on alert details and in the officials' inbox; an official's own alert says so.
+- [x] Guardrails, as the owner chose on 26 September ("Auto, floor stays"): each barangay has its own bar. At least two rejections, outnumbering confirmations since the last move and within 90 days, raise it a step (reporters 3→4→5, trust 1.0→1.25→…→2.0); a missed event lowers it a step, never below 3 and 1.0. Every move is `engine.tuned` in the action record, credited "Automatic — calibration", and `/admin/history` describes it in words. Officials see outcomes and raised bars on the dashboard; residents' "how many more" follows the bar.
+- [ ] Run it against at least one real event, and record the result here. Needs a real flood.
+- Ruling: predicted timing against observed reports is not recorded. Nothing writes `alerts.predicted_timing`, because the prediction engine was never built (see the PRD Build Status). The outcome record covers what the engine does decide, and a timeline comparison waits for a prediction engine. Cost if wrong: the exit criterion's "prediction-versus-actual" is read as outcome-versus-actual until then.
 
-### Task 4: WCAG 2.1 AA audit
+### Task 4: WCAG 2.1 AA audit — passed on 26 September
 
-- [ ] Manual pass over every route: keyboard only, focus order and visibility, reflow at 320 px, contrast in both themes, screen-reader names, `lang` on Filipino text.
-- [ ] Fix each violation. Add a regression test where the axe sweep cannot see it.
+- [x] Manual pass over every route: keyboard only, focus order and visibility, reflow at 320 px, contrast, screen-reader names and `lang`. Pages behind sign-in were checked in the tests and the code, since the audit does not sign in. The app is dark-only, so "both themes" is one theme: a light preference renders dark.
+- [x] Violations found and fixed (`1e63060`):
+  - 2.1.1 Keyboard: placing a flood pin or an official marker needed a pointer. The arrow keys now move the focused map, and a button under the crosshair places at its centre.
+  - 1.4.11 Non-text contrast: form fields' edges were 1.2:1 against the page (now 3:1 or more), and the focus ring was drawn at half strength (now full).
+  - 1.3.1 Info and relationships: card titles were not headings.
+  - 3.1.1 Language of page: `lang` stayed `en` after switching to Filipino.
+  - 2.2.1 Timing adjustable: the one-tap report's confirmation vanished after 3 seconds, and its error and withdrawal messages after 4. Now only Undo expires.
+  - 2.4.2 Page titled: every page was titled "WeatherWell".
+- [x] Regression tests where axe cannot see: `src/app/colour-contrast.test.ts` computes the palette's contrast from `globals.css`, and `src/app/page-titles.test.ts` checks every page has a title. The rest have component tests.
+- Passing without changes, on every page the audit opened: text contrast (4.5:1 or more), names on every control, alt text, reflow at 320 px with no sideways scroll, landmarks, and no orientation lock.
 
-### Task 5: TTS
+### Task 5: TTS — done
 
-- [ ] Read-aloud exists on alert details. Extend it to evacuation instructions, and add a fallback for devices without a Filipino voice.
+- [x] One read-aloud button (`src/features/alerts/read-aloud-button.tsx`) on alert details and evacuation instructions (`43d3145`). It uses a Filipino voice when the phone lists one; when the phone lists voices but none is Filipino, it reads the English text in `en-PH` and says so on screen.
