@@ -20,6 +20,9 @@ jobs:
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
     steps:
       - uses: actions/checkout@v5
         with:
@@ -28,3 +31,22 @@ jobs:
         with:
           node-version: 24
       - run: node scripts/check-health.mjs
+      # Supabase's pg_cron starts this workflow on time, with a GitHub token in
+      # Vault (PRD Setup step 10). An expired or revoked token fails silently,
+      # leaving only GitHub's own late schedule, so this fails the run, and
+      # emails the owner, once no on-time run has come for an hour.
+      - name: Supabase still starts the scheduled runs
+        if: ${{ always() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          last=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow monitor.yml --event workflow_dispatch --limit 1 --json createdAt --jq ".[0].createdAt // empty")
+          if [ -z "$last" ]; then
+            echo "No run has been started by Supabase yet: see PRD Setup step 10."
+            exit 1
+          fi
+          age=$(( $(date +%s) - $(date -d "$last" +%s) ))
+          if [ "$age" -gt 3600 ]; then
+            echo "No on-time run from Supabase for $((age / 60)) minutes: renew github_workflow_token in Vault (PRD Setup step 10)."
+            exit 1
+          fi
