@@ -6,7 +6,7 @@ import { getSelectedZoneId, markConsented } from "@/features/onboarding/onboardi
 import { FIXTURE_REFERENCE_DATA, renderWithData } from "@/test-utils/render-with-data";
 import { mockZoneApis } from "@/test-utils/mock-zone-apis";
 
-const followEmailAlerts = vi.fn(async () => {});
+const followEmailAlerts = vi.fn(async (zoneId: string) => void zoneId);
 vi.mock("@/lib/follow-email-alerts", () => ({ followEmailAlerts: (zoneId: string) => followEmailAlerts(zoneId) }));
 
 const ZONES = FIXTURE_REFERENCE_DATA.zones;

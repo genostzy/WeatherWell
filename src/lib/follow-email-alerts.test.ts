@@ -6,7 +6,7 @@ vi.mock("@/lib/supabase/browser", () => ({
     from: () => ({ select: () => ({ maybeSingle: () => row() }) }),
   }),
 }));
-const subscribeEmailAlerts = vi.fn(async () => ({ ok: true }));
+const subscribeEmailAlerts = vi.fn(async (zoneId: string) => ({ ok: true, zoneId }));
 vi.mock("@/app/actions/email-alerts", () => ({ subscribeEmailAlerts: (zoneId: string) => subscribeEmailAlerts(zoneId) }));
 
 import { followEmailAlerts } from "./follow-email-alerts";
