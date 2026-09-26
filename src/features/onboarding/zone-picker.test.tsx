@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { ZonePicker } from "./zone-picker";
 import { FIXTURE_REFERENCE_DATA, renderWithData } from "@/test-utils/render-with-data";
 import { mockZoneApis } from "@/test-utils/mock-zone-apis";
+import { markConsented } from "./onboarding-storage";
 
 const ZONES = FIXTURE_REFERENCE_DATA.zones;
 
@@ -36,8 +37,27 @@ async function searchAndSelect(query: string, zoneName: string) {
 
 describe("ZonePicker", () => {
   beforeEach(() => {
+    // Setup shows the picker only after the consent notice is accepted.
+    window.localStorage.clear();
+    markConsented();
     stubGeolocation(undefined);
     mockZoneApis(ZONES);
+  });
+
+  it("offers Use my location only after the consent notice", () => {
+    window.localStorage.clear();
+    const { unmount } = renderWithData(<ZonePicker onSelect={() => {}} />);
+    expect(screen.queryByRole("button", { name: /use my location/i })).not.toBeInTheDocument();
+    unmount();
+
+    markConsented();
+    renderWithData(<ZonePicker onSelect={() => {}} />);
+    expect(screen.getByRole("button", { name: /use my location/i })).toBeInTheDocument();
+  });
+
+  it("names its confirm button as asked", () => {
+    renderWithData(<ZonePicker onSelect={() => {}} confirmLabel={{ en: "Make this my barangay", fil: "Gawin itong aking barangay" }} />);
+    expect(screen.getByRole("button", { name: "Make this my barangay" })).toBeInTheDocument();
   });
 
   it("starts with confirm disabled and no selected zone", () => {

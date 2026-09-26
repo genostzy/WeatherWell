@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { APPROXIMATE_ACCURACY_METERS } from "@/lib/nearest-zone";
+import { hasConsented } from "./onboarding-storage";
 import type { LanguageCode, LocalizedText } from "@/lib/types";
 
 /**
@@ -154,8 +155,17 @@ function toZoneSummary(row: ZoneSearchRow): ZoneSummary {
   };
 }
 
-export function ZonePicker({ onSelect }: { onSelect: (zoneId: string) => void }) {
+export function ZonePicker({
+  onSelect,
+  confirmLabel = COPY.confirm,
+}: {
+  onSelect: (zoneId: string) => void;
+  confirmLabel?: LocalizedText;
+}) {
   const { lang } = useLanguage();
+  // The position is read only after the consent notice (setup shows this
+  // picker after it; a resident on an older notice is sent back to it).
+  const consented = hasConsented();
   // Starts empty so the user must make a real choice.
   const [selectedZone, setSelectedZone] = useState<ZoneSummary | null>(null);
   const [query, setQuery] = useState("");
@@ -334,6 +344,7 @@ export function ZonePicker({ onSelect }: { onSelect: (zoneId: string) => void })
   // evacuation route). A denial or a failure just falls through to the
   // search box below, exactly as before.
   useEffect(() => {
+    if (!consented) return;
     // Deferred to a microtask rather than called directly: detectLocation's
     // own no-geolocation branch calls setDetection synchronously, and doing
     // that straight from an effect body trips
@@ -344,7 +355,7 @@ export function ZonePicker({ onSelect }: { onSelect: (zoneId: string) => void })
     queueMicrotask(() => {
       void detectLocation();
     });
-  }, [detectLocation]);
+  }, [detectLocation, consented]);
 
   const displayResults = showResults ? searchResults : [];
 
@@ -352,15 +363,17 @@ export function ZonePicker({ onSelect }: { onSelect: (zoneId: string) => void })
     <div className="w-full max-w-md space-y-6" lang={lang}>
       <p className="text-sm text-muted-foreground">{t(COPY.intro, lang)}</p>
 
-      <Button
-        type="button"
-        variant="outline"
-        size="lg"
-        onClick={detectLocation}
-        loading={detection.state === "detecting"}
-      >
-        {t(COPY.useLocation, lang)}
-      </Button>
+      {consented && (
+        <Button
+          type="button"
+          variant="outline"
+          size="lg"
+          onClick={detectLocation}
+          loading={detection.state === "detecting"}
+        >
+          {t(COPY.useLocation, lang)}
+        </Button>
+      )}
 
       <div aria-live="polite" className="space-y-1 text-sm">
         {detection.state === "detecting" && <p>{t(COPY.detecting, lang)}</p>}
@@ -465,7 +478,7 @@ export function ZonePicker({ onSelect }: { onSelect: (zoneId: string) => void })
         disabled={!selectedZone}
         onClick={() => selectedZone && onSelect(selectedZone.id)}
       >
-        {t(COPY.confirm, lang)}
+        {t(confirmLabel, lang)}
       </Button>
     </div>
   );

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { getSelectedZoneId } from "@/features/onboarding/onboarding-storage";
+import { followEmailAlerts } from "@/lib/follow-email-alerts";
 import { getBrowserClient } from "@/lib/supabase/browser";
 import { friendlyError } from "@/lib/friendly-error";
 import { t } from "@/lib/i18n";
@@ -35,14 +36,11 @@ export function EmailAlertsCard({ email }: { email: string }) {
       .from("email_alert_subscriptions")
       .select("zone_id")
       .maybeSingle()
-      .then(async ({ data }) => {
+      .then(({ data }) => {
         setOn(!!data);
         // Follows a change of barangay, the way a push subscription does.
         const zoneId = getSelectedZoneId();
-        if (data && zoneId && data.zone_id !== zoneId) {
-          const { subscribeEmailAlerts } = await import("@/app/actions/email-alerts");
-          await subscribeEmailAlerts(zoneId);
-        }
+        if (data && zoneId) void followEmailAlerts(zoneId);
       });
   }, []);
 
