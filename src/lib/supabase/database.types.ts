@@ -121,6 +121,51 @@ export type Database = {
         }
         Relationships: []
       }
+      calibration_events: {
+        Row: {
+          alert_id: string | null
+          id: number
+          kind: string
+          occurred_at: string
+          step_after: number
+          step_before: number
+          zone_id: string
+        }
+        Insert: {
+          alert_id?: string | null
+          id?: never
+          kind: string
+          occurred_at?: string
+          step_after: number
+          step_before: number
+          zone_id: string
+        }
+        Update: {
+          alert_id?: string | null
+          id?: never
+          kind?: string
+          occurred_at?: string
+          step_after?: number
+          step_before?: number
+          zone_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calibration_events_alert_id_fkey"
+            columns: ["alert_id"]
+            isOneToOne: false
+            referencedRelation: "alerts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "calibration_events_zone_id_fkey"
+            columns: ["zone_id"]
+            isOneToOne: false
+            referencedRelation: "zones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       community_pins: {
         Row: {
           author_id: string
@@ -783,6 +828,32 @@ export type Database = {
             foreignKeyName: "weather_readings_zone_id_fkey"
             columns: ["zone_id"]
             isOneToOne: false
+            referencedRelation: "zones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      zone_alert_floors: {
+        Row: {
+          step: number
+          updated_at: string
+          zone_id: string
+        }
+        Insert: {
+          step?: number
+          updated_at?: string
+          zone_id: string
+        }
+        Update: {
+          step?: number
+          updated_at?: string
+          zone_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "zone_alert_floors_zone_id_fkey"
+            columns: ["zone_id"]
+            isOneToOne: true
             referencedRelation: "zones"
             referencedColumns: ["id"]
           },
