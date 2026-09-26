@@ -54,7 +54,7 @@ describe("TownBarangaysPanel (a municipal official's barangays at a glance)", ()
       ok: true,
       json: async () => [0, 1].map((i) => ({
         id: `r${i}`, zoneId: first.id, depthLevel: "knee", reporterId: `u${i}`,
-        reportedAt: new Date(now - i * 60_000).toISOString(), trustWeight: 0.2, isOutlier: false,
+        reportedAt: new Date(now - i * 60_000).toISOString(), trustWeight: 0.2, isOutlier: false, located: true,
       })),
     }));
     renderWithData(<TownBarangaysPanel zones={zones} officials={[]} />, { alerts: [] });

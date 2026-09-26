@@ -19,6 +19,8 @@ export interface LiveWaterLevelReport {
   isOutlier: boolean;
   /** The reporter's identity was over a day old; the engine needs at least one such reporter. */
   reporterEstablished: boolean;
+  /** Sent with a position (the position itself stays private). The engine counts only these. */
+  located: boolean;
 }
 
 const NO_SERVER_ROWS: LiveWaterLevelReport[] = [];
@@ -184,6 +186,7 @@ export function mergeReports(
         trustWeight: 1.0,
         isOutlier: false,
         reporterEstablished: false,
+        located: typeof payload.lat === "number" && typeof payload.lng === "number",
       };
     });
 

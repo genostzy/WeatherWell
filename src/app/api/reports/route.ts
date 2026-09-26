@@ -13,7 +13,7 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from("water_level_reports")
-    .select("id, zone_id, depth_level, reported_at, trust_weight, is_outlier, reporter_established")
+    .select("id, zone_id, depth_level, reported_at, trust_weight, is_outlier, reporter_established, located")
     .order("reported_at", { ascending: false })
     .limit(200);
 
@@ -36,6 +36,7 @@ export async function GET() {
     trustWeight: Number(row.trust_weight),
     isOutlier: row.is_outlier,
     reporterEstablished: row.reporter_established,
+    located: row.located === true,
   }));
 
   return NextResponse.json(reports);

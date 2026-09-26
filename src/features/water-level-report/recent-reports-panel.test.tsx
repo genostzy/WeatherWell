@@ -28,6 +28,7 @@ function seededServerReports() {
     trustWeight: report.trustWeight,
     isOutlier: report.isOutlier,
     reporterEstablished: true,
+    located: true,
   }));
 }
 
@@ -79,6 +80,7 @@ describe("RecentReportsPanel", () => {
       reportedAt: new Date(Date.now() - hoursAgo * 3_600_000).toISOString(),
       trustWeight: 1,
       isOutlier: false,
+      located: true,
     });
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => [row("a", 1), row("b", 5), row("c", 7), row("d", 40)] }));
     render(<RecentReportsPanel zone={zone} />);
@@ -88,7 +90,7 @@ describe("RecentReportsPanel", () => {
 
   it("says report, not reports, for one", async () => {
     const zone = FIXTURE_REFERENCE_DATA.zones[0];
-    const one = [{ id: "a", zoneId: zone.id, depthLevel: "knee", reportedAt: new Date().toISOString(), trustWeight: 1, isOutlier: false }];
+    const one = [{ id: "a", zoneId: zone.id, depthLevel: "knee", reportedAt: new Date().toISOString(), trustWeight: 1, isOutlier: false, located: true }];
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => one }));
     render(<RecentReportsPanel zone={zone} />);
     expect(await screen.findByText(/^agreeing report in the last 6 hours$/i)).toBeInTheDocument();
@@ -112,7 +114,8 @@ describe("RecentReportsPanel", () => {
     // fetch promise has even had a chance to resolve — this assertion runs
     // to completion before that microtask fires.
     const zone = FIXTURE_REFERENCE_DATA.zones[0];
-    addWaterLevelReport(zone.id, "neck");
+    // With a position: only a located report counts toward the threshold.
+    addWaterLevelReport(zone.id, "neck", { lat: zone.lat, lng: zone.lng });
 
     render(<RecentReportsPanel zone={zone} />);
 

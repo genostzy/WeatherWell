@@ -79,7 +79,7 @@ export function QuickDepthReport({ zoneId }: { zoneId: string }) {
   const counts = (depth: DepthLevel, located: boolean): LocalizedText => {
     if (depth === "dry") return DRY_HELPS;
     if (activeAlert) return HAS_ALERT;
-    // The engine counts only located reports (countsTowardAlert), so never promise one it won't.
+    // The engine counts only located reports, so never promise one it won't.
     if (!located) return NO_LOCATION;
     const needed = bar.reporters - agreeing;
     return needed > 0 ? { en: NEED_MORE.en.replace("{n}", String(needed)), fil: NEED_MORE.fil.replace("{n}", String(needed)) } : ENOUGH;

@@ -44,17 +44,18 @@ export const REPORT_WINDOW_HOURS = 6;
 
 /**
  * True when a report still counts toward an automatic advisory, as the engine
- * counts it: recent, not dry, not an outlier, and from a device that still
- * counts (weight above 0).
+ * counts it: recent, not dry, not an outlier, sent with a position, and from a
+ * device that still counts (weight above 0).
  */
 export function countsTowardAlert(
-  report: { reportedAt: string; isOutlier: boolean; depthLevel: string; trustWeight: number },
+  report: { reportedAt: string; isOutlier: boolean; depthLevel: string; trustWeight: number; located: boolean },
   now: number = Date.now()
 ): boolean {
   return (
     report.depthLevel !== "dry" &&
     !report.isOutlier &&
     report.trustWeight > 0 &&
+    report.located &&
     now - Date.parse(report.reportedAt) <= REPORT_WINDOW_HOURS * 3_600_000
   );
 }

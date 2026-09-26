@@ -746,6 +746,7 @@ export type Database = {
           is_outlier: boolean
           lat: number | null
           lng: number | null
+          located: boolean | null
           received_at: string
           reported_at: string
           reporter_established: boolean
@@ -759,6 +760,7 @@ export type Database = {
           is_outlier?: boolean
           lat?: number | null
           lng?: number | null
+          located?: never
           received_at?: string
           reported_at?: string
           reporter_established?: boolean
@@ -772,6 +774,7 @@ export type Database = {
           is_outlier?: boolean
           lat?: number | null
           lng?: number | null
+          located?: never
           received_at?: string
           reported_at?: string
           reporter_established?: boolean

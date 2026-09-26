@@ -27,10 +27,11 @@ describe("weather thresholds", () => {
 
 describe("countsTowardAlert (found testing the live site)", () => {
   const now = Date.parse("2026-09-24T12:00:00Z");
-  const r = (depthLevel: string, hoursAgo: number, isOutlier = false, trustWeight = 0.2) => ({
+  const r = (depthLevel: string, hoursAgo: number, isOutlier = false, trustWeight = 0.2, located = true) => ({
     depthLevel,
     isOutlier,
     trustWeight,
+    located,
     reportedAt: new Date(now - hoursAgo * 3_600_000).toISOString(),
   });
   it("counts recent, non-outlier flooding reports only — never dry ones, as the engine does", () => {
@@ -42,6 +43,10 @@ describe("countsTowardAlert (found testing the live site)", () => {
 
   it("leaves out a device whose advisories officials rejected (weight 0, layer 6)", () => {
     expect(countsTowardAlert(r("knee", 1, false, 0), now)).toBe(false);
+  });
+
+  it("leaves out a report sent without a location, which the engine never counts", () => {
+    expect(countsTowardAlert(r("knee", 1, false, 0.2, false), now)).toBe(false);
   });
 });
 

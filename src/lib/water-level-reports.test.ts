@@ -117,6 +117,7 @@ describe("water-level-reports", () => {
       trustWeight: 1,
       isOutlier: false,
       reporterEstablished: false,
+      located: false,
       reporterId: "user-1",
     };
 

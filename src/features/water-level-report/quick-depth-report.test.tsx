@@ -225,6 +225,42 @@ describe("QuickDepthReport", () => {
       vi.unstubAllGlobals();
     });
 
+    it("leaves neighbours' reports without a location out of the count, as the engine does", async () => {
+      markConsented();
+      Object.defineProperty(navigator, "geolocation", {
+        configurable: true,
+        value: {
+          watchPosition: vi.fn((success) => {
+            success({ coords: { latitude: 16.0288, longitude: 120.4366 } });
+            return 1;
+          }),
+          clearWatch: vi.fn(),
+        },
+      });
+      const unlocated = [1, 2, 3].map((n) => ({
+        id: `r${n}`,
+        zoneId: "zone-1",
+        depthLevel: "knee",
+        reportedAt: new Date().toISOString(),
+        trustWeight: 0.5,
+        isOutlier: false,
+        reporterEstablished: true,
+        located: false,
+      }));
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (url: string) =>
+          String(url) === "/api/reports" ? { ok: true, json: async () => unlocated } : { ok: false, json: async () => ({}) }
+        )
+      );
+      const user = userEvent.setup();
+      renderWithData(<QuickDepthReport zoneId="zone-1" />, { alerts: [] });
+      await user.click(screen.getByRole("button", { name: /knee-deep/i }));
+      expect(await screen.findByText(/at least 2 more neighbours/i)).toBeInTheDocument();
+      expect(screen.queryByText(/enough neighbours have reported/i)).not.toBeInTheDocument();
+      vi.unstubAllGlobals();
+    });
+
     it("never tells a report sent without a location that it counts toward an advisory (privacy review)", async () => {
       const user = userEvent.setup();
       renderWithData(<QuickDepthReport zoneId="zone-1" />, { alerts: [] });

@@ -23,6 +23,7 @@ function seededServerReports() {
     trustWeight: report.trustWeight,
     isOutlier: report.isOutlier,
     reporterEstablished: true,
+    located: true,
   }));
 }
 
@@ -70,6 +71,7 @@ describe("FloodMonitoringPanel", () => {
       trustWeight: 0.2,
       isOutlier: false,
       reporterEstablished: false,
+      located: true,
     }));
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => fresh }));
     renderWithData(<FloodMonitoringPanel zones={[zone]} />);
@@ -88,6 +90,7 @@ describe("FloodMonitoringPanel", () => {
         trustWeight: 0.2,
         isOutlier: false,
         reporterEstablished: established && n === 1,
+        located: true,
       }));
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => reports(false) }));
     const { unmount } = renderWithData(<FloodMonitoringPanel zones={[zone]} />);
