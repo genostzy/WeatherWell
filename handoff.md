@@ -16,7 +16,8 @@
 
 - The calibration migration `20260926010743_calibration_loop` went live before the release; it only adds, so the earlier build ran safely with it.
 - Checked on production after the release: the 8 public pages tried each have their own title, `/api/health` reports the database ok with no recent errors, and `/api/alert-bars` answers (no barangay's bar has moved yet).
-- `pg_cron` holds two jobs that start the GitHub workflows on time. They do nothing until the owner adds the token (step 1 below); GitHub's own, late schedule still runs meanwhile.
+- `pg_cron` now starts the GitHub workflows on time. The owner put the token in Vault at 02:18 UTC on 26 September, and the first dispatched Monitor run started at 02:30 UTC and passed.
+- The Nilombot test alert (yellow, set by Test Official at 22:17 on 25 September) was lifted at 02:21 UTC on 26 September. The action record shows it as cleared by the System owner. No push or email went out, because it was lifted in the database, not through the app.
 
 ## Stage 4 exit criteria
 
@@ -29,14 +30,13 @@
 
 ## Owner steps, in order
 
-1. **Scheduled jobs on time.** Make a fine-grained GitHub token for the `WeatherWell` repository with only "Actions: Read and write", and store it in Supabase Vault as `github_workflow_token` (PRD Setup step 10).
-2. **Clean up test data.** Lift the Nilombot test alert (yellow, set by Test Official at 22:17), and remove the leftover `mapandanofficial@weatherwell.com` account.
-3. **Change the test passwords** in `.env.local` and rerun `npx tsx scripts/reset-test-accounts.ts --yes`. They were shared in chat and the admin account controls the live system.
-4. **Pilot drill** with a barangay, then log its feedback as incorporated or deferred.
+1. **Remove the leftover `mapandanofficial@weatherwell.com` account.** It is still appointed as a municipal official for Mapandan. Remove it at `/admin/officials` while signed in as the admin, so the record names who removed it; then delete the user in Supabase → Authentication → Users. Deleting the user alone also works, because its profile and appointment go with it.
+2. **Pilot drill** with a barangay, then log its feedback as incorporated or deferred.
 
 ## Owner's decisions (26 September)
 
 - Calibration: "Auto, floor stays". The loop moves each barangay's bar by itself, logs every move to the action record, and never goes below 3 reporters and trust 1.0.
+- The test accounts keep their current passwords.
 
 ## Open work
 
@@ -52,6 +52,7 @@
 
 ## Risks to keep in mind
 
+- **Test passwords:** they were shared in chat and are kept by the owner's decision, and the admin test account controls the live system.
 - **Impersonation:** with email confirmation off, anyone can register any email. Confirm an official's email by phone or in person before appointing them, and prefer their Google account.
 - **Security questions:** someone who knows the resident can guess the answers. The limit is 5 tries an hour per email, with no per-IP limit.
 - **Email volume:** a free Gmail account sends about 500 emails a day.
