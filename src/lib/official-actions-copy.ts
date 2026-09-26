@@ -3,6 +3,7 @@ import { CENTER_STATUS_LABEL } from "./center-status";
 import { t } from "./i18n";
 import type { LanguageCode, LocalizedText } from "./types";
 import type { OfficialAction } from "./official-actions-mapper";
+import { describeBar } from "./weather-thresholds";
 
 /**
  * One sentence describing an official_actions entry, in the requested
@@ -147,8 +148,7 @@ function describeEngineTuned(detail: Record<string, unknown>, lang: LanguageCode
   if (typeof from !== "number" || typeof to !== "number" || typeof reporters !== "number" || typeof trust !== "number") {
     return t({ en: "Advisory bar changed", fil: "Nagbago ang pamantayan ng paalala" }, lang);
   }
-  const trustText = trust.toFixed(2).replace(/0$/, "");
-  const bar = { en: `${reporters} located reporters, trust ${trustText}`, fil: `${reporters} residenteng may lokasyon, tiwalang ${trustText}` };
+  const bar = { en: describeBar({ reporters, trust }, "en"), fil: describeBar({ reporters, trust }, "fil") };
   return to > from
     ? t(
         {

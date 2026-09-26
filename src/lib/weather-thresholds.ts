@@ -1,4 +1,5 @@
 import type { HazardLevel } from "./hazards";
+import type { LanguageCode } from "./types";
 
 /** PAGASA's own "heavy" rainfall classification starts around 15mm in an hour. */
 export function isHeavyRainfall(mmPerHour: number): boolean {
@@ -37,6 +38,16 @@ export const MIN_REPORT_TRUST = 1.0;
  */
 export function alertBar(step: number): { reporters: number; trust: number } {
   return { reporters: Math.min(REPORT_THRESHOLD + step, 5), trust: MIN_REPORT_TRUST + 0.25 * step };
+}
+
+/**
+ * A bar in words, the one way the dashboard and the action record both say
+ * it: "4 located reporters, trust 1.25". `located` false drops "located".
+ */
+export function describeBar(bar: { reporters: number; trust: number }, lang: LanguageCode, located = true): string {
+  const trust = bar.trust.toFixed(2).replace(/0$/, "");
+  if (lang === "fil") return `${bar.reporters} residente${located ? "ng may lokasyon" : ""}, tiwalang ${trust}`;
+  return `${bar.reporters} ${located ? "located " : ""}reporters, trust ${trust}`;
 }
 
 /** The alert engine only counts reports from the last 6 hours (check_and_trigger_alerts' v_window). */

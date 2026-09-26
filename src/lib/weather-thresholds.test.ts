@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { alertBar, countsTowardAlert, getHeatIndexCategory, hasElevatedLandslideRisk, isHeavyRainfall, REPORT_THRESHOLD } from "./weather-thresholds";
+import { alertBar, countsTowardAlert, describeBar, getHeatIndexCategory, hasElevatedLandslideRisk, isHeavyRainfall, REPORT_THRESHOLD } from "./weather-thresholds";
 
 describe("weather thresholds", () => {
   it("bands the heat index on PAGASA's published cut-offs", () => {
@@ -56,5 +56,14 @@ describe("alertBar (Stage 4 calibration: each barangay's own bar)", () => {
     expect(alertBar(1)).toEqual({ reporters: 4, trust: 1.25 });
     expect(alertBar(2)).toEqual({ reporters: 5, trust: 1.5 });
     expect(alertBar(4)).toEqual({ reporters: 5, trust: 2 });
+  });
+});
+
+describe("describeBar (one wording for the dashboard and the action record)", () => {
+  it("says a bar the same way in both places, in English and Filipino", () => {
+    expect(describeBar({ reporters: 4, trust: 1.25 }, "en")).toBe("4 located reporters, trust 1.25");
+    expect(describeBar({ reporters: 4, trust: 1.25 }, "fil")).toBe("4 residenteng may lokasyon, tiwalang 1.25");
+    expect(describeBar({ reporters: 3, trust: 1 }, "en")).toBe("3 located reporters, trust 1.0");
+    expect(describeBar({ reporters: 5, trust: 1.5 }, "fil", false)).toBe("5 residente, tiwalang 1.5");
   });
 });

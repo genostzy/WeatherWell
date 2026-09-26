@@ -7,8 +7,8 @@ import { TimeAgo } from "@/components/time-ago";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { useZones } from "@/lib/reference-data/use-reference-data";
-import { alertBar } from "@/lib/weather-thresholds";
-import type { LanguageCode, LocalizedText } from "@/lib/types";
+import { alertBar, describeBar } from "@/lib/weather-thresholds";
+import type { LocalizedText } from "@/lib/types";
 
 export type CalibrationKind = "confirmed" | "rejected" | "expired" | "missed";
 
@@ -40,14 +40,6 @@ const KIND: Record<CalibrationKind, LocalizedText> = {
 };
 const RAISED_TO: LocalizedText = { en: "bar raised to", fil: "itinaas ang pamantayan sa" };
 const LOWERED_TO: LocalizedText = { en: "bar lowered to", fil: "ibinaba ang pamantayan sa" };
-
-/** "4 located reporters, trust 1.25" for a step. */
-function describeBar(step: number, lang: LanguageCode, located = true): string {
-  const { reporters, trust } = alertBar(step);
-  const trustText = trust.toFixed(2).replace(/0$/, "");
-  if (lang === "fil") return `${reporters} residente${located ? " na may lokasyon" : ""}, tiwalang ${trustText}`;
-  return `${reporters} ${located ? "located " : ""}reporters, trust ${trustText}`;
-}
 
 /**
  * The calibration loop's record for officials (Stage 4 Task 3): which
@@ -83,7 +75,7 @@ export function CalibrationPanel({ bars, events }: { bars: Record<string, number
             <ul className="space-y-1">
               {raised.map(([zoneId, step]) => (
                 <li key={zoneId} lang={lang}>
-                  <span className="font-medium">{nameOf(zoneId)}</span>: {describeBar(step, lang)}
+                  <span className="font-medium">{nameOf(zoneId)}</span>: {describeBar(alertBar(step), lang)}
                 </li>
               ))}
             </ul>
@@ -107,7 +99,7 @@ export function CalibrationPanel({ bars, events }: { bars: Record<string, number
                     <>
                       {" "}
                       · {t(event.stepAfter > event.stepBefore ? RAISED_TO : LOWERED_TO, lang)}{" "}
-                      {describeBar(event.stepAfter, lang, false)}
+                      {describeBar(alertBar(event.stepAfter), lang, false)}
                     </>
                   )}
                   <TimeAgo reportedAt={event.occurredAt} prefix=" · " className="text-muted-foreground" />
