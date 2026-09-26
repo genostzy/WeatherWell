@@ -760,6 +760,21 @@ describe("service worker install", () => {
     await expect(Promise.all(waits)).resolves.toBeDefined();
   });
 
+  it("precaches /onboarding, so a new consent notice never strands a resident offline", async () => {
+    // A change of consent version sends a returning resident from / to
+    // /onboarding. Opened offline, an uncached /onboarding was the browser's
+    // offline page instead of their alerts (review, 26 September).
+    const { listeners, store } = loadServiceWorker({
+      fetch: async () => response("ok"),
+    });
+
+    const waits: Promise<unknown>[] = [];
+    listeners.install({ waitUntil: (p: Promise<unknown>) => waits.push(p) });
+    await Promise.all(waits);
+
+    expect(store.get(SHELL_CACHE)?.has("/onboarding")).toBe(true);
+  });
+
   it("precaches zones and alerts, so one prior visit is enough to work offline (I3/I4)", async () => {
     // Before this fix, nothing populated either cache until a manual fetch
     // happened to land after the worker already controlled the page — so a

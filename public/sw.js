@@ -20,7 +20,7 @@
  * CURRENT_CACHES, so a bump is what evicts a bad build from installed devices.
  * Leaving it unchanged is what pins users to a stale app forever.
  */
-const VERSION = "v18";
+const VERSION = "v19";
 
 const SHELL_CACHE = `weatherwell-shell-${VERSION}`;
 const ASSET_CACHE = `weatherwell-assets-${VERSION}`;
@@ -99,7 +99,9 @@ const PUBLIC_API_PATHS = ["/api/reports", "/api/pins", "/api/centres"];
 // here. Once /admin needs a sign-in, pre-downloading it would save the
 // sign-in page on every device and serve it back in place of the dashboard.
 // An official's own visits are not cached either: see isAdminScoped below.
-const PRECACHED_ROUTES = ["/", "/evacuation", "/report", "/map", "/a"];
+// /onboarding too: a new consent version sends a returning resident there from
+// /, and offline an uncached page would stand between them and their alerts.
+const PRECACHED_ROUTES = ["/", "/evacuation", "/report", "/map", "/a", "/onboarding"];
 
 self.addEventListener("install", (event) => {
   // Deliberately not cache.addAll: that is all-or-nothing, so a single route
