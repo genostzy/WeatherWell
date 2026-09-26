@@ -46,6 +46,13 @@ describe("AlertDetails read-aloud", () => {
   });
 });
 
+describe("AlertDetails confidence (PRD: always shown)", () => {
+  it("says how far the alert can be trusted", () => {
+    render(<AlertDetails alert={{ ...alert, source: "auto_crowdsourced", confidence: "estimated" }} zone={zone} lang="en" />);
+    expect(screen.getByText(/haven't been checked against real floods/i)).toBeInTheDocument();
+  });
+});
+
 describe("AlertDetails age", () => {
   afterEach(() => vi.useRealTimers());
 

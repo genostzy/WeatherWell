@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { countsTowardAlert, getHeatIndexCategory, hasElevatedLandslideRisk, isHeavyRainfall, REPORT_THRESHOLD } from "./weather-thresholds";
+import { alertBar, countsTowardAlert, getHeatIndexCategory, hasElevatedLandslideRisk, isHeavyRainfall, REPORT_THRESHOLD } from "./weather-thresholds";
 
 describe("weather thresholds", () => {
   it("bands the heat index on PAGASA's published cut-offs", () => {
@@ -42,5 +42,14 @@ describe("countsTowardAlert (found testing the live site)", () => {
 
   it("leaves out a device whose advisories officials rejected (weight 0, layer 6)", () => {
     expect(countsTowardAlert(r("knee", 1, false, 0), now)).toBe(false);
+  });
+});
+
+describe("alertBar (Stage 4 calibration: each barangay's own bar)", () => {
+  it("is 3 reporters and trust 1.0 at step 0, one reporter and 0.25 trust more a step, to 5 and 2.0", () => {
+    expect(alertBar(0)).toEqual({ reporters: 3, trust: 1 });
+    expect(alertBar(1)).toEqual({ reporters: 4, trust: 1.25 });
+    expect(alertBar(2)).toEqual({ reporters: 5, trust: 1.5 });
+    expect(alertBar(4)).toEqual({ reporters: 5, trust: 2 });
   });
 });

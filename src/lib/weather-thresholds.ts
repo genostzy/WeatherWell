@@ -30,6 +30,15 @@ export const REPORT_THRESHOLD = 3;
 /** Combined trust those reports need, each reporter's best report counted once (see report_trust_weights). */
 export const MIN_REPORT_TRUST = 1.0;
 
+/**
+ * A barangay's bar for an automatic advisory at a calibration step (Stage 4):
+ * step 0 is the two floors above, the anti-abuse minimum; each step up adds a
+ * reporter, to at most 5, and 0.25 trust. Mirrors check_and_trigger_alerts.
+ */
+export function alertBar(step: number): { reporters: number; trust: number } {
+  return { reporters: Math.min(REPORT_THRESHOLD + step, 5), trust: MIN_REPORT_TRUST + 0.25 * step };
+}
+
 /** The alert engine only counts reports from the last 6 hours (check_and_trigger_alerts' v_window). */
 export const REPORT_WINDOW_HOURS = 6;
 

@@ -16,7 +16,18 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 vi.mock("@/features/admin/admin-overview", () => ({ AdminOverview: () => null }));
 const rpc = vi.fn();
-vi.mock("@/lib/supabase/user-server", () => ({ createSupabaseUserClient: async () => ({ rpc }) }));
+// The calibration record (Stage 4): calibration_events newest first, and the raised bars.
+const events = vi.fn();
+const floors = vi.fn();
+vi.mock("@/lib/supabase/user-server", () => ({
+  createSupabaseUserClient: async () => ({
+    rpc,
+    from: (table: string) =>
+      table === "calibration_events"
+        ? { select: () => ({ order: () => ({ limit: () => events() }) }) }
+        : { select: () => ({ gt: () => floors() }) },
+  }),
+}));
 
 import AdminPage from "./page";
 
@@ -25,6 +36,8 @@ const barangay = { userId: "u", displayName: "K", areaCode: "0105528012", areaNa
 beforeEach(() => {
   vi.clearAllMocks();
   rpc.mockResolvedValue({ data: [], error: null });
+  events.mockResolvedValue({ data: [], error: null });
+  floors.mockResolvedValue({ data: [], error: null });
 });
 
 describe("/admin landing (found checking the live site)", () => {
@@ -51,5 +64,19 @@ describe("/admin landing (found checking the live site)", () => {
     const page = (await AdminPage()) as { props: { townOfficials: unknown } };
     expect(rpc).toHaveBeenCalledWith("town_officials");
     expect(page.props.townOfficials).toEqual([{ userId: "u2", displayName: "Kap Nilo", areaCode: "0105528012" }]);
+  });
+
+  it("hands admins and town officials the calibration record (Stage 4 Task 3)", async () => {
+    events.mockResolvedValue({
+      data: [{ id: 7, zone_id: "zone-1", kind: "rejected", step_before: 0, step_after: 1, occurred_at: "2026-09-26T01:00:00Z" }],
+      error: null,
+    });
+    floors.mockResolvedValue({ data: [{ zone_id: "zone-1", step: 1 }], error: null });
+    loadOfficial.mockResolvedValue({ state: "official", official: { ...barangay, level: "admin", areaCode: "" } });
+    const page = (await AdminPage()) as { props: { calibration: unknown } };
+    expect(page.props.calibration).toEqual({
+      bars: { "zone-1": 1 },
+      events: [{ id: 7, zoneId: "zone-1", kind: "rejected", stepBefore: 0, stepAfter: 1, occurredAt: "2026-09-26T01:00:00Z" }],
+    });
   });
 });

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { SeverityBadge } from "@/features/alerts/severity-badge";
+import { ConfidenceTag } from "@/features/alerts/confidence-tag";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { friendlyError } from "@/lib/friendly-error";
@@ -171,6 +172,7 @@ export function OfficialInbox({ zones }: { zones: Zone[] }) {
                   <p lang={lang} className="text-sm text-muted-foreground">
                     {t(automatic ? AUTO_NOTE : STALE_NOTE, lang)}
                   </p>
+                  {automatic && <ConfidenceTag source={alert.source} confidence={alert.confidence} lang={lang} />}
                   <div className="grid grid-cols-2 gap-2">
                     <Button
                       type="button"

@@ -5,7 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Users, TriangleAlert } from "lucide-react";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
-import { countsTowardAlert, REPORT_THRESHOLD } from "@/lib/weather-thresholds";
+import { countsTowardAlert } from "@/lib/weather-thresholds";
+import { useAlertBars } from "@/lib/use-alert-bars";
 import { useWaterLevelReports, getRecentReportsForZoneLive } from "@/lib/water-level-reports";
 import { TimeAgo } from "@/components/time-ago";
 import { DEPTH_LABEL, DEPTH_CM, DEPTH_SEVERITY } from "@/lib/depth";
@@ -34,6 +35,8 @@ export function RecentReportsPanel({ zone }: { zone: Zone }) {
   const allReports = useWaterLevelReports();
   const reports = getRecentReportsForZoneLive(allReports, zone.id);
   const agreeing = reports.filter((report) => countsTowardAlert(report)).length;
+  // This barangay's own bar, as calibrated (Stage 4).
+  const needed = useAlertBars()(zone.id).reporters;
 
   return (
     <Card>
@@ -57,7 +60,7 @@ export function RecentReportsPanel({ zone }: { zone: Zone }) {
             </div>
             {/* Progress toward the multi-report threshold — PRD Anti-Abuse layer 3. */}
             <div className="flex gap-1" aria-hidden="true">
-              {Array.from({ length: Math.max(REPORT_THRESHOLD, agreeing) }).map((_, index) => (
+              {Array.from({ length: Math.max(needed, agreeing) }).map((_, index) => (
                 <div
                   key={index}
                   className={`h-2 flex-1 rounded-sm ${index < agreeing ? "bg-severity-orange" : "bg-muted"}`}
@@ -65,7 +68,7 @@ export function RecentReportsPanel({ zone }: { zone: Zone }) {
               ))}
             </div>
             <p className="text-xs text-muted-foreground">
-              {REPORT_THRESHOLD} {t(THRESHOLD_NOTE, lang)}
+              {needed} {t(THRESHOLD_NOTE, lang)}
             </p>
 
             <ul className="space-y-2 border-t pt-3">

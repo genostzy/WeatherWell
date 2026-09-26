@@ -8,7 +8,8 @@ import { Droplet, Users, Settings2 } from "lucide-react";
 import { SeverityBadge } from "@/features/alerts/severity-badge";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
-import { countsTowardAlert, MIN_REPORT_TRUST, REPORT_THRESHOLD } from "@/lib/weather-thresholds";
+import { countsTowardAlert } from "@/lib/weather-thresholds";
+import { useAlertBars } from "@/lib/use-alert-bars";
 import { countReportsToday } from "@/lib/reports-today";
 import {
   useWaterLevelReports,
@@ -46,6 +47,7 @@ const SUSCEPTIBILITY_LABEL: Record<HazardLevel, LocalizedText> = {
 };
 
 export function FloodMonitoringPanel({ zones }: { zones: Zone[] }) {
+  const barFor = useAlertBars();
   const { lang } = useLanguage();
   const official = useOfficial();
   const allReports = useWaterLevelReports();
@@ -64,7 +66,7 @@ export function FloodMonitoringPanel({ zones }: { zones: Zone[] }) {
       </CardHeader>
       <CardContent className="space-y-3">
         {inAreaZones.map((zone) => (
-          <FloodMonitoringRow key={zone.id} zone={zone} lang={lang} allReports={allReports} />
+          <FloodMonitoringRow key={zone.id} zone={zone} lang={lang} allReports={allReports} bar={barFor(zone.id)} />
         ))}
       </CardContent>
     </Card>
@@ -75,10 +77,13 @@ function FloodMonitoringRow({
   zone,
   lang,
   allReports,
+  bar,
 }: {
   zone: Zone;
   lang: LanguageCode;
   allReports: LiveWaterLevelReport[];
+  /** This barangay's bar for an automatic advisory, as calibrated (Stage 4). */
+  bar: { reporters: number; trust: number };
 }) {
   const alert = useActiveAlertForZone(zone.id);
   const status = getZoneStatus(alert);
@@ -92,8 +97,8 @@ function FloodMonitoringRow({
   // not per reporter; the feed carries no reporter id since SP1).
   const trust = counted.reduce((sum, report) => sum + report.trustWeight, 0);
   const met =
-    agreeing >= REPORT_THRESHOLD &&
-    trust >= MIN_REPORT_TRUST &&
+    agreeing >= bar.reporters &&
+    trust >= bar.trust &&
     counted.some((report) => report.reporterEstablished);
 
   return (
@@ -137,7 +142,7 @@ function FloodMonitoringRow({
           }
         >
           {t(met ? THRESHOLD_MET : BELOW_THRESHOLD, lang)} ({agreeing}/
-          {REPORT_THRESHOLD})
+          {bar.reporters})
         </Badge>
       </div>
 

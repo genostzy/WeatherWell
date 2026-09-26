@@ -25,6 +25,7 @@ import { NoZonesNotice } from "@/features/admin/no-zones-notice";
 import { OfficialInbox } from "@/features/admin/official-inbox";
 import { OfficialMessagesPanel } from "@/features/admin/official-messages-panel";
 import { TownBarangaysPanel, type TownOfficial } from "@/features/admin/town-barangays-panel";
+import { CalibrationPanel, type CalibrationEvent } from "@/features/admin/calibration-panel";
 import { useWaterLevelReports } from "@/lib/water-level-reports";
 import { countReportsToday } from "@/lib/reports-today";
 import { useTyphoon } from "@/lib/use-typhoon";
@@ -78,7 +79,24 @@ const UNVERIFIED: LocalizedText = { en: "unverified, resident-reported", fil: "h
 const ACTIVE_CYCLONE: LocalizedText = { en: "Tropical cyclone", fil: "Bagyo" };
 const NONE_TRACKED: LocalizedText = { en: "None tracked", fil: "Wala" };
 
-export function AdminOverview({ townOfficials = [] }: { townOfficials?: TownOfficial[] } = {}) {
+/** The part of the calibration record inside this dashboard's area. */
+function inArea(
+  calibration: { bars: Record<string, number>; events: CalibrationEvent[] },
+  zoneIds: Set<string>
+): { bars: Record<string, number>; events: CalibrationEvent[] } {
+  return {
+    bars: Object.fromEntries(Object.entries(calibration.bars).filter(([zoneId]) => zoneIds.has(zoneId))),
+    events: calibration.events.filter((event) => zoneIds.has(event.zoneId)),
+  };
+}
+
+export function AdminOverview({
+  townOfficials = [],
+  calibration,
+}: {
+  townOfficials?: TownOfficial[];
+  calibration?: { bars: Record<string, number>; events: CalibrationEvent[] };
+} = {}) {
   const { lang } = useLanguage();
   const official = useOfficial();
   const pins = useCommunityPins();
@@ -194,6 +212,10 @@ export function AdminOverview({ townOfficials = [] }: { townOfficials?: TownOffi
               </p>
             </CardContent>
           </Card>
+        )}
+
+        {calibration && (
+          <CalibrationPanel {...inArea(calibration, new Set(zones.map((zone) => zone.id)))} />
         )}
 
         {!isNationwide && (

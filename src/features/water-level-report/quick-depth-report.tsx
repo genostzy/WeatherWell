@@ -8,7 +8,8 @@ import { t } from "@/lib/i18n";
 import { DEPTH_LEVELS, DEPTH_LABEL, DEPTH_CM, type DepthLevel } from "@/lib/depth";
 import { addWaterLevelReport, useWaterLevelReports } from "@/lib/water-level-reports";
 import { useActiveAlertForZone } from "@/lib/alerts-store";
-import { countsTowardAlert, REPORT_THRESHOLD } from "@/lib/weather-thresholds";
+import { countsTowardAlert } from "@/lib/weather-thresholds";
+import { useAlertBars } from "@/lib/use-alert-bars";
 import { discardEntry, readOutbox } from "@/lib/outbox/outbox";
 import type { LocalizedText } from "@/lib/types";
 
@@ -76,13 +77,14 @@ type State =
 export function QuickDepthReport({ zoneId }: { zoneId: string }) {
   const reports = useWaterLevelReports();
   const activeAlert = useActiveAlertForZone(zoneId);
+  const bar = useAlertBars()(zoneId);
   const agreeing = reports.filter((r) => r.zoneId === zoneId && countsTowardAlert(r)).length;
   const counts = (depth: DepthLevel, located: boolean): LocalizedText => {
     if (depth === "dry") return DRY_HELPS;
     if (activeAlert) return HAS_ALERT;
     // The engine counts only located reports (countsTowardAlert), so never promise one it won't.
     if (!located) return NO_LOCATION;
-    const needed = REPORT_THRESHOLD - agreeing;
+    const needed = bar.reporters - agreeing;
     return needed > 0 ? { en: NEED_MORE.en.replace("{n}", String(needed)), fil: NEED_MORE.fil.replace("{n}", String(needed)) } : ENOUGH;
   };
   const { lang } = useLanguage();

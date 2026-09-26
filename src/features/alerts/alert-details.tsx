@@ -1,6 +1,7 @@
 "use client";
 
 import { RelayButton } from "@/features/relay/relay";
+import { ConfidenceTag } from "./confidence-tag";
 import { ReadAloudButton } from "./read-aloud-button";
 import { ShareAlertButton } from "./share-alert-button";
 import { t } from "@/lib/i18n";
@@ -48,6 +49,7 @@ export function AlertDetails({ alert, zone, lang }: { alert: AlertRecord; zone: 
           {t(UNVERIFIED, lang)}
         </p>
       )}
+      <ConfidenceTag source={alert.source} confidence={alert.confidence} lang={lang} />
       <div className="flex flex-wrap items-center gap-2 pt-1">
         <ReadAloudButton
           text={{ en: `${zone.name}. ${alert.message.en}`, fil: `${zone.name}. ${alert.message.fil}` }}

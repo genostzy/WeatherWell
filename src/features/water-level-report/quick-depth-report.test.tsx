@@ -168,6 +168,31 @@ describe("QuickDepthReport", () => {
       expect(await screen.findByText(/at least 2 more neighbours/i)).toBeInTheDocument();
     });
 
+    it("counts toward this barangay's own bar once the calibration loop has raised it (Stage 4)", async () => {
+      markConsented();
+      Object.defineProperty(navigator, "geolocation", {
+        configurable: true,
+        value: {
+          watchPosition: vi.fn((success) => {
+            success({ coords: { latitude: 16.0288, longitude: 120.4366 } });
+            return 1;
+          }),
+          clearWatch: vi.fn(),
+        },
+      });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (url: string) =>
+          String(url) === "/api/alert-bars" ? { ok: true, json: async () => ({ "zone-1": 1 }) } : { ok: false, json: async () => ({}) }
+        )
+      );
+      const user = userEvent.setup();
+      renderWithData(<QuickDepthReport zoneId="zone-1" />, { alerts: [] });
+      await user.click(screen.getByRole("button", { name: /knee-deep/i }));
+      expect(await screen.findByText(/at least 3 more neighbours/i)).toBeInTheDocument();
+      vi.unstubAllGlobals();
+    });
+
     it("never tells a report sent without a location that it counts toward an advisory (privacy review)", async () => {
       const user = userEvent.setup();
       renderWithData(<QuickDepthReport zoneId="zone-1" />, { alerts: [] });

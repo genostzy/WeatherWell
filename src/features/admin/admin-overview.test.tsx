@@ -252,6 +252,26 @@ describe("AdminOverview by role (each account sees its own dashboard)", () => {
     expect(screen.queryByText(/^flood monitoring$/i)).not.toBeInTheDocument();
   });
 
+  it("shows admins the calibration record for the barangays in view (Stage 4 Task 3)", () => {
+    const [first] = FIXTURE_REFERENCE_DATA.zones;
+    renderWithData(
+      <AdminOverview
+        calibration={{
+          bars: { [first.id]: 1, "zone-elsewhere": 2 },
+          events: [
+            { id: 1, zoneId: first.id, kind: "rejected", stepBefore: 0, stepAfter: 1, occurredAt: new Date().toISOString() },
+            { id: 2, zoneId: "zone-elsewhere", kind: "missed", stepBefore: 2, stepAfter: 1, occurredAt: new Date().toISOString() },
+          ],
+        }}
+      />,
+      { official: ADMIN }
+    );
+    const panel = screen.getByText("Calibration").closest("[data-slot=card]") as HTMLElement;
+    expect(within(panel).getByText(/rejected by an official/i)).toBeInTheDocument();
+    // Only the barangays this dashboard covers.
+    expect(within(panel).queryByText(/zone-elsewhere/)).not.toBeInTheDocument();
+  });
+
   it("calls an admin's the system dashboard, without a town's panels", () => {
     renderWithData(<AdminOverview />, { official: ADMIN });
     expect(screen.getByRole("heading", { level: 1, name: /system dashboard/i })).toBeInTheDocument();
