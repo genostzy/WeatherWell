@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import { loadOfficial } from "@/lib/auth/load-official";
@@ -7,6 +8,8 @@ import { toOfficialRows } from "@/lib/official-rows-mapper";
 import { OfficialsPanel } from "@/features/admin/officials-panel";
 import { TownOfficialsPanel } from "@/features/admin/town-officials-panel";
 import type { ReactNode } from "react";
+
+export const metadata: Metadata = { title: "Officials" };
 
 /** Both versions of the page share its frame and a plain title. */
 function Frame({ title, children }: { title: string; children: ReactNode }) {

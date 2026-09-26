@@ -1,5 +1,8 @@
+import type { Metadata } from "next";
 import { createSupabaseUserClient } from "@/lib/supabase/user-server";
 import { ResidentOverview } from "@/features/resident/resident-overview";
+
+export const metadata: Metadata = { title: "Your account" };
 
 export default async function ResidentOverviewPage() {
   const supabase = await createSupabaseUserClient();

@@ -44,7 +44,7 @@ function AccountMenu({ label, badge, children }: { label: string; badge: ReactNo
     <details ref={ref} className="relative">
       <summary
         aria-label={label}
-        className="flex min-h-9 cursor-pointer list-none items-center gap-1 rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden"
+        className="flex min-h-9 cursor-pointer list-none items-center gap-1 rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring [&::-webkit-details-marker]:hidden"
       >
         {badge}
         <ChevronDown aria-hidden="true" className="h-4 w-4 text-muted-foreground" />

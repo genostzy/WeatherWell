@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { LanguageProvider, useLanguage } from "./language-provider";
 
@@ -37,5 +37,29 @@ describe("LanguageProvider", () => {
       </LanguageProvider>
     );
     expect(screen.getByTestId("lang")).toHaveTextContent("fil");
+  });
+});
+
+describe("LanguageProvider and the page's language (WCAG 3.1.1)", () => {
+  it("declares the page Filipino while Filipino is on, so a screen reader speaks it as Filipino", async () => {
+    function Switch() {
+      const { setLang } = useLanguage();
+      return (
+        <>
+          <button onClick={() => setLang("fil")}>fil</button>
+          <button onClick={() => setLang("en")}>en</button>
+        </>
+      );
+    }
+    render(
+      <LanguageProvider>
+        <Switch />
+      </LanguageProvider>
+    );
+    expect(document.documentElement.lang).toBe("en");
+    fireEvent.click(screen.getByRole("button", { name: "fil" }));
+    expect(document.documentElement.lang).toBe("fil");
+    fireEvent.click(screen.getByRole("button", { name: "en" }));
+    expect(document.documentElement.lang).toBe("en");
   });
 });

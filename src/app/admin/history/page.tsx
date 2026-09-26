@@ -1,8 +1,11 @@
+import type { Metadata } from "next";
 import { loadOfficial } from "@/lib/auth/load-official";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseUserClient } from "@/lib/supabase/user-server";
 import { toOfficialActions, filterToArea, historyScope } from "@/lib/official-actions-mapper";
 import { HistoryList } from "@/features/admin/history-list";
+
+export const metadata: Metadata = { title: "History" };
 
 /**
  * Every recorded action across the system, newest first, opening filtered to

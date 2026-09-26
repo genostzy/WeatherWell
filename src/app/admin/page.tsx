@@ -1,9 +1,12 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { loadOfficial } from "@/lib/auth/load-official";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseUserClient } from "@/lib/supabase/user-server";
 import { AdminOverview } from "@/features/admin/admin-overview";
 import type { CalibrationEvent, CalibrationKind } from "@/features/admin/calibration-panel";
+
+export const metadata: Metadata = { title: "Dashboard" };
 
 /**
  * The calibration loop's record (Stage 4 Task 3): the newest outcomes and the

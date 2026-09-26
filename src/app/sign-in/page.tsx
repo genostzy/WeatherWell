@@ -1,5 +1,8 @@
+import type { Metadata } from "next";
 import { SignInPanel } from "@/features/auth/sign-in-panel";
 import { safeNext } from "@/lib/auth/safe-next";
+
+export const metadata: Metadata = { title: "Sign in" };
 
 /**
  * The one sign-in surface for both an official (arriving via `?next=/admin…`)

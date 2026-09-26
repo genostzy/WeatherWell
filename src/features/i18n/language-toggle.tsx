@@ -25,7 +25,7 @@ export function LanguageToggle() {
           aria-label={LANGUAGE_LABEL[code]}
           aria-pressed={code === lang}
           onClick={() => setLang(code)}
-          className={`min-h-8 min-w-10 rounded-full px-2.5 text-xs font-semibold transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${
+          className={`min-h-8 min-w-10 rounded-full px-2.5 text-xs font-semibold transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring ${
             code === lang ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
           }`}
         >

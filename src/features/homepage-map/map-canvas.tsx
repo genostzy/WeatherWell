@@ -25,7 +25,8 @@ import {
 import { MarkerLegend } from "@/features/map/marker-legend";
 import { HazardTypeSelector, hazardMapTitle } from "@/features/map/hazard-type-selector";
 import { hasRealEvacuationCenter } from "@/lib/zone-data-quality";
-import type { HazardType, LocalizedText, Zone } from "@/lib/types";
+import type { HazardType, LanguageCode, LocalizedText, Zone } from "@/lib/types";
+import { MapCentrePlacer } from "@/features/map/map-centre-placer";
 
 const MAP_ARIA_LABEL: LocalizedText = {
   en: "Interactive flood zone map",
@@ -61,14 +62,21 @@ const NEAREST_EVAC_LABEL: LocalizedText = { en: "Nearest evac", fil: "Pinakamala
 const EVAC_FULL: LocalizedText = { en: "Full", fil: "Puno" };
 const EVAC_AVAILABLE: LocalizedText = { en: "Available", fil: "May espasyo" };
 
-/** Only mounted while `isPlacingPin` — reports the resident's tap back up without adding a permanent click handler to the whole map. */
-function PinPlacer({ onPlace }: { onPlace: (lat: number, lng: number) => void }) {
+const DROP_AT_CENTRE: LocalizedText = { en: "Drop the pin at the map's centre", fil: "Ilagay ang pin sa gitna ng mapa" };
+
+/**
+ * Only mounted while `isPlacingPin` — reports the resident's tap back up
+ * without adding a permanent click handler to the whole map. Without a
+ * pointer, the arrow keys move the map and the button drops the pin at its
+ * centre (WCAG 2.1.1).
+ */
+function PinPlacer({ onPlace, lang }: { onPlace: (lat: number, lng: number) => void; lang: LanguageCode }) {
   useMapEvents({
     click(event) {
       onPlace(event.latlng.lat, event.latlng.lng);
     },
   });
-  return null;
+  return <MapCentrePlacer onPlace={onPlace} label={t(DROP_AT_CENTRE, lang)} />;
 }
 
 /** Centers the map on the user's GPS position. */
@@ -323,7 +331,7 @@ export function MapCanvas({
                 onFocus={() => setShowSearch(true)}
                 onBlur={() => setTimeout(() => setShowSearch(false), 200)}
                 placeholder={t(SEARCH_PLACEHOLDER, lang)}
-                className="h-10 w-full rounded-lg border-2 border-border bg-background/95 px-3 pr-8 text-sm font-medium shadow-md backdrop-blur placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                className="h-10 w-full rounded-lg border-2 border-input bg-background/95 px-3 pr-8 text-sm font-medium shadow-md backdrop-blur placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               />
               <svg className="absolute right-2.5 top-3 h-4 w-4 text-muted-foreground" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
               {searchResults.length > 0 && showSearch && (
@@ -372,7 +380,7 @@ export function MapCanvas({
                       type="checkbox"
                       checked={layer.value}
                       onChange={(e) => layer.setter(e.target.checked)}
-                      className="h-4 w-4 rounded border-border"
+                      className="h-4 w-4 rounded border-input"
                     />
                     {layer.label}
                   </label>
@@ -430,7 +438,7 @@ export function MapCanvas({
     >
       {flyTarget && <FlyToUser position={flyTarget} />}
       {searchTarget && <FlyToTarget target={searchTarget} />}
-      {isPlacingPin && onMapClickForPin && <PinPlacer onPlace={onMapClickForPin} />}
+      {isPlacingPin && onMapClickForPin && <PinPlacer onPlace={onMapClickForPin} lang={lang} />}
       <ViewportTracker onZoom={setZoom} onCenter={setViewCenter} />
 
       {showHazard && <HazardBackdropLayer zones={visibleZones} hazardType={hazardType} />}

@@ -107,7 +107,7 @@ export function CommunityPinForm({
               rows={2}
               maxLength={140}
               required
-              className="w-full resize-none rounded-md border-2 border-border bg-background p-2 text-sm placeholder:text-muted-foreground"
+              className="w-full resize-none rounded-md border-2 border-input bg-background p-2 text-sm placeholder:text-muted-foreground"
             />
           </div>
 

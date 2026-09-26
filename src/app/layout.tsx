@@ -19,7 +19,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "WeatherWell",
+  title: { template: "%s — WeatherWell", default: "WeatherWell" },
   description: "Offline-capable flood alerts and evacuation guidance.",
   manifest: "/manifest.json",
   // iOS Safari ignores the Web App Manifest's icons for "Add to Home

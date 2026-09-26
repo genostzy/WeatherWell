@@ -175,6 +175,13 @@ describe("MapCanvas", () => {
       expect(screen.getByRole("button", { name: /^Delete$/i })).toBeInTheDocument();
     });
   });
+
+  it("drops a pin without a pointer, at the map's centre (WCAG 2.1.1)", () => {
+    const onMapClickForPin = vi.fn();
+    renderWithData(<MapCanvas {...baseProps} isPlacingPin onMapClickForPin={onMapClickForPin} />);
+    fireEvent.click(screen.getByRole("button", { name: /drop the pin at the map's centre/i }));
+    expect(onMapClickForPin).toHaveBeenCalledOnce();
+  });
 });
 
 describe("MapCanvas with no hazard data (I3)", () => {
@@ -198,4 +205,5 @@ describe("MapCanvas with no hazard data (I3)", () => {
       vi.unstubAllGlobals();
     }
   });
+
 });

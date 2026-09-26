@@ -127,6 +127,38 @@ describe("QuickDepthReport", () => {
     expect(undo.className).toMatch(/h-11/);
   });
 
+  it("keeps saying what was reported once undo has gone, for as long as it takes to read (WCAG 2.2.1)", async () => {
+    vi.useFakeTimers();
+    try {
+      renderWithData(<QuickDepthReport zoneId="zone-1" />);
+      fireEvent.click(screen.getByRole("button", { name: /ankle-deep/i }));
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60_000);
+      });
+
+      expect(screen.queryByRole("button", { name: /undo/i })).not.toBeInTheDocument();
+      expect(screen.getByRole("status")).toHaveTextContent(/reported: ankle-deep/i);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("files a later tap as a new report, not a correction of one whose undo has gone", async () => {
+    vi.useFakeTimers();
+    try {
+      renderWithData(<QuickDepthReport zoneId="zone-1" />);
+      fireEvent.click(screen.getByRole("button", { name: /ankle-deep/i }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3000);
+      });
+      fireEvent.click(screen.getByRole("button", { name: /knee-deep/i }));
+      expect(readOutbox()).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("degrades to a truthful message when undo lands after delivery", async () => {
     // Review Focus 4: the drain may deliver the report between the tap and
     // the undo. The entry is gone from the queue; undo must say so rather

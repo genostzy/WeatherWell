@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Marker, Polyline, Popup, useMapEvents } from "react-leaflet";
 import { useLanguage } from "@/features/i18n/language-provider";
+import { MapCentrePlacer } from "@/features/map/map-centre-placer";
 import { t } from "@/lib/i18n";
 import { friendlyError } from "@/lib/friendly-error";
 import { getZoneStatus, getZoneStatusColor, ZONE_STATUS_LABEL } from "@/lib/zone-status";
@@ -86,14 +87,19 @@ interface LayerVisibility {
   historical: boolean;
 }
 
-/** Placed on the map when the admin taps during official-marker placement mode. */
-function OfficialPinPlacer({ onPlace }: { onPlace: (lat: number, lng: number) => void }) {
+const PLACE_AT_CENTRE: LocalizedText = { en: "Place at the map's centre", fil: "Ilagay sa gitna ng mapa" };
+
+/**
+ * Placed on the map when the admin taps during official-marker placement
+ * mode, or, without a pointer, at the map's centre (WCAG 2.1.1).
+ */
+function OfficialPinPlacer({ onPlace, lang }: { onPlace: (lat: number, lng: number) => void; lang: LanguageCode }) {
   useMapEvents({
     click(event) {
       onPlace(event.latlng.lat, event.latlng.lng);
     },
   });
-  return null;
+  return <MapCentrePlacer onPlace={onPlace} label={t(PLACE_AT_CENTRE, lang)} />;
 }
 
 /**
@@ -224,7 +230,7 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
                   value={pendingOfficialCaption}
                   onChange={(e) => setPendingOfficialCaption(e.target.value)}
                   placeholder={t(CAPTION_PLACEHOLDER, lang)}
-                  className="w-full rounded-md border-2 border-border bg-background px-2 py-1 text-xs"
+                  className="w-full rounded-md border-2 border-input bg-background px-2 py-1 text-xs"
                 />
                 {pendingOfficialPos && (
                   <p className="text-[10px] text-muted-foreground">
@@ -307,6 +313,7 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
       {isPlacingOfficial && (
         <OfficialPinPlacer
           onPlace={(lat, lng) => setPendingOfficialPos({ lat, lng })}
+          lang={lang}
         />
       )}
 
@@ -682,7 +689,7 @@ function CenterOccupancyControl({
             if (event.key === "Enter") headcount.commit();
           }}
           aria-label={`${t(HEADCOUNT, lang)} — ${zone.evacuationCenterName}`}
-          className="w-full rounded-md border-2 border-border bg-background px-2 py-1 text-sm"
+          className="w-full rounded-md border-2 border-input bg-background px-2 py-1 text-sm"
         />
       </label>
       {error && <p className="text-xs text-severity-red">{t(SAVE_FAILED, lang)}</p>}

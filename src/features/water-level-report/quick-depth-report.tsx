@@ -51,15 +51,12 @@ const ALREADY_SENT: LocalizedText = {
 };
 const WITHDRAWN: LocalizedText = { en: "Report withdrawn", fil: "Nabawi ang ulat" };
 
-/** How long a terminal status message (withdrawn, already-sent, failed) stays up before the region clears itself. */
-const STATUS_MESSAGE_MS = 4000;
-
 /** How long the resident has to take back a mis-tap. */
 const UNDO_WINDOW_MS = 3000;
 
 type State =
   | { kind: "idle" }
-  | { kind: "reported"; entryId: string; depthLevel: DepthLevel; located: boolean }
+  | { kind: "reported"; entryId: string; depthLevel: DepthLevel; located: boolean; canUndo: boolean }
   | { kind: "undone" }
   | { kind: "too-late" }
   | { kind: "failed" };
@@ -101,18 +98,20 @@ export function QuickDepthReport({ zoneId }: { zoneId: string }) {
     // A second depth tap while the first is still within its undo window is
     // a correction, not a second report — discard the one it's replacing so
     // both don't end up queued for one resident's one intent.
-    if (state.kind === "reported") discardEntry(state.entryId);
+    if (state.kind === "reported" && state.canUndo) discardEntry(state.entryId);
     try {
       const entry = addWaterLevelReport(zoneId, depthLevel, position, UNDO_WINDOW_MS);
-      setState({ kind: "reported", entryId: entry.id, depthLevel, located: position !== null });
-      timer.current = setTimeout(() => setState({ kind: "idle" }), UNDO_WINDOW_MS);
+      const report = { kind: "reported", entryId: entry.id, depthLevel, located: position !== null } as const;
+      setState({ ...report, canUndo: true });
+      // Only Undo expires; what was reported stays until the next tap, for
+      // anyone who reads slowly (WCAG 2.2.1).
+      timer.current = setTimeout(() => setState({ ...report, canUndo: false }), UNDO_WINDOW_MS);
     } catch {
       // enqueue throws OutboxWriteFailed when local storage is full or
       // blocked, meaning the report reached neither the queue nor the wire.
       // Saying "Reported" here would be the one lie this surface must not
       // tell.
       setState({ kind: "failed" });
-      timer.current = setTimeout(() => setState({ kind: "idle" }), STATUS_MESSAGE_MS);
     }
   }
 
@@ -124,12 +123,10 @@ export function QuickDepthReport({ zoneId }: { zoneId: string }) {
       // withdraw, and pretending otherwise would tell a resident their
       // report is gone when the barangay already has it.
       setState({ kind: "too-late" });
-      timer.current = setTimeout(() => setState({ kind: "idle" }), STATUS_MESSAGE_MS);
       return;
     }
     discardEntry(entryId);
     setState({ kind: "undone" });
-    timer.current = setTimeout(() => setState({ kind: "idle" }), STATUS_MESSAGE_MS);
   }
 
   return (
@@ -164,9 +161,11 @@ export function QuickDepthReport({ zoneId }: { zoneId: string }) {
               <span lang={lang} className="text-green-500">
                 {t(RECORDED, lang)}: {t(DEPTH_LABEL[state.depthLevel], lang)}
               </span>
-              <Button type="button" variant="ghost" size="lg" onClick={() => undo(state.entryId)}>
-                {t(UNDO, lang)}
-              </Button>
+              {state.canUndo && (
+                <Button type="button" variant="ghost" size="lg" onClick={() => undo(state.entryId)}>
+                  {t(UNDO, lang)}
+                </Button>
+              )}
             </span>
             <span lang={lang} className="block text-muted-foreground">
               {t(counts(state.depthLevel, state.located), lang)}

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { LanguageCode } from "@/lib/types";
 
 interface LanguageContextValue {
@@ -22,6 +22,11 @@ export function LanguageProvider({
   initialLang?: LanguageCode;
 }) {
   const [lang, setLang] = useState<LanguageCode>(initialLang);
+  // The page's own language follows the toggle (WCAG 3.1.1): a screen reader
+  // then speaks untagged text in the language it is written in.
+  useEffect(() => {
+    document.documentElement.lang = lang;
+  }, [lang]);
   return (
     <LanguageContext.Provider value={{ lang, setLang }}>
       {children}

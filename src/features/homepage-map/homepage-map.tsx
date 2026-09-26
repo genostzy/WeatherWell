@@ -156,7 +156,7 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
               handleFindSafeArea();
               setActiveAction("safe-area");
             }}
-            className={`flex min-h-16 flex-col items-center justify-center gap-1.5 rounded-xl border-2 px-3 py-3 text-center outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 ${
+            className={`flex min-h-16 flex-col items-center justify-center gap-1.5 rounded-xl border-2 px-3 py-3 text-center outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring ${
               activeAction === "safe-area" ? `border-primary ${NAV_ACTIVE}` : "border-border hover:bg-muted/50"
             }`}
           >
@@ -171,7 +171,7 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
               setRevealEvacuationCenters(true);
               setActiveAction("evac-centre");
             }}
-            className={`flex min-h-16 flex-col items-center justify-center gap-1.5 rounded-xl border-2 px-3 py-3 text-center outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 ${
+            className={`flex min-h-16 flex-col items-center justify-center gap-1.5 rounded-xl border-2 px-3 py-3 text-center outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring ${
               activeAction === "evac-centre" ? `border-primary ${NAV_ACTIVE}` : "border-border hover:bg-muted/50"
             }`}
           >
@@ -238,7 +238,7 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
           type="button"
           aria-pressed={isPlacingPin}
           onClick={() => setIsPlacingPin((v) => !v)}
-          className={`flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border-2 px-3 py-2.5 text-sm font-medium outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 ${
+          className={`flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border-2 px-3 py-2.5 text-sm font-medium outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring ${
             isPlacingPin
               ? "border-primary bg-primary text-primary-foreground hover:bg-primary/80"
               : "border-border hover:bg-muted/50"

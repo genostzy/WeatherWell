@@ -1,5 +1,8 @@
+import type { Metadata } from "next";
 import { createSupabaseUserClient } from "@/lib/supabase/user-server";
 import { ResidentCheckInsList, type ResidentCheckInRow } from "@/features/resident/resident-check-ins-list";
+
+export const metadata: Metadata = { title: "Your check-ins" };
 
 export default async function ResidentCheckInsPage() {
   const supabase = await createSupabaseUserClient();

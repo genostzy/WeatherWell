@@ -176,7 +176,7 @@ export function OfficialMessagesPanel() {
               maxLength={500}
               rows={3}
               onChange={(e) => setNote(e.target.value)}
-              className="w-full rounded-md border-2 border-border bg-background p-2 text-sm"
+              className="w-full rounded-md border-2 border-input bg-background p-2 text-sm"
             />
             <Button type="submit" size="lg" className="w-full" disabled={busy || !note.trim()} loading={busyKey === "send"}>
               <Send aria-hidden="true" />
@@ -210,7 +210,7 @@ export function OfficialMessagesPanel() {
               maxLength={500}
               rows={2}
               onChange={(e) => setNote(e.target.value)}
-              className="w-full rounded-md border-2 border-border bg-background p-2 text-sm"
+              className="w-full rounded-md border-2 border-input bg-background p-2 text-sm"
             />
             <Button
               type="button"

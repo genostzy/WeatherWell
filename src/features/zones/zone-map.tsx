@@ -110,7 +110,7 @@ export function ZoneMap({ zones }: { zones: Zone[] }) {
           value={searchQuery}
           onChange={(e) => handleSearch(e.target.value)}
           placeholder={t(SEARCH_PLACEHOLDER, lang)}
-          className="w-full rounded-lg border-2 border-border bg-background pl-9 pr-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          className="w-full rounded-lg border-2 border-input bg-background pl-9 pr-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
         />
       </div>
 

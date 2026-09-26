@@ -32,7 +32,7 @@ export function FloodModeActions({ zone }: { zone: Zone }) {
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <Link
           href="/evacuation"
-          className="flex min-h-14 items-center justify-center gap-2 rounded-xl px-4 text-base font-bold text-white outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="flex min-h-14 items-center justify-center gap-2 rounded-xl px-4 text-base font-bold text-white outline-none focus-visible:ring-3 focus-visible:ring-ring"
           style={{ backgroundColor: color }}
         >
           <Building2 aria-hidden="true" className="h-5 w-5 shrink-0" />
@@ -40,7 +40,7 @@ export function FloodModeActions({ zone }: { zone: Zone }) {
         </Link>
         <a
           href={`tel:${realHotline ? zone.hotlineNumber : "911"}`}
-          className="flex min-h-14 items-center justify-center gap-2 rounded-xl border-2 px-4 text-base font-bold text-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="flex min-h-14 items-center justify-center gap-2 rounded-xl border-2 px-4 text-base font-bold text-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring"
           style={{ borderColor: color }}
         >
           <Phone aria-hidden="true" className="h-5 w-5 shrink-0" />

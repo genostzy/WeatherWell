@@ -295,7 +295,7 @@ export function OfficialInbox({ zones }: { zones: Zone[] }) {
             value={manualCopy}
             rows={6}
             onFocus={(e) => e.currentTarget.select()}
-            className="w-full rounded-md border-2 border-border bg-background p-2 text-sm"
+            className="w-full rounded-md border-2 border-input bg-background p-2 text-sm"
           />
         )}
         {notice && (

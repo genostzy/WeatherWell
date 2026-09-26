@@ -1,4 +1,7 @@
+import type { Metadata } from "next";
 import { SharedAlertView } from "./shared-alert-view";
+
+export const metadata: Metadata = { title: "Shared flood alert" };
 
 /**
  * A forwarded alert. Read from ?d= on the server (idea 6), so the whole alert

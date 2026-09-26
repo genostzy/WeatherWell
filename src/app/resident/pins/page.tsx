@@ -1,5 +1,8 @@
+import type { Metadata } from "next";
 import { createSupabaseUserClient } from "@/lib/supabase/user-server";
 import { ResidentPinsList, type ResidentPinRow } from "@/features/resident/resident-pins-list";
+
+export const metadata: Metadata = { title: "Your pins" };
 
 export default async function ResidentPinsPage() {
   const supabase = await createSupabaseUserClient();

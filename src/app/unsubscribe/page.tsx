@@ -1,5 +1,8 @@
+import type { Metadata } from "next";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+export const metadata: Metadata = { title: "Unsubscribe" };
 
 /**
  * Where an email's "stop these emails" link lands. Asks before doing

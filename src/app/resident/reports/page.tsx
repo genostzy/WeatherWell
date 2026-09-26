@@ -1,5 +1,8 @@
+import type { Metadata } from "next";
 import { createSupabaseUserClient } from "@/lib/supabase/user-server";
 import { ResidentReportsList, type ResidentReportRow } from "@/features/resident/resident-reports-list";
+
+export const metadata: Metadata = { title: "Your reports" };
 
 export default async function ResidentReportsPage() {
   const supabase = await createSupabaseUserClient();
