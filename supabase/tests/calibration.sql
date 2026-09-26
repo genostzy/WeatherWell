@@ -45,6 +45,24 @@ begin
   perform set_config('request.jwt.claims', '', true);
 end $$;
 
+-- A located report made p_hours_ago hours ago (the write-time check keeps
+-- any time within the last 6 hours), filed as p_uid.
+create or replace function tests.calibration_report_at(p_uid uuid, p_zone text, p_hours_ago int) returns void
+language plpgsql set search_path = '' as $$
+declare
+  v_lat double precision;
+  v_lng double precision;
+begin
+  select z.lat, z.lng into v_lat, v_lng from public.zones z where z.id = p_zone;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', p_uid::text, 'role', 'authenticated')::text, true);
+  execute 'set local role authenticated';
+  insert into public.water_level_reports (zone_id, depth_level, reporter_id, lat, lng, reported_at)
+    values (p_zone, 'waist', p_uid, v_lat, v_lng, now() - make_interval(hours => p_hours_ago));
+  execute 'reset role';
+  perform set_config('request.jwt.claims', '', true);
+end $$;
+
 -- An automatic advisory, raised the way the engine raises one.
 create or replace function tests.calibration_advisory(p_zone text) returns uuid
 language plpgsql set search_path = '' as $$
@@ -56,7 +74,7 @@ begin
   return v_id;
 end $$;
 
--- Fixtures: eight barangays in one town, its official, 30 identities made
+-- Fixtures: ten barangays in one town, its official, 30 identities made
 -- two days ago (so they count as established) and one resident.
 do $$
 begin
@@ -64,7 +82,7 @@ begin
     (id, psgc_barangay_code, name, evacuation_route_text, lat, lng, evacuation_route_path, hotline_number)
     select 'cal-z' || g, '9900008' || lpad(g::text, 3, '0'), 'Calibration Zone ' || g,
            '{"en":"x","fil":"x"}'::jsonb, 14 + g * 0.2, 122, '[]'::jsonb, '000'
-      from generate_series(1, 8) g;
+      from generate_series(1, 10) g;
   insert into auth.users (id, created_at)
     select ('ca100000-0000-4000-8000-0000000000' || lpad(g::text, 2, '0'))::uuid, now() - interval '2 days'
       from generate_series(1, 30) g
@@ -177,35 +195,70 @@ begin
   raise notice 'ok C4: the engine holds each barangay to its own bar';
 end $$;
 
--- C5: a missed event (an official raises an alert from nothing while located
--- reports are coming in) brings the bar down a step, never below step 0.
+-- C5: a missed event brings the bar down a step. A miss is an official's
+-- alert raised from nothing over reports the engine was counting that would
+-- have cleared the floor bar (3 reporters, trust 1.0, one established), so
+-- only the raised bar kept the engine quiet. Too few reports, reports made
+-- before the official's own last decision on the alert, or a bar already at
+-- the floor: no miss.
 do $$
 declare
   u text := 'ca100000-0000-4000-8000-0000000000';
 begin
+  -- Two reporters: not even the floor bar would have caught this.
   insert into public.zone_alert_floors (zone_id, step) values ('cal-z6', 1);
   perform tests.calibration_report((u || '21')::uuid, 'cal-z6');
   perform tests.calibration_report((u || '22')::uuid, 'cal-z6');
   perform * from public.check_and_trigger_alerts();
-
   perform tests.as_calibrator($q$select public.set_zone_alert('cal-z6', 'orange', '{"en":"o","fil":"o"}'::jsonb)$q$);
-  if private.alert_bar_step('cal-z6') <> 0 then
+  if private.alert_bar_step('cal-z6') <> 1
+     or exists (select 1 from public.calibration_events where zone_id = 'cal-z6' and kind = 'missed') then
+    raise exception using errcode = 'TSTFL', message = 'C5: two reporters, whom no bar would have acted on, counted as a miss';
+  end if;
+
+  -- Five reporters (trust 1.0) clear the floor but not the step-1 bar (1.25): a miss.
+  insert into public.zone_alert_floors (zone_id, step) values ('cal-z9', 1);
+  for g in 23..27 loop
+    perform tests.calibration_report((u || lpad(g::text, 2, '0'))::uuid, 'cal-z9');
+  end loop;
+  perform * from public.check_and_trigger_alerts();
+  if exists (select 1 from public.alerts where zone_id = 'cal-z9' and is_active) then
+    raise exception using errcode = 'TSTFL', message = 'C5: five reporters cleared a step-1 bar';
+  end if;
+  perform tests.as_calibrator($q$select public.set_zone_alert('cal-z9', 'orange', '{"en":"o","fil":"o"}'::jsonb)$q$);
+  if private.alert_bar_step('cal-z9') <> 0 then
     raise exception using errcode = 'TSTFL', message = 'C5: a missed event did not lower the bar';
   end if;
-  perform tests.as_calibrator($q$select public.set_zone_alert('cal-z6', null, null)$q$);
-  perform tests.as_calibrator($q$select public.set_zone_alert('cal-z6', 'orange', '{"en":"o","fil":"o"}'::jsonb)$q$);
-  if private.alert_bar_step('cal-z6') <> 0 then
-    raise exception using errcode = 'TSTFL', message = 'C5: the bar went below the anti-abuse minimum';
+
+  -- At the floor there is nothing lower, and nothing a raised bar kept quiet.
+  perform tests.as_calibrator($q$select public.set_zone_alert('cal-z9', null, null)$q$);
+  perform tests.as_calibrator($q$select public.set_zone_alert('cal-z9', 'orange', '{"en":"o","fil":"o"}'::jsonb)$q$);
+  if private.alert_bar_step('cal-z9') <> 0
+     or (select count(*) from public.calibration_events where zone_id = 'cal-z9' and kind = 'missed') <> 1 then
+    raise exception using errcode = 'TSTFL', message = 'C5: the floor bar moved, or recorded a miss';
   end if;
-  if (select count(*) from public.calibration_events where zone_id = 'cal-z6' and kind = 'missed') <> 2 then
-    raise exception using errcode = 'TSTFL', message = 'C5: a missed event went unrecorded';
+
+  -- Reports made before the official's own last decision on the alert are the
+  -- ones the engine sets aside, so they are no miss either. That decision is
+  -- written an hour back here, since everything in this suite shares now().
+  insert into public.zone_alert_floors (zone_id, step) values ('cal-z10', 1);
+  for g in 23..27 loop
+    perform tests.calibration_report_at((u || lpad(g::text, 2, '0'))::uuid, 'cal-z10', 2);
+  end loop;
+  insert into public.official_actions (actor_id, actor_name, action, zone_id, target_id, detail, occurred_at)
+    values ('ca200000-0000-4000-8000-000000000001', 'Test Calibrator', 'alert.cleared', 'cal-z10', null,
+            '{"from":"orange"}'::jsonb, now() - interval '1 hour');
+  perform tests.as_calibrator($q$select public.set_zone_alert('cal-z10', 'orange', '{"en":"o","fil":"o"}'::jsonb)$q$);
+  if private.alert_bar_step('cal-z10') <> 1 then
+    raise exception using errcode = 'TSTFL', message = 'C5: reports the engine had set aside counted as a miss';
   end if;
+
   -- An official alert raised with no reports at all is no miss: nothing was there to catch.
   perform tests.as_calibrator($q$select public.set_zone_alert('cal-z3', 'orange', '{"en":"o","fil":"o"}'::jsonb)$q$);
   if exists (select 1 from public.calibration_events where zone_id = 'cal-z3') then
     raise exception using errcode = 'TSTFL', message = 'C5: an alert with no reports behind it counted as missed';
   end if;
-  raise notice 'ok C5: a missed event lowers the bar a step, never below the anti-abuse minimum';
+  raise notice 'ok C5: a miss is only what the raised bar kept quiet, and it lowers the bar a step';
 end $$;
 
 -- C6: every advisory's outcome is recorded against it: confirmed, rejected,
