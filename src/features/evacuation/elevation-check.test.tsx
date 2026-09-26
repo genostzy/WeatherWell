@@ -1,6 +1,7 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { ElevationCheck } from "./elevation-check";
+import { markConsented } from "@/features/onboarding/onboarding-storage";
 
 function stubPosition(ok: boolean) {
   Object.defineProperty(navigator, "geolocation", {
@@ -15,6 +16,11 @@ function stubPosition(ok: boolean) {
 }
 
 describe("ElevationCheck (idea 8)", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    markConsented();
+  });
+
   afterEach(() => {
     vi.unstubAllGlobals();
     Reflect.deleteProperty(navigator, "geolocation");
@@ -41,6 +47,21 @@ describe("ElevationCheck (idea 8)", () => {
     render(<ElevationCheck zoneId="zone-1" />);
     fireEvent.click(screen.getByRole("button", { name: /how high am i/i }));
     expect(await screen.findByText(/needs your location/i)).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("never reads the position before the consent notice, and points to it instead (review)", async () => {
+    // A shared /evacuation link opens without onboarding, and a resident set
+    // up under an older notice has not accepted the current one.
+    window.localStorage.clear();
+    const getCurrentPosition = vi.fn();
+    Object.defineProperty(navigator, "geolocation", { configurable: true, value: { getCurrentPosition } });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ElevationCheck zoneId="zone-1" />);
+    fireEvent.click(screen.getByRole("button", { name: /how high am i/i }));
+    expect(await screen.findByRole("link", { name: /how weatherwell uses your location/i })).toHaveAttribute("href", "/onboarding");
+    expect(getCurrentPosition).not.toHaveBeenCalled();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
