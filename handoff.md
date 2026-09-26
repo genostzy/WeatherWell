@@ -19,6 +19,30 @@
 - `pg_cron` now starts the GitHub workflows on time. The owner put the token in Vault at 02:18 UTC on 26 September, and the first dispatched Monitor run started at 02:30 UTC and passed.
 - The Nilombot test alert (yellow, set by Test Official at 22:17 on 25 September) was lifted at 02:21 UTC on 26 September. The action record shows it as cleared by the System owner. No push or email went out, because it was lifted in the database, not through the app.
 
+### Code review of the session, 26 September (not yet released)
+
+A self-review of `0b9f0fd..ddf7293` (the review agents hit their usage limit) found 15 issues. Fixed in these commits on `v1`, **not pushed and not released**:
+
+| Commit | Fix |
+|---|---|
+| `8c84424` | A report sent without a location no longer counts toward "enough neighbours" or "Threshold met" (the engine never counts it) |
+| `a9f0411` | DB: a missed event is only what the raised bar kept quiet; one rule for the reports that count, `private.report_evidence` |
+| `f3eb5ea` | `/onboarding` is precached (service worker v19), so a new consent version never strands a resident offline |
+| `6e8fc9d` | "How high am I?" waits for the consent notice |
+| `145bbbd` | A town's calibration record is filtered in the query, before the 30-row limit |
+| `801de6a` | A queued report's rate-limit note never outlives the wait |
+| `251f5fe` | `/api/alert-bars` reads past PostgREST's 1,000-row page |
+| `0888fb2` | The bar is described one way on the dashboard and in the action record |
+| `065d91b` | Monitor fails, and so emails the owner, once Supabase has not started a run for an hour (an expired Vault token) |
+| `39bddbb` | DB: a report's refusal carries a HINT (`too_far`, `rate_limited`) that the app matches, not the wording |
+
+- Three migrations from these are **already live**: `20260926062134_report_located_flag`, `20260926062859_missed_needs_floor_evidence` and `20260926064539_report_refusals_carry_hints`. Production at `ddf7293` runs safely with all three: the first only adds a column, the second decides exactly as before except for misses, and the third keeps the wording the old app matches on.
+- Left for the owner to decide:
+  - **Undo is still 3 seconds.** WCAG 2.2.1 prefers 20 seconds or a way to extend it, but a longer undo holds every report back that much longer before it is sent.
+  - **Page titles stay in English** when the app is in Filipino. Localizing them needs the language to reach the server (a cookie), because Next.js metadata is rendered there.
+- Not fixed, minor: each component that shows a bar fetches `/api/alert-bars` itself (the CDN caches it for 60 seconds).
+- The live database has a leftover `tests` schema from an earlier test run (helper functions only; no client can reach it). It can be removed with `drop schema tests cascade;`.
+
 ## Stage 4 exit criteria
 
 | Criterion | State |
@@ -63,11 +87,11 @@
 
 - App: `npm run lint`, `npm run typecheck`, `npm test`, `npm run knip`, `npm run build`.
 - Database: start Supabase the way CI does, then run `helpers.sql`, `reference-tables.sql`, `rls.sql`, `abuse.sql`, `accounts.sql` and `calibration.sql` with `psql` (see `.github/workflows/ci.yml`).
-- Last run, 26 September, locally: 1,667 app tests pass; lint (two old warnings in a test), typecheck, knip and build are clean. The calibration checks C1–C8 passed against the live database inside a rolled-back transaction.
+- Last run, 26 September, locally: 1,681 app tests pass; lint (two old warnings in a test), typecheck, knip and build are clean. Calibration checks C1–C7 passed against the live database with the new functions, inside a rolled-back transaction; the new hints were checked there the same way. `rls.sql` and `abuse.sql` run in CI on the next push.
 
 ## Where things live
 
-- Calibration: the `20260926010743` migration, `supabase/tests/calibration.sql`, `src/features/admin/calibration-panel.tsx`, `src/features/alerts/confidence-tag.tsx`, `src/app/api/alert-bars/route.ts` and `alertBar` in `src/lib/weather-thresholds.ts`.
+- Calibration: the `20260926010743` and `20260926062859` migrations (`private.report_evidence` is the one rule for which reports count), `supabase/tests/calibration.sql`, `src/features/admin/calibration-panel.tsx`, `src/features/alerts/confidence-tag.tsx`, `src/app/api/alert-bars/route.ts` and `alertBar` in `src/lib/weather-thresholds.ts`.
 - Read-aloud: `src/features/alerts/read-aloud-button.tsx`.
 - Accessibility: `src/features/map/map-centre-placer.tsx`, and the tests `src/app/colour-contrast.test.ts` and `src/app/page-titles.test.ts`.
 - Scheduling: the `20260925135257` migration.
