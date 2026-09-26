@@ -1,11 +1,14 @@
 "use client";
 
+import { Suspense } from "react";
 import { OnboardingGate } from "@/features/onboarding/onboarding-gate";
 import { PersonalStatusHeadline } from "@/features/homepage-map/personal-status-headline";
 import { HomepageMap } from "@/features/homepage-map/homepage-map";
 import { ZoneAlertListFallback } from "@/features/homepage-map/zone-alert-list-fallback";
 import { useIsOnline } from "@/features/homepage-map/use-tiles-cached";
 import { useSelectedZone } from "@/features/zones/use-selected-zone";
+import { useViewedZone } from "@/features/zones/use-viewed-zone";
+import { BarangayBar } from "@/features/zones/barangay-bar";
 import { useZones } from "@/lib/reference-data/use-reference-data";
 import { orderZonesWithSelectedFirst } from "@/lib/order-zones";
 import { useHasOnboarded } from "@/features/onboarding/onboarding-storage";
@@ -14,14 +17,17 @@ import { useHasOnboarded } from "@/features/onboarding/onboarding-storage";
 function HomeContent() {
   const isOnline = useIsOnline();
   const zones = useZones();
-  const selectedZone = useSelectedZone();
-  const orderedZones = orderZonesWithSelectedFirst(zones, selectedZone.id);
+  const myZone = useSelectedZone();
+  // Mine, or another one being viewed (?zone=); push alerts stay on mine.
+  const shownZone = useViewedZone() ?? myZone;
+  const orderedZones = orderZonesWithSelectedFirst(zones, shownZone.id);
 
   return isOnline ? (
-    <HomepageMap zones={orderedZones} />
+    <HomepageMap zones={orderedZones} myZoneId={myZone.id} />
   ) : (
     <>
-      <PersonalStatusHeadline zone={selectedZone} />
+      <BarangayBar shownZone={shownZone} myZone={myZone} whereYouAre={null} />
+      <PersonalStatusHeadline zone={shownZone} />
       <ZoneAlertListFallback zones={orderedZones} />
     </>
   );
@@ -45,7 +51,12 @@ export default function Home() {
   return (
     <main className="flex flex-1 flex-col items-center gap-3 p-4 sm:gap-4 sm:p-6 lg:p-8">
       <OnboardingGate />
-      {onboarded === true && <HomeContent />}
+      {/* HomeContent reads ?zone=, which a prerendered page must wrap in Suspense. */}
+      {onboarded === true && (
+        <Suspense fallback={null}>
+          <HomeContent />
+        </Suspense>
+      )}
     </main>
   );
 }

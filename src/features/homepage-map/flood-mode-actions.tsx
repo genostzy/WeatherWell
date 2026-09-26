@@ -19,7 +19,7 @@ const CALL_911: LocalizedText = { en: "Call 911", fil: "Tumawag sa 911" };
  * to hit with a wet thumb, straight under the alert. Below that level the
  * home screen is unchanged; these would only crowd a calm day.
  */
-export function FloodModeActions({ zone }: { zone: Zone }) {
+export function FloodModeActions({ zone, viewing = false }: { zone: Zone; viewing?: boolean }) {
   const { lang } = useLanguage();
   const alert = useActiveAlertForZone(zone.id);
   if (!alert || (alert.severity !== "red" && alert.severity !== "evacuate")) return null;
@@ -31,7 +31,7 @@ export function FloodModeActions({ zone }: { zone: Zone }) {
     <div className="space-y-3">
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <Link
-          href="/evacuation"
+          href={viewing ? `/evacuation?zone=${zone.id}` : "/evacuation"}
           className="flex min-h-14 items-center justify-center gap-2 rounded-xl px-4 text-base font-bold text-white outline-none focus-visible:ring-3 focus-visible:ring-ring"
           style={{ backgroundColor: color }}
         >

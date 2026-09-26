@@ -29,6 +29,14 @@ describe("PushPrompt tells the resident what happened (found testing push on a p
     expect(await screen.findByRole("alert")).toHaveTextContent(message);
   });
 
+  it("says alerts follow my barangay, not where I am", () => {
+    const { unmount } = renderWithData(<PushPrompt zoneId="zone-1" zoneName="Uno" />);
+    expect(screen.getByText("Alerts come for Uno, your barangay, wherever you are.")).toBeInTheDocument();
+    unmount();
+    renderWithData(<PushPrompt zoneId="zone-1" />);
+    expect(screen.queryByText(/wherever you are/i)).not.toBeInTheDocument();
+  });
+
   it("confirms when alerts are on", async () => {
     subscribe.mockResolvedValue("subscribed");
     renderWithData(<PushPrompt zoneId="zone-1" />);

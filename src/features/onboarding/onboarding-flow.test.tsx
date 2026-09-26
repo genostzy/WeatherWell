@@ -16,6 +16,8 @@ import {
 const { replace } = vi.hoisted(() => ({ replace: vi.fn() }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace, push: vi.fn(), prefetch: vi.fn() }),
+  // The home page reads ?zone= (a barangay being viewed); none here.
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 /**

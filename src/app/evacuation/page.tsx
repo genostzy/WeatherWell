@@ -9,7 +9,9 @@ import { FloodPlanLink } from "@/features/evacuation/flood-plan";
 import { ElevationCheck } from "@/features/evacuation/elevation-check";
 import { CandidateSites } from "@/features/evacuation/candidate-sites";
 import { AlertDowngradeNotice } from "@/features/alerts/alert-downgrade-notice";
+import { Suspense } from "react";
 import { useSelectedZone } from "@/features/zones/use-selected-zone";
+import { useViewedZone } from "@/features/zones/use-viewed-zone";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { resolveAlertDowngrade } from "@/lib/alert-downgrade";
@@ -19,9 +21,21 @@ import type { LocalizedText } from "@/lib/types";
 
 const HEADING: LocalizedText = { en: "Evacuation", fil: "Paglikas" };
 
+/** Reads ?zone=, which a prerendered page must wrap in Suspense. */
 export default function EvacuationPage() {
+  return (
+    <Suspense fallback={null}>
+      <Evacuation />
+    </Suspense>
+  );
+}
+
+/** My barangay's evacuation, or a viewed barangay's (?zone=). */
+function Evacuation() {
   const { lang } = useLanguage();
-  const zone = useSelectedZone();
+  const myZone = useSelectedZone();
+  const viewedZone = useViewedZone();
+  const zone = viewedZone ?? myZone;
   const alert = useActiveAlertForZone(zone.id);
   const alerts = useAlerts();
   const downgrade = resolveAlertDowngrade(alerts.filter((a) => a.zoneId === zone.id));
@@ -54,7 +68,8 @@ export default function EvacuationPage() {
         </div>
         <div className="space-y-6">
           <EmergencyCard zone={zone} />
-          {showCheckIn && <CheckInPanel zoneId={zone.id} />}
+          {/* A check-in says where the resident is: their own barangay, never one they only view. */}
+          {showCheckIn && !viewedZone && <CheckInPanel zoneId={zone.id} />}
           <RelayContactsEditor />
           <FloodPlanLink zoneId={zone.id} />
         </div>

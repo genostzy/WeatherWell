@@ -29,6 +29,14 @@ describe("FloodModeActions (flood mode: the two things to do, big, when it is se
     expect(screen.getByRole("link", { name: /call/i }).getAttribute("href")).toMatch(/^tel:/);
   });
 
+  it("sends a viewed barangay's evacuation link to that barangay", () => {
+    renderWithData(<FloodModeActions zone={zone} viewing />, { alerts: [alert("evacuate")] });
+    expect(screen.getByRole("link", { name: /go to evacuation centre/i })).toHaveAttribute(
+      "href",
+      `/evacuation?zone=${zone.id}`
+    );
+  });
+
   it("at Warning too", () => {
     renderWithData(<FloodModeActions zone={zone} />, { alerts: [alert("red")] });
     expect(screen.getByRole("link", { name: /go to evacuation centre/i })).toBeInTheDocument();

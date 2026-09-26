@@ -35,6 +35,11 @@ vi.mock("next/dynamic", () => ({
  * "finds a hazard-free route" test can exercise that branch deterministically
  * instead of depending on incidental real-world distance.
  */
+// The push prompt's own behaviour has its own tests; here only which barangay it gets matters.
+vi.mock("@/features/onboarding/push-prompt", () => ({
+  PushPrompt: ({ zoneId }: { zoneId?: string }) => <p>push:{zoneId}</p>,
+}));
+
 vi.mock("./route-hazard", () => ({
   routeCrossesHazard: (zone: Zone) => zone.id === "zone-1",
 }));
@@ -46,6 +51,13 @@ vi.mock("./route-hazard", () => ({
  * itself, outside MapCanvas).
  */
 describe("HomepageMap", () => {
+  it("keeps push alerts on my barangay while showing another", () => {
+    const [mine, shown] = FIXTURE_REFERENCE_DATA.zones;
+    renderWithData(<HomepageMap zones={[shown, mine]} myZoneId={mine.id} />);
+    expect(screen.getByText(`push:${mine.id}`)).toBeInTheDocument();
+    expect(screen.getByText(`Viewing ${shown.name}. Your alerts still come for ${mine.name}.`)).toBeInTheDocument();
+  });
+
   it("renders the direction-to-safety compass label localized, not as a bare code", async () => {
     // zone-1's evacuation center sits due north (same lng) of this stubbed live
     // position, so getBearingAndDistance deterministically returns "N".

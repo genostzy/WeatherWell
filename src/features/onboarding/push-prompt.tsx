@@ -48,7 +48,12 @@ const ON: LocalizedText = { en: "Alerts are on for this phone.", fil: "Naka-on n
  * Turns flood alerts on or off for this phone, and always says what
  * happened: a failure used to end the spinner silently.
  */
-export function PushPrompt({ zoneId }: { zoneId?: string }) {
+const FOLLOWS_MY_BARANGAY: LocalizedText = {
+  en: "Alerts come for {name}, your barangay, wherever you are.",
+  fil: "Para sa {name}, ang iyong barangay, ang mga alerto saan ka man naroon.",
+};
+
+export function PushPrompt({ zoneId, zoneName }: { zoneId?: string; zoneName?: string }) {
   const { lang } = useLanguage();
   const { state, subscribe, unsubscribe } = usePushSubscription(zoneId);
   const [isToggling, setIsToggling] = useState(false);
@@ -98,6 +103,11 @@ export function PushPrompt({ zoneId }: { zoneId?: string }) {
       >
         <span lang={lang}>{isSubscribed ? t(DISABLE_PUSH, lang) : t(ENABLE_PUSH, lang)}</span>
       </Button>
+      {zoneName && (
+        <p lang={lang} className="text-xs text-muted-foreground">
+          {t(FOLLOWS_MY_BARANGAY, lang).replace("{name}", zoneName)}
+        </p>
+      )}
       {result === "subscribed" && (
         <p role="status" lang={lang} className="text-sm text-green-500">
           {t(ON, lang)}

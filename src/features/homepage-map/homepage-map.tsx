@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { NAV_ACTIVE } from "@/components/nav-active";
 import { PushPrompt } from "@/features/onboarding/push-prompt";
 import { OfficialBanner } from "@/features/auth/official-banner";
@@ -28,6 +28,8 @@ import { OverlayDialog } from "@/components/overlay-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { hasRealEvacuationCenter, NO_VERIFIED_CENTER } from "@/lib/zone-data-quality";
 import { CoverageNote } from "@/features/zones/coverage-note";
+import { BarangayBar } from "@/features/zones/barangay-bar";
+import { findWhereYouAre } from "@/lib/where-you-are";
 import type { HazardType, LocalizedText, Zone } from "@/lib/types";
 
 const ALERTS_ON_PHONE: LocalizedText = { en: "Alerts on this phone", fil: "Alerto sa teleponong ito" };
@@ -74,7 +76,11 @@ const COMPASS_LABEL: Record<string, LocalizedText> = {
   NW: { en: "NW", fil: "Hilagang-Kanluran" },
 };
 
-export function HomepageMap({ zones }: { zones: Zone[] }) {
+/**
+ * `zones[0]` is the barangay on screen (mine, or one being viewed);
+ * `myZoneId` is mine, which push alerts follow. Defaults to `zones[0]`.
+ */
+export function HomepageMap({ zones, myZoneId }: { zones: Zone[]; myZoneId?: string }) {
   const { lang } = useLanguage();
   const [hazardType, setHazardType] = useState<HazardType>("flood");
   // Set only by "Find safe evacuation center" — see MapCanvas's own comment
@@ -86,6 +92,10 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
   const [activeAction, setActiveAction] = useState<"safe-area" | "evac-centre" | null>(null);
   const livePosition = useLivePosition();
   const { alert: geofenceAlert, dismiss: dismissGeofence } = useGeofenceAlert(zones, livePosition);
+  const myZone = useMemo(() => zones.find((zone) => zone.id === myZoneId) ?? zones[0], [zones, myZoneId]);
+  const viewing = zones[0].id !== myZone.id;
+  // On the phone, from zones it already holds: the position goes nowhere for it.
+  const whereYouAre = useMemo(() => findWhereYouAre(livePosition, zones), [livePosition, zones]);
   const forecast = useFloodForecast(zones[0]?.id);
 
   const {
@@ -144,8 +154,9 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
     >
       <div className="flex min-w-0 flex-col gap-3 sm:gap-4 lg:col-start-2 lg:row-start-1">
         <OfficialBanner />
+        <BarangayBar shownZone={zones[0]} myZone={myZone} whereYouAre={whereYouAre} />
         <PersonalStatusHeadline zone={zones[0]} />
-        <FloodModeActions zone={zones[0]} />
+        <FloodModeActions zone={zones[0]} viewing={viewing} />
 
         {/* The two safety actions come straight after the status. */}
         <div className="grid grid-cols-2 gap-2">
@@ -260,7 +271,7 @@ export function HomepageMap({ zones }: { zones: Zone[] }) {
           <h2 id="alerts-on-phone" lang={lang} className="text-sm font-medium">
             {t(ALERTS_ON_PHONE, lang)}
           </h2>
-          <PushPrompt zoneId={zones[0].id} />
+          <PushPrompt zoneId={myZone.id} zoneName={myZone.name} />
         </section>
 
         <CurrentConditionsPanel zone={zones[0]} />
