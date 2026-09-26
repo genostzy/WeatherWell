@@ -91,11 +91,30 @@ export function getSelectedZoneId(): string | null {
   }
 }
 
-export function setSelectedZoneId(zoneId: string): void {
-  if (typeof window === "undefined") return;
+/** Announced on this tab when my barangay changes; other tabs hear the storage event. */
+export const SELECTED_ZONE_EVENT = "weatherwell:selected-zone-changed";
+
+/** Saves my barangay. False when the phone would not keep it (private mode, blocked storage). */
+export function setSelectedZoneId(zoneId: string): boolean {
+  if (typeof window === "undefined") return false;
   try {
     window.localStorage.setItem(SELECTED_ZONE_KEY, zoneId);
   } catch {
-    // Private-mode or blocked storage: callers fall back to the default zone.
+    return false;
   }
+  window.dispatchEvent(new Event(SELECTED_ZONE_EVENT));
+  return true;
+}
+
+/** Calls onChange whenever my barangay changes, in this tab or another. */
+export function subscribeSelectedZone(onChange: () => void): () => void {
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === SELECTED_ZONE_KEY) onChange();
+  };
+  window.addEventListener(SELECTED_ZONE_EVENT, onChange);
+  window.addEventListener("storage", onStorage);
+  return () => {
+    window.removeEventListener(SELECTED_ZONE_EVENT, onChange);
+    window.removeEventListener("storage", onStorage);
+  };
 }

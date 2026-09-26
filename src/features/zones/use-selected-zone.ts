@@ -1,13 +1,9 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { getSelectedZoneId } from "@/features/onboarding/onboarding-storage";
+import { getSelectedZoneId, subscribeSelectedZone } from "@/features/onboarding/onboarding-storage";
 import { useZones } from "@/lib/reference-data/use-reference-data";
 import type { Zone } from "@/lib/types";
-
-function subscribe(): () => void {
-  return () => {};
-}
 
 function getServerSnapshot(): string | null {
   return null;
@@ -24,7 +20,7 @@ function getServerSnapshot(): string | null {
  */
 export function useSelectedZone(): Zone {
   const zones = useZones();
-  const zoneId = useSyncExternalStore(subscribe, getSelectedZoneId, getServerSnapshot);
+  const zoneId = useSyncExternalStore(subscribeSelectedZone, getSelectedZoneId, getServerSnapshot);
 
   if (zones.length === 0) {
     throw new Error("No zones available. The database returned an empty zone list.");

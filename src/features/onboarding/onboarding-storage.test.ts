@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { CONSENT_ITEMS } from "./consent-notice";
-import { CONSENT_VERSION, hasConsented, hasOnboarded, markConsented, markOnboarded } from "./onboarding-storage";
+import { CONSENT_VERSION, hasConsented, hasOnboarded, markConsented, markOnboarded, setSelectedZoneId } from "./onboarding-storage";
 
 /** FNV-1a, 32-bit: a stable fingerprint of the notice's text. */
 function fingerprint(text: string): string {
@@ -35,5 +35,19 @@ describe("consent is versioned (privacy review)", () => {
       version: "2026-09-25",
       text: "a8085da0",
     });
+  });
+});
+
+describe("my barangay on this phone", () => {
+  it("setSelectedZoneId says whether the phone kept it", () => {
+    expect(setSelectedZoneId("zone-2")).toBe(true);
+    const blocked = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("blocked");
+    });
+    try {
+      expect(setSelectedZoneId("zone-3")).toBe(false);
+    } finally {
+      blocked.mockRestore();
+    }
   });
 });
