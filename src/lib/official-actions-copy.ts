@@ -41,6 +41,10 @@ export function describeAction(action: OfficialAction, lang: LanguageCode): stri
       return describeOfficialAppointed(detail, lang);
     case "official.removed":
       return describeOfficialRemoved(detail, lang);
+    case "official.password_reset":
+      return describePasswordReset(detail, lang);
+    case "engine.tuned":
+      return describeEngineTuned(detail, lang);
     default:
       return t(
         { en: `Action recorded: ${action.action}`, fil: `Aksyong naitala: ${action.action}` },
@@ -126,6 +130,42 @@ function describeOfficialRemoved(detail: Record<string, unknown>, lang: Language
   return t({ en: `Removed ${displayName}`, fil: `Inalis si ${displayName}` }, lang);
 }
 
+function describePasswordReset(detail: Record<string, unknown>, lang: LanguageCode): string {
+  const displayName = typeof detail.display_name === "string" ? detail.display_name : "?";
+  return t(
+    { en: `New password set for ${displayName}`, fil: `Binigyan ng bagong password si ${displayName}` },
+    lang
+  );
+}
+
+/**
+ * The calibration loop moving a barangay's bar for an automatic advisory.
+ * The bar is read from the entry, as it was then, not recomputed from the step.
+ */
+function describeEngineTuned(detail: Record<string, unknown>, lang: LanguageCode): string {
+  const { from, to, reporters, trust } = detail;
+  if (typeof from !== "number" || typeof to !== "number" || typeof reporters !== "number" || typeof trust !== "number") {
+    return t({ en: "Advisory bar changed", fil: "Nagbago ang pamantayan ng paalala" }, lang);
+  }
+  const trustText = trust.toFixed(2).replace(/0$/, "");
+  const bar = { en: `${reporters} located reporters, trust ${trustText}`, fil: `${reporters} residenteng may lokasyon, tiwalang ${trustText}` };
+  return to > from
+    ? t(
+        {
+          en: `Advisory bar raised to ${bar.en}, after rejected advisories`,
+          fil: `Itinaas ang pamantayan ng paalala sa ${bar.fil}, dahil sa mga tinanggihang paalala`,
+        },
+        lang
+      )
+    : t(
+        {
+          en: `Advisory bar lowered to ${bar.en}, after an alert the engine missed`,
+          fil: `Ibinaba ang pamantayan ng paalala sa ${bar.fil}, dahil sa alertong hindi nahuli ng sistema`,
+        },
+        lang
+      );
+}
+
 const SYSTEM_OWNER = "System owner";
 const NOT_AN_OFFICIAL = "Not an official";
 const AUTOMATIC_PREFIX = "Automatic — ";
@@ -141,6 +181,7 @@ const AUTOMATIC_CAUSE: Record<string, LocalizedText> = {
   auto_crowdsourced: { en: "community reports", fil: "mga ulat ng komunidad" },
   predicted: { en: "prediction", fil: "prediksyon" },
   cascade: { en: "upstream alert", fil: "babala mula sa itaas" },
+  calibration: { en: "calibration", fil: "pagsasaayos" },
 };
 
 /**

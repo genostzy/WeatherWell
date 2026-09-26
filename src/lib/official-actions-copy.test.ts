@@ -133,6 +133,46 @@ describe("describeAction", () => {
     expect(describeAction(a, "fil")).toBe("Inalis si Juan Dela Cruz");
   });
 
+  it("official.password_reset: New password for {display_name}", () => {
+    const a = action({ action: "official.password_reset", zoneId: null, detail: { display_name: "Juan Dela Cruz" } });
+    expect(describeAction(a, "en")).toBe("New password set for Juan Dela Cruz");
+    expect(describeAction(a, "fil")).toBe("Binigyan ng bagong password si Juan Dela Cruz");
+  });
+
+  it("engine.tuned, raised: the calibration loop's new bar and why", () => {
+    const a = action({
+      action: "engine.tuned",
+      targetId: null,
+      detail: { from: 0, to: 1, reason: "rejected", reporters: 4, trust: 1.25 },
+    });
+    expect(describeAction(a, "en")).toBe(
+      "Advisory bar raised to 4 located reporters, trust 1.25, after rejected advisories"
+    );
+    expect(describeAction(a, "fil")).toBe(
+      "Itinaas ang pamantayan ng paalala sa 4 residenteng may lokasyon, tiwalang 1.25, dahil sa mga tinanggihang paalala"
+    );
+  });
+
+  it("engine.tuned, lowered: back down after an alert the engine missed", () => {
+    const a = action({
+      action: "engine.tuned",
+      targetId: null,
+      detail: { from: 1, to: 0, reason: "missed", reporters: 3, trust: 1.0 },
+    });
+    expect(describeAction(a, "en")).toBe(
+      "Advisory bar lowered to 3 located reporters, trust 1.0, after an alert the engine missed"
+    );
+    expect(describeAction(a, "fil")).toBe(
+      "Ibinaba ang pamantayan ng paalala sa 3 residenteng may lokasyon, tiwalang 1.0, dahil sa alertong hindi nahuli ng sistema"
+    );
+  });
+
+  it("engine.tuned with a malformed detail degrades to a generic sentence", () => {
+    const a = action({ action: "engine.tuned", detail: {} });
+    expect(describeAction(a, "en")).toBe("Advisory bar changed");
+    expect(describeAction(a, "fil")).toBe("Nagbago ang pamantayan ng paalala");
+  });
+
   it("an unknown action degrades to a sensible sentence rather than blank or a crash", () => {
     const a = action({ action: "something.new", detail: { anything: true } });
     expect(describeAction(a, "en")).toBe("Action recorded: something.new");
@@ -162,6 +202,7 @@ describe("describeActor (M2)", () => {
     ["Automatic — auto_crowdsourced", "Automatic — community reports", "Awtomatiko — mga ulat ng komunidad"],
     ["Automatic — predicted", "Automatic — prediction", "Awtomatiko — prediksyon"],
     ["Automatic — cascade", "Automatic — upstream alert", "Awtomatiko — babala mula sa itaas"],
+    ["Automatic — calibration", "Automatic — calibration", "Awtomatiko — pagsasaayos"],
   ])("%s", (stored, en, fil) => {
     expect(describeActor(stored, "en")).toBe(en);
     expect(describeActor(stored, "fil")).toBe(fil);
