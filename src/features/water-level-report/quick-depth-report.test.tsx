@@ -24,6 +24,16 @@ beforeEach(() => {
 });
 
 describe("QuickDepthReport", () => {
+  it("says which barangay the report counts for", () => {
+    const { unmount } = renderWithData(
+      <QuickDepthReport zoneId="zone-2" reportingFor={{ zoneName: "Dos", whereYouAre: true }} />
+    );
+    expect(screen.getByText("Reporting for Dos (where you are)")).toBeInTheDocument();
+    unmount();
+    renderWithData(<QuickDepthReport zoneId="zone-2" reportingFor={{ zoneName: "Dos", whereYouAre: false }} />);
+    expect(screen.getByText("Reporting for Dos (your barangay)")).toBeInTheDocument();
+  });
+
   it("files the report on the depth tap itself — one tap, no separate submit", async () => {
     const user = userEvent.setup();
     renderWithData(<QuickDepthReport zoneId="zone-1" />);

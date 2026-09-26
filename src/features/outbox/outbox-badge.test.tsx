@@ -251,7 +251,7 @@ describe("OutboxBadge", () => {
 
     expect(
       screen.getByText(
-        "Couldn't send: Your location is outside this barangay. Reports only count from inside it — if you've moved, change your barangay."
+        "Couldn't send: Your location is outside this barangay, so the report can't count there. Turn on location so reports count where you are, or change your barangay on the home screen."
       )
     ).toBeInTheDocument();
   });

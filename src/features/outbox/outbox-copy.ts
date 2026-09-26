@@ -52,8 +52,8 @@ const GAVE_UP_REASON: LocalizedText = {
 };
 /** Not from the spec table: the geofence's refusal, which read as "This couldn't be accepted." */
 const TOO_FAR_REASON: LocalizedText = {
-  en: "Your location is outside this barangay. Reports only count from inside it — if you've moved, change your barangay.",
-  fil: "Nasa labas ka ng barangay na ito. Tinatanggap lang ang ulat mula sa loob nito — kung lumipat ka, palitan ang iyong barangay.",
+  en: "Your location is outside this barangay, so the report can't count there. Turn on location so reports count where you are, or change your barangay on the home screen.",
+  fil: "Nasa labas ka ng barangay na ito, kaya hindi mabibilang doon ang ulat. I-on ang lokasyon para mabilang ang ulat kung nasaan ka, o palitan ang iyong barangay sa home screen.",
 };
 /** Not from the spec table: the 5-minute limit, which read as "Will send when online" to a resident who was online. */
 const RATE_LIMITED: LocalizedText = {

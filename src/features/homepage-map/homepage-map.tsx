@@ -215,7 +215,11 @@ export function HomepageMap({ zones, myZoneId }: { zones: Zone[]; myZoneId?: str
           </div>
         )}
 
-        <QuickDepthReport zoneId={zones[0].id} />
+        {/* Where GPS puts you, else your own barangay: never one you are only viewing. */}
+        <QuickDepthReport
+          zoneId={(whereYouAre ?? myZone).id}
+          reportingFor={{ zoneName: (whereYouAre ?? myZone).name, whereYouAre: whereYouAre !== null }}
+        />
       </div>
 
       {/* Map — desktop: the whole left column. */}

@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { screen, fireEvent } from "@testing-library/react";
 import { renderWithData, FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
+import { readOutbox } from "@/lib/outbox/outbox";
+import { markConsented } from "@/features/onboarding/onboarding-storage";
 
 // Submitting queues a report, and queuing asks the outbox to drain, which
 // signs in. Stubbed to the offline answer so this file never constructs the
@@ -104,6 +106,53 @@ describe("ReportPage when the report cannot be saved", () => {
 
     expect(screen.getByText(/without your location/i)).toHaveTextContent(/can't count toward an automatic advisory/i);
     expect(screen.queryByText(/where it counts toward an automatic advisory/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("ReportPage: which barangay the report counts for", () => {
+  const [mine, here] = FIXTURE_REFERENCE_DATA.zones;
+
+  function standNear(zone: { lat: number; lng: number }) {
+    Object.defineProperty(navigator, "geolocation", {
+      configurable: true,
+      value: {
+        watchPosition: vi.fn((success) => {
+          success({ coords: { latitude: zone.lat + 0.009, longitude: zone.lng } });
+          return 1;
+        }),
+        clearWatch: vi.fn(),
+      },
+    });
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem("weatherwell.selectedZoneId", mine.id);
+  });
+
+  afterEach(() => {
+    Object.defineProperty(navigator, "geolocation", {
+      configurable: true,
+      value: { watchPosition: vi.fn(() => 1), clearWatch: vi.fn() },
+    });
+  });
+
+  it("files for where you are when GPS knows it", async () => {
+    markConsented();
+    standNear(here);
+    renderWithData(<ReportPage />);
+    expect(await screen.findByText(`Reporting for ${here.name} (where you are)`)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(here.name);
+    fireEvent.click(screen.getByRole("button", { name: /submit report|ipadala ang ulat/i }));
+    expect(readOutbox()[0].payload).toMatchObject({ zoneId: here.id });
+  });
+
+  it("files for my barangay without consent", () => {
+    standNear(here);
+    renderWithData(<ReportPage />);
+    expect(screen.getByText(`Reporting for ${mine.name} (your barangay)`)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /submit report|ipadala ang ulat/i }));
+    expect(readOutbox()[0].payload).toMatchObject({ zoneId: mine.id });
   });
 });
 

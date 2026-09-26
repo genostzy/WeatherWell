@@ -14,7 +14,7 @@ const DISMISS: LocalizedText = { en: "Dismiss", fil: "Isara" };
 
 interface GeofenceAlertBannerProps {
   severity: string;
-  message: string;
+  message: LocalizedText;
   onDismiss: () => void;
 }
 
@@ -41,7 +41,9 @@ export function GeofenceAlertBanner({
           <p className="text-sm font-bold text-white">
             {t(GEOFENCE_TITLE, lang)}
           </p>
-          <p className="mt-0.5 text-sm text-white/90">{message}</p>
+          <p lang={lang} className="mt-0.5 text-sm text-white/90">
+            {t(message, lang)}
+          </p>
         </div>
         <button
           type="button"

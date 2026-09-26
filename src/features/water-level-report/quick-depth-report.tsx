@@ -9,6 +9,7 @@ import { DEPTH_LEVELS, DEPTH_LABEL, DEPTH_CM, type DepthLevel } from "@/lib/dept
 import { addWaterLevelReport, useWaterLevelReports } from "@/lib/water-level-reports";
 import { useActiveAlertForZone } from "@/lib/alerts-store";
 import { countsTowardAlert } from "@/lib/weather-thresholds";
+import { ReportingFor } from "./reporting-for";
 import { useAlertBars } from "@/lib/use-alert-bars";
 import { discardEntry, readOutbox } from "@/lib/outbox/outbox";
 import type { LocalizedText } from "@/lib/types";
@@ -71,7 +72,14 @@ type State =
  * the person who actually mis-tapped. In an emergency, always pay the
  * mistake cost rather than the everyone cost.
  */
-export function QuickDepthReport({ zoneId }: { zoneId: string }) {
+export function QuickDepthReport({
+  zoneId,
+  reportingFor,
+}: {
+  zoneId: string;
+  /** Said above the buttons: which barangay the report counts for, and why. */
+  reportingFor?: { zoneName: string; whereYouAre: boolean };
+}) {
   const reports = useWaterLevelReports();
   const activeAlert = useActiveAlertForZone(zoneId);
   const bar = useAlertBars()(zoneId);
@@ -134,6 +142,8 @@ export function QuickDepthReport({ zoneId }: { zoneId: string }) {
       <h2 lang={lang} className="text-sm font-medium">
         {t(HOW_DEEP, lang)}
       </h2>
+
+      {reportingFor && <ReportingFor zoneName={reportingFor.zoneName} whereYouAre={reportingFor.whereYouAre} />}
 
       <div className="grid grid-cols-5 gap-1.5">
         {DEPTH_LEVELS.map((level) => (

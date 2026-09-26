@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -22,6 +22,9 @@ import { ReportExplainer } from "@/features/water-level-report/report-explainer"
 import { ShareAlertButton } from "@/features/alerts/share-alert-button";
 import { SeverityBadge } from "@/features/alerts/severity-badge";
 import { useSelectedZone } from "@/features/zones/use-selected-zone";
+import { ReportingFor } from "@/features/water-level-report/reporting-for";
+import { useZones } from "@/lib/reference-data/use-reference-data";
+import { findWhereYouAre } from "@/lib/where-you-are";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { DEPTH_LABEL, DEPTH_CM, DEPTH_SEVERITY, type DepthLevel } from "@/lib/depth";
@@ -82,12 +85,16 @@ export default function ReportPage() {
   const [submitted, setSubmitted] = useState<DepthLevel | null>(null);
   const [submittedLocated, setSubmittedLocated] = useState(false);
   const [saveFailed, setSaveFailed] = useState(false);
-  const zone = useSelectedZone();
+  const myZone = useSelectedZone();
+  const zones = useZones();
   const { lang } = useLanguage();
   // Never awaited before submit — a resident without a GPS fix yet must still
   // be able to report in one tap. Whatever fix is already in hand (or null)
   // rides along; the geofence check on the server skips itself when absent.
   const position = useLivePosition();
+  // A report counts where GPS puts you, else for your own barangay.
+  const whereYouAre = useMemo(() => findWhereYouAre(position, zones), [position, zones]);
+  const zone = whereYouAre ?? myZone;
 
   function handleSubmit(depthLevel: DepthLevel): boolean {
     try {
@@ -139,6 +146,7 @@ export default function ReportPage() {
           <p lang={lang} className="text-sm text-muted-foreground">
             {t(PAGE_INTRO, lang)}
           </p>
+          <ReportingFor zoneName={zone.name} whereYouAre={whereYouAre !== null} />
         </div>
 
         {/* Context first: what the zone already knows, so the resident is

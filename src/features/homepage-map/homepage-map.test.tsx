@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { HomepageMap } from "./homepage-map";
 import { renderWithData, FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
 import { markConsented } from "@/features/onboarding/onboarding-storage";
+import { readOutbox } from "@/lib/outbox/outbox";
 import type { Zone } from "@/lib/types";
 
 /**
@@ -50,6 +51,41 @@ vi.mock("./route-hazard", () => ({
  * wires a marker click back into its own state (the compass text it renders
  * itself, outside MapCanvas).
  */
+describe("HomepageMap: which barangay a report counts for", () => {
+  const [shown, mine, here] = FIXTURE_REFERENCE_DATA.zones;
+
+  function standAt(lat: number, lng: number) {
+    Object.defineProperty(navigator, "geolocation", {
+      configurable: true,
+      value: {
+        watchPosition: vi.fn((success) => {
+          success({ coords: { latitude: lat, longitude: lng } });
+          return 1;
+        }),
+        clearWatch: vi.fn(),
+      },
+    });
+    window.localStorage.clear();
+    markConsented();
+  }
+
+  it("reports count where GPS puts you, not the barangay on screen", async () => {
+    standAt(here.lat + 0.009, here.lng);
+    renderWithData(<HomepageMap zones={[shown, mine, here]} myZoneId={mine.id} />);
+    expect(await screen.findByText(`Reporting for ${here.name} (where you are)`)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /knee-deep/i }));
+    expect(readOutbox()[0].payload).toMatchObject({ zoneId: here.id });
+  });
+
+  it("with GPS far from every barangay, reports count for my barangay", async () => {
+    standAt(mine.lat + 0.5, mine.lng + 0.5);
+    renderWithData(<HomepageMap zones={[shown, mine, here]} myZoneId={mine.id} />);
+    expect(await screen.findByText(`Reporting for ${mine.name} (your barangay)`)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /knee-deep/i }));
+    expect(readOutbox()[0].payload).toMatchObject({ zoneId: mine.id });
+  });
+});
+
 describe("HomepageMap", () => {
   it("keeps push alerts on my barangay while showing another", () => {
     const [mine, shown] = FIXTURE_REFERENCE_DATA.zones;

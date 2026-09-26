@@ -3,12 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useAlerts } from "@/lib/alerts-store";
 import { getZoneStatus } from "@/lib/zone-status";
-import type { Zone } from "@/lib/types";
+import type { LocalizedText, Zone } from "@/lib/types";
 
 interface GeofenceAlert {
   zoneName: string;
   severity: string;
-  message: string;
+  message: LocalizedText;
 }
 
 /**
@@ -22,6 +22,17 @@ interface GeofenceAlert {
  * The alert fires once per zone entry and resets when the user leaves
  * the zone or dismisses it.
  */
+const EVACUATE_NOW: LocalizedText = { en: "You are near {name}. Evacuate now!", fil: "Malapit ka sa {name}. Lumikas na ngayon!" };
+const HIGHER_GROUND: LocalizedText = {
+  en: "You are near {name}. Move to higher ground.",
+  fil: "Malapit ka sa {name}. Pumunta sa mas mataas na lugar.",
+};
+const CHECK_CONDITIONS: LocalizedText = { en: "You are near {name}. Check conditions.", fil: "Malapit ka sa {name}. Tingnan ang kalagayan." };
+
+function nearMessage(text: LocalizedText, name: string): LocalizedText {
+  return { en: text.en.replace("{name}", name), fil: text.fil.replace("{name}", name) };
+}
+
 export function useGeofenceAlert(
   zones: Zone[],
   position: { lat: number; lng: number } | null
@@ -62,9 +73,7 @@ export function useGeofenceAlert(
       setAlert({
         zoneName: nearestZone.name,
         severity: status,
-        message: zoneAlert
-          ? `You are near ${nearestZone.name}. ${status === "hazardous" ? "Evacuate now!" : "Move to higher ground."}`
-          : `You are near ${nearestZone.name}. Check conditions.`,
+        message: nearMessage(zoneAlert ? (status === "hazardous" ? EVACUATE_NOW : HIGHER_GROUND) : CHECK_CONDITIONS, nearestZone.name),
       });
     } else if (status === "safe" && lastZoneRef.current === nearestZone.id) {
       // Left the dangerous zone
