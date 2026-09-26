@@ -103,8 +103,10 @@ export function applyOutcome(entry: OutboxEntry, outcome: SendOutcome, now: Date
     case "delivered":
       return null;
 
+    // Every outcome but a rate-limited retry clears waitReason: it says why an
+    // entry waits, and none of these wait for that.
     case "held":
-      return { ...entry, status: "held", nextAttemptAt: null, updatedAt };
+      return { ...entry, status: "held", waitReason: null, nextAttemptAt: null, updatedAt };
 
     // Left for the page: the worker never creates or refreshes a session, so
     // it cannot tell a genuinely signed-out resident from one whose cookies
@@ -122,11 +124,12 @@ export function applyOutcome(entry: OutboxEntry, outcome: SendOutcome, now: Date
           status: "stuck",
           stuckReason,
           lastError: "signed_out",
+          waitReason: null,
           nextAttemptAt: null,
           updatedAt,
         };
       }
-      return { ...entry, updatedAt };
+      return { ...entry, waitReason: null, updatedAt };
     }
 
     case "permanent": {
@@ -137,6 +140,7 @@ export function applyOutcome(entry: OutboxEntry, outcome: SendOutcome, now: Date
         status: "stuck",
         stuckReason,
         lastError: outcome.reason ?? "permanent",
+        waitReason: null,
         nextAttemptAt: null,
         updatedAt,
       };
@@ -153,6 +157,7 @@ export function applyOutcome(entry: OutboxEntry, outcome: SendOutcome, now: Date
           status: "stuck",
           stuckReason,
           lastError: outcome.error,
+          waitReason: null,
           nextAttemptAt: null,
           updatedAt,
         };
@@ -187,6 +192,7 @@ export function retryStuck(entry: OutboxEntry, now: Date): OutboxEntry {
   };
   delete retried.stuckReason;
   delete retried.lastError;
+  delete retried.waitReason;
   return retried;
 }
 

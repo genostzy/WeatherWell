@@ -73,8 +73,8 @@ export interface OutboxEntry {
   stuckReason?: StuckReason;
   /**
    * Why a pending entry is waiting, when the server said: "rate_limited" is
-   * one report per barangay every 5 minutes. null once a later attempt says
-   * nothing, so a stale reason never outlives the wait it described.
+   * one report per barangay every 5 minutes. Cleared by every other outcome
+   * and by a retry, so a stale reason never outlives the wait it described.
    */
   waitReason?: "rate_limited" | null;
 }

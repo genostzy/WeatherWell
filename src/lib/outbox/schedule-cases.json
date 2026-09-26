@@ -288,6 +288,72 @@
       }
     },
     {
+      "name": "signed_out clears an earlier rate limit, which is no longer why it waits",
+      "entry": {
+        "id": "e-signed-out-clears-wait",
+        "operation": "submitWaterLevelReport",
+        "payload": { "zoneId": "zone-1", "depthLevel": "waist" },
+        "queuedAt": "2026-09-16T11:59:00.000Z",
+        "attempts": 2,
+        "userId": "user-1",
+        "status": "pending",
+        "waitReason": "rate_limited",
+        "nextAttemptAt": "2026-09-16T12:00:00.000Z",
+        "updatedAt": "2026-09-16T11:59:00.000Z"
+      },
+      "outcome": { "result": "signed_out" },
+      "now": "2026-09-16T12:00:00.000Z",
+      "expect": {
+        "status": "pending",
+        "waitReason": null,
+        "updatedAt": "2026-09-16T12:00:00.000Z"
+      }
+    },
+    {
+      "name": "giving up clears an earlier rate limit",
+      "entry": {
+        "id": "e-gave-up-clears-wait",
+        "operation": "submitWaterLevelReport",
+        "payload": { "zoneId": "zone-1", "depthLevel": "waist" },
+        "queuedAt": "2026-09-16T11:59:00.000Z",
+        "attempts": 9,
+        "userId": "user-1",
+        "status": "pending",
+        "waitReason": "rate_limited",
+        "nextAttemptAt": "2026-09-16T12:00:00.000Z",
+        "updatedAt": "2026-09-16T11:59:00.000Z"
+      },
+      "outcome": { "result": "retry", "reason": "rate_limited" },
+      "now": "2026-09-16T12:00:00.000Z",
+      "expect": {
+        "status": "stuck",
+        "stuckReason": "gave_up",
+        "waitReason": null
+      }
+    },
+    {
+      "name": "permanent clears an earlier rate limit",
+      "entry": {
+        "id": "e-permanent-clears-wait",
+        "operation": "submitWaterLevelReport",
+        "payload": { "zoneId": "zone-1", "depthLevel": "waist" },
+        "queuedAt": "2026-09-16T11:59:00.000Z",
+        "attempts": 2,
+        "userId": "user-1",
+        "status": "pending",
+        "waitReason": "rate_limited",
+        "nextAttemptAt": "2026-09-16T12:00:00.000Z",
+        "updatedAt": "2026-09-16T11:59:00.000Z"
+      },
+      "outcome": { "result": "permanent", "reason": "too_far" },
+      "now": "2026-09-16T12:00:00.000Z",
+      "expect": {
+        "status": "stuck",
+        "stuckReason": "too_far",
+        "waitReason": null
+      }
+    },
+    {
       "name": "permanent with another reason marks stuck as permanent",
       "entry": {
         "id": "e-permanent-other",

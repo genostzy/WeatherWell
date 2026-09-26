@@ -826,7 +826,7 @@ function applyOutcome(entry, outcome, now) {
       return null;
 
     case "held":
-      return Object.assign({}, entry, { status: "held", nextAttemptAt: null, updatedAt });
+      return Object.assign({}, entry, { status: "held", waitReason: null, nextAttemptAt: null, updatedAt });
 
     // Left for the page: the worker never creates or refreshes a session, so
     // it cannot tell a genuinely signed-out resident from one whose cookies
@@ -839,11 +839,12 @@ function applyOutcome(entry, outcome, now) {
           status: "stuck",
           stuckReason: "gave_up",
           lastError: "signed_out",
+          waitReason: null,
           nextAttemptAt: null,
           updatedAt,
         });
       }
-      return Object.assign({}, entry, { updatedAt });
+      return Object.assign({}, entry, { waitReason: null, updatedAt });
     }
 
     case "permanent": {
@@ -853,6 +854,7 @@ function applyOutcome(entry, outcome, now) {
         status: "stuck",
         stuckReason,
         lastError: outcome.reason == null ? "permanent" : outcome.reason,
+        waitReason: null,
         nextAttemptAt: null,
         updatedAt,
       });
@@ -867,6 +869,7 @@ function applyOutcome(entry, outcome, now) {
           status: "stuck",
           stuckReason: "gave_up",
           lastError: outcome.error,
+          waitReason: null,
           nextAttemptAt: null,
           updatedAt,
         });

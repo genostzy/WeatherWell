@@ -121,4 +121,23 @@ describe("schedule: retryStuck", () => {
     expect(result.stuckReason).toBeUndefined();
     expect(result.lastError).toBeUndefined();
   });
+
+  it("clears an old wait reason too, so a retried entry never claims the 5-minute limit", () => {
+    const now = new Date("2026-09-16T12:00:00.000Z");
+    const stuck: OutboxEntry = {
+      id: "e-stuck-waited",
+      operation: "submitWaterLevelReport",
+      payload: { zoneId: "zone-1", depthLevel: "knee" },
+      queuedAt: "2026-09-16T11:00:00.000Z",
+      attempts: 10,
+      userId: "user-1",
+      status: "stuck",
+      stuckReason: "gave_up",
+      waitReason: "rate_limited",
+      nextAttemptAt: null,
+      updatedAt: "2026-09-16T11:30:00.000Z",
+    };
+
+    expect(retryStuck(stuck, now).waitReason ?? null).toBeNull();
+  });
 });
