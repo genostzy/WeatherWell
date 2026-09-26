@@ -3,8 +3,7 @@
 ## State
 
 - `mvp` was merged into `v1` on 25 September. `v1` is the default branch and the production branch; `mvp` stays at `0b9f0fd` for reference.
-- **Production runs `8fa9dd9`**, released on 25 September with the privacy fixes.
-- **`v1` is 6 commits ahead of `origin/v1`, not pushed and not released:**
+- **Production runs `ddf7293`**, released on 26 September as `dpl_DAEpr9WuSe9jkLvzPLWoHsPcQf8B` after CI run #115 passed. It shipped these commits on top of `8fa9dd9`:
 
 | Commit | What |
 |---|---|
@@ -13,9 +12,10 @@
 | `1045501` | App: confidence tags on alerts, each barangay's own bar in the report counts, the Calibration panel for officials (Task 3) |
 | `1e63060` | The WCAG 2.1 AA audit's fixes (Task 4) |
 | `e2cc8a9` | `/admin/history` describes a calibration move and an admin's password reset in words |
-| The latest | Docs: PRD Build Status and Setup step 10, the Stage 4 plan, README and this handoff (Task 2) |
+| `ddf7293` | Docs: PRD Build Status and Setup step 10, the Stage 4 plan, README and this handoff (Task 2) |
 
-- The calibration migration `20260926010743_calibration_loop` is **already live**. It only adds, so production at `8fa9dd9` runs with it: advisories now get a confidence tag and outcomes are recorded, but production shows neither until the commits above are released.
+- The calibration migration `20260926010743_calibration_loop` went live before the release; it only adds, so the earlier build ran safely with it.
+- Checked on production after the release: the 8 public pages tried each have their own title, `/api/health` reports the database ok with no recent errors, and `/api/alert-bars` answers (no barangay's bar has moved yet).
 - `pg_cron` holds two jobs that start the GitHub workflows on time. They do nothing until the owner adds the token (step 1 below); GitHub's own, late schedule still runs meanwhile.
 
 ## Stage 4 exit criteria
@@ -30,10 +30,9 @@
 ## Owner steps, in order
 
 1. **Scheduled jobs on time.** Make a fine-grained GitHub token for the `WeatherWell` repository with only "Actions: Read and write", and store it in Supabase Vault as `github_workflow_token` (PRD Setup step 10).
-2. **Release.** Say "push and release" and the commits above go out: push `v1`, wait for the Vercel preview and CI, then redeploy that build to production.
-3. **Clean up test data.** Lift the Nilombot test alert (yellow, set by Test Official at 22:17), and remove the leftover `mapandanofficial@weatherwell.com` account.
-4. **Change the test passwords** in `.env.local` and rerun `npx tsx scripts/reset-test-accounts.ts --yes`. They were shared in chat and the admin account controls the live system.
-5. **Pilot drill** with a barangay, then log its feedback as incorporated or deferred.
+2. **Clean up test data.** Lift the Nilombot test alert (yellow, set by Test Official at 22:17), and remove the leftover `mapandanofficial@weatherwell.com` account.
+3. **Change the test passwords** in `.env.local` and rerun `npx tsx scripts/reset-test-accounts.ts --yes`. They were shared in chat and the admin account controls the live system.
+4. **Pilot drill** with a barangay, then log its feedback as incorporated or deferred.
 
 ## Owner's decisions (26 September)
 
