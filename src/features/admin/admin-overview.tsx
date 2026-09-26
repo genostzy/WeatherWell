@@ -215,7 +215,7 @@ export function AdminOverview({
         )}
 
         {calibration && (
-          <CalibrationPanel {...inArea(calibration, new Set(zones.map((zone) => zone.id)))} />
+          <CalibrationPanel {...inArea(calibration, inAreaZoneIds)} />
         )}
 
         {!isNationwide && (

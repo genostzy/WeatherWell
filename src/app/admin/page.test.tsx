@@ -16,16 +16,25 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 vi.mock("@/features/admin/admin-overview", () => ({ AdminOverview: () => null }));
 const rpc = vi.fn();
-// The calibration record (Stage 4): calibration_events newest first, and the raised bars.
+// The calibration record (Stage 4): calibration_events newest first, and the
+// raised bars. Each query records the filters it was given.
 const events = vi.fn();
 const floors = vi.fn();
+const calls: Record<string, [string, unknown[]][]> = {};
+function query(table: string, result: () => Promise<unknown>) {
+  calls[table] = [];
+  const builder: Record<string, unknown> = {
+    then: (resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) => result().then(resolve, reject),
+  };
+  for (const method of ["select", "like", "gt", "order", "limit"]) {
+    builder[method] = (...args: unknown[]) => (calls[table].push([method, args]), builder);
+  }
+  return builder;
+}
 vi.mock("@/lib/supabase/user-server", () => ({
   createSupabaseUserClient: async () => ({
     rpc,
-    from: (table: string) =>
-      table === "calibration_events"
-        ? { select: () => ({ order: () => ({ limit: () => events() }) }) }
-        : { select: () => ({ gt: () => floors() }) },
+    from: (table: string) => query(table, table === "calibration_events" ? events : floors),
   }),
 }));
 
@@ -78,5 +87,19 @@ describe("/admin landing (found checking the live site)", () => {
       bars: { "zone-1": 1 },
       events: [{ id: 7, zoneId: "zone-1", kind: "rejected", stepBefore: 0, stepAfter: 1, occurredAt: "2026-09-26T01:00:00Z" }],
     });
+    // The admin's dashboard is nationwide: no area filter.
+    expect(calls.calibration_events.some(([method]) => method === "like")).toBe(false);
+  });
+
+  it("reads a town's own calibration record in the query, not the newest 30 nationwide filtered afterwards (review)", async () => {
+    loadOfficial.mockResolvedValue({ state: "official", official: { ...barangay, level: "municipality", areaCode: "0105528" } });
+    await AdminPage();
+    for (const table of ["calibration_events", "zone_alert_floors"]) {
+      expect(calls[table]).toContainEqual(["like", ["zones.psgc_barangay_code", "0105528%"]]);
+    }
+    const limitAt = calls.calibration_events.findIndex(([method]) => method === "limit");
+    const likeAt = calls.calibration_events.findIndex(([method]) => method === "like");
+    expect(likeAt).toBeGreaterThanOrEqual(0);
+    expect(likeAt).toBeLessThan(limitAt);
   });
 });

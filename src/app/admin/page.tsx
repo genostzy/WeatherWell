@@ -11,21 +11,25 @@ export const metadata: Metadata = { title: "Dashboard" };
 /**
  * The calibration loop's record (Stage 4 Task 3): the newest outcomes and the
  * raised bars. Officials may read it, as they read the action record; the
- * dashboard shows the part inside its own area.
+ * dashboard shows the part inside its own area. A town's part is filtered in
+ * the query, before the limit: the newest 30 nationwide can all be elsewhere.
  */
-async function loadCalibration(): Promise<{ bars: Record<string, number>; events: CalibrationEvent[] }> {
+async function loadCalibration(
+  areaCode: string | null
+): Promise<{ bars: Record<string, number>; events: CalibrationEvent[] }> {
   const supabase = await createSupabaseUserClient();
-  const [events, floors] = await Promise.all([
-    supabase
-      .from("calibration_events")
-      .select("id, zone_id, kind, step_before, step_after, occurred_at")
-      .order("occurred_at", { ascending: false })
-      .limit(30),
-    supabase.from("zone_alert_floors").select("zone_id, step").gt("step", 0),
-  ]);
+  let events = supabase
+    .from("calibration_events")
+    .select("id, zone_id, kind, step_before, step_after, occurred_at, zones!inner(psgc_barangay_code)");
+  let floors = supabase.from("zone_alert_floors").select("zone_id, step, zones!inner(psgc_barangay_code)").gt("step", 0);
+  if (areaCode) {
+    events = events.like("zones.psgc_barangay_code", `${areaCode}%`);
+    floors = floors.like("zones.psgc_barangay_code", `${areaCode}%`);
+  }
+  const [eventRows, floorRows] = await Promise.all([events.order("occurred_at", { ascending: false }).limit(30), floors]);
   return {
-    bars: Object.fromEntries((floors.data ?? []).map((row) => [row.zone_id, row.step])),
-    events: (events.data ?? []).map((row) => ({
+    bars: Object.fromEntries((floorRows.data ?? []).map((row) => [row.zone_id, row.step])),
+    events: (eventRows.data ?? []).map((row) => ({
       id: row.id,
       zoneId: row.zone_id,
       kind: row.kind as CalibrationKind,
@@ -62,10 +66,10 @@ export default async function AdminPage() {
       displayName: row.display_name,
       areaCode: row.area_code,
     }));
-    return <AdminOverview townOfficials={townOfficials} calibration={await loadCalibration()} />;
+    return <AdminOverview townOfficials={townOfficials} calibration={await loadCalibration(gate.official.areaCode)} />;
   }
   if (gate.state === "official" && gate.official.level === "admin") {
-    return <AdminOverview calibration={await loadCalibration()} />;
+    return <AdminOverview calibration={await loadCalibration(null)} />;
   }
   return <AdminOverview />;
 }

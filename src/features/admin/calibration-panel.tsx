@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { Gauge } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TimeAgo } from "@/components/time-ago";
@@ -56,7 +57,9 @@ function describeBar(step: number, lang: LanguageCode, located = true): string {
 export function CalibrationPanel({ bars, events }: { bars: Record<string, number>; events: CalibrationEvent[] }) {
   const { lang } = useLanguage();
   const zones = useZones();
-  const nameOf = (zoneId: string) => zones.find((zone) => zone.id === zoneId)?.name ?? zoneId;
+  // One pass over every barangay, not one per line: the admin's list is nationwide.
+  const names = useMemo(() => new Map(zones.map((zone) => [zone.id, zone.name])), [zones]);
+  const nameOf = (zoneId: string) => names.get(zoneId) ?? zoneId;
   const raised = Object.entries(bars).filter(([, step]) => step > 0);
 
   return (
