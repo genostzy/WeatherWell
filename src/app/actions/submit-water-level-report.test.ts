@@ -207,9 +207,10 @@ describe("submitWaterLevelReport", () => {
 
   it("names a report from outside the barangay too_far, so the resident is told why it was refused", async () => {
     // The geofence trigger's refusal (check_violation). Seen on production 2026-09-25 as "This couldn't be accepted."
+    // Named by its hint, not its wording, which a later migration may change (review).
     getClaims.mockResolvedValue({ data: { claims: { sub: "user-1" } } });
     insert.mockResolvedValue({
-      error: { code: "23514", message: "Report location is too far from the zone being reported." },
+      error: { code: "23514", message: "Reworded: this position is outside the barangay.", hint: "too_far" },
     });
 
     const result = await submitWaterLevelReport({
@@ -228,10 +229,7 @@ describe("submitWaterLevelReport", () => {
     // the reason lets the phone say so instead of "Will send when online".
     getClaims.mockResolvedValue({ data: { claims: { sub: "user-1" } } });
     insert.mockResolvedValue({
-      error: {
-        code: "P0001",
-        message: "Too many reports for this zone from this device — wait a few minutes before reporting again.",
-      },
+      error: { code: "P0001", message: "Reworded: one report per barangay every 5 minutes.", hint: "rate_limited" },
     });
 
     const result = await submitWaterLevelReport({

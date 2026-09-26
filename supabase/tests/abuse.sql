@@ -96,11 +96,17 @@ end $$;
 do $$
 declare
   v_id uuid := 'ab000000-0000-4000-8000-000000000030';
+  v_hint text;
 begin
   begin
     perform tests.report_as(v_id, 'abuse-z1', 'neck', 16.2 + 1, 121 + 1);
     raise exception using errcode = 'TSTFL', message = 'A1a: a report ~150 km from its barangay was accepted';
-  exception when check_violation then null;
+  exception when check_violation then
+    -- The app names the refusal by this hint, never by the wording.
+    get stacked diagnostics v_hint = pg_exception_hint;
+    if v_hint is distinct from 'too_far' then
+      raise exception using errcode = 'TSTFL', message = format('A1a: the refusal''s hint is %s, not too_far', v_hint);
+    end if;
   end;
   begin
     perform tests.report_as(v_id, 'abuse-z1', 'neck', 'NaN', 121);
@@ -120,14 +126,19 @@ end $$;
 do $$
 declare
   v_msg text;
+  v_hint text;
 begin
   perform tests.report_as('ab100000-0000-4000-8000-000000000008', 'abuse-z2', 'knee');
   begin
     perform tests.report_as('ab100000-0000-4000-8000-000000000008', 'abuse-z2', 'knee');
     raise exception using errcode = 'TSTFL', message = 'A2a: a repeat report inside the window was accepted';
   exception when raise_exception then
-    get stacked diagnostics v_msg = message_text;
+    get stacked diagnostics v_msg = message_text, v_hint = pg_exception_hint;
     if v_msg !~ 'Too many reports' then raise; end if;
+    -- The app names the wait by this hint, never by the wording.
+    if v_hint is distinct from 'rate_limited' then
+      raise exception using errcode = 'TSTFL', message = format('A2a: the refusal''s hint is %s, not rate_limited', v_hint);
+    end if;
   end;
 
   perform tests.report_as('ab100000-0000-4000-8000-000000000009', 'abuse-z2', 'knee', p_at => now() - interval '10 minutes');
