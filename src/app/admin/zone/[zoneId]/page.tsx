@@ -35,6 +35,7 @@ import { TrendChart } from "@/features/admin/charts/trend-chart";
 import { RecentReportsPanel } from "@/features/water-level-report/recent-reports-panel";
 import { CommunityPinModerationPanel } from "@/features/admin/community-pin-moderation-panel";
 import { CheckInSummaryPanel } from "@/features/admin/check-in-summary-panel";
+import { BarangayDetailsForm } from "@/features/admin/barangay-details-form";
 import { LastChangeLine } from "@/features/admin/last-change-line";
 import type { CenterStatus, LocalizedText } from "@/lib/types";
 
@@ -70,6 +71,8 @@ const VIEW_ONLY_NOTE: LocalizedText = {
   fil: "Tingnan lang — wala sa saklaw mo ang barangay na ito",
 };
 
+const EDIT_DETAILS: LocalizedText = { en: "Edit barangay details", fil: "I-edit ang detalye ng barangay" };
+
 const ALERT_SEVERITY_VALUES: (Severity | "none")[] = ["none", ...SEVERITY_ORDER];
 
 export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zoneId]">) {
@@ -82,6 +85,7 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
   const setCenterStatus = useSetCenterStatus();
   const [alertError, setAlertError] = useState(false);
   const [statusError, setStatusError] = useState(false);
+  const [editingDetails, setEditingDetails] = useState(false);
   const managesZone = useManagesZone();
   const official = useOfficial();
   const { rainfallHistory, river } = useWeatherData(zoneId);
@@ -213,6 +217,15 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
                 {t(NO_HOTLINE, lang)}
               </p>
             )}
+
+            {canManage &&
+              (editingDetails ? (
+                <BarangayDetailsForm zone={zone} onClose={() => setEditingDetails(false)} />
+              ) : (
+                <Button type="button" variant="outline" size="sm" onClick={() => setEditingDetails(true)}>
+                  <span lang={lang}>{t(EDIT_DETAILS, lang)}</span>
+                </Button>
+              ))}
 
             {canManage && (
               <div className="space-y-2">

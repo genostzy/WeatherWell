@@ -21,6 +21,10 @@ vi.mock("@/app/actions/set-zone-alert", () => ({
 vi.mock("@/app/actions/set-center", () => ({
   setCenterStatus: (...args: unknown[]) => setCenterStatusMock(...args),
 }));
+const setBarangayDetailsMock = vi.fn();
+vi.mock("@/app/actions/set-barangay-details", () => ({
+  setBarangayDetails: (...args: unknown[]) => setBarangayDetailsMock(...args),
+}));
 
 import ZoneDashboardPage from "./page";
 import { renderWithData, FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
@@ -485,5 +489,72 @@ describe("ZoneDashboardPage hotline numbers", () => {
     });
     expect(screen.getByRole("link", { name: "0917 123 4567" })).toHaveAttribute("href", "tel:09171234567");
     expect(screen.getByRole("link", { name: "(075) 522-1234" })).toHaveAttribute("href", "tel:0755221234");
+  });
+});
+
+describe("ZoneDashboardPage barangay details", () => {
+  const own = FIXTURE_REFERENCE_DATA.zones[0];
+  const OFFICIAL: Official = {
+    userId: "u1",
+    displayName: "Test",
+    areaCode: own.psgcBarangayCode,
+    areaName: "Own barangay",
+    level: "barangay",
+  };
+
+  beforeEach(() => {
+    localStorage.clear();
+    setBarangayDetailsMock.mockReset();
+    setBarangayDetailsMock.mockResolvedValue({
+      ok: true,
+      saved: { id: own.id, hotline_number: "0917 123 4567", extra_hotlines: [], evacuation_route_text: own.evacuationRouteText },
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("shows Edit barangay details only to an official who manages the barangay", () => {
+    const { unmount } = renderWithData(
+      <ZoneDashboardPage params={resolvedParams({ zoneId: own.id })} searchParams={emptySearchParams} />,
+      { official: OFFICIAL }
+    );
+    expect(screen.getByRole("button", { name: /edit barangay details/i })).toBeInTheDocument();
+    unmount();
+
+    const other = FIXTURE_REFERENCE_DATA.zones[1];
+    renderWithData(<ZoneDashboardPage params={resolvedParams({ zoneId: other.id })} searchParams={emptySearchParams} />, {
+      official: OFFICIAL,
+    });
+    expect(screen.queryByRole("button", { name: /edit barangay details/i })).not.toBeInTheDocument();
+  });
+
+  it("shows the new numbers on the card as soon as the save is confirmed", async () => {
+    // The real provider, as the R1 block above: a fixed context value cannot show a patch.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url === "/data/reference-data.json") return { ok: true, json: async () => FIXTURE_REFERENCE_DATA };
+        return { ok: true, json: async () => [] };
+      })
+    );
+    const user = userEvent.setup();
+    render(
+      <TooltipProvider>
+        <LanguageProvider>
+          <ReferenceDataProvider>
+            <OfficialContext.Provider value={OFFICIAL}>
+              <ZoneDashboardPage params={resolvedParams({ zoneId: own.id })} searchParams={emptySearchParams} />
+            </OfficialContext.Provider>
+          </ReferenceDataProvider>
+        </LanguageProvider>
+      </TooltipProvider>
+    );
+
+    await user.click(await screen.findByRole("button", { name: /edit barangay details/i }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByRole("link", { name: "0917 123 4567" })).toHaveAttribute("href", "tel:09171234567");
   });
 });
