@@ -939,6 +939,10 @@ export type Database = {
         Returns: string
       }
       admin_remove_official: { Args: { p_email: string }; Returns: string }
+      attach_pin_photo: {
+        Args: { p_path: string; p_pin_id: string }
+        Returns: undefined
+      }
       check_and_trigger_alerts: {
         Args: never
         Returns: {
@@ -980,6 +984,12 @@ export type Database = {
           id: string
           reported_at: string
           zone_id: string
+        }[]
+      }
+      pin_photos_to_delete: {
+        Args: never
+        Returns: {
+          path: string
         }[]
       }
       recent_app_error_count: {

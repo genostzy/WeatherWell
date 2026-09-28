@@ -3437,4 +3437,109 @@ begin
   raise notice 'ok B7, C5: blank means blank, and every confirmed centre reaches phones';
 end $$;
 
+
+-- PT1-PT6: pin types, and pin photos only officials can read.
+do $$
+declare n int; r record; p1 uuid := 'c7100000-0000-4000-8000-000000000001'; p2 uuid := 'c7100000-0000-4000-8000-000000000002';
+  u1 text := 'c7000000-0000-4000-8000-000000000001'; u2 text := 'c7000000-0000-4000-8000-000000000002';
+begin
+  set local role postgres;
+  perform set_config('request.jwt.claims', '', true);
+  insert into auth.users (id) values
+    ('c7000000-0000-4000-8000-000000000001'), ('c7000000-0000-4000-8000-000000000002'),
+    ('c7000000-0000-4000-8000-000000000003');
+  insert into public.zones
+    (id, psgc_barangay_code, name, evacuation_route_text, lat, lng, evacuation_route_path, hotline_number)
+  values ('tests-fixture-zone-pins', '9900000081', 'Test Zone Pins', '{"en":"x","fil":"x"}'::jsonb,
+          16.0288, 120.4366, '[]'::jsonb, '00000000000');
+  insert into public.profiles (id, role, area_code, display_name) values
+    ('c7000000-0000-4000-8000-000000000003', 'operator', '9900000081', 'Test Pin Official')
+  on conflict (id) do update set role = excluded.role, area_code = excluded.area_code, display_name = excluded.display_name;
+
+  -- PT1: the new types are accepted, and an unknown one refused.
+  insert into public.community_pins (id, zone_id, author_id, status_tag, caption, lat, lng)
+    values (p1, 'tests-fixture-zone-pins', u1::uuid, 'road_blocked', 'Fallen tree', 16.0288, 120.4366);
+  insert into public.community_pins (id, zone_id, author_id, status_tag, caption, lat, lng)
+    values (p2, 'tests-fixture-zone-pins', u1::uuid, 'landslide', 'Mud on the road', 16.0289, 120.4367);
+  begin
+    insert into public.community_pins (id, zone_id, author_id, status_tag, caption, lat, lng)
+      values (gen_random_uuid(), 'tests-fixture-zone-pins', u1::uuid, 'snow', 'x', 16.0288, 120.4366);
+    raise exception using errcode = 'TSTFL', message = 'PT1: an unknown pin type was accepted';
+  exception when check_violation then null;
+  end;
+
+  -- PT2: a resident uploads only into their own folder.
+  set local role authenticated;
+  perform set_config('request.jwt.claims', json_build_object('sub', u1, 'role', 'authenticated')::text, true);
+  insert into storage.objects (bucket_id, name, owner_id) values ('pin-photos', u1 || '/a.jpg', u1);
+  insert into storage.objects (bucket_id, name, owner_id) values ('pin-photos', u1 || '/orphan.jpg', u1);
+  insert into storage.objects (bucket_id, name, owner_id) values ('pin-photos', u1 || '/fresh.jpg', u1);
+  begin
+    insert into storage.objects (bucket_id, name, owner_id) values ('pin-photos', u2 || '/b.jpg', u1);
+    raise exception using errcode = 'TSTFL', message = 'PT2: a resident uploaded into another folder';
+  exception when insufficient_privilege then null;
+  end;
+
+  -- PT3: a resident reads no photo, not even their own; an official reads them.
+  select count(*) into n from storage.objects where bucket_id = 'pin-photos';
+  if n <> 0 then raise exception using errcode = 'TSTFL', message = format('PT3: a resident read %s photos', n); end if;
+  perform set_config('request.jwt.claims', '{"sub":"c7000000-0000-4000-8000-000000000003","role":"authenticated"}', true);
+  select count(*) into n from storage.objects where bucket_id = 'pin-photos';
+  if n < 3 then raise exception using errcode = 'TSTFL', message = format('PT3: an official read %s photos', n); end if;
+
+  -- PT4: attach_pin_photo checks whose pin, whose folder, and that the photo exists.
+  perform set_config('request.jwt.claims', json_build_object('sub', u2, 'role', 'authenticated')::text, true);
+  begin
+    perform public.attach_pin_photo(p1, u1 || '/a.jpg');
+    raise exception using errcode = 'TSTFL', message = 'PT4: attached a photo to someone else''s pin';
+  exception when insufficient_privilege then null;
+  end;
+  perform set_config('request.jwt.claims', json_build_object('sub', u1, 'role', 'authenticated')::text, true);
+  begin
+    perform public.attach_pin_photo(p1, u2 || '/b.jpg');
+    raise exception using errcode = 'TSTFL', message = 'PT4: attached a photo from another folder';
+  exception when invalid_parameter_value then null;
+  end;
+  begin
+    perform public.attach_pin_photo(p1, u1 || '/missing.jpg');
+    raise exception using errcode = 'TSTFL', message = 'PT4: attached a photo that does not exist';
+  exception when invalid_parameter_value then null;
+  end;
+  perform public.attach_pin_photo(p1, u1 || '/a.jpg');
+  perform public.attach_pin_photo(p2, u1 || '/fresh.jpg');
+  reset role;
+  select photo_path into r from public.community_pins where id = p1;
+  if r.photo_path is distinct from u1 || '/a.jpg' then
+    raise exception using errcode = 'TSTFL', message = format('PT4: photo_path is %s', r.photo_path);
+  end if;
+  update public.community_pins set removed = true, removed_reason = 'admin' where id = p1;
+  set local role authenticated;
+  perform set_config('request.jwt.claims', json_build_object('sub', u1, 'role', 'authenticated')::text, true);
+  begin
+    perform public.attach_pin_photo(p1, u1 || '/a.jpg');
+    raise exception using errcode = 'TSTFL', message = 'PT4: attached a photo to a removed pin';
+  exception when invalid_parameter_value then null;
+  end;
+  reset role;
+
+  -- PT5: the cleanup list: a removed pin's photo, an orphan over an hour old, a photo over 7 days old; not a fresh live one.
+  update storage.objects set created_at = now() - interval '2 hours' where bucket_id = 'pin-photos' and name = u1 || '/orphan.jpg';
+  insert into storage.objects (bucket_id, name, owner_id, created_at) values ('pin-photos', u1 || '/old.jpg', u1, now() - interval '8 days');
+  select count(*) into n from public.pin_photos_to_delete() d
+   where d.path in (u1 || '/a.jpg', u1 || '/orphan.jpg', u1 || '/old.jpg');
+  if n <> 3 then raise exception using errcode = 'TSTFL', message = format('PT5: listed %s of 3', n); end if;
+  if exists (select 1 from public.pin_photos_to_delete() d where d.path = u1 || '/fresh.jpg') then
+    raise exception using errcode = 'TSTFL', message = 'PT5: listed a fresh photo of a live pin';
+  end if;
+
+  -- PT6: who may call what.
+  if has_function_privilege('anon', 'public.attach_pin_photo(uuid,text)', 'execute') then
+    raise exception using errcode = 'TSTFL', message = 'PT6: anon can attach a photo';
+  end if;
+  if has_function_privilege('authenticated', 'public.pin_photos_to_delete()', 'execute') then
+    raise exception using errcode = 'TSTFL', message = 'PT6: residents can list photos to delete';
+  end if;
+  raise notice 'ok PT1-PT6: pin types, and pin photos only officials can read';
+end $$;
+
 rollback;
