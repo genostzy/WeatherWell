@@ -1,9 +1,9 @@
-# Handoff — 26 September 2026
+# Handoff — 28 September 2026
 
 ## State
 
 - `mvp` was merged into `v1` on 25 September. `v1` is the default branch and the production branch; `mvp` stays at `0b9f0fd` for reference.
-- **Production runs `d4ac54a`** (the review fixes below, released later on 26 September). Before that, `ddf7293` was released as `dpl_DAEpr9WuSe9jkLvzPLWoHsPcQf8B` after CI run #115 passed, shipping these commits on top of `8fa9dd9`:
+- **Production runs `dea649b`** (changing and viewing a barangay, below, released on 28 September). `d4ac54a` (the review fixes below) ran before it, released later on 26 September. Before that, `ddf7293` was released as `dpl_DAEpr9WuSe9jkLvzPLWoHsPcQf8B` after CI run #115 passed, shipping these commits on top of `8fa9dd9`:
 
 | Commit | What |
 |---|---|
@@ -18,6 +18,24 @@
 - Checked on production after the release: the 8 public pages tried each have their own title, `/api/health` reports the database ok with no recent errors, and `/api/alert-bars` answers (no barangay's bar has moved yet).
 - `pg_cron` now starts the GitHub workflows on time. The owner put the token in Vault at 02:18 UTC on 26 September, and the first dispatched Monitor run started at 02:30 UTC and passed.
 - The Nilombot test alert (yellow, set by Test Official at 22:17 on 25 September) was lifted at 02:21 UTC on 26 September. The action record shows it as cleared by the System owner. No push or email went out, because it was lifted in the database, not through the app.
+
+### Changing and viewing a barangay, 28 September
+
+Residents can change their barangay after setup, look at another barangay without changing theirs, and report where GPS puts them. Designed in `docs/superpowers/specs/2026-09-26-change-and-view-barangay-design.md`, planned in `docs/superpowers/plans/2026-09-26-change-and-view-barangay.md`, reviewed by a fresh reviewer at the end, and **released on 28 September as `dpl_hyBRodJ4LUgpJcbkoJUUWU4RhrWo` (`dea649b`)** after CI run #117 passed. No migrations.
+
+| Commit | What |
+|---|---|
+| `892bc66` | My barangay can change while the app is open; every screen follows it |
+| `1ce023a` | "Change" on the home screen and on your own card in the Zones list; email alerts follow the change |
+| `c206d0c` | View another barangay (`/?zone=`), with Back to my barangay and My location; push stays on mine |
+| `5bdae0d` | A report counts where GPS puts you, or for your barangay without a position; the danger banner speaks Filipino |
+| `c682ece` | The Zones list's View and Evacuation open the barangay on the card |
+| `1ff8eb7` | A viewed barangay opens offline from the cached page (service worker v20) |
+| `dea649b` | The review's fixes: within 2 km of your barangay's centre a report stays yours; the screen starts afresh on a change; push follows a change made anywhere; `/evacuation?zone=` says whose it is |
+
+- Left for the owner to decide: **the home radius is 2 km** (`HOME_RADIUS_METERS` in `src/lib/where-you-are.ts`). Larger keeps more reports at home, including some made just across the border; smaller hands at-home reports to a neighbour in dense towns.
+- Not fixed, minor: the picker hides "Use my location" before consent instead of pointing to the notice; Change is offered offline, where the search cannot work; "Palitan" and "Baguhin" name the same step; the push line shows even when push is off; clearing storage in another tab goes unnoticed; while viewing, My location does not name where you are.
+- Checked on production after the release: service worker v20 is served with the offline rule for pages with a query; `/`, `/evacuation`, `/report` and `/map` answer, with and without `?zone=`; the new wording is in the served code; and `/api/health` reports the database ok with no recent errors.
 
 ### Code review of the session, 26 September
 
@@ -62,6 +80,7 @@ A self-review of `0b9f0fd..ddf7293` (the review agents hit their usage limit) fo
 
 - Calibration: "Auto, floor stays". The loop moves each barangay's bar by itself, logs every move to the action record, and never goes below 3 reporters and trust 1.0.
 - The test accounts keep their current passwords.
+- Barangays: "My barangay + view others". Alerts come for the barangay a resident picks; a report counts where GPS says they are.
 
 ## Open work
 
@@ -88,7 +107,7 @@ A self-review of `0b9f0fd..ddf7293` (the review agents hit their usage limit) fo
 
 - App: `npm run lint`, `npm run typecheck`, `npm test`, `npm run knip`, `npm run build`.
 - Database: start Supabase the way CI does, then run `helpers.sql`, `reference-tables.sql`, `rls.sql`, `abuse.sql`, `accounts.sql` and `calibration.sql` with `psql` (see `.github/workflows/ci.yml`).
-- Last run, 26 September, locally: 1,681 app tests pass; lint (two old warnings in a test), typecheck, knip and build are clean. Calibration checks C1–C7 passed against the live database with the new functions, inside a rolled-back transaction; the new hints were checked there the same way. `rls.sql` and `abuse.sql` run in CI on the next push.
+- Last run, 28 September, locally: 1,731 app tests pass; lint (two old warnings in a test), typecheck, knip and build are clean. The database suites run in CI on every push.
 
 ## Where things live
 
@@ -97,4 +116,5 @@ A self-review of `0b9f0fd..ddf7293` (the review agents hit their usage limit) fo
 - Accessibility: `src/features/map/map-centre-placer.tsx`, and the tests `src/app/colour-contrast.test.ts` and `src/app/page-titles.test.ts`.
 - Scheduling: the `20260925135257` migration.
 - Anti-abuse: the `20260925123429` migration and `supabase/tests/abuse.sql`.
+- Changing and viewing a barangay: `src/features/zones/change-barangay-dialog.tsx`, `barangay-bar.tsx` and `use-viewed-zone.ts`; `src/lib/where-you-are.ts` (`HOME_RADIUS_METERS`); `src/lib/follow-email-alerts.ts`; `followPushSubscription` in `src/lib/push-subscription.ts`; `pageWithQuery` in `public/sw.js`.
 - Consent notice: `CONSENT_ITEMS` in `src/features/onboarding/consent-notice.tsx`, versioned by `CONSENT_VERSION` in `onboarding-storage.ts`.
