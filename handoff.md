@@ -3,7 +3,7 @@
 ## State
 
 - `mvp` was merged into `v1` on 25 September. `v1` is the default branch and the production branch; `mvp` stays at `0b9f0fd` for reference.
-- **Production runs `dea649b`** (changing and viewing a barangay, below, released on 28 September). `d4ac54a` (the review fixes below) ran before it, released later on 26 September. Before that, `ddf7293` was released as `dpl_DAEpr9WuSe9jkLvzPLWoHsPcQf8B` after CI run #115 passed, shipping these commits on top of `8fa9dd9`:
+- **Production runs `4f592b6`** (officials fill in their barangay's details, below, released on 28 September). Before it ran `dea649b` (changing and viewing a barangay, below), and before that `d4ac54a` (the review fixes below), released later on 26 September. Before that, `ddf7293` was released as `dpl_DAEpr9WuSe9jkLvzPLWoHsPcQf8B` after CI run #115 passed, shipping these commits on top of `8fa9dd9`:
 
 | Commit | What |
 |---|---|
@@ -18,6 +18,28 @@
 - Checked on production after the release: the 8 public pages tried each have their own title, `/api/health` reports the database ok with no recent errors, and `/api/alert-bars` answers (no barangay's bar has moved yet).
 - `pg_cron` now starts the GitHub workflows on time. The owner put the token in Vault at 02:18 UTC on 26 September, and the first dispatched Monitor run started at 02:30 UTC and passed.
 - The Nilombot test alert (yellow, set by Test Official at 22:17 on 25 September) was lifted at 02:21 UTC on 26 September. The action record shows it as cleared by the System owner. No push or email went out, because it was lifted in the database, not through the app.
+
+### Officials fill in their barangay's details, 28 September
+
+Officials enter what residents had only as placeholders: up to 3 hotline numbers, the evacuation instructions (English, Filipino or both; a blank language shows the other, marked with its real language) and the centre, picked from OpenStreetMap or placed on a map. Designed in `docs/superpowers/specs/2026-09-28-barangay-details-design.md`, planned in `docs/superpowers/plans/2026-09-28-barangay-details.md`, reviewed by a fresh reviewer (Opus; Fable had no usage credits), and **released on 28 September as `dpl_BgPg4GTEKAzDYJiT6oMxfi3SzGru` (`4f592b6`)** after CI run #120 passed, database suites included.
+
+| Commit | What |
+|---|---|
+| `c521f22` | No grey hazard ring around every barangay while hazard data is unknown |
+| `9f75477` | DB: `set_barangay_details` (area-checked, recorded as `barangay.details`), `zones.extra_hotlines` and `details_set_at` |
+| `ed6d71a` | The rules and wording for numbers and instructions, in both languages |
+| `c53248e` | `/api/barangay-details`, laid over the offline file and kept by the service worker (v21) |
+| `d287ffb` | A call button for each number; every call link dials digits only |
+| `21f0a5e` | Edit barangay details on the barangay page |
+| `d238197` | Place the centre on a map |
+| `6c2a971` | Operations map and Drill in the barangay officials' menu; Drill in the town's |
+| `df9f0e6` | Docs: PRD and README |
+| `66c9141` | The review's fixes: a centre confirmed without a capacity reaches phones (`evacuation_centers.confirmed_at`); "(+63)" numbers dial right; whitespace-only boxes are blank; the official's next open shows the new details; the plan shows the instructions without a centre; the placeholder is not offered as the official's words; errors name their field; instructions in one language are marked with it |
+| `4f592b6` | The new database checks use fixture ids no other block uses (CI run #119 failed on the clash) |
+
+- Two migrations came with it, applied live before the release: `20260928083830_barangay_details` and `20260928123726_barangay_details_fixes`. Both only add, or replace a function with the same signature and grants.
+- Checked on production after the release: service worker v21 lists `/api/barangay-details`; the feed answers (empty until an official saves); `/api/centres` lists the one confirmed centre; the pages answer; the new wording is in the served code; and `/api/health` reports the database ok with no recent errors.
+- Not fixed, minor: pasted numbers with non-breaking spaces, en dashes or dots are refused; "Saved — residents see it the next time their app opens" is one open early; on a very slow first load the feed can overwrite a just-saved change on the official's screen; odd capacities show an untranslated message; focus and screen-reader details in the new forms; the centre panel's loading state; two test gaps; one PRD line reads as if the details function also saves the centre.
 
 ### Changing and viewing a barangay, 28 September
 
@@ -82,6 +104,7 @@ A self-review of `0b9f0fd..ddf7293` (the review agents hit their usage limit) fo
 - The test accounts keep their current passwords.
 - Barangays: "My barangay + view others". Alerts come for the barangay a resident picks; a report counts where GPS says they are.
 - Home radius (28 September): 2 km stays. Within it, a report counts for the resident's own barangay.
+- Barangay details (28 September): one language is enough for the instructions; up to 3 hotline numbers; stored in the barangay's own row.
 
 ## Open work
 
@@ -108,7 +131,7 @@ A self-review of `0b9f0fd..ddf7293` (the review agents hit their usage limit) fo
 
 - App: `npm run lint`, `npm run typecheck`, `npm test`, `npm run knip`, `npm run build`.
 - Database: start Supabase the way CI does, then run `helpers.sql`, `reference-tables.sql`, `rls.sql`, `abuse.sql`, `accounts.sql` and `calibration.sql` with `psql` (see `.github/workflows/ci.yml`).
-- Last run, 28 September, locally: 1,731 app tests pass; lint (two old warnings in a test), typecheck, knip and build are clean. The database suites run in CI on every push.
+- Last run, 28 September, locally: 1,778 app tests pass; lint (two old warnings in a test), typecheck, knip and build are clean. The database suites run in CI on every push.
 
 ## Where things live
 
@@ -117,5 +140,6 @@ A self-review of `0b9f0fd..ddf7293` (the review agents hit their usage limit) fo
 - Accessibility: `src/features/map/map-centre-placer.tsx`, and the tests `src/app/colour-contrast.test.ts` and `src/app/page-titles.test.ts`.
 - Scheduling: the `20260925135257` migration.
 - Anti-abuse: the `20260925123429` migration and `supabase/tests/abuse.sql`.
+- Barangay details: `src/features/admin/barangay-details-form.tsx`, `src/features/evacuation/place-centre-on-map.tsx`, `src/lib/barangay-details.ts` (the rules, `telHref`, `instructionsFor`), `src/app/api/barangay-details/route.ts`, `applyDetailsOverlay` in `src/lib/reference-data/types.ts`, and the `20260928083830` and `20260928123726` migrations.
 - Changing and viewing a barangay: `src/features/zones/change-barangay-dialog.tsx`, `barangay-bar.tsx` and `use-viewed-zone.ts`; `src/lib/where-you-are.ts` (`HOME_RADIUS_METERS`); `src/lib/follow-email-alerts.ts`; `followPushSubscription` in `src/lib/push-subscription.ts`; `pageWithQuery` in `public/sw.js`.
 - Consent notice: `CONSENT_ITEMS` in `src/features/onboarding/consent-notice.tsx`, versioned by `CONSENT_VERSION` in `onboarding-storage.ts`.
