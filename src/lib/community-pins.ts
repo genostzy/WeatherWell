@@ -336,6 +336,7 @@ export function addCommunityPin(input: {
   caption: string;
   lat: number;
   lng: number;
+  photoPath?: string;
 }): void {
   enqueue("createPin", input);
   triggerDrain();

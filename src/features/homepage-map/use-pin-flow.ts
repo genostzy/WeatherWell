@@ -64,6 +64,7 @@ export function usePinFlow(zones: Zone[]) {
       caption: input.caption,
       lat: pendingPinLocation.lat,
       lng: pendingPinLocation.lng,
+      ...(input.photoPath ? { photoPath: input.photoPath } : {}),
     });
     setPendingPinLocation(null);
   }

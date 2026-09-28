@@ -110,6 +110,8 @@ export interface CreatePinInput {
   caption: string;
   lat: number;
   lng: number;
+  /** A photo already uploaded to the caller's own folder of pin-photos, for officials only. */
+  photoPath?: string;
 }
 
 /**
@@ -145,15 +147,19 @@ export async function createPin(input: CreatePinInput): Promise<ActionResult> {
     author_id: userId,
   });
 
-  if (!error) return { ok: true };
-
   // The outbox re-sends anything it did not see confirmed, so a row that
   // already landed under this id is a success, not a failure. (Contrast the
   // votes and check-ins tables, where the primary key is not the outbox's own
   // id and a collision means something else.)
-  if (error.code === UNIQUE_VIOLATION) return { ok: true };
+  if (error && error.code !== UNIQUE_VIOLATION) return classify(error);
 
-  return classify(error);
+  // attach_pin_photo checks the pin is the caller's and the photo is in their
+  // own folder. A failure keeps the pin, without its photo: by now no form is
+  // open to say so, and the pin matters more than the picture.
+  if (input.photoPath) {
+    await supabase.rpc("attach_pin_photo", { p_pin_id: input.id, p_path: input.photoPath });
+  }
+  return { ok: true };
 }
 
 /**

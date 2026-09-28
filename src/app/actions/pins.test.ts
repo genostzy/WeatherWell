@@ -2,9 +2,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const getClaims = vi.fn();
 const from = vi.fn();
+const rpc = vi.fn();
 
 vi.mock("@/lib/supabase/user-server", () => ({
-  createSupabaseUserClient: async () => ({ auth: { getClaims }, from }),
+  createSupabaseUserClient: async () => ({ auth: { getClaims }, from, rpc }),
 }));
 
 beforeEach(() => {
@@ -248,5 +249,32 @@ describe("createPin: pin types", () => {
     expect(insert).toHaveBeenCalledWith(expect.objectContaining({ status_tag: "road_blocked" }));
     const refused = await createPin({ ...validPin, statusTag: "snow" as never });
     expect(refused).toMatchObject({ ok: false, permanent: true });
+  });
+});
+
+describe("createPin: a photo", () => {
+  it("attaches the photo after the pin is saved", async () => {
+    const { createPin } = await import("./pins");
+    getClaims.mockResolvedValue({ data: { claims: { sub: "u1" } } });
+    from.mockReturnValue({ insert: vi.fn().mockResolvedValue({ error: null }) });
+    rpc.mockResolvedValue({ error: null });
+    expect(await createPin({ ...validPin, photoPath: "u1/x.jpg" })).toEqual({ ok: true });
+    expect(rpc).toHaveBeenCalledWith("attach_pin_photo", { p_pin_id: PIN_ID, p_path: "u1/x.jpg" });
+  });
+
+  it("keeps the pin when the attach fails", async () => {
+    const { createPin } = await import("./pins");
+    getClaims.mockResolvedValue({ data: { claims: { sub: "u1" } } });
+    from.mockReturnValue({ insert: vi.fn().mockResolvedValue({ error: null }) });
+    rpc.mockResolvedValue({ error: { message: "no such photo" } });
+    expect(await createPin({ ...validPin, photoPath: "u1/x.jpg" })).toEqual({ ok: true });
+  });
+
+  it("attaches nothing for a pin without a photo", async () => {
+    const { createPin } = await import("./pins");
+    getClaims.mockResolvedValue({ data: { claims: { sub: "u1" } } });
+    from.mockReturnValue({ insert: vi.fn().mockResolvedValue({ error: null }) });
+    await createPin(validPin);
+    expect(rpc).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -17,6 +17,7 @@ import {
   type PinStatusTag,
 } from "@/lib/community-pin";
 import type { LocalizedText } from "@/lib/types";
+import { PIN_PHOTO_NOTICE_KEY, shrinkPhoto, uploadPinPhoto } from "@/lib/pin-photo";
 
 const FORM_TITLE: LocalizedText = { en: "Report flood conditions here", fil: "Iulat ang kondisyon ng baha dito" };
 const EDIT_TITLE: LocalizedText = { en: "Edit your flood pin", fil: "I-edit ang iyong flood pin" };
@@ -28,8 +29,31 @@ const CAPTION_PLACEHOLDER: LocalizedText = {
   fil: "hal. Tuhod na ang tubig malapit sa palengke",
 };
 const SHARING_NOTE: LocalizedText = {
-  en: "This pin — its status, description, and location — is shared with the barangay. Photos can't be attached yet.",
-  fil: "Ang pin na ito — status, paglalarawan, at lokasyon — ay ibinabahagi sa barangay. Hindi pa maaaring maglagay ng larawan dito.",
+  en: "This pin — what's happening, the description and the location — is shared with the barangay. A photo, if you add one, goes only to officials.",
+  fil: "Ang pin na ito — ang nangyayari, paglalarawan at lokasyon — ay ibinabahagi sa barangay. Ang larawan, kung maglalagay ka, ay para lang sa mga opisyal.",
+};
+const ADD_PHOTO: LocalizedText = {
+  en: "Add photo (only officials see it)",
+  fil: "Magdagdag ng larawan (mga opisyal lang ang makakakita)",
+};
+const REMOVE_PHOTO: LocalizedText = { en: "Remove photo", fil: "Alisin ang larawan" };
+const PHOTO_ALT: LocalizedText = { en: "Photo to send", fil: "Larawang ipapadala" };
+const PHOTO_NOTICE: LocalizedText = {
+  en: "Only officials see this photo. It is deleted after 7 days. Don't include people's faces or plate numbers.",
+  fil: "Mga opisyal lang ang makakakita ng larawang ito. Buburahin ito pagkalipas ng 7 araw. Huwag isama ang mukha ng tao o plate number.",
+};
+const OK: LocalizedText = { en: "OK", fil: "OK" };
+const NEEDS_CONNECTION: LocalizedText = {
+  en: "Photos need a connection — the pin will be sent without it.",
+  fil: "Kailangan ng koneksyon para sa larawan — ipapadala ang pin nang wala nito.",
+};
+const PHOTO_UNUSABLE: LocalizedText = {
+  en: "This photo couldn't be used — send the pin without it, or try another.",
+  fil: "Hindi magamit ang larawang ito — ipadala ang pin nang wala nito, o sumubok ng iba.",
+};
+const UPLOAD_FAILED: LocalizedText = {
+  en: "The photo couldn't be sent — drop the pin again to send it without the photo.",
+  fil: "Hindi naipadala ang larawan — pindutin muli para ipadala ang pin nang wala nito.",
 };
 const UNVERIFIED_NOTE: LocalizedText = {
   en: "Unverified community report, separate from official alerts.",
@@ -42,6 +66,16 @@ const SAVE_CHANGES: LocalizedText = { en: "Save changes", fil: "I-save ang pagba
 export interface CommunityPinFormValues {
   statusTag: PinStatusTag;
   caption: string;
+  /** Set only when a photo was uploaded; see pin-photo.ts. */
+  photoPath?: string;
+}
+
+function noticeSeen(): boolean {
+  try {
+    return localStorage.getItem(PIN_PHOTO_NOTICE_KEY) === "1";
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -49,11 +83,9 @@ export interface CommunityPinFormValues {
  * and for editing a pin they already dropped (see HomepageMap, which renders
  * this inside an OverlayDialog so it never sits below the fold).
  *
- * No photo field: pins going live moved status, caption, and location to
- * Postgres, but pin photos are still out of scope pending consent and
- * retention rules, and there is no bucket or grant behind an upload. A form
- * that collected a photo here would mislead the resident into thinking it
- * was part of their report.
+ * A new pin can carry one photo for officials: shrunk on the phone when
+ * picked, uploaded when the pin is sent (online only), and attached by
+ * createPin. The first photo on a phone shows a short notice first.
  */
 export function CommunityPinForm({
   onSubmit,
@@ -74,6 +106,66 @@ export function CommunityPinForm({
   );
   const statusTag: PinStatusTag = kind === "flood" ? waterTag : kind;
   const [caption, setCaption] = useState(initialValues?.caption ?? "");
+  const [photo, setPhoto] = useState<Blob | null>(null);
+  // Held until the resident has read the notice, the first time.
+  const [awaitingNotice, setAwaitingNotice] = useState<Blob | null>(null);
+  const [photoMessage, setPhotoMessage] = useState<LocalizedText | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+  // A second press can land before the disabled button re-renders.
+  const busy = useRef(false);
+  const fileInput = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!photo || typeof URL.createObjectURL !== "function") return;
+    const url = URL.createObjectURL(photo);
+    setPreview(url);
+    return () => URL.revokeObjectURL?.(url);
+  }, [photo]);
+
+  function attach(shrunk: Blob) {
+    setPhoto(shrunk);
+    setPhotoMessage(navigator.onLine ? null : NEEDS_CONNECTION);
+  }
+
+  async function pick(file: File | undefined) {
+    if (!file) return;
+    setPhotoMessage(null);
+    try {
+      const shrunk = await shrinkPhoto(file);
+      if (noticeSeen()) attach(shrunk);
+      else setAwaitingNotice(shrunk);
+    } catch {
+      setPhoto(null);
+      setPhotoMessage(PHOTO_UNUSABLE);
+    }
+  }
+
+  function removePhoto() {
+    setPhoto(null);
+    setPreview(null);
+    setPhotoMessage(null);
+    if (fileInput.current) fileInput.current.value = "";
+  }
+
+  async function send() {
+    if (busy.current) return;
+    const values: CommunityPinFormValues = { statusTag, caption: caption.trim() };
+    if (photo && navigator.onLine) {
+      busy.current = true;
+      setSending(true);
+      const path = await uploadPinPhoto(photo);
+      busy.current = false;
+      setSending(false);
+      if (!path) {
+        removePhoto();
+        setPhotoMessage(UPLOAD_FAILED);
+        return;
+      }
+      values.photoPath = path;
+    }
+    onSubmit(values);
+  }
 
   return (
     <Card className="w-full">
@@ -87,7 +179,7 @@ export function CommunityPinForm({
           className="flex flex-col gap-4"
           onSubmit={(event) => {
             event.preventDefault();
-            onSubmit({ statusTag, caption: caption.trim() });
+            void send();
           }}
         >
           <div className="space-y-2">
@@ -141,6 +233,62 @@ export function CommunityPinForm({
             />
           </div>
 
+          {mode === "create" && (
+            <div className="space-y-2">
+              <Label htmlFor="pin-photo" lang={lang}>
+                {t(ADD_PHOTO, lang)}
+              </Label>
+              <input
+                ref={fileInput}
+                id="pin-photo"
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="block w-full text-sm"
+                onChange={(event) => void pick(event.target.files?.[0])}
+              />
+              {awaitingNotice && (
+                <div role="alertdialog" aria-label={t(ADD_PHOTO, lang)} className="space-y-2 rounded-md border-2 border-border p-2">
+                  <p lang={lang} className="text-sm">
+                    {t(PHOTO_NOTICE, lang)}
+                  </p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => {
+                      try {
+                        localStorage.setItem(PIN_PHOTO_NOTICE_KEY, "1");
+                      } catch {
+                        // The notice shows again next time; nothing else depends on it.
+                      }
+                      attach(awaitingNotice);
+                      setAwaitingNotice(null);
+                    }}
+                  >
+                    {t(OK, lang)}
+                  </Button>
+                </div>
+              )}
+              {photo && (
+                <div className="flex items-center gap-2">
+                  {preview && (
+                    // eslint-disable-next-line @next/next/no-img-element -- a local blob: URL of the resident's own photo
+                    <img src={preview} alt={t(PHOTO_ALT, lang)} className="h-16 w-16 rounded-md object-cover" />
+                  )}
+                  {!preview && <span role="img" aria-label={t(PHOTO_ALT, lang)} className="h-16 w-16 rounded-md bg-muted" />}
+                  <Button type="button" size="sm" variant="outline" onClick={removePhoto}>
+                    {t(REMOVE_PHOTO, lang)}
+                  </Button>
+                </div>
+              )}
+              {photoMessage && (
+                <p role="status" lang={lang} className="text-xs">
+                  {t(photoMessage, lang)}
+                </p>
+              )}
+            </div>
+          )}
+
           <p lang={lang} className="text-xs text-muted-foreground">
             {t(SHARING_NOTE, lang)}
           </p>
@@ -151,7 +299,7 @@ export function CommunityPinForm({
 
           <div className="flex gap-2">
             {/* The server refuses a pin without a description (createPin), so the form does too. */}
-            <Button type="submit" size="sm" disabled={!caption.trim()}>
+            <Button type="submit" size="sm" disabled={!caption.trim() || Boolean(awaitingNotice)} loading={sending}>
               {t(mode === "edit" ? SAVE_CHANGES : DROP_PIN, lang)}
             </Button>
             <Button type="button" variant="outline" size="sm" onClick={onCancel}>
