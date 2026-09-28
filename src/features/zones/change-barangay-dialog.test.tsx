@@ -8,6 +8,10 @@ import { mockZoneApis } from "@/test-utils/mock-zone-apis";
 
 const followEmailAlerts = vi.fn(async (zoneId: string) => void zoneId);
 vi.mock("@/lib/follow-email-alerts", () => ({ followEmailAlerts: (zoneId: string) => followEmailAlerts(zoneId) }));
+const followPushSubscription = vi.fn(async (zoneId: string) => void zoneId);
+vi.mock("@/lib/push-subscription", () => ({
+  followPushSubscription: (zoneId: string) => followPushSubscription(zoneId),
+}));
 
 const ZONES = FIXTURE_REFERENCE_DATA.zones;
 const target = ZONES[1];
@@ -37,6 +41,10 @@ describe("ChangeBarangayDialog", () => {
 
     expect(getSelectedZoneId()).toBe(target.id);
     expect(followEmailAlerts).toHaveBeenCalledWith(target.id);
+    // Push moves too, wherever the change was made, not only where a push prompt is on screen.
+    expect(followPushSubscription).toHaveBeenCalledWith(target.id);
+    // The confirm button is gone: focus lands on Done, not the page behind the dialog.
+    expect(screen.getByRole("button", { name: /^done$/i })).toHaveFocus();
     expect(screen.getByText(`Alerts now come for ${target.name}.`)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /^done$/i }));
     expect(onClose).toHaveBeenCalled();

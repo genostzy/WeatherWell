@@ -12,7 +12,7 @@ describe("BarangayBar: my barangay", () => {
   it("names my barangay and lets me change it", async () => {
     renderWithData(<BarangayBar shownZone={mine} myZone={mine} whereYouAre={null} />);
     expect(screen.getByText(mine.name)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: /^change$/i }));
+    await userEvent.click(screen.getByRole("button", { name: /change my barangay/i }));
     expect(screen.getByRole("dialog", { name: "Change my barangay" })).toBeInTheDocument();
   });
 

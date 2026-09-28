@@ -29,6 +29,7 @@ const ALL_ZONES: LocalizedText = { en: "All", fil: "Lahat" };
 const VIEW_EVACUATION: LocalizedText = { en: "Evacuation", fil: "Paglikas" };
 const VIEW: LocalizedText = { en: "View", fil: "Tingnan" };
 const CHANGE: LocalizedText = { en: "Change", fil: "Palitan" };
+const CHANGE_MINE: LocalizedText = { en: "Change my barangay", fil: "Palitan ang aking barangay" };
 const NO_ZONES_MATCH: LocalizedText = { en: "No zones with this status right now.", fil: "Walang zone na ganito ngayon." };
 const SEARCH_PLACEHOLDER: LocalizedText = { en: "Search zone, municipality…", fil: "Maghanap ng zone, munisipalidad…" };
 const LOAD_MORE: LocalizedText = { en: "Load more", fil: "Dagdagan pa" };
@@ -44,6 +45,9 @@ export function ZoneMap({ zones }: { zones: Zone[] }) {
   const [statusFilter, setStatusFilter] = useState<ZoneStatus | "all">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  // Held here, not in a card: after the change the list re-ranks and the
+  // old card can drop off the page, taking a dialog it held with it.
+  const [changing, setChanging] = useState(false);
 
   const alertMap = useMemo(() => {
     const m = new Map<string, typeof alerts[0]>();
@@ -154,6 +158,7 @@ export function ZoneMap({ zones }: { zones: Zone[] }) {
             lang={lang}
             alert={alertMap.get(zone.id)}
             isOwnZone={zone.id === selectedZone.id}
+            onChangeMine={() => setChanging(true)}
           />
         ))}
       </div>
@@ -177,6 +182,8 @@ export function ZoneMap({ zones }: { zones: Zone[] }) {
           </Button>
         </div>
       )}
+
+      {changing && <ChangeBarangayDialog onClose={() => setChanging(false)} />}
     </div>
   );
 }
@@ -190,13 +197,14 @@ function ZoneRow({
   lang,
   alert,
   isOwnZone,
+  onChangeMine,
 }: {
   zone: Zone;
   lang: LanguageCode;
   alert: ReturnType<typeof useAlerts>[number] | undefined;
   isOwnZone: boolean;
+  onChangeMine: () => void;
 }) {
-  const [changing, setChanging] = useState(false);
   const status = getZoneStatus(alert);
   const color = getZoneStatusColor(alert);
   const centerStatus = resolveEffectiveCenterStatus(
@@ -248,24 +256,31 @@ function ZoneRow({
           <div className="flex gap-1">
             {/* The barangay on this card, not your own. No Report: a report counts where you are. */}
             <Button asChild size="sm" variant="ghost" className="h-6 px-1.5 text-xs">
-              <Link href={isOwnZone ? "/" : `/?zone=${zone.id}`} lang={lang}>
+              {/* No prefetch: 20 cards would fetch 40 barangays' pages on a metered phone. */}
+              <Link href={isOwnZone ? "/" : `/?zone=${zone.id}`} prefetch={false} lang={lang}>
                 {t(VIEW, lang)}
               </Link>
             </Button>
             <Button asChild size="sm" variant="ghost" className="h-6 px-1.5 text-xs">
-              <Link href={isOwnZone ? "/evacuation" : `/evacuation?zone=${zone.id}`} lang={lang}>
+              <Link href={isOwnZone ? "/evacuation" : `/evacuation?zone=${zone.id}`} prefetch={false} lang={lang}>
                 {t(VIEW_EVACUATION, lang)}
               </Link>
             </Button>
             {isOwnZone && (
-              <Button type="button" size="sm" variant="ghost" className="h-6 px-1.5 text-xs" onClick={() => setChanging(true)}>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-6 px-1.5 text-xs"
+                aria-label={t(CHANGE_MINE, lang)}
+                onClick={onChangeMine}
+              >
                 <span lang={lang}>{t(CHANGE, lang)}</span>
               </Button>
             )}
           </div>
         </div>
       </CardContent>
-      {changing && <ChangeBarangayDialog onClose={() => setChanging(false)} />}
     </Card>
   );
 }

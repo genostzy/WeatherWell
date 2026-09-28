@@ -12,7 +12,7 @@ vi.mock("@/lib/auth/anonymous-session", () => ({
   ensureAnonymousSession: () => ensureAnonymousSession(),
 }));
 
-import { usePushSubscription } from "./push-subscription";
+import { followPushSubscription, usePushSubscription } from "./push-subscription";
 
 const fakeSubscription = {
   endpoint: "https://push.example/1",
@@ -41,6 +41,19 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
+});
+
+describe("followPushSubscription (my barangay changed)", () => {
+  it("moves this phone's subscription to the new barangay", async () => {
+    pushManager.getSubscription.mockResolvedValue(fakeSubscription);
+    await followPushSubscription("zone-3");
+    expect(rpc).toHaveBeenCalledWith("save_push_subscription", expect.objectContaining({ p_zone_id: "zone-3" }));
+  });
+
+  it("does nothing when this phone has no subscription", async () => {
+    await followPushSubscription("zone-3");
+    expect(rpc).not.toHaveBeenCalled();
+  });
 });
 
 describe("usePushSubscription", () => {

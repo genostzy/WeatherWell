@@ -116,6 +116,15 @@ describe("MapCanvas", () => {
     });
   });
 
+  it("opens the evacuation of the barangay whose marker you tapped", async () => {
+    renderWithData(<MapCanvas {...baseProps} />);
+    fireEvent.click(screen.getByRole("img", { name: /Barangay Nilombot, Mapandan/i }));
+    expect(await screen.findByRole("link", { name: /view evacuation details/i })).toHaveAttribute(
+      "href",
+      "/evacuation?zone=" + FIXTURE_REFERENCE_DATA.zones[0].id
+    );
+  });
+
   it("calls onSelectZone when a zone status marker is clicked", () => {
     const onSelectZone = vi.fn();
     renderWithData(<MapCanvas {...baseProps} onSelectZone={onSelectZone} />);

@@ -56,6 +56,23 @@ async function saveSubscription(sub: PushSubscription, zoneId: string): Promise<
 }
 
 /**
+ * Moves this phone's push subscription to a new barangay, when it has one.
+ * Done where my barangay changes, not only where a push prompt is on screen.
+ * Offline or without a service worker it does nothing; the home screen's
+ * prompt re-saves on its next visit.
+ */
+export async function followPushSubscription(zoneId: string): Promise<void> {
+  try {
+    if (!("serviceWorker" in navigator)) return;
+    const registration = await navigator.serviceWorker.ready;
+    const sub = await registration.pushManager.getSubscription();
+    if (sub) await saveSubscription(sub, zoneId);
+  } catch {
+    // Left for the next re-save.
+  }
+}
+
+/**
  * What subscribe() came to. Every way it can stop is named, so the button
  * can say why instead of quietly ending its spinner (found testing push on
  * a phone: nothing was saved and nothing was said).

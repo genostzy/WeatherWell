@@ -9,6 +9,7 @@ import { t } from "@/lib/i18n";
 import type { LocalizedText, Zone } from "@/lib/types";
 
 const CHANGE: LocalizedText = { en: "Change", fil: "Palitan" };
+const CHANGE_MINE: LocalizedText = { en: "Change my barangay", fil: "Palitan ang aking barangay" };
 const VIEWING: LocalizedText = {
   en: "Viewing {name}. Your alerts still come for {mine}.",
   fil: "Tinitingnan ang {name}. Para pa rin sa {mine} ang iyong mga alerto.",
@@ -27,15 +28,18 @@ export function BarangayBar({
   shownZone,
   myZone,
   whereYouAre,
+  path = "/",
 }: {
   shownZone: Zone;
   myZone: Zone;
   whereYouAre: Zone | null;
+  /** The page the bar sits on: "/" or "/evacuation". Back and My location stay on it. */
+  path?: string;
 }) {
   const { lang } = useLanguage();
   const [changing, setChanging] = useState(false);
   const viewing = shownZone.id !== myZone.id;
-  const hrefFor = (zone: Zone) => (zone.id === myZone.id ? "/" : `/?zone=${zone.id}`);
+  const hrefFor = (zone: Zone) => (zone.id === myZone.id ? path : `${path}?zone=${zone.id}`);
 
   return (
     <div className="w-full space-y-1 text-sm">
@@ -44,7 +48,7 @@ export function BarangayBar({
           <p lang={lang}>{t(VIEWING, lang).replace("{name}", shownZone.name).replace("{mine}", myZone.name)}</p>
           <div className="flex flex-wrap gap-2">
             <Button asChild size="sm">
-              <Link href="/" lang={lang}>
+              <Link href={path} lang={lang}>
                 {t(BACK, lang)}
               </Link>
             </Button>
@@ -61,7 +65,13 @@ export function BarangayBar({
         <>
           <div className="flex items-center justify-between gap-2">
             <p className="truncate font-medium">{myZone.name}</p>
-            <Button type="button" size="sm" variant="outline" onClick={() => setChanging(true)}>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              aria-label={t(CHANGE_MINE, lang)}
+              onClick={() => setChanging(true)}
+            >
               <span lang={lang}>{t(CHANGE, lang)}</span>
             </Button>
           </div>

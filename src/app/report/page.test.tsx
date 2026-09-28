@@ -147,6 +147,18 @@ describe("ReportPage: which barangay the report counts for", () => {
     expect(readOutbox()[0].payload).toMatchObject({ zoneId: here.id });
   });
 
+  it("after filing where you are, points to that barangay's evacuation", async () => {
+    markConsented();
+    standNear(here);
+    renderWithData(<ReportPage />);
+    await screen.findByText(`Reporting for ${here.name} (where you are)`);
+    fireEvent.click(screen.getByRole("button", { name: /submit report|ipadala ang ulat/i }));
+    expect(screen.getByRole("link", { name: /see evacuation steps/i })).toHaveAttribute(
+      "href",
+      "/evacuation?zone=" + here.id
+    );
+  });
+
   it("files for my barangay without consent", () => {
     standNear(here);
     renderWithData(<ReportPage />);

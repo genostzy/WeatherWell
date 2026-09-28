@@ -7,6 +7,7 @@ import { useLanguage } from "@/features/i18n/language-provider";
 import { ZonePicker } from "@/features/onboarding/zone-picker";
 import { setSelectedZoneId } from "@/features/onboarding/onboarding-storage";
 import { followEmailAlerts } from "@/lib/follow-email-alerts";
+import { followPushSubscription } from "@/lib/push-subscription";
 import { t } from "@/lib/i18n";
 import { useZones } from "@/lib/reference-data/use-reference-data";
 import type { LocalizedText } from "@/lib/types";
@@ -23,9 +24,8 @@ const CLOSE: LocalizedText = { en: "Close", fil: "Isara" };
 
 /**
  * Changes my barangay: the one push and email alerts come for, and the one
- * every screen shows by default. The setup picker, in a dialog. Push follows
- * by itself (usePushSubscription re-saves when its barangay changes); email
- * alerts are moved here.
+ * every screen shows by default. The setup picker, in a dialog. Push and
+ * email alerts are moved here, wherever the change is made.
  */
 export function ChangeBarangayDialog({ onClose }: { onClose: () => void }) {
   const { lang } = useLanguage();
@@ -38,6 +38,7 @@ export function ChangeBarangayDialog({ onClose }: { onClose: () => void }) {
       return;
     }
     void followEmailAlerts(zoneId);
+    void followPushSubscription(zoneId);
     setResult({ saved: true, name: zones.find((zone) => zone.id === zoneId)?.name ?? zoneId });
   }
 
@@ -52,7 +53,8 @@ export function ChangeBarangayDialog({ onClose }: { onClose: () => void }) {
             <p role="status" lang={lang} className="text-sm">
               {t(SAVED, lang).replace("{name}", result.name)}
             </p>
-            <Button type="button" className="w-full" onClick={onClose}>
+            {/* The confirm button is gone; focus goes here, not to the page behind the dialog. */}
+            <Button type="button" className="w-full" onClick={onClose} autoFocus>
               {t(DONE, lang)}
             </Button>
           </>

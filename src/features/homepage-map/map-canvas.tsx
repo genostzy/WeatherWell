@@ -459,7 +459,7 @@ export function MapCanvas({
               <Popup>
                 <div className="space-y-1">
                   <p className="font-medium">{label}</p>
-                  <a href="/evacuation" className="text-sm underline">
+                  <a href={`/evacuation?zone=${zone.id}`} className="text-sm underline">
                     {t(VIEW_EVACUATION_DETAILS, lang)}
                   </a>
                 </div>

@@ -23,7 +23,9 @@ function HomeContent() {
   const orderedZones = orderZonesWithSelectedFirst(zones, shownZone.id);
 
   return isOnline ? (
-    <HomepageMap zones={orderedZones} myZoneId={myZone.id} />
+    // Keyed: the map's centre and route are read once at mount, and / to /?zone=
+    // keeps this page mounted.
+    <HomepageMap key={shownZone.id} zones={orderedZones} myZoneId={myZone.id} />
   ) : (
     <>
       <BarangayBar shownZone={shownZone} myZone={myZone} whereYouAre={null} />

@@ -12,6 +12,7 @@ import { AlertDowngradeNotice } from "@/features/alerts/alert-downgrade-notice";
 import { Suspense } from "react";
 import { useSelectedZone } from "@/features/zones/use-selected-zone";
 import { useViewedZone } from "@/features/zones/use-viewed-zone";
+import { BarangayBar } from "@/features/zones/barangay-bar";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { resolveAlertDowngrade } from "@/lib/alert-downgrade";
@@ -45,6 +46,11 @@ function Evacuation() {
   return (
     <main className="flex flex-1 flex-col items-center gap-6 p-4 sm:p-6 lg:p-8">
       <BackLink className="max-w-md lg:max-w-3xl" />
+      {viewedZone && (
+        <div className="w-full max-w-md lg:max-w-3xl">
+          <BarangayBar shownZone={viewedZone} myZone={myZone} whereYouAre={null} path="/evacuation" />
+        </div>
+      )}
       <h1 lang={lang} className="text-lg font-semibold md:text-xl">
         {t(HEADING, lang)} — {zone.name}
       </h1>
@@ -64,7 +70,7 @@ function Evacuation() {
         <div className="space-y-6">
           <EvacuationInstructions zone={zone} />
           <CandidateSites zone={zone} />
-          <ElevationCheck zoneId={zone.id} />
+          <ElevationCheck key={zone.id} zoneId={zone.id} />
         </div>
         <div className="space-y-6">
           <EmergencyCard zone={zone} />

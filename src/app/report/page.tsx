@@ -93,7 +93,7 @@ export default function ReportPage() {
   // rides along; the geofence check on the server skips itself when absent.
   const position = useLivePosition();
   // A report counts where GPS puts you, else for your own barangay.
-  const whereYouAre = useMemo(() => findWhereYouAre(position, zones), [position, zones]);
+  const whereYouAre = useMemo(() => findWhereYouAre(position, zones, myZone), [position, zones, myZone]);
   const zone = whereYouAre ?? myZone;
 
   function handleSubmit(depthLevel: DepthLevel): boolean {
@@ -247,7 +247,7 @@ export default function ReportPage() {
                     <p className="text-sm font-medium">{t(WHAT_NOW, lang)}</p>
                     <div className="flex flex-wrap gap-2">
                       <Button asChild size="sm">
-                        <Link href="/evacuation">
+                        <Link href={zone.id === myZone.id ? "/evacuation" : `/evacuation?zone=${zone.id}`}>
                           {t(SEE_EVACUATION, lang)}
                           <ArrowRight aria-hidden="true" className="h-4 w-4" />
                         </Link>

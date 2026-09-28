@@ -95,7 +95,7 @@ export function HomepageMap({ zones, myZoneId }: { zones: Zone[]; myZoneId?: str
   const myZone = useMemo(() => zones.find((zone) => zone.id === myZoneId) ?? zones[0], [zones, myZoneId]);
   const viewing = zones[0].id !== myZone.id;
   // On the phone, from zones it already holds: the position goes nowhere for it.
-  const whereYouAre = useMemo(() => findWhereYouAre(livePosition, zones), [livePosition, zones]);
+  const whereYouAre = useMemo(() => findWhereYouAre(livePosition, zones, myZone), [livePosition, zones, myZone]);
   const forecast = useFloodForecast(zones[0]?.id);
 
   const {

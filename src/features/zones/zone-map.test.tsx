@@ -1,9 +1,24 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { screen, within } from "@testing-library/react";
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import { fireEvent, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ZoneMap } from "./zone-map";
 import { renderWithData, FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
 import { zonesWithStatus } from "@/test-utils/mock-fixtures";
+import { mockZoneApis } from "@/test-utils/mock-zone-apis";
+import { markConsented } from "@/features/onboarding/onboarding-storage";
+
+// Records each link's prefetch setting (next/link adds nothing to the DOM for it).
+const prefetchOf = new Map<string, unknown>();
+vi.mock("next/link", () => ({
+  default: ({ href, prefetch, children, ...rest }: { href: string; prefetch?: unknown; children: React.ReactNode }) => {
+    prefetchOf.set(href, prefetch);
+    return (
+      <a href={href} {...rest}>
+        {children}
+      </a>
+    );
+  },
+}));
 
 describe("ZoneMap", () => {
   it("renders a labeled region for every zone", () => {
@@ -116,8 +131,42 @@ describe("ZoneMap card actions (the barangay on the card, not your own)", () => 
 
   it("lets you change your barangay from your own card", async () => {
     renderWithData(<ZoneMap zones={zones} />);
-    expect(within(card(zones[1])).queryByRole("button", { name: /^change$/i })).not.toBeInTheDocument();
-    await userEvent.click(within(card(zones[0])).getByRole("button", { name: /^change$/i }));
+    expect(within(card(zones[1])).queryByRole("button", { name: /change my barangay/i })).not.toBeInTheDocument();
+    await userEvent.click(within(card(zones[0])).getByRole("button", { name: /change my barangay/i }));
     expect(screen.getByRole("dialog", { name: "Change my barangay" })).toBeInTheDocument();
+  });
+
+  it("does not prefetch every barangay a card links to", () => {
+    prefetchOf.clear();
+    renderWithData(<ZoneMap zones={zones} />);
+    expect(prefetchOf.get(`/?zone=${zones[1].id}`)).toBe(false);
+    expect(prefetchOf.get(`/evacuation?zone=${zones[1].id}`)).toBe(false);
+  });
+
+  it("keeps the change dialog open while the list re-ranks around the new barangay", async () => {
+    // Mine sorts last by name; after the change, 20 barangays of my old town
+    // come first and my old card drops off the page.
+    const template = zones[0];
+    const mine = { ...template, id: "zone-mine", name: "Zulu Mine, Town A", psgcBarangayCode: "0105528999" };
+    const town = Array.from({ length: 21 }, (_, i) => ({
+      ...template,
+      id: `zone-a${i}`,
+      name: `Alpha ${String(i).padStart(2, "0")}, Town A`,
+      psgcBarangayCode: `0105528${String(i).padStart(3, "0")}`,
+    }));
+    const bravo = { ...template, id: "zone-b", name: "Bravo One, Town B", municipalityName: "Town B", psgcBarangayCode: "0999999001" };
+    const all = [mine, ...town, bravo];
+    localStorage.setItem("weatherwell.selectedZoneId", mine.id);
+    markConsented();
+    mockZoneApis(all);
+    renderWithData(<ZoneMap zones={all} />, { data: { zones: all } });
+
+    await userEvent.click(within(card(mine)).getByRole("button", { name: /change my barangay/i }));
+    await userEvent.type(screen.getByRole("textbox", { name: /search barangay/i }), "Bravo");
+    const option = (await screen.findByText("Bravo One, Town B", { selector: "[role='option'] *" })).closest("[role='option']") as HTMLElement;
+    fireEvent.mouseDown(option);
+    await userEvent.click(screen.getByRole("button", { name: /make this my barangay/i }));
+
+    expect(await screen.findByText("Alerts now come for Bravo One, Town B.")).toBeInTheDocument();
   });
 });
