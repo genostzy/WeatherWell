@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { screen } from "@testing-library/react";
+import { describe, it, expect, beforeEach } from "vitest";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ZoneMap } from "./zone-map";
 import { renderWithData, FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
@@ -86,5 +86,38 @@ describe("ZoneMap order (it opened on Adams, Ilocos Norte, for everyone)", () =>
     );
     expect(order).toEqual([nilombot.id, santaBarbara.id, neighbour.id, manaoag.id, mangaldan.id]);
     window.localStorage.clear();
+  });
+});
+
+describe("ZoneMap card actions (the barangay on the card, not your own)", () => {
+  const zones = FIXTURE_REFERENCE_DATA.zones;
+  const card = (zone: { name: string }) =>
+    screen.getByText(zone.name).closest('[data-testid="zone-region"]') as HTMLElement;
+
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem("weatherwell.selectedZoneId", zones[0].id);
+  });
+
+  it("opens the barangay on the card, not your own", () => {
+    renderWithData(<ZoneMap zones={zones} />);
+    const other = within(card(zones[1]));
+    expect(other.getByRole("link", { name: /^view$/i })).toHaveAttribute("href", `/?zone=${zones[1].id}`);
+    expect(other.getByRole("link", { name: /^evacuation$/i })).toHaveAttribute("href", `/evacuation?zone=${zones[1].id}`);
+    const mine = within(card(zones[0]));
+    expect(mine.getByRole("link", { name: /^view$/i })).toHaveAttribute("href", "/");
+    expect(mine.getByRole("link", { name: /^evacuation$/i })).toHaveAttribute("href", "/evacuation");
+  });
+
+  it("has no Report button on a card", () => {
+    const { container } = renderWithData(<ZoneMap zones={zones} />);
+    expect(container.querySelector('[data-testid="zone-region"] a[href="/report"]')).toBeNull();
+  });
+
+  it("lets you change your barangay from your own card", async () => {
+    renderWithData(<ZoneMap zones={zones} />);
+    expect(within(card(zones[1])).queryByRole("button", { name: /^change$/i })).not.toBeInTheDocument();
+    await userEvent.click(within(card(zones[0])).getByRole("button", { name: /^change$/i }));
+    expect(screen.getByRole("dialog", { name: "Change my barangay" })).toBeInTheDocument();
   });
 });

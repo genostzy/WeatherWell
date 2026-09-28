@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { useSelectedZone } from "@/features/zones/use-selected-zone";
+import { ChangeBarangayDialog } from "@/features/zones/change-barangay-dialog";
 import { t } from "@/lib/i18n";
 import { getZoneStatus, getZoneStatusColor, ZONE_STATUS_LABEL, type ZoneStatus } from "@/lib/zone-status";
 import { CENTER_STATUS_LABEL, CENTER_STATUS_CLASS, resolveEffectiveCenterStatus } from "@/lib/center-status";
@@ -26,7 +27,8 @@ const NO_CENTER_SHORT: LocalizedText = { en: "No verified evacuation centre", fi
 const YOUR_ZONE: LocalizedText = { en: "Your zone", fil: "Iyong zone" };
 const ALL_ZONES: LocalizedText = { en: "All", fil: "Lahat" };
 const VIEW_EVACUATION: LocalizedText = { en: "Evacuation", fil: "Paglikas" };
-const REPORT_WATER: LocalizedText = { en: "Report", fil: "Iulat" };
+const VIEW: LocalizedText = { en: "View", fil: "Tingnan" };
+const CHANGE: LocalizedText = { en: "Change", fil: "Palitan" };
 const NO_ZONES_MATCH: LocalizedText = { en: "No zones with this status right now.", fil: "Walang zone na ganito ngayon." };
 const SEARCH_PLACEHOLDER: LocalizedText = { en: "Search zone, municipality…", fil: "Maghanap ng zone, munisipalidad…" };
 const LOAD_MORE: LocalizedText = { en: "Load more", fil: "Dagdagan pa" };
@@ -194,6 +196,7 @@ function ZoneRow({
   alert: ReturnType<typeof useAlerts>[number] | undefined;
   isOwnZone: boolean;
 }) {
+  const [changing, setChanging] = useState(false);
   const status = getZoneStatus(alert);
   const color = getZoneStatusColor(alert);
   const centerStatus = resolveEffectiveCenterStatus(
@@ -243,19 +246,26 @@ function ZoneRow({
         {/* Quick stats + actions */}
         <div className="flex shrink-0 items-center gap-2">
           <div className="flex gap-1">
+            {/* The barangay on this card, not your own. No Report: a report counts where you are. */}
             <Button asChild size="sm" variant="ghost" className="h-6 px-1.5 text-xs">
-              <Link href="/evacuation">
+              <Link href={isOwnZone ? "/" : `/?zone=${zone.id}`} lang={lang}>
+                {t(VIEW, lang)}
+              </Link>
+            </Button>
+            <Button asChild size="sm" variant="ghost" className="h-6 px-1.5 text-xs">
+              <Link href={isOwnZone ? "/evacuation" : `/evacuation?zone=${zone.id}`} lang={lang}>
                 {t(VIEW_EVACUATION, lang)}
               </Link>
             </Button>
-            <Button asChild size="sm" variant="ghost" className="h-6 px-1.5 text-xs">
-              <Link href="/report">
-                {t(REPORT_WATER, lang)}
-              </Link>
-            </Button>
+            {isOwnZone && (
+              <Button type="button" size="sm" variant="ghost" className="h-6 px-1.5 text-xs" onClick={() => setChanging(true)}>
+                <span lang={lang}>{t(CHANGE, lang)}</span>
+              </Button>
+            )}
           </div>
         </div>
       </CardContent>
+      {changing && <ChangeBarangayDialog onClose={() => setChanging(false)} />}
     </Card>
   );
 }

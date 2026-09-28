@@ -116,13 +116,13 @@ Then open http://localhost:3000. The first visit runs onboarding.
 
 | Route | Who | What |
 | --- | --- | --- |
-| `/` | Resident | Status, alert details, live weather and river outlook, report, map |
+| `/` | Resident | Status, alert details, live weather and river outlook, report, map. `?zone=` views another barangay |
 | `/onboarding` | Resident | Consent and barangay selection |
 | `/forgot-password` | Resident | New password after answering two security questions |
 | `/unsubscribe` | Anyone | Stops email alerts, from the link in an email |
 | `/map` | Resident | Multi-barangay overview |
 | `/report` | Resident | Water-level report (ankle / knee / waist / neck) |
-| `/evacuation` | Resident | Instructions, likely sites, "How high am I?", emergency card, neighbours to text, check-in |
+| `/evacuation` | Resident | Instructions, likely sites, "How high am I?", emergency card, neighbours to text, check-in. `?zone=` for another barangay |
 | `/a` | Anyone | A forwarded alert, readable without the app or JavaScript |
 | `/admin` | Official | Needs your attention, three-step alert, figures, monitoring |
 | `/admin/map` | Official | Operations map |
