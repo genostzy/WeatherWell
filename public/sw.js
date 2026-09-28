@@ -20,7 +20,7 @@
  * CURRENT_CACHES, so a bump is what evicts a bad build from installed devices.
  * Leaving it unchanged is what pins users to a stale app forever.
  */
-const VERSION = "v19";
+const VERSION = "v20";
 
 const SHELL_CACHE = `weatherwell-shell-${VERSION}`;
 const ASSET_CACHE = `weatherwell-assets-${VERSION}`;
@@ -273,8 +273,13 @@ function networkFirst(request, cacheName, timeoutMs) {
   });
 }
 
-function sharedAlertPage(request) {
-  const shell = () => caches.match(new URL("/a", self.location.origin).href);
+/**
+ * A page address with a query: network first, never stored under its own
+ * key, and offline or slow the cached page without the query, which reads
+ * the query itself (/a?d= a forwarded alert, /?zone= a viewed barangay).
+ */
+function pageWithQuery(request, pathname) {
+  const shell = () => caches.match(new URL(pathname, self.location.origin).href);
   return new Promise((resolve) => {
     let settled = false;
     const settle = (response) => {
@@ -591,11 +596,13 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // A forwarded alert (/a?d=...): the network renders it as plain HTML
-  // (idea 6); offline or slow, the one cached /a page renders it from the
-  // query itself. Never stored per link: every alert would be its own entry.
-  if (request.mode === "navigate" && url.pathname === "/a" && url.search) {
-    event.respondWith(sharedAlertPage(request));
+  // A page address with a query: a forwarded alert (/a?d=..., rendered as
+  // plain HTML by the network, idea 6) or a viewed barangay (/?zone=...,
+  // /evacuation?zone=...). Offline or slow, the cached page without the query
+  // renders it from the address itself. Never stored per query: every alert
+  // and every viewed barangay would be its own entry.
+  if (request.mode === "navigate" && url.search) {
+    event.respondWith(pageWithQuery(request, url.pathname));
     return;
   }
 

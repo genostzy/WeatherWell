@@ -286,6 +286,27 @@ describe("service worker request routing", () => {
     expect(store.get(SHELL_CACHE)?.has(`${ORIGIN}/a?d=eyJ2IjoxfQ`) ?? false).toBe(false);
   });
 
+  it("never stores a page address with a query under its own key", async () => {
+    // Every barangay someone views (/?zone=) would otherwise be its own entry.
+    const { listeners, store } = loadServiceWorker({ fetch: async () => response("HOME HTML") });
+    const result = await handleFetch(listeners, { url: `${ORIGIN}/?zone=zone-2`, mode: "navigate" });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(result?.body).toBe("HOME HTML");
+    expect(store.get(SHELL_CACHE)?.has(`${ORIGIN}/?zone=zone-2`) ?? false).toBe(false);
+  });
+
+  it("offline, a page address with a query gets the cached page without it", async () => {
+    // The page reads ?zone= itself, so the cached home screen can show the viewed barangay.
+    const { listeners } = loadServiceWorker({
+      caches: { [SHELL_CACHE]: { [`${ORIGIN}/`]: "CACHED HOME" } },
+      fetch: async () => {
+        throw new Error("offline");
+      },
+    });
+    const result = await handleFetch(listeners, { url: `${ORIGIN}/?zone=zone-2`, mode: "navigate" });
+    expect(result?.body).toBe("CACHED HOME");
+  });
+
   it("serves zone data from cache first, so an outage still shows a zone", async () => {
     const { listeners } = loadServiceWorker({
       caches: { [ZONE_CACHE]: { [`${ORIGIN}/data/reference-data.json`]: "CACHED ZONES" } },
