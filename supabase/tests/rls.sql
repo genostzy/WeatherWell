@@ -3297,4 +3297,104 @@ begin
   raise notice 'ok P1-P3: a phone''s alert address follows the account using it';
 end $$;
 
+
+-- B1-B6: officials fill in their barangay's hotlines and instructions.
+do $$
+declare z record; n int; saved jsonb; u text; bad record;
+begin
+  set local role postgres;
+  perform set_config('request.jwt.claims', '', true);
+  insert into auth.users (id) values
+    ('e5000000-0000-4000-8000-000000000001'), ('e5000000-0000-4000-8000-000000000002'),
+    ('e5000000-0000-4000-8000-000000000003'), ('e5000000-0000-4000-8000-000000000004'),
+    ('e5000000-0000-4000-8000-000000000005');
+  insert into public.zones
+    (id, psgc_barangay_code, name, evacuation_route_text, lat, lng, evacuation_route_path, hotline_number)
+  values ('tests-fixture-zone-details', '9900000061', 'Test Zone Details', '{"en":"x","fil":"x"}'::jsonb,
+          16.0288, 120.4366, '[]'::jsonb, '00000000000');
+  insert into public.profiles (id, role, area_code, display_name) values
+    ('e5000000-0000-4000-8000-000000000001', 'operator', '9900000061', 'Test Kagawad'),
+    ('e5000000-0000-4000-8000-000000000003', 'operator', '9900000062', 'Test Other Kagawad'),
+    ('e5000000-0000-4000-8000-000000000004', 'operator', '9900000', 'Test MDRRMO'),
+    ('e5000000-0000-4000-8000-000000000005', 'admin', null, 'Test Admin')
+  on conflict (id) do update set role = excluded.role, area_code = excluded.area_code, display_name = excluded.display_name;
+
+  -- B1: a resident, and an official for another barangay, are refused.
+  set local role authenticated;
+  foreach u in array array['e5000000-0000-4000-8000-000000000002', 'e5000000-0000-4000-8000-000000000003'] loop
+    perform set_config('request.jwt.claims', json_build_object('sub', u, 'role', 'authenticated')::text, true);
+    begin
+      perform public.set_barangay_details('tests-fixture-zone-details', array['0917 123 4567'], 'Go', '');
+      raise exception using errcode = 'TSTFL', message = format('B1: %s saved another barangay''s details', u);
+    exception when insufficient_privilege then null;
+    end;
+  end loop;
+
+  -- B2: the barangay's own official saves; trimmed, blanks dropped, English copied to Filipino, logged, returned.
+  perform set_config('request.jwt.claims', '{"sub":"e5000000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+  saved := public.set_barangay_details('tests-fixture-zone-details',
+    array['  0917 123 4567 ', '', '(075) 522-1234'], '  Go to Nilombot Elementary School. ', '');
+  reset role;
+  select hotline_number, extra_hotlines, evacuation_route_text, details_set_at into z
+    from public.zones where id = 'tests-fixture-zone-details';
+  if z.hotline_number <> '0917 123 4567' or z.extra_hotlines <> array['(075) 522-1234']
+     or z.evacuation_route_text <> '{"en":"Go to Nilombot Elementary School.","fil":"Go to Nilombot Elementary School."}'::jsonb
+     or z.details_set_at is null then
+    raise exception using errcode = 'TSTFL', message = format('B2: not saved as expected: %s', z);
+  end if;
+  if saved <> jsonb_build_object('id', 'tests-fixture-zone-details', 'hotline_number', '0917 123 4567',
+       'extra_hotlines', jsonb_build_array('(075) 522-1234'), 'evacuation_route_text', z.evacuation_route_text) then
+    raise exception using errcode = 'TSTFL', message = format('B2: returned %s', saved);
+  end if;
+  select count(*) into n from public.official_actions
+   where zone_id = 'tests-fixture-zone-details' and action = 'barangay.details' and actor_name = 'Test Kagawad'
+     and detail = '{"hotlines":["0917 123 4567","(075) 522-1234"],"wrote":["en"]}'::jsonb;
+  if n <> 1 then raise exception using errcode = 'TSTFL', message = format('B2: logged %s times', n); end if;
+
+  -- B3: the town's official saves (Filipino copied to English), and so does the admin.
+  set local role authenticated;
+  perform set_config('request.jwt.claims', '{"sub":"e5000000-0000-4000-8000-000000000004","role":"authenticated"}', true);
+  perform public.set_barangay_details('tests-fixture-zone-details', array['0918 000 1111'], '', 'Pumunta sa paaralan.');
+  reset role;
+  select evacuation_route_text into z from public.zones where id = 'tests-fixture-zone-details';
+  if z.evacuation_route_text <> '{"en":"Pumunta sa paaralan.","fil":"Pumunta sa paaralan."}'::jsonb then
+    raise exception using errcode = 'TSTFL', message = format('B3: Filipino not copied: %s', z);
+  end if;
+
+  -- B4: no numbers stores the placeholder, so residents see the 911 fallback.
+  set local role authenticated;
+  perform set_config('request.jwt.claims', '{"sub":"e5000000-0000-4000-8000-000000000005","role":"authenticated"}', true);
+  perform public.set_barangay_details('tests-fixture-zone-details', array[]::text[], 'Go to the school.', 'Pumunta sa paaralan.');
+  reset role;
+  select hotline_number, extra_hotlines into z from public.zones where id = 'tests-fixture-zone-details';
+  if z.hotline_number <> '00000000000' or cardinality(z.extra_hotlines) <> 0 then
+    raise exception using errcode = 'TSTFL', message = format('B4: no numbers stored %s', z);
+  end if;
+
+  -- B5: bad input is refused: four numbers, letters, two digits, all zeros, blank and over-long instructions.
+  set local role authenticated;
+  perform set_config('request.jwt.claims', '{"sub":"e5000000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+  for bad in select * from (values
+      (array['0917 123 4567', '0918 123 4567', '0919 123 4567', '0920 123 4567'], 'Go', ''),
+      (array['abc'], 'Go', ''), (array['1-2'], 'Go', ''), (array['000 000'], 'Go', ''),
+      (array['0917 123 4567'], '', '   '), (array['0917 123 4567'], repeat('x', 1001), '')
+    ) t(numbers, en, fil) loop
+    begin
+      perform public.set_barangay_details('tests-fixture-zone-details', bad.numbers, bad.en, bad.fil);
+      raise exception using errcode = 'TSTFL', message = format('B5: accepted %s', bad);
+    exception when invalid_parameter_value then null;
+    end;
+  end loop;
+  reset role;
+
+  -- B6: signed-in callers can call it (the function checks who); anon cannot.
+  if has_function_privilege('anon', 'public.set_barangay_details(text,text[],text,text)', 'execute') then
+    raise exception using errcode = 'TSTFL', message = 'B6: anon can save barangay details';
+  end if;
+  if not has_function_privilege('authenticated', 'public.set_barangay_details(text,text[],text,text)', 'execute') then
+    raise exception using errcode = 'TSTFL', message = 'B6: officials cannot call it';
+  end if;
+  raise notice 'ok B1-B6: officials fill in their own barangay''s hotlines and instructions';
+end $$;
+
 rollback;

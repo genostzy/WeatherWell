@@ -864,9 +864,11 @@ export type Database = {
       }
       zones: {
         Row: {
+          details_set_at: string | null
           downstream_zone_id: string | null
           evacuation_route_path: Json
           evacuation_route_text: Json
+          extra_hotlines: string[]
           hotline_number: string
           id: string
           lat: number
@@ -877,9 +879,11 @@ export type Database = {
           psgc_barangay_code: string
         }
         Insert: {
+          details_set_at?: string | null
           downstream_zone_id?: string | null
           evacuation_route_path: Json
           evacuation_route_text: Json
+          extra_hotlines?: string[]
           hotline_number: string
           id: string
           lat: number
@@ -890,9 +894,11 @@ export type Database = {
           psgc_barangay_code: string
         }
         Update: {
+          details_set_at?: string | null
           downstream_zone_id?: string | null
           evacuation_route_path?: Json
           evacuation_route_text?: Json
+          extra_hotlines?: string[]
           hotline_number?: string
           id?: string
           lat?: number
@@ -1014,6 +1020,15 @@ export type Database = {
       send_official_message: {
         Args: { p_body: string; p_kind: string }
         Returns: string
+      }
+      set_barangay_details: {
+        Args: {
+          p_hotlines: string[]
+          p_instructions_en: string
+          p_instructions_fil: string
+          p_zone_id: string
+        }
+        Returns: Json
       }
       set_recovery_answers: {
         Args: {
