@@ -126,7 +126,7 @@ Then open http://localhost:3000. The first visit runs onboarding.
 | `/a` | Anyone | A forwarded alert, readable without the app or JavaScript |
 | `/admin` | Official | Needs your attention, three-step alert, figures, monitoring |
 | `/admin/map` | Official | Operations map |
-| `/admin/zone/[zoneId]` | Official | One barangay: alert, centre, rain and river, reports |
+| `/admin/zone/[zoneId]` | Official | One barangay: alert, centre, rain and river, reports; its hotlines, evacuation instructions and centre, edited here |
 | `/admin/history` | Official | Every recorded action |
 | `/admin/officials` | Admin | Appoint and remove officials |
 | `/admin/simulation` | Official | Drill mode; notifies nobody |
