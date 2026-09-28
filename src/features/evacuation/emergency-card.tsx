@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
-import { hasRealEvacuationCenter, hasRealHotline, NO_VERIFIED_CENTER } from "@/lib/zone-data-quality";
+import { hasRealEvacuationCenter, hasRealHotline, hotlinesOf, NO_VERIFIED_CENTER } from "@/lib/zone-data-quality";
 import type { LocalizedText, Zone } from "@/lib/types";
 
 const EMERGENCY_CARD: LocalizedText = { en: "Emergency Card", fil: "Emergency Card" };
@@ -73,7 +73,7 @@ export function EmergencyCard({ zone }: { zone: Zone }) {
 
           <div>
             <p className="text-xs text-muted-foreground">{t(HOW_TO_GET_THERE, lang)}</p>
-            <p lang={lang} className="text-sm">
+            <p lang={lang} className="whitespace-pre-line text-sm">
               {t(zone.evacuationRouteText, lang)}
             </p>
           </div>
@@ -81,7 +81,11 @@ export function EmergencyCard({ zone }: { zone: Zone }) {
           <div>
             <p className="text-xs text-muted-foreground">{t(EMERGENCY_HOTLINE, lang)}</p>
             {hasRealHotline(zone) ? (
-              <p className="font-bold text-severity-red">{zone.hotlineNumber}</p>
+              hotlinesOf(zone).map((number, i) => (
+                <p key={`${number}-${i}`} className="font-bold text-severity-red">
+                  {number}
+                </p>
+              ))
             ) : (
               <p lang={lang} className="text-sm">
                 {t(NO_HOTLINE, lang)}: ______________

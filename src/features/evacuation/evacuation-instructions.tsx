@@ -7,7 +7,8 @@ import { ReadAloudButton } from "@/features/alerts/read-aloud-button";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { CENTER_STATUS_CLASS, CENTER_STATUS_LABEL, resolveEffectiveCenterStatus } from "@/lib/center-status";
-import { hasRealEvacuationCenter, NO_VERIFIED_CENTER, hasRealHotline } from "@/lib/zone-data-quality";
+import { hasRealEvacuationCenter, NO_VERIFIED_CENTER, hotlinesOf } from "@/lib/zone-data-quality";
+import { telHref } from "@/lib/barangay-details";
 import type { LocalizedText, Zone } from "@/lib/types";
 
 const GO_HERE: LocalizedText = { en: "Go here", fil: "Pumunta rito" };
@@ -26,12 +27,13 @@ export function EvacuationInstructions({ zone }: { zone: Zone }) {
   const occupancy = zone.currentOccupancy;
   const centerStatus = resolveEffectiveCenterStatus(zone.centerStatus, zone.evacuationCenterCapacity, occupancy);
   const realCenter = hasRealEvacuationCenter(zone);
+  const hotlines = hotlinesOf(zone);
   // What the card says, in the order it says it, for a resident who can't read it.
   const spoken = (language: "en" | "fil") =>
     [
       `${t(GO_HERE, language)}: ${realCenter ? zone.evacuationCenterName : t(NO_VERIFIED_CENTER, language)}`,
       `${t(HOW_TO_GET_THERE, language)}: ${t(zone.evacuationRouteText, language)}`,
-      hasRealHotline(zone) ? `${t(CALL, language)} ${zone.hotlineNumber}` : t(CALL_911, language),
+      hotlines.length > 0 ? hotlines.map((number) => `${t(CALL, language)} ${number}`).join(". ") : t(CALL_911, language),
     ].join(". ");
 
   return (
@@ -85,7 +87,8 @@ export function EvacuationInstructions({ zone }: { zone: Zone }) {
           />
           <div>
             <p className="text-sm text-muted-foreground">{t(HOW_TO_GET_THERE, lang)}</p>
-            <p lang={lang} className="text-base">
+            {/* An official may write the steps on separate lines. */}
+            <p lang={lang} className="whitespace-pre-line text-base">
               {t(zone.evacuationRouteText, lang)}
             </p>
           </div>
@@ -93,19 +96,22 @@ export function EvacuationInstructions({ zone }: { zone: Zone }) {
 
         {/* No verified hotline: 911 is the national emergency number, and a
             resident reading this in an emergency needs something that rings. */}
-        <a
-          href={`tel:${hasRealHotline(zone) ? zone.hotlineNumber : "911"}`}
-          className="flex items-center gap-4 rounded-md border-2 border-severity-red p-3"
-        >
-          <Phone
-            data-testid="icon-hotline"
-            aria-hidden="true"
-            className="h-8 w-8 shrink-0"
-          />
-          <span lang={lang} className="text-base font-medium">
-            {hasRealHotline(zone) ? `${t(CALL, lang)} ${zone.hotlineNumber}` : t(CALL_911, lang)}
-          </span>
-        </a>
+        {(hotlines.length > 0 ? hotlines : ["911"]).map((number, i) => (
+          <a
+            key={`${number}-${i}`}
+            href={telHref(number)}
+            className="flex items-center gap-4 rounded-md border-2 border-severity-red p-3"
+          >
+            <Phone
+              data-testid="icon-hotline"
+              aria-hidden="true"
+              className="h-8 w-8 shrink-0"
+            />
+            <span lang={lang} className="text-base font-medium">
+              {hotlines.length > 0 ? `${t(CALL, lang)} ${number}` : t(CALL_911, lang)}
+            </span>
+          </a>
+        ))}
       </CardContent>
     </Card>
   );

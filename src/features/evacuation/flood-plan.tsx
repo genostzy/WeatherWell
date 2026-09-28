@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import Link from "next/link";
 import QRCode from "qrcode";
 import { Printer } from "lucide-react";
@@ -9,7 +9,7 @@ import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { useZones } from "@/lib/reference-data/use-reference-data";
 import { SEVERITY_HEX, SEVERITY_LABEL, SEVERITY_ORDER, type Severity } from "@/lib/severity";
-import { hasRealEvacuationCenter, hasRealHotline, NO_VERIFIED_CENTER } from "@/lib/zone-data-quality";
+import { hasRealEvacuationCenter, hasRealHotline, hotlinesOf, NO_VERIFIED_CENTER } from "@/lib/zone-data-quality";
 import type { LocalizedText } from "@/lib/types";
 
 const TITLE: LocalizedText = { en: "Flood plan", fil: "Plano sa baha" };
@@ -90,7 +90,9 @@ export function FloodPlan({ zoneId }: { zoneId: string }) {
             {zone.evacuationCenterCapacity > 0 && (
               <p lang={lang}>{t(CAPACITY, lang).replace("{n}", String(zone.evacuationCenterCapacity))}</p>
             )}
-            <p lang={lang}>{t(zone.evacuationRouteText, lang)}</p>
+            <p lang={lang} className="whitespace-pre-line">
+              {t(zone.evacuationRouteText, lang)}
+            </p>
           </>
         ) : (
           <p lang={lang} className="font-medium">
@@ -106,7 +108,12 @@ export function FloodPlan({ zoneId }: { zoneId: string }) {
         <p>
           <span lang={lang}>{t(BARANGAY, lang)}: </span>
           {hasRealHotline(zone) ? (
-            <span className="font-bold">{zone.hotlineNumber}</span>
+            hotlinesOf(zone).map((number, i) => (
+              <Fragment key={`${number}-${i}`}>
+                {i > 0 && " · "}
+                <span className="font-bold">{number}</span>
+              </Fragment>
+            ))
           ) : (
             <span lang={lang}>{t(NO_HOTLINE, lang)}</span>
           )}

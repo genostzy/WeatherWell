@@ -45,3 +45,10 @@ describe("EmergencyHotlineButton", () => {
     expect(link.className).toMatch(/w-14/);
   });
 });
+
+describe("EmergencyHotlineButton: a number as an official wrote it", () => {
+  it("dials the digits of a formatted number", () => {
+    renderButton("(075) 522-1234");
+    expect(screen.getByRole("link")).toHaveAttribute("href", "tel:0755221234");
+  });
+});

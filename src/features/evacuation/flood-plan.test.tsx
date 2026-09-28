@@ -43,3 +43,21 @@ describe("FloodPlanLink", () => {
     expect(screen.getByRole("link", { name: /print.*flood plan/i })).toHaveAttribute("href", "/plan/zone-1");
   });
 });
+
+describe("FloodPlan: every number the barangay lists", () => {
+  const listed = { ...zone, hotlineNumber: "0917 123 4567", extraHotlines: ["(075) 522-1234"] };
+  const steps = "1. Take the river road.\n2. Cross at the bridge.";
+
+  it("lists every hotline number", () => {
+    renderWithData(<FloodPlan zoneId={listed.id} />, { data: { zones: [listed] } });
+    expect(screen.getByText("0917 123 4567")).toBeInTheDocument();
+    expect(screen.getByText("(075) 522-1234")).toBeInTheDocument();
+  });
+
+  it("keeps the official's line breaks", () => {
+    renderWithData(<FloodPlan zoneId={listed.id} />, {
+      data: { zones: [{ ...listed, evacuationRouteText: { en: steps, fil: steps } }] },
+    });
+    expect(screen.getByText(/take the river road/i)).toHaveClass("whitespace-pre-line");
+  });
+});

@@ -476,3 +476,14 @@ describe("ZoneDashboardPage rainfall trend", () => {
     expect(await screen.findByText(/no live weather reading right now/i)).toBeInTheDocument();
   });
 });
+
+describe("ZoneDashboardPage hotline numbers", () => {
+  it("lists every hotline number as a call link", () => {
+    const zone = { ...FIXTURE_REFERENCE_DATA.zones[0], hotlineNumber: "0917 123 4567", extraHotlines: ["(075) 522-1234"] };
+    renderWithData(<ZoneDashboardPage params={resolvedParams({ zoneId: zone.id })} searchParams={emptySearchParams} />, {
+      data: { zones: [zone, ...FIXTURE_REFERENCE_DATA.zones.slice(1)] },
+    });
+    expect(screen.getByRole("link", { name: "0917 123 4567" })).toHaveAttribute("href", "tel:09171234567");
+    expect(screen.getByRole("link", { name: "(075) 522-1234" })).toHaveAttribute("href", "tel:0755221234");
+  });
+});

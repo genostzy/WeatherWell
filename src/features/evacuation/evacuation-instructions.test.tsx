@@ -92,3 +92,19 @@ describe("EvacuationInstructions without a verified hotline (found testing the l
     expect(call).toHaveTextContent(/national emergency/i);
   });
 });
+
+describe("EvacuationInstructions: every number the barangay lists", () => {
+  const listed = { ...zone, hotlineNumber: "0917 123 4567", extraHotlines: ["(075) 522-1234"] };
+  const steps = "1. Take the river road.\n2. Cross at the bridge.";
+
+  it("gives a call button for each of the barangay's numbers", () => {
+    render(<EvacuationInstructions zone={listed} />);
+    expect(screen.getByRole("link", { name: /call 0917 123 4567/i })).toHaveAttribute("href", "tel:09171234567");
+    expect(screen.getByRole("link", { name: /call \(075\) 522-1234/i })).toHaveAttribute("href", "tel:0755221234");
+  });
+
+  it("keeps the official's line breaks", () => {
+    render(<EvacuationInstructions zone={{ ...listed, evacuationRouteText: { en: steps, fil: steps } }} />);
+    expect(screen.getByText(/take the river road/i)).toHaveClass("whitespace-pre-line");
+  });
+});

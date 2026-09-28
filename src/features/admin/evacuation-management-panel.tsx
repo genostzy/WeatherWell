@@ -14,6 +14,7 @@ import {
 import { Building2, Phone, Settings2 } from "lucide-react";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
+import { telHref } from "@/lib/barangay-details";
 import {
   CENTER_STATUS_LABEL,
   CENTER_STATUS_ORDER,
@@ -173,7 +174,7 @@ function EvacuationCenterRow({ zone, lang }: { zone: Zone; lang: LanguageCode })
           <p className="truncate text-sm text-muted-foreground">{zone.evacuationCenterName}</p>
           {hasRealHotline(zone) ? (
             <a
-              href={`tel:${zone.hotlineNumber}`}
+              href={telHref(zone.hotlineNumber)}
               className="flex items-center gap-1 text-sm text-muted-foreground underline-offset-2 hover:underline"
             >
               <Phone aria-hidden="true" className="h-3.5 w-3.5" />

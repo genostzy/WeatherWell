@@ -26,7 +26,8 @@ import { useActiveAlertForZone, useSetZoneAlert } from "@/lib/alerts-store";
 import { useManagesZone, useOfficial } from "@/lib/auth/official-context";
 import { OfficialInbox } from "@/features/admin/official-inbox";
 import { OfficialMessagesPanel } from "@/features/admin/official-messages-panel";
-import { hasRealEvacuationCenter, hasRealHotline } from "@/lib/zone-data-quality";
+import { hasRealEvacuationCenter, hasRealHotline, hotlinesOf } from "@/lib/zone-data-quality";
+import { telHref } from "@/lib/barangay-details";
 import { SEVERITY_ORDER, SEVERITY_LABEL, SEVERITY_HEX, type Severity } from "@/lib/severity";
 import { CENTER_STATUS_LABEL, CENTER_STATUS_ORDER, resolveEffectiveCenterStatus } from "@/lib/center-status";
 import { SeverityBadge } from "@/features/alerts/severity-badge";
@@ -194,13 +195,18 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
           </CardHeader>
           <CardContent className="space-y-4">
             {hasRealHotline(zone) ? (
-              <a
-                href={`tel:${zone.hotlineNumber}`}
-                className="flex items-center gap-2 text-sm text-muted-foreground underline-offset-2 hover:underline"
-              >
-                <Phone aria-hidden="true" className="h-4 w-4" />
-                {zone.hotlineNumber}
-              </a>
+              <div className="space-y-1">
+                {hotlinesOf(zone).map((number, i) => (
+                  <a
+                    key={`${number}-${i}`}
+                    href={telHref(number)}
+                    className="flex items-center gap-2 text-sm text-muted-foreground underline-offset-2 hover:underline"
+                  >
+                    <Phone aria-hidden="true" className="h-4 w-4" />
+                    {number}
+                  </a>
+                ))}
+              </div>
             ) : (
               <p className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Phone aria-hidden="true" className="h-4 w-4" />

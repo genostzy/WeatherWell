@@ -52,3 +52,19 @@ describe("EmergencyCard as a printable card", () => {
     );
   });
 });
+
+describe("EmergencyCard: every number the barangay lists", () => {
+  const listed = { ...zone, hotlineNumber: "0917 123 4567", extraHotlines: ["(075) 522-1234"] };
+  const steps = "1. Take the river road.\n2. Cross at the bridge.";
+
+  it("lists every hotline number", () => {
+    render(<EmergencyCard zone={listed} />);
+    expect(screen.getByText("0917 123 4567")).toBeInTheDocument();
+    expect(screen.getByText("(075) 522-1234")).toBeInTheDocument();
+  });
+
+  it("keeps the official's line breaks", () => {
+    render(<EmergencyCard zone={{ ...listed, evacuationRouteText: { en: steps, fil: steps } }} />);
+    expect(screen.getByText(/take the river road/i)).toHaveClass("whitespace-pre-line");
+  });
+});

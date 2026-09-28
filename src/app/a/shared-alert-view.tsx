@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { decodeAlert } from "@/lib/alert-share/payload";
+import { telHref } from "@/lib/barangay-details";
 import { SEVERITY_BADGE_CLASS } from "@/lib/severity";
 import type { LocalizedText } from "@/lib/types";
 
@@ -128,7 +129,7 @@ export function SharedAlertView({ initialPayload = "" }: { initialPayload?: stri
         {alert.hotline && (
           <div className="space-y-1">
             <Button asChild variant="outline" size="lg" className="w-full">
-              <a href={`tel:${alert.hotline}`}>
+              <a href={telHref(alert.hotline)}>
                 <Phone aria-hidden="true" className="h-4 w-4" />
                 {alert.hotline}
               </a>

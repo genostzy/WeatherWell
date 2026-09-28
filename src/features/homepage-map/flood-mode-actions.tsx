@@ -7,6 +7,7 @@ import { t } from "@/lib/i18n";
 import { useActiveAlertForZone } from "@/lib/alerts-store";
 import { SEVERITY_HEX } from "@/lib/severity";
 import { hasRealHotline } from "@/lib/zone-data-quality";
+import { telHref } from "@/lib/barangay-details";
 import { CheckInPanel } from "@/features/evacuation/check-in-panel";
 import type { LocalizedText, Zone } from "@/lib/types";
 
@@ -39,7 +40,7 @@ export function FloodModeActions({ zone, viewing = false }: { zone: Zone; viewin
           <span lang={lang}>{t(GO, lang)}</span>
         </Link>
         <a
-          href={`tel:${realHotline ? zone.hotlineNumber : "911"}`}
+          href={telHref(realHotline ? zone.hotlineNumber : "911")}
           className="flex min-h-14 items-center justify-center gap-2 rounded-xl border-2 px-4 text-base font-bold text-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring"
           style={{ borderColor: color }}
         >
