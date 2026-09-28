@@ -87,7 +87,7 @@ A self-review of `0b9f0fd..ddf7293` (the review agents hit their usage limit) fo
 
 - The calibration loop's first real event: record the outcome in the Stage 4 plan when one happens.
 - Not started, listed in the PRD Build Status:
-  - Real hazard data: every barangay's hazard is "Unknown".
+  - Real hazard data: every barangay's hazard is "Unknown", so the map's Hazards layer draws nothing until it is loaded.
   - The prediction engine, so `predicted_timing` stays empty and the loop compares outcomes, not timings.
   - The cascade heads-up downstream.
   - Self-hosted routing: directions use the public OSRM server's car profile.
