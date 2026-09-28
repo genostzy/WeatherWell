@@ -33,7 +33,7 @@ Residents can change their barangay after setup, look at another barangay withou
 | `1ff8eb7` | A viewed barangay opens offline from the cached page (service worker v20) |
 | `dea649b` | The review's fixes: within 2 km of your barangay's centre a report stays yours; the screen starts afresh on a change; push follows a change made anywhere; `/evacuation?zone=` says whose it is |
 
-- Left for the owner to decide: **the home radius is 2 km** (`HOME_RADIUS_METERS` in `src/lib/where-you-are.ts`). Larger keeps more reports at home, including some made just across the border; smaller hands at-home reports to a neighbour in dense towns.
+- **The home radius is 2 km** (`HOME_RADIUS_METERS` in `src/lib/where-you-are.ts`), kept by the owner on 28 September. Larger keeps more reports at home, including some made just across the border; smaller hands at-home reports to a neighbour in dense towns.
 - Not fixed, minor: the picker hides "Use my location" before consent instead of pointing to the notice; Change is offered offline, where the search cannot work; "Palitan" and "Baguhin" name the same step; the push line shows even when push is off; clearing storage in another tab goes unnoticed; while viewing, My location does not name where you are.
 - Checked on production after the release: service worker v20 is served with the offline rule for pages with a query; `/`, `/evacuation`, `/report` and `/map` answer, with and without `?zone=`; the new wording is in the served code; and `/api/health` reports the database ok with no recent errors.
 
@@ -81,6 +81,7 @@ A self-review of `0b9f0fd..ddf7293` (the review agents hit their usage limit) fo
 - Calibration: "Auto, floor stays". The loop moves each barangay's bar by itself, logs every move to the action record, and never goes below 3 reporters and trust 1.0.
 - The test accounts keep their current passwords.
 - Barangays: "My barangay + view others". Alerts come for the barangay a resident picks; a report counts where GPS says they are.
+- Home radius (28 September): 2 km stays. Within it, a report counts for the resident's own barangay.
 
 ## Open work
 
