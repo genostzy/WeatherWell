@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { hasRealHotline, hasRealEvacuationCenter } from "./zone-data-quality";
+import { hasRealHotline, hasRealEvacuationCenter, hotlinesOf } from "./zone-data-quality";
 import type { Zone } from "@/lib/types";
 
 const ZONE: Zone = {
@@ -79,5 +79,15 @@ describe("hasRealEvacuationCenter", () => {
     expect(
       hasRealEvacuationCenter({ ...ZONE, evacuationCenterCapacity: 0, evacuationCenterLat: ZONE.lat + 0.01 })
     ).toBe(true);
+  });
+});
+
+describe("hotlinesOf", () => {
+  it("lists a barangay's real numbers, main first, and none for the placeholder", () => {
+    expect(hotlinesOf({ hotlineNumber: "00000000000" })).toEqual([]);
+    expect(hotlinesOf({ hotlineNumber: "0917 123 4567", extraHotlines: ["(075) 522-1234"] })).toEqual([
+      "0917 123 4567",
+      "(075) 522-1234",
+    ]);
   });
 });

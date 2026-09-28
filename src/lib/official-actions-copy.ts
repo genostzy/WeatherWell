@@ -46,6 +46,8 @@ export function describeAction(action: OfficialAction, lang: LanguageCode): stri
       return describePasswordReset(detail, lang);
     case "engine.tuned":
       return describeEngineTuned(detail, lang);
+    case "barangay.details":
+      return describeBarangayDetails(detail, lang);
     default:
       return t(
         { en: `Action recorded: ${action.action}`, fil: `Aksyong naitala: ${action.action}` },
@@ -129,6 +131,18 @@ function describeOfficialAppointed(detail: Record<string, unknown>, lang: Langua
 function describeOfficialRemoved(detail: Record<string, unknown>, lang: LanguageCode): string {
   const displayName = typeof detail.display_name === "string" ? detail.display_name : "?";
   return t({ en: `Removed ${displayName}`, fil: `Inalis si ${displayName}` }, lang);
+}
+
+/** "Barangay details updated: hotline 0917 123 4567 (+2 more)", or "no hotline". */
+function describeBarangayDetails(detail: Record<string, unknown>, lang: LanguageCode): string {
+  const hotlines = Array.isArray(detail.hotlines) ? detail.hotlines.map(String) : [];
+  const [main, ...more] = hotlines;
+  const numbers = main
+    ? `hotline ${main}${more.length > 0 ? (lang === "fil" ? ` (+${more.length} pa)` : ` (+${more.length} more)`) : ""}`
+    : lang === "fil"
+      ? "walang hotline"
+      : "no hotline";
+  return lang === "fil" ? `Na-update ang detalye ng barangay: ${numbers}` : `Barangay details updated: ${numbers}`;
 }
 
 function describePasswordReset(detail: Record<string, unknown>, lang: LanguageCode): string {

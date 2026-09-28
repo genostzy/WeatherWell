@@ -1,5 +1,14 @@
 import { t } from "./i18n";
 import type { LanguageCode, LocalizedText } from "./types";
+import {
+  ALL_ZEROS_HOTLINE,
+  BAD_HOTLINE,
+  CENTRE_TOO_FAR,
+  LONG_INSTRUCTIONS,
+  NO_INSTRUCTIONS,
+  NOT_AN_OFFICIAL,
+  TOO_MANY_HOTLINES,
+} from "./barangay-details";
 
 const KNOWN: [RegExp, LocalizedText][] = [
   [/invalid login credentials/i, { en: "Wrong email or password.", fil: "Mali ang email o password." }],
@@ -9,6 +18,14 @@ const KNOWN: [RegExp, LocalizedText][] = [
   [/too many tries/i, { en: "Too many tries. Try again in an hour.", fil: "Masyadong maraming subok. Subukan ulit pagkalipas ng isang oras." }],
   [/enter the email you signed up with/i, { en: "Enter the email you signed up with.", fil: "Ilagay ang email na ginamit mo sa pag-sign up." }],
   [/at least 6 characters/i, { en: "Use at least 6 characters for the new password.", fil: "Gumamit ng hindi bababa sa 6 na titik para sa bagong password." }],
+  // An official's barangay details and centre (set_barangay_details, confirm_evacuation_center).
+  [/not an official for this barangay/i, NOT_AN_OFFICIAL],
+  [/at most 3 hotline numbers/i, TOO_MANY_HOTLINES],
+  [/a hotline number uses 3 to 20 digits/i, BAD_HOTLINE],
+  [/a hotline number cannot be all zeros/i, ALL_ZEROS_HOTLINE],
+  [/write the instructions in english or filipino/i, NO_INSTRUCTIONS],
+  [/instructions must be 1,000 characters or fewer/i, LONG_INSTRUCTIONS],
+  [/centre must be within 5 km of the barangay/i, CENTRE_TOO_FAR],
 ];
 
 /**

@@ -46,6 +46,8 @@ export interface Zone {
   /** Pre-authored path from the zone's own point to its evacuation center. Phase 1 only — real routing lands Phase 2+. */
   evacuationRoutePath: [number, number][];
   hotlineNumber: string;
+  /** More numbers after hotlineNumber, as the barangay's official entered them (at most 2). Absent means none. */
+  extraHotlines?: string[];
   centerStatus: CenterStatus;
   /** Total headcount the evacuation center can hold. Paired with currentOccupancy below to derive a real "X of Y spots" reading instead of just the manual centerStatus enum (PRD Gap B / Climate Resilience plan). */
   evacuationCenterCapacity: number;

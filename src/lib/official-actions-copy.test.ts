@@ -225,3 +225,22 @@ describe("describeAction for a confirmed centre (idea 10)", () => {
     expect(describeAction(a, "fil")).toBe("Itinakda ang evacuation center: Nilombot ES (300 tao)");
   });
 });
+
+describe("describeAction: barangay.details", () => {
+  it("describes an official's barangay details", () => {
+    const three = { hotlines: ["0917 123 4567", "0918 765 4321", "(075) 522-1234"], wrote: ["en"] };
+    const none = { hotlines: [], wrote: ["fil"] };
+    expect(describeAction(action({ action: "barangay.details", detail: three }), "en")).toBe(
+      "Barangay details updated: hotline 0917 123 4567 (+2 more)"
+    );
+    expect(describeAction(action({ action: "barangay.details", detail: three }), "fil")).toBe(
+      "Na-update ang detalye ng barangay: hotline 0917 123 4567 (+2 pa)"
+    );
+    expect(describeAction(action({ action: "barangay.details", detail: none }), "en")).toBe(
+      "Barangay details updated: no hotline"
+    );
+    expect(describeAction(action({ action: "barangay.details", detail: none }), "fil")).toBe(
+      "Na-update ang detalye ng barangay: walang hotline"
+    );
+  });
+});

@@ -24,6 +24,12 @@ export function hasRealHotline(zone: Pick<Zone, "hotlineNumber">): boolean {
   return !ALL_ZEROES.test(number);
 }
 
+/** A barangay's numbers to call, main first; none while the hotline is the placeholder. */
+export function hotlinesOf(zone: Pick<Zone, "hotlineNumber" | "extraHotlines">): string[] {
+  if (!hasRealHotline(zone)) return [];
+  return [zone.hotlineNumber, ...(zone.extraHotlines ?? [])];
+}
+
 export function hasRealEvacuationCenter(zone: Zone): boolean {
   if (zone.evacuationCenterName.trim().length === 0) return false;
   // The seed's placeholders are NAMED ("Evacuation Centre — <Town>") but sit

@@ -16,3 +16,13 @@ describe("friendlyError", () => {
     expect(friendlyError("Database error 23505", "fil")).toBe("Hindi natuloy — subukan ulit. (Database error 23505)");
   });
 });
+
+describe("friendlyError: barangay details and centres", () => {
+  it("translates the barangay-details and centre refusals", () => {
+    expect(friendlyError("at most 3 hotline numbers", "fil")).toBe("Hanggang 3 hotline number lang.");
+    expect(friendlyError("centre must be within 5 km of the barangay", "fil")).toBe(
+      "Dapat nasa loob ng 5 km mula sa barangay ang center."
+    );
+    expect(friendlyError("not an official for this barangay", "en")).toBe("You don't manage this barangay.");
+  });
+});
