@@ -153,6 +153,68 @@ describe("ReferenceDataProvider", () => {
     expect(await screen.findByText("Static School")).toBeInTheDocument();
   });
 
+  it("lays officials' barangay details over the static file", async () => {
+    function MainHotline() {
+      const zones = useZones();
+      return <span>{zones[0]?.hotlineNumber}</span>;
+    }
+    (fetch as ReturnType<typeof vi.fn>).mockImplementation(async (url: string) => ({
+      ok: true,
+      json: async () =>
+        String(url).includes("/api/barangay-details")
+          ? [{ id: "zone-1", hotline_number: "0917 123 4567", extra_hotlines: [], evacuation_route_text: { en: "Go", fil: "Go" } }]
+          : String(url).includes("/api/centres") || String(url).includes("/api/alerts")
+            ? []
+            : { zones: [{ id: "zone-1", name: "N", hotlineNumber: "00000000000" }], pois: [], hazards: {} },
+    }));
+    render(
+      <LanguageProvider>
+        <ReferenceDataProvider>
+          <MainHotline />
+        </ReferenceDataProvider>
+      </LanguageProvider>
+    );
+    expect(await screen.findByText("0917 123 4567")).toBeInTheDocument();
+  });
+
+  it("keeps the static details when the feed fails", async () => {
+    function MainHotline() {
+      const zones = useZones();
+      return <span>{zones[0]?.hotlineNumber}</span>;
+    }
+    const failures = [
+      { ok: false, json: async () => ({}) },
+      { ok: true, json: async () => ({ error: "down" }) },
+    ];
+    for (const failure of failures) {
+      (fetch as ReturnType<typeof vi.fn>).mockImplementation(async (url: string) =>
+        String(url).includes("/api/barangay-details")
+          ? failure
+          : {
+              ok: true,
+              json: async () =>
+                String(url).includes("/api/centres") || String(url).includes("/api/alerts")
+                  ? []
+                  : { zones: [{ id: "zone-1", name: "N", hotlineNumber: "00000000000" }], pois: [], hazards: {} },
+            }
+      );
+      const { unmount } = render(
+        <LanguageProvider>
+          <ReferenceDataProvider>
+            <MainHotline />
+          </ReferenceDataProvider>
+        </LanguageProvider>
+      );
+      expect(await screen.findByText("00000000000")).toBeInTheDocument();
+      await waitFor(() =>
+        expect(fetch).toHaveBeenCalledWith("/api/barangay-details", expect.anything())
+      );
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+      expect(screen.getByText("00000000000")).toBeInTheDocument();
+      unmount();
+    }
+  });
+
   it("renders children once the data arrives", async () => {
     (fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,

@@ -8,7 +8,14 @@ import { t } from "@/lib/i18n";
 import { AlertsContext, AlertsRefreshContext } from "@/lib/alerts-store";
 import { useHasOnboarded } from "@/features/onboarding/onboarding-storage";
 import type { AlertRecord, CenterStatus, LocalizedText } from "@/lib/types";
-import { applyCentreOverlay, expandReferenceData, type CentreOverlayRow, type ReferenceData } from "./types";
+import {
+  applyCentreOverlay,
+  applyDetailsOverlay,
+  expandReferenceData,
+  type CentreOverlayRow,
+  type DetailsOverlayRow,
+  type ReferenceData,
+} from "./types";
 
 export const ReferenceDataContext = createContext<ReferenceData | null>(null);
 
@@ -29,6 +36,14 @@ export const ReferenceDataContext = createContext<ReferenceData | null>(null);
  * without waiting on a round trip the cache would swallow anyway.
  */
 export const SetCenterStatusContext = createContext<((zoneId: string, status: CenterStatus) => void) | null>(null);
+
+/**
+ * Lays one barangay's saved hotlines and instructions over the provider's
+ * zones once an official's save is confirmed, with exactly what the database
+ * returned (see useSetBarangayDetails). A local patch for the same reason as
+ * SetCenterStatusContext: a refetch would get the service worker's cached copy.
+ */
+export const SetBarangayDetailsContext = createContext<((row: DetailsOverlayRow) => void) | null>(null);
 
 const LOADING: LocalizedText = { en: "Loading your zone…", fil: "Kinukuha ang iyong zone…" };
 const UNREACHABLE: LocalizedText = {
@@ -181,6 +196,25 @@ export function ReferenceDataProvider({
       .catch(() => undefined);
   }, []);
 
+  /**
+   * Officials' hotlines and instructions, laid over the static file the same
+   * way (see applyDetailsOverlay). Never blocks the gate: a failure leaves the
+   * static details showing.
+   */
+  const loadDetailsOverlay = useCallback(() => {
+    fetchWithTimeout("/api/barangay-details", FETCH_TIMEOUT_MS)
+      .then((response) => (response.ok ? (response.json() as Promise<DetailsOverlayRow[]>) : null))
+      .then((rows) => {
+        if (!Array.isArray(rows) || rows.length === 0) return;
+        setState((current) =>
+          current.status === "ready"
+            ? { ...current, data: { ...current.data, zones: applyDetailsOverlay(current.data.zones, rows) } }
+            : current
+        );
+      })
+      .catch(() => undefined);
+  }, []);
+
   const load = useCallback(() => {
     Promise.all([
       fetchWithTimeout("/data/reference-data.json", FETCH_TIMEOUT_MS),
@@ -208,12 +242,13 @@ export function ReferenceDataProvider({
             alerts: alerts as AlertRecord[],
           });
           loadCentreOverlay();
+          loadDetailsOverlay();
         });
       })
       .catch(() => {
         setState({ status: "failed" });
       });
-  }, [loadCentreOverlay]);
+  }, [loadCentreOverlay, loadDetailsOverlay]);
 
   /**
    * Re-reads alerts only, after an official's alert write is confirmed (C1).
@@ -258,6 +293,15 @@ export function ReferenceDataProvider({
     });
   }, []);
 
+  /** Patches one barangay's details once set_barangay_details confirms them (see SetBarangayDetailsContext). */
+  const applyDetails = useCallback((row: DetailsOverlayRow) => {
+    setState((current) =>
+      current.status === "ready"
+        ? { ...current, data: { ...current.data, zones: applyDetailsOverlay(current.data.zones, [row]) } }
+        : current
+    );
+  }, []);
+
   const retry = useCallback(() => {
     setState({ status: "loading" });
     load();
@@ -299,12 +343,14 @@ export function ReferenceDataProvider({
         // above already rendered it, and rendering it twice would mount two
         // copies of the real onboarding page once its data happens to load.
         <SetCenterStatusContext.Provider value={applyCenterStatus}>
-          <AlertsContext.Provider value={state.alerts}>
-            <AlertsRefreshContext.Provider value={refreshAlerts}>
-              {!bypassGate && children}
-              {gatedExtras}
-            </AlertsRefreshContext.Provider>
-          </AlertsContext.Provider>
+          <SetBarangayDetailsContext.Provider value={applyDetails}>
+            <AlertsContext.Provider value={state.alerts}>
+              <AlertsRefreshContext.Provider value={refreshAlerts}>
+                {!bypassGate && children}
+                {gatedExtras}
+              </AlertsRefreshContext.Provider>
+            </AlertsContext.Provider>
+          </SetBarangayDetailsContext.Provider>
         </SetCenterStatusContext.Provider>
       )}
     </ReferenceDataContext.Provider>

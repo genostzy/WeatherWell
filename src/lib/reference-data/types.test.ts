@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { toReferenceData } from "./types";
+import { applyDetailsOverlay, toReferenceData } from "./types";
+import { MOCK_ZONES } from "@/lib/mock-data";
 import { resolveEffectiveCenterStatus } from "@/lib/center-status";
 
 /**
@@ -120,3 +121,31 @@ describe("toReferenceData", () => {
   });
 });
 
+
+describe("applyDetailsOverlay", () => {
+  it("lays an official's numbers and instructions over the static barangay", () => {
+    const [zone] = MOCK_ZONES;
+    const route = { en: "Go to the school.", fil: "Pumunta sa paaralan." };
+    const [patched] = applyDetailsOverlay(
+      [zone],
+      [{ id: zone.id, hotline_number: "0917 123 4567", extra_hotlines: ["(075) 522-1234"], evacuation_route_text: route }]
+    );
+    expect(patched.hotlineNumber).toBe("0917 123 4567");
+    expect(patched.extraHotlines).toEqual(["(075) 522-1234"]);
+    expect(patched.evacuationRouteText).toEqual(route);
+  });
+
+  it("leaves every other barangay as the same object, and an empty feed changes nothing", () => {
+    const [a, b] = MOCK_ZONES;
+    const withExtras = { ...a, extraHotlines: ["0918 765 4321"] };
+    const out = applyDetailsOverlay(
+      [withExtras, b],
+      [{ id: a.id, hotline_number: "0917 123 4567", extra_hotlines: [], evacuation_route_text: a.evacuationRouteText }]
+    );
+    expect(out[1]).toBe(b);
+    // An official who cleared the extra numbers: none are left behind.
+    expect(out[0].extraHotlines).toBeUndefined();
+    const zones = [a, b];
+    expect(applyDetailsOverlay(zones, [])).toBe(zones);
+  });
+});

@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useContext } from "react";
-import { ReferenceDataContext, SetCenterStatusContext } from "./provider";
+import { ReferenceDataContext, SetBarangayDetailsContext, SetCenterStatusContext } from "./provider";
 import { hazardsForZone, type HazardsByZone, type ZoneHazards } from "@/lib/hazards";
 import type { PointOfInterest, Zone } from "@/lib/types";
 import type { SetCenterStatusInput } from "@/app/actions/set-center";
 import type { ActionResult } from "@/app/actions/action-result";
+import type { SetBarangayDetailsInput, SetBarangayDetailsResult } from "@/app/actions/set-barangay-details";
 
 function useData() {
   const data = useContext(ReferenceDataContext);
@@ -77,4 +78,30 @@ export function useSetCenterStatus(): (input: SetCenterStatusInput) => Promise<A
     );
   }
   return setStatus;
+}
+
+/**
+ * The one way a screen saves a barangay's hotlines and instructions. Once the
+ * database confirms the save, that barangay is patched in
+ * ReferenceDataProvider's state with exactly what was saved (see
+ * SetBarangayDetailsContext), so every screen on the official's phone shows it
+ * at once. Dynamic import for the same reason as useSetCenterStatus.
+ */
+export function useSetBarangayDetails(): (input: SetBarangayDetailsInput) => Promise<SetBarangayDetailsResult> {
+  const apply = useContext(SetBarangayDetailsContext);
+  const save = useCallback(
+    async (input: SetBarangayDetailsInput) => {
+      const { setBarangayDetails } = await import("@/app/actions/set-barangay-details");
+      const result = await setBarangayDetails(input);
+      if (result.ok) apply?.(result.saved);
+      return result;
+    },
+    [apply]
+  );
+  if (!apply) {
+    throw new Error(
+      "useSetBarangayDetails requires ReferenceDataProvider's barangay-details context. In tests, use renderWithData()."
+    );
+  }
+  return save;
 }

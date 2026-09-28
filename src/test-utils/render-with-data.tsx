@@ -2,7 +2,7 @@ import { render, type RenderResult } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { LanguageProvider } from "@/features/i18n/language-provider";
-import { ReferenceDataContext, SetCenterStatusContext } from "@/lib/reference-data/provider";
+import { ReferenceDataContext, SetBarangayDetailsContext, SetCenterStatusContext } from "@/lib/reference-data/provider";
 import type { ReferenceData } from "@/lib/reference-data/types";
 import { AlertsContext, AlertsRefreshContext } from "@/lib/alerts-store";
 import { MOCK_ZONES, MOCK_POIS, MOCK_HAZARD_SUSCEPTIBILITY, MOCK_ALERTS } from "@/lib/mock-data";
@@ -53,6 +53,9 @@ const noRefresh = async () => {};
  */
 const noSetCenterStatus = () => {};
 
+/** Likewise for an official's barangay details: the zones here are fixed. */
+const noSetBarangayDetails = () => {};
+
 export function renderWithData(
   ui: ReactElement,
   options: {
@@ -70,11 +73,13 @@ export function renderWithData(
       <LanguageProvider initialLang={options.lang}>
         <ReferenceDataContext.Provider value={data}>
           <SetCenterStatusContext.Provider value={noSetCenterStatus}>
-            <AlertsContext.Provider value={alerts}>
-              <AlertsRefreshContext.Provider value={noRefresh}>
-                <OfficialContext.Provider value={official}>{ui}</OfficialContext.Provider>
-              </AlertsRefreshContext.Provider>
-            </AlertsContext.Provider>
+            <SetBarangayDetailsContext.Provider value={noSetBarangayDetails}>
+              <AlertsContext.Provider value={alerts}>
+                <AlertsRefreshContext.Provider value={noRefresh}>
+                  <OfficialContext.Provider value={official}>{ui}</OfficialContext.Provider>
+                </AlertsRefreshContext.Provider>
+              </AlertsContext.Provider>
+            </SetBarangayDetailsContext.Provider>
           </SetCenterStatusContext.Provider>
         </ReferenceDataContext.Provider>
       </LanguageProvider>

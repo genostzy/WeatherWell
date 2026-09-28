@@ -236,6 +236,34 @@ export function applyCentreOverlay(zones: Zone[], rows: CentreOverlayRow[]): Zon
   });
 }
 
+/** One barangay whose details an official filled in, as /api/barangay-details serves it. */
+export interface DetailsOverlayRow {
+  id: string;
+  hotline_number: string;
+  extra_hotlines: string[];
+  evacuation_route_text: Zone["evacuationRouteText"];
+}
+
+/**
+ * An official's hotlines and instructions (set_barangay_details) are in the
+ * database, not the static file, until the file is next regenerated: laid
+ * over it the same way as centres (applyCentreOverlay). Every other zone is
+ * returned as the same object.
+ */
+export function applyDetailsOverlay(zones: Zone[], rows: DetailsOverlayRow[]): Zone[] {
+  if (rows.length === 0) return zones;
+  const byZone = new Map(rows.map((r) => [r.id, r]));
+  return zones.map((zone) => {
+    const row = byZone.get(zone.id);
+    if (!row) return zone;
+    const patched: Zone = { ...zone, hotlineNumber: row.hotline_number, evacuationRouteText: row.evacuation_route_text };
+    // Absent means none: an official who cleared the extra numbers leaves none behind.
+    if (row.extra_hotlines.length > 0) patched.extraHotlines = row.extra_hotlines;
+    else delete patched.extraHotlines;
+    return patched;
+  });
+}
+
 /** Row shapes as Postgres returns them — snake_case, centre nested by the join. */
 interface ZoneRow {
   id: string;
