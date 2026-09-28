@@ -1,4 +1,4 @@
-import type { LocalizedText } from "./types";
+import type { LanguageCode, LocalizedText, Zone } from "./types";
 
 /**
  * The rules for what an official enters as their barangay's details. The
@@ -58,8 +58,38 @@ export function instructionsProblem(instructions: { en: string; fil: string }): 
   return null;
 }
 
-/** A call link for a number as an official wrote it: "(075) 522-1234" dials 0755221234. */
+/**
+ * A call link for a number as an official wrote it: "(075) 522-1234" dials
+ * 0755221234. A plus before the first digit is the country code's, brackets
+ * or not: "(+63) 917 123 4567" dials +639171234567.
+ */
 export function telHref(number: string): string {
-  const trimmed = number.trim();
-  return `tel:${trimmed.startsWith("+") ? "+" : ""}${trimmed.replace(/[^0-9]/g, "")}`;
+  const plus = /^[^0-9]*\+/.test(number) ? "+" : "";
+  return `tel:${plus}${number.replace(/[^0-9]/g, "")}`;
+}
+
+/**
+ * What the nationwide seed gave every barangay as its instructions. The form
+ * does not offer it back as the official's own words: saved unchanged, it
+ * would stand in for a language the official left blank.
+ */
+export const PLACEHOLDER_INSTRUCTIONS: LocalizedText = {
+  en: "Contact your barangay captain for evacuation instructions.",
+  fil: "Makipag-ugnayan sa inyong barangay captain para sa mga tagubilin sa paglikas.",
+};
+
+/**
+ * A barangay's instructions for a reader of one language, and the language
+ * they are actually in. An official may write only one; the other language's
+ * reader gets that text, marked with its real language so screen readers and
+ * read-aloud pronounce it right (WCAG 3.1.2).
+ */
+export function instructionsFor(
+  zone: Pick<Zone, "evacuationRouteText">,
+  lang: LanguageCode
+): { text: string; lang: LanguageCode } {
+  const own = zone.evacuationRouteText[lang];
+  if (own) return { text: own, lang };
+  const other: LanguageCode = lang === "en" ? "fil" : "en";
+  return { text: zone.evacuationRouteText[other], lang: other };
 }

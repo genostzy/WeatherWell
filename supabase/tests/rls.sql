@@ -3330,7 +3330,8 @@ begin
     end;
   end loop;
 
-  -- B2: the barangay's own official saves; trimmed, blanks dropped, English copied to Filipino, logged, returned.
+  -- B2: the barangay's own official saves; trimmed, blanks dropped, English stored as written (the phone shows it
+  -- for Filipino too, marked as English), logged, returned.
   perform set_config('request.jwt.claims', '{"sub":"e5000000-0000-4000-8000-000000000001","role":"authenticated"}', true);
   saved := public.set_barangay_details('tests-fixture-zone-details',
     array['  0917 123 4567 ', '', '(075) 522-1234'], '  Go to Nilombot Elementary School. ', '');
@@ -3338,7 +3339,7 @@ begin
   select hotline_number, extra_hotlines, evacuation_route_text, details_set_at into z
     from public.zones where id = 'tests-fixture-zone-details';
   if z.hotline_number <> '0917 123 4567' or z.extra_hotlines <> array['(075) 522-1234']
-     or z.evacuation_route_text <> '{"en":"Go to Nilombot Elementary School.","fil":"Go to Nilombot Elementary School."}'::jsonb
+     or z.evacuation_route_text <> '{"en":"Go to Nilombot Elementary School.","fil":""}'::jsonb
      or z.details_set_at is null then
     raise exception using errcode = 'TSTFL', message = format('B2: not saved as expected: %s', z);
   end if;
@@ -3351,14 +3352,14 @@ begin
      and detail = '{"hotlines":["0917 123 4567","(075) 522-1234"],"wrote":["en"]}'::jsonb;
   if n <> 1 then raise exception using errcode = 'TSTFL', message = format('B2: logged %s times', n); end if;
 
-  -- B3: the town's official saves (Filipino copied to English), and so does the admin.
+  -- B3: the town's official saves (Filipino only, stored as written), and so does the admin.
   set local role authenticated;
   perform set_config('request.jwt.claims', '{"sub":"e5000000-0000-4000-8000-000000000004","role":"authenticated"}', true);
   perform public.set_barangay_details('tests-fixture-zone-details', array['0918 000 1111'], '', 'Pumunta sa paaralan.');
   reset role;
   select evacuation_route_text into z from public.zones where id = 'tests-fixture-zone-details';
-  if z.evacuation_route_text <> '{"en":"Pumunta sa paaralan.","fil":"Pumunta sa paaralan."}'::jsonb then
-    raise exception using errcode = 'TSTFL', message = format('B3: Filipino not copied: %s', z);
+  if z.evacuation_route_text <> '{"en":"","fil":"Pumunta sa paaralan."}'::jsonb then
+    raise exception using errcode = 'TSTFL', message = format('B3: not stored as written: %s', z);
   end if;
 
   -- B4: no numbers stores the placeholder, so residents see the 911 fallback.
@@ -3395,6 +3396,45 @@ begin
     raise exception using errcode = 'TSTFL', message = 'B6: officials cannot call it';
   end if;
   raise notice 'ok B1-B6: officials fill in their own barangay''s hotlines and instructions';
+end $$;
+
+
+-- B7, C5: blank means blank, and every confirmed centre reaches phones (the review's I3 and I1).
+do $$
+declare z record; n int;
+begin
+  set local role postgres;
+  perform set_config('request.jwt.claims', '', true);
+  insert into auth.users (id) values ('e6000000-0000-4000-8000-000000000001');
+  insert into public.zones
+    (id, psgc_barangay_code, name, evacuation_route_text, lat, lng, evacuation_route_path, hotline_number)
+  values ('tests-fixture-zone-details-2', '9900000071', 'Test Zone Details 2', '{"en":"x","fil":"x"}'::jsonb,
+          16.0288, 120.4366, '[]'::jsonb, '00000000000');
+  insert into public.profiles (id, role, area_code, display_name) values
+    ('e6000000-0000-4000-8000-000000000001', 'operator', '9900000071', 'Test Tanod')
+  on conflict (id) do update set role = excluded.role, area_code = excluded.area_code, display_name = excluded.display_name;
+
+  set local role authenticated;
+  perform set_config('request.jwt.claims', '{"sub":"e6000000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+  -- B7: a box holding only a newline or a tab is blank, and numbers lose tabs and newlines around them.
+  perform public.set_barangay_details('tests-fixture-zone-details-2', array[E'\t0917 123 4567\n'], E'\n\t ', 'Pumunta sa paaralan.');
+  -- C5: a centre confirmed without a capacity or a status is still marked confirmed.
+  perform public.confirm_evacuation_center('tests-fixture-zone-details-2', 'Covered Court', 16.0295, 120.436, 0);
+  reset role;
+
+  select hotline_number, evacuation_route_text into z from public.zones where id = 'tests-fixture-zone-details-2';
+  if z.hotline_number <> '0917 123 4567' or z.evacuation_route_text <> '{"en":"","fil":"Pumunta sa paaralan."}'::jsonb then
+    raise exception using errcode = 'TSTFL', message = format('B7: whitespace not trimmed: %s', z);
+  end if;
+  select count(*) into n from public.official_actions
+   where zone_id = 'tests-fixture-zone-details-2' and action = 'barangay.details' and detail->'wrote' = '["fil"]'::jsonb;
+  if n <> 1 then raise exception using errcode = 'TSTFL', message = format('B7: logged %s times', n); end if;
+  select count(*) into n from public.evacuation_centers
+   where zone_id = 'tests-fixture-zone-details-2' and confirmed_at is not null;
+  if n <> 1 then
+    raise exception using errcode = 'TSTFL', message = 'C5: a centre confirmed with capacity 0 is not marked confirmed';
+  end if;
+  raise notice 'ok B7, C5: blank means blank, and every confirmed centre reaches phones';
 end $$;
 
 rollback;

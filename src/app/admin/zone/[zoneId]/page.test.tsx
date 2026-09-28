@@ -556,5 +556,11 @@ describe("ZoneDashboardPage barangay details", () => {
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     expect(await screen.findByRole("link", { name: "0917 123 4567" })).toHaveAttribute("href", "tel:09171234567");
+    // The phone's saved copy is refreshed too, so the next open does not bring back the old details.
+    await waitFor(() =>
+      expect(
+        vi.mocked(fetch).mock.calls.some(([url]) => /^\/api\/barangay-details\?saved=\d+$/.test(String(url)))
+      ).toBe(true)
+    );
   });
 });

@@ -91,3 +91,46 @@ describe("BarangayDetailsForm", () => {
     expect(await screen.findByRole("status")).toBeInTheDocument();
   });
 });
+
+describe("BarangayDetailsForm: the review's fixes", () => {
+  it("sends instructions without the whitespace around them", async () => {
+    const user = userEvent.setup();
+    renderWithData(<BarangayDetailsForm zone={zone} onClose={() => {}} />);
+    await user.clear(screen.getByLabelText("Evacuation instructions (English)"));
+    await user.type(screen.getByLabelText("Evacuation instructions (English)"), "{Enter}");
+    await user.clear(screen.getByLabelText("Evacuation instructions (Filipino)"));
+    await user.type(screen.getByLabelText("Evacuation instructions (Filipino)"), "  Pumunta sa paaralan. ");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(setBarangayDetailsMock).toHaveBeenCalledWith(
+      expect.objectContaining({ instructions: { en: "", fil: "Pumunta sa paaralan." } })
+    );
+  });
+
+  it("leaves a box empty where residents only see the placeholder", () => {
+    const seeded = {
+      ...zone,
+      evacuationRouteText: {
+        en: "Contact your barangay captain for evacuation instructions.",
+        fil: "Makipag-ugnayan sa inyong barangay captain para sa mga tagubilin sa paglikas.",
+      },
+    };
+    renderWithData(<BarangayDetailsForm zone={seeded} onClose={() => {}} />);
+    expect(screen.getByLabelText("Evacuation instructions (English)")).toHaveValue("");
+    expect(screen.getByLabelText("Evacuation instructions (Filipino)")).toHaveValue("");
+  });
+
+  it("points to the hotline that needs fixing", async () => {
+    const user = userEvent.setup();
+    renderWithData(<BarangayDetailsForm zone={zone} onClose={() => {}} />);
+    await user.type(screen.getByLabelText("Hotline 2"), "abc");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("Hotline 2: A hotline number uses 3 to 20 digits, spaces and + - ( ).");
+    const field = screen.getByLabelText("Hotline 2");
+    expect(field).toHaveAttribute("aria-invalid", "true");
+    expect(field).toHaveAttribute("aria-describedby", alert.id);
+    expect(field).toHaveFocus();
+  });
+});

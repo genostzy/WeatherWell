@@ -61,3 +61,23 @@ describe("FloodPlan: every number the barangay lists", () => {
     expect(screen.getByText(/take the river road/i)).toHaveClass("whitespace-pre-line");
   });
 });
+
+describe("FloodPlan: the official's instructions", () => {
+  it("shows the official's instructions even before the barangay has a centre", () => {
+    const noCentre = {
+      ...zone,
+      evacuationCenterLat: zone.lat,
+      evacuationCenterLng: zone.lng,
+      evacuationCenterCapacity: 0,
+      evacuationRouteText: { en: "Go to the chapel.", fil: "Pumunta sa kapilya." },
+    };
+    renderWithData(<FloodPlan zoneId={noCentre.id} />, { data: { zones: [noCentre] } });
+    expect(screen.getByText("Go to the chapel.")).toBeInTheDocument();
+  });
+
+  it("marks instructions written only in Filipino as Filipino on an English plan", () => {
+    const filipinoOnly = { ...zone, evacuationRouteText: { en: "", fil: "Pumunta sa kapilya." } };
+    renderWithData(<FloodPlan zoneId={filipinoOnly.id} />, { data: { zones: [filipinoOnly] } });
+    expect(screen.getByText("Pumunta sa kapilya.")).toHaveAttribute("lang", "fil");
+  });
+});

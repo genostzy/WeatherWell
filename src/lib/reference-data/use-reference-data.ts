@@ -93,7 +93,13 @@ export function useSetBarangayDetails(): (input: SetBarangayDetailsInput) => Pro
     async (input: SetBarangayDetailsInput) => {
       const { setBarangayDetails } = await import("@/app/actions/set-barangay-details");
       const result = await setBarangayDetails(input);
-      if (result.ok) apply?.(result.saved);
+      if (result.ok) {
+        apply?.(result.saved);
+        // The service worker answers the next open from its saved copy of the
+        // feed, taken before this save. A query makes it fetch afresh and keep
+        // the answer under the plain address (see revalidatePlainEntry in sw.js).
+        void fetch(`/api/barangay-details?saved=${Date.now()}`).catch(() => undefined);
+      }
       return result;
     },
     [apply]

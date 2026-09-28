@@ -108,3 +108,10 @@ describe("EvacuationInstructions: every number the barangay lists", () => {
     expect(screen.getByText(/take the river road/i)).toHaveClass("whitespace-pre-line");
   });
 });
+
+describe("EvacuationInstructions: instructions in one language", () => {
+  it("marks instructions written only in Filipino as Filipino on an English screen", () => {
+    render(<EvacuationInstructions zone={{ ...zone, evacuationRouteText: { en: "", fil: "Pumunta sa kapilya." } }} />);
+    expect(screen.getByText("Pumunta sa kapilya.")).toHaveAttribute("lang", "fil");
+  });
+});

@@ -7,6 +7,7 @@ import { Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
+import { instructionsFor } from "@/lib/barangay-details";
 import { useZones } from "@/lib/reference-data/use-reference-data";
 import { SEVERITY_HEX, SEVERITY_LABEL, SEVERITY_ORDER, type Severity } from "@/lib/severity";
 import { hasRealEvacuationCenter, hasRealHotline, hotlinesOf, NO_VERIFIED_CENTER } from "@/lib/zone-data-quality";
@@ -90,15 +91,16 @@ export function FloodPlan({ zoneId }: { zoneId: string }) {
             {zone.evacuationCenterCapacity > 0 && (
               <p lang={lang}>{t(CAPACITY, lang).replace("{n}", String(zone.evacuationCenterCapacity))}</p>
             )}
-            <p lang={lang} className="whitespace-pre-line">
-              {t(zone.evacuationRouteText, lang)}
-            </p>
           </>
         ) : (
           <p lang={lang} className="font-medium">
             {t(NO_VERIFIED_CENTER, lang)}
           </p>
         )}
+        {/* The official's instructions stand on their own, centre or not. */}
+        <p lang={instructionsFor(zone, lang).lang} className="whitespace-pre-line">
+          {instructionsFor(zone, lang).text}
+        </p>
       </section>
 
       <section className="space-y-1">

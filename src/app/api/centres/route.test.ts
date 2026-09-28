@@ -16,7 +16,8 @@ describe("GET /api/centres", () => {
     query.mockResolvedValue({ data: [row], error: null });
     const res = await GET();
     expect(await res.json()).toEqual([row]);
-    expect(or).toHaveBeenCalledWith("status.neq.unknown,capacity.gt.0,current_occupancy.not.is.null");
+    // A confirmed centre is listed even with no capacity or status yet.
+    expect(or).toHaveBeenCalledWith("status.neq.unknown,capacity.gt.0,current_occupancy.not.is.null,confirmed_at.not.is.null");
   });
 
   it("is a 502, not an empty list, when the database fails", async () => {

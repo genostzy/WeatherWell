@@ -68,3 +68,10 @@ describe("EmergencyCard: every number the barangay lists", () => {
     expect(screen.getByText(/take the river road/i)).toHaveClass("whitespace-pre-line");
   });
 });
+
+describe("EmergencyCard: instructions in one language", () => {
+  it("marks instructions written only in Filipino as Filipino on an English card", () => {
+    render(<EmergencyCard zone={{ ...zone, evacuationRouteText: { en: "", fil: "Pumunta sa kapilya." } }} />);
+    expect(screen.getByText("Pumunta sa kapilya.")).toHaveAttribute("lang", "fil");
+  });
+});

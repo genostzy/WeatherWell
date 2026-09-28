@@ -248,6 +248,7 @@ export type Database = {
       evacuation_centers: {
         Row: {
           capacity: number
+          confirmed_at: string | null
           current_occupancy: number | null
           id: string
           lat: number
@@ -258,6 +259,7 @@ export type Database = {
         }
         Insert: {
           capacity: number
+          confirmed_at?: string | null
           current_occupancy?: number | null
           id: string
           lat: number
@@ -268,6 +270,7 @@ export type Database = {
         }
         Update: {
           capacity?: number
+          confirmed_at?: string | null
           current_occupancy?: number | null
           id?: string
           lat?: number

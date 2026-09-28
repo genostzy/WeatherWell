@@ -8,7 +8,7 @@ import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { CENTER_STATUS_CLASS, CENTER_STATUS_LABEL, resolveEffectiveCenterStatus } from "@/lib/center-status";
 import { hasRealEvacuationCenter, NO_VERIFIED_CENTER, hotlinesOf } from "@/lib/zone-data-quality";
-import { telHref } from "@/lib/barangay-details";
+import { instructionsFor, telHref } from "@/lib/barangay-details";
 import type { LocalizedText, Zone } from "@/lib/types";
 
 const GO_HERE: LocalizedText = { en: "Go here", fil: "Pumunta rito" };
@@ -28,11 +28,12 @@ export function EvacuationInstructions({ zone }: { zone: Zone }) {
   const centerStatus = resolveEffectiveCenterStatus(zone.centerStatus, zone.evacuationCenterCapacity, occupancy);
   const realCenter = hasRealEvacuationCenter(zone);
   const hotlines = hotlinesOf(zone);
+  const instructions = instructionsFor(zone, lang);
   // What the card says, in the order it says it, for a resident who can't read it.
   const spoken = (language: "en" | "fil") =>
     [
       `${t(GO_HERE, language)}: ${realCenter ? zone.evacuationCenterName : t(NO_VERIFIED_CENTER, language)}`,
-      `${t(HOW_TO_GET_THERE, language)}: ${t(zone.evacuationRouteText, language)}`,
+      `${t(HOW_TO_GET_THERE, language)}: ${instructionsFor(zone, language).text}`,
       hotlines.length > 0 ? hotlines.map((number) => `${t(CALL, language)} ${number}`).join(". ") : t(CALL_911, language),
     ].join(". ");
 
@@ -88,8 +89,8 @@ export function EvacuationInstructions({ zone }: { zone: Zone }) {
           <div>
             <p className="text-sm text-muted-foreground">{t(HOW_TO_GET_THERE, lang)}</p>
             {/* An official may write the steps on separate lines. */}
-            <p lang={lang} className="whitespace-pre-line text-base">
-              {t(zone.evacuationRouteText, lang)}
+            <p lang={instructions.lang} className="whitespace-pre-line text-base">
+              {instructions.text}
             </p>
           </div>
         </div>

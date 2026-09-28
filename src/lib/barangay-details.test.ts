@@ -24,3 +24,10 @@ describe("a barangay's evacuation instructions", () => {
     expect(instructionsProblem({ en: "x".repeat(1001), fil: "" })).not.toBeNull();
   });
 });
+
+describe("a number written with its country code in brackets", () => {
+  it("keeps a plus written inside brackets", () => {
+    expect(telHref("(+63) 917 123 4567")).toBe("tel:+639171234567");
+    expect(telHref("(+632) 8284-0800")).toBe("tel:+63282840800");
+  });
+});

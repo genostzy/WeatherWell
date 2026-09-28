@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
+import { instructionsFor } from "@/lib/barangay-details";
 import { hasRealEvacuationCenter, hasRealHotline, hotlinesOf, NO_VERIFIED_CENTER } from "@/lib/zone-data-quality";
 import type { LocalizedText, Zone } from "@/lib/types";
 
@@ -73,8 +74,8 @@ export function EmergencyCard({ zone }: { zone: Zone }) {
 
           <div>
             <p className="text-xs text-muted-foreground">{t(HOW_TO_GET_THERE, lang)}</p>
-            <p lang={lang} className="whitespace-pre-line text-sm">
-              {t(zone.evacuationRouteText, lang)}
+            <p lang={instructionsFor(zone, lang).lang} className="whitespace-pre-line text-sm">
+              {instructionsFor(zone, lang).text}
             </p>
           </div>
 
