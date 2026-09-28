@@ -26,6 +26,8 @@ interface NavItem {
 const HISTORY: NavItem = { href: "/admin/history", label: { en: "History", fil: "Kasaysayan" }, icon: History };
 const MAP: NavItem = { href: "/admin/map", label: { en: "Operations map", fil: "Mapa ng operasyon" }, icon: Map };
 const RESIDENT_VIEW: NavItem = { href: "/", label: { en: "Resident view", fil: "Tingin ng residente" }, icon: Smartphone };
+// Every official rehearses in drill mode (PRD, Who It Serves); the drill uses only their own area.
+const DRILL: NavItem = { href: "/admin/simulation", label: { en: "Drill", fil: "Pagsasanay" }, icon: PlayCircle };
 
 function navFor(official: Official): NavItem[] {
   switch (official.level) {
@@ -35,7 +37,7 @@ function navFor(official: Official): NavItem[] {
         MAP,
         { href: "/admin/officials", label: { en: "Officials", fil: "Mga Opisyal" }, icon: Users },
         HISTORY,
-        { href: "/admin/simulation", label: { en: "Drill", fil: "Pagsasanay" }, icon: PlayCircle },
+        DRILL,
         RESIDENT_VIEW,
       ];
     case "municipality":
@@ -48,12 +50,15 @@ function navFor(official: Official): NavItem[] {
         MAP,
         { href: "/admin/officials", label: { en: "Barangay officials", fil: "Mga opisyal ng barangay" }, icon: Users },
         HISTORY,
+        DRILL,
         RESIDENT_VIEW,
       ];
     case "barangay":
       return [
         { href: "/admin", label: { en: "My barangay", fil: "Aking barangay" }, icon: Home },
+        MAP,
         HISTORY,
+        DRILL,
         RESIDENT_VIEW,
       ];
   }

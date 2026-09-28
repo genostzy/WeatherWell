@@ -72,18 +72,20 @@ describe("AdminHeader role (each account sees who it is)", () => {
     expect(screen.getByText("System admin")).toBeInTheDocument();
   });
 
-  it("gives a municipal official their town dashboard, the map and their barangay officials", () => {
+  it("gives a municipal official their town dashboard, the map, their barangay officials and the drill", () => {
     renderWithData(<AdminHeader />, { official: TOWN });
     expect(screen.getByRole("link", { name: /mapandan dashboard/i })).toHaveAttribute("href", "/admin");
     expect(screen.getByRole("link", { name: /operations map/i })).toHaveAttribute("href", "/admin/map");
     expect(screen.getByRole("link", { name: /barangay officials/i })).toHaveAttribute("href", "/admin/officials");
-    expect(screen.queryByRole("link", { name: /drill/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /drill/i })).toHaveAttribute("href", "/admin/simulation");
   });
 
-  it("gives a barangay official their barangay and History only", () => {
+  it("gives a barangay official their barangay, the map, History and the drill", () => {
     renderWithData(<AdminHeader />, { official: OFFICIAL });
     expect(screen.getByRole("link", { name: /my barangay/i })).toHaveAttribute("href", "/admin");
-    expect(screen.queryByRole("link", { name: /operations map/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /operations map/i })).toHaveAttribute("href", "/admin/map");
+    expect(screen.getByRole("link", { name: /history/i })).toHaveAttribute("href", "/admin/history");
+    expect(screen.getByRole("link", { name: /drill/i })).toHaveAttribute("href", "/admin/simulation");
   });
 
   it("gives an admin the system dashboard, officials and the drill", () => {
