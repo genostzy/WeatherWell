@@ -64,3 +64,30 @@ describe("CommunityPinForm", () => {
     expect(screen.getByText(/is shared with the barangay/i)).toBeInTheDocument();
   });
 });
+
+describe("CommunityPinForm: what's happening", () => {
+  it("asks what's happening before the water status", () => {
+    render(<CommunityPinForm onSubmit={() => {}} onCancel={() => {}} />);
+    const kinds = screen.getByRole("radiogroup", { name: "What's happening?" });
+    for (const name of ["Flood", "Road blocked", "Landslide", "Power line down", "Other"]) {
+      expect(kinds).toContainElement(screen.getByLabelText(name));
+    }
+  });
+
+  it("asks the water status only for a flood", async () => {
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(<CommunityPinForm onSubmit={onSubmit} onCancel={() => {}} />);
+
+    await user.click(screen.getByLabelText("Road blocked"));
+    expect(screen.queryByLabelText("Receding")).not.toBeInTheDocument();
+    await user.type(screen.getByLabelText(/short description/i), "Fallen tree");
+    await user.click(screen.getByRole("button", { name: /drop pin/i }));
+    expect(onSubmit).toHaveBeenLastCalledWith(expect.objectContaining({ statusTag: "road_blocked" }));
+
+    await user.click(screen.getByLabelText("Flood"));
+    await user.click(screen.getByLabelText("Receding"));
+    await user.click(screen.getByRole("button", { name: /drop pin/i }));
+    expect(onSubmit).toHaveBeenLastCalledWith(expect.objectContaining({ statusTag: "receding" }));
+  });
+});

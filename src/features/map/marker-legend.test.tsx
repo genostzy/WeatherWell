@@ -51,3 +51,14 @@ describe("MarkerLegend", () => {
     expect(screen.getByText(/unverified/i)).toBeInTheDocument();
   });
 });
+
+describe("MarkerLegend: pin types", () => {
+  it("lists every pin type", async () => {
+    const user = userEvent.setup();
+    render(<MarkerLegend />);
+    await user.click(screen.getByRole("button", { name: /see more/i }));
+    for (const name of ["Flood", "Road blocked", "Landslide", "Power line down", "Other"]) {
+      expect(screen.getByText(name)).toBeInTheDocument();
+    }
+  });
+});

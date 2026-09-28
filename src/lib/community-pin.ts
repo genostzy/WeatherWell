@@ -1,14 +1,45 @@
 import type { LocalizedText } from "./types";
 
-export type PinStatusTag = "flooded" | "rising" | "receding" | "impassable";
+export type PinStatusTag =
+  | "flooded"
+  | "rising"
+  | "receding"
+  | "impassable"
+  | "road_blocked"
+  | "landslide"
+  | "power_line_down"
+  | "other";
 
-export const PIN_STATUS_ORDER: PinStatusTag[] = ["flooded", "rising", "receding", "impassable"];
+/** What a pin is about. A flood pin also says what the water is doing (its tag); the others are their own tag. */
+export type PinKind = "flood" | "road_blocked" | "landslide" | "power_line_down" | "other";
+
+export const PIN_KIND_ORDER: PinKind[] = ["flood", "road_blocked", "landslide", "power_line_down", "other"];
+
+export const FLOOD_STATUS_TAGS: PinStatusTag[] = ["flooded", "rising", "receding", "impassable"];
+
+export const PIN_STATUS_ORDER: PinStatusTag[] = [...FLOOD_STATUS_TAGS, "road_blocked", "landslide", "power_line_down", "other"];
+
+export function pinKindOf(tag: PinStatusTag): PinKind {
+  return FLOOD_STATUS_TAGS.includes(tag) ? "flood" : (tag as Exclude<PinKind, "flood">);
+}
+
+export const PIN_KIND_LABEL: Record<PinKind, LocalizedText> = {
+  flood: { en: "Flood", fil: "Baha" },
+  road_blocked: { en: "Road blocked", fil: "Sarado ang daan" },
+  landslide: { en: "Landslide", fil: "Pagguho ng lupa" },
+  power_line_down: { en: "Power line down", fil: "Bumagsak na kawad ng kuryente" },
+  other: { en: "Other", fil: "Iba pa" },
+};
 
 export const PIN_STATUS_LABEL: Record<PinStatusTag, LocalizedText> = {
   flooded: { en: "Flooded", fil: "Baha" },
   rising: { en: "Rising", fil: "Tumataas" },
   receding: { en: "Receding", fil: "Bumababa" },
   impassable: { en: "Impassable", fil: "Hindi Madaanan" },
+  road_blocked: PIN_KIND_LABEL.road_blocked,
+  landslide: PIN_KIND_LABEL.landslide,
+  power_line_down: PIN_KIND_LABEL.power_line_down,
+  other: PIN_KIND_LABEL.other,
 };
 
 /** Distinct from the official severity palette (yellow/orange/red/evacuate) — pins are a clearly-labeled, unverified community layer, never confused with an official Alert. */
@@ -17,6 +48,10 @@ export const PIN_STATUS_COLOR: Record<PinStatusTag, string> = {
   rising: "#f97316",
   receding: "#0f766e",
   impassable: "#991b1b",
+  road_blocked: "#7c2d12",
+  landslide: "#854d0e",
+  power_line_down: "#7e22ce",
+  other: "#475569",
 };
 
 /**

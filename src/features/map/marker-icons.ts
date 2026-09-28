@@ -1,8 +1,8 @@
 import L from "leaflet";
 import type { ZoneStatus } from "@/lib/zone-status";
 import type { POICategory } from "@/lib/types";
-import type { PinStatusTag } from "@/lib/community-pin";
-import { PIN_STATUS_COLOR } from "@/lib/community-pin";
+import type { PinKind, PinStatusTag } from "@/lib/community-pin";
+import { PIN_STATUS_COLOR, pinKindOf } from "@/lib/community-pin";
 import type { OfficialMarkerType } from "@/lib/official-markers";
 import { OFFICIAL_MARKER_COLOR } from "@/lib/official-markers";
 import type { Severity } from "@/lib/severity";
@@ -171,8 +171,18 @@ export function createClusteredEvacMarkerIcon(municipality: string, count: numbe
   });
 }
 
-const PIN_ICON_SVG =
-  '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-map-pin" aria-hidden="true"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"></path><circle cx="12" cy="10" r="3"></circle></svg>';
+/** One glyph per pin kind (lucide shapes, inlined as strings like the POI glyphs above). */
+const PIN_GLYPH: Record<PinKind, string> = {
+  flood: '<path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"></path>',
+  road_blocked: '<rect x="2" y="6" width="20" height="8" rx="1"></rect><path d="M17 14v7"></path><path d="M7 14v7"></path><path d="M10 14 2.3 6.3"></path><path d="m14 6 7.7 7.7"></path><path d="m8 6 8 8"></path>',
+  landslide: '<path d="m8 3 4 8 5-5 5 15H2L8 3z"></path>',
+  power_line_down: '<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"></path>',
+  other: '<circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path>',
+};
+
+function pinGlyphSvg(kind: PinKind): string {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${PIN_GLYPH[kind]}</svg>`;
+}
 
 /**
  * A dashed border (vs. the official markers' solid border) plus a distinct
@@ -183,7 +193,7 @@ const PIN_ICON_SVG =
 export function createCommunityPinMarkerIcon(statusTag: PinStatusTag, label: string): L.DivIcon {
   return L.divIcon({
     className: `community-pin-marker community-pin-marker--${statusTag}`,
-    html: `<div role="img" aria-label="${escapeHtml(label)}" style="width:24px;height:24px;background:${PIN_STATUS_COLOR[statusTag]};border:2px dashed white;border-radius:50% 50% 50% 0;transform:rotate(45deg);display:flex;align-items:center;justify-content:center;"><span style="transform:rotate(-45deg);display:flex;">${PIN_ICON_SVG}</span></div>`,
+    html: `<div role="img" aria-label="${escapeHtml(label)}" style="width:24px;height:24px;background:${PIN_STATUS_COLOR[statusTag]};border:2px dashed white;border-radius:50% 50% 50% 0;transform:rotate(45deg);display:flex;align-items:center;justify-content:center;"><span style="transform:rotate(-45deg);display:flex;">${pinGlyphSvg(pinKindOf(statusTag))}</span></div>`,
     iconSize: [28, 28],
     iconAnchor: [14, 26],
   });

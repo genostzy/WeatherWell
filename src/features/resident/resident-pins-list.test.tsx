@@ -59,3 +59,14 @@ describe("ResidentPinsList", () => {
     expect(screen.getByText(/Wala pang pin/)).toBeInTheDocument();
   });
 });
+
+describe("ResidentPinsList: pin types", () => {
+  it("names a pin's type", () => {
+    render(
+      <ResidentPinsList
+        pins={[{ id: "p2", zoneName: "Barangay Nilombot", statusTag: "landslide", caption: "Mud", createdAt: "2026-09-01T00:00:00Z", removed: false }]}
+      />
+    );
+    expect(screen.getByText(/Landslide/)).toBeInTheDocument();
+  });
+});

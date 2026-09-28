@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  createCommunityPinMarkerIcon,
   createStatusMarkerIcon,
   createPoiMarkerIcon,
   createEvacuationMarkerIcon,
@@ -83,5 +84,16 @@ describe("label HTML-escaping", () => {
     expect(icon.options.html).toContain("&lt;script&gt;");
     expect(icon.options.html).toContain("&quot;");
     expect(icon.options.html).toContain("&amp;");
+  });
+});
+
+describe("createCommunityPinMarkerIcon: a glyph per kind", () => {
+  it("draws a different glyph for each kind, all dashed", () => {
+    const flood = String(createCommunityPinMarkerIcon("flooded", "Flooded").options.html);
+    const blocked = String(createCommunityPinMarkerIcon("road_blocked", "Road blocked").options.html);
+    const glyph = (html: string) => html.slice(html.indexOf("<svg"), html.indexOf("</svg>"));
+    expect(glyph(flood)).not.toBe(glyph(blocked));
+    expect(flood).toContain("dashed");
+    expect(blocked).toContain("dashed");
   });
 });

@@ -237,3 +237,16 @@ describe("setPinRemoved", () => {
     });
   });
 });
+
+describe("createPin: pin types", () => {
+  it("accepts the new types and refuses an unknown one", async () => {
+    const { createPin } = await import("./pins");
+    getClaims.mockResolvedValue({ data: { claims: { sub: "u1" } } });
+    const insert = vi.fn().mockResolvedValue({ error: null });
+    from.mockReturnValue({ insert });
+    expect(await createPin({ ...validPin, statusTag: "road_blocked" })).toEqual({ ok: true });
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ status_tag: "road_blocked" }));
+    const refused = await createPin({ ...validPin, statusTag: "snow" as never });
+    expect(refused).toMatchObject({ ok: false, permanent: true });
+  });
+});

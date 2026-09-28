@@ -3,17 +3,22 @@
 import { useState, type ComponentType } from "react";
 import {
   Building2,
+  Construction,
   ChevronDown,
   ChevronUp,
   Droplet,
   Flame,
+  Info,
   Landmark,
   MapPin,
+  Mountain,
   Pill,
   Shield,
   ShoppingBasket,
   Stethoscope,
+  Zap,
 } from "lucide-react";
+import { PIN_KIND_LABEL } from "@/lib/community-pin";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { ZONE_STATUS_LABEL, SAFE_HEX, type ZoneStatus } from "@/lib/zone-status";
@@ -65,6 +70,12 @@ const MARKER_LEGEND_ITEMS: {
     icon: MapPin,
     unverified: true,
   },
+  // What a community pin is about: each kind has its own glyph on the map (see createCommunityPinMarkerIcon).
+  { key: "pin_flood", label: PIN_KIND_LABEL.flood, icon: Droplet, unverified: true },
+  { key: "pin_road_blocked", label: PIN_KIND_LABEL.road_blocked, icon: Construction, unverified: true },
+  { key: "pin_landslide", label: PIN_KIND_LABEL.landslide, icon: Mountain, unverified: true },
+  { key: "pin_power_line_down", label: PIN_KIND_LABEL.power_line_down, icon: Zap, unverified: true },
+  { key: "pin_other", label: PIN_KIND_LABEL.other, icon: Info, unverified: true },
 ];
 
 const LEGEND_TITLE: LocalizedText = { en: "Map legend", fil: "Legend ng Mapa" };

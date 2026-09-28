@@ -7,12 +7,21 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
-import { PIN_STATUS_ORDER, PIN_STATUS_LABEL, type PinStatusTag } from "@/lib/community-pin";
+import {
+  FLOOD_STATUS_TAGS,
+  PIN_KIND_LABEL,
+  PIN_KIND_ORDER,
+  PIN_STATUS_LABEL,
+  pinKindOf,
+  type PinKind,
+  type PinStatusTag,
+} from "@/lib/community-pin";
 import type { LocalizedText } from "@/lib/types";
 
 const FORM_TITLE: LocalizedText = { en: "Report flood conditions here", fil: "Iulat ang kondisyon ng baha dito" };
 const EDIT_TITLE: LocalizedText = { en: "Edit your flood pin", fil: "I-edit ang iyong flood pin" };
-const STATUS_LABEL: LocalizedText = { en: "What's happening?", fil: "Ano ang nangyayari?" };
+const KIND_LABEL: LocalizedText = { en: "What's happening?", fil: "Ano ang nangyayari?" };
+const WATER_LABEL: LocalizedText = { en: "How is the water?", fil: "Kumusta ang tubig?" };
 const CAPTION_LABEL: LocalizedText = { en: "Short description", fil: "Maikling paglalarawan" };
 const CAPTION_PLACEHOLDER: LocalizedText = {
   en: "e.g. Water already knee-deep near the market",
@@ -58,7 +67,12 @@ export function CommunityPinForm({
   mode?: "create" | "edit";
 }) {
   const { lang } = useLanguage();
-  const [statusTag, setStatusTag] = useState<PinStatusTag>(initialValues?.statusTag ?? "flooded");
+  const [kind, setKind] = useState<PinKind>(initialValues ? pinKindOf(initialValues.statusTag) : "flood");
+  // The water status is kept while another kind is picked, so switching back does not lose it.
+  const [waterTag, setWaterTag] = useState<PinStatusTag>(
+    initialValues && pinKindOf(initialValues.statusTag) === "flood" ? initialValues.statusTag : "flooded"
+  );
+  const statusTag: PinStatusTag = kind === "flood" ? waterTag : kind;
   const [caption, setCaption] = useState(initialValues?.caption ?? "");
 
   return (
@@ -77,13 +91,28 @@ export function CommunityPinForm({
           }}
         >
           <div className="space-y-2">
-            <Label lang={lang}>{t(STATUS_LABEL, lang)}</Label>
+            <Label lang={lang}>{t(KIND_LABEL, lang)}</Label>
+            <RadioGroup value={kind} onValueChange={(value) => setKind(value as PinKind)} aria-label={t(KIND_LABEL, lang)}>
+              {PIN_KIND_ORDER.map((option) => (
+                <div key={option} className="flex items-center space-x-3 py-1">
+                  <RadioGroupItem value={option} id={`pin-kind-${option}`} />
+                  <Label htmlFor={`pin-kind-${option}`} lang={lang}>
+                    {t(PIN_KIND_LABEL[option], lang)}
+                  </Label>
+                </div>
+              ))}
+            </RadioGroup>
+          </div>
+
+          {kind === "flood" && (
+          <div className="space-y-2">
+            <Label lang={lang}>{t(WATER_LABEL, lang)}</Label>
             <RadioGroup
-              value={statusTag}
-              onValueChange={(value) => setStatusTag(value as PinStatusTag)}
-              aria-label={t(STATUS_LABEL, lang)}
+              value={waterTag}
+              onValueChange={(value) => setWaterTag(value as PinStatusTag)}
+              aria-label={t(WATER_LABEL, lang)}
             >
-              {PIN_STATUS_ORDER.map((tag) => (
+              {FLOOD_STATUS_TAGS.map((tag) => (
                 <div key={tag} className="flex items-center space-x-3 py-1">
                   <RadioGroupItem value={tag} id={`pin-status-${tag}`} />
                   <Label htmlFor={`pin-status-${tag}`} lang={lang}>
@@ -93,6 +122,7 @@ export function CommunityPinForm({
               ))}
             </RadioGroup>
           </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="pin-caption" lang={lang}>
