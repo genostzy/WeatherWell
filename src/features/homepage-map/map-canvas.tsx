@@ -11,7 +11,7 @@ import { useCommunityPins, voteOnPin, hasVotedOnPin, isOwnPin, type CommunityPin
 import { useSessionUserId } from "@/lib/auth/anonymous-session";
 import { PIN_STATUS_LABEL } from "@/lib/community-pin";
 import { MapShell } from "@/features/map/map-shell";
-import { ViewportTracker, viewportRadiusDeg, viewportMarkerCap } from "@/features/map/viewport-tracker";
+import { ViewportTracker, viewportRadiusDeg, zonesInView } from "@/features/map/viewport-tracker";
 import { HazardBackdropLayer } from "@/features/map/hazard-backdrop-layer";
 import { PoiMarkerLayer } from "@/features/map/poi-marker-layer";
 import { HistoricalEventsLayer } from "@/features/map/historical-events-layer";
@@ -215,16 +215,8 @@ export function MapCanvas({
    * Shared with the admin map's own culling — see viewport-tracker.tsx.
    */
   const radiusDeg = viewportRadiusDeg(zoom);
-  const markerCap = viewportMarkerCap(zoom);
-
-  const visibleZones = useMemo(() => {
-    const filtered = zones.filter(
-      (z) =>
-        Math.abs(z.lat - viewCenter[0]) < radiusDeg &&
-        Math.abs(z.lng - viewCenter[1]) < radiusDeg
-    );
-    return filtered.slice(0, markerCap);
-  }, [zones, viewCenter, radiusDeg, markerCap]);
+  // The barangay on screen (first in the list) keeps its marker whenever it is in view.
+  const visibleZones = useMemo(() => zonesInView(zones, viewCenter, zoom, zones[0]?.id), [zones, viewCenter, zoom]);
 
   /**
    * Evacuation center display strategy:

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { useMap } from "react-leaflet";
+import type { Zone } from "@/lib/types";
 
 /**
  * Tracks the current map zoom level and viewport center with throttling.
@@ -43,17 +44,44 @@ export function ViewportTracker({
   return null;
 }
 
+/** Half the width, in pixels, of the widest map drawn here (a desktop column): the culling box covers the screen. */
+const VIEW_HALF_WIDTH_PX = 1000;
+
 /**
- * The zoom-adaptive culling radius and marker cap shared by both canvases:
- * 0.02° (~2 km) at zoom 10 → 0.25° (~25 km) at zoom 15+, capped at 20
- * markers at zoom ≤11 rising to 500 at zoom ≥14. Centred on the actual
- * viewport (not a fixed point), so markers follow panning and never vanish
- * just because the map moved.
+ * How far from the middle of the view markers are drawn: about what the
+ * screen shows at this zoom, so it shrinks as the map zooms in. It used to
+ * grow with zoom (0.004° at zoom 10 to 0.25° at zoom 16); with the marker
+ * cap keeping list order, that dropped the barangay in the middle of the
+ * screen in dense towns — 5,898 barangays lost their own marker at street zoom.
  */
+// ponytail: at most 1° (~110 km) when zoomed far out, where the 20-marker cap
+// shows only the nearest anyway; the true bounds, if a wider view needs them.
 export function viewportRadiusDeg(zoom: number): number {
-  return Math.min(0.25, 0.004 * Math.pow(2, Math.max(zoom - 10, 0)));
+  return Math.min(1, (VIEW_HALF_WIDTH_PX * 360) / (256 * 2 ** zoom));
 }
 
 export function viewportMarkerCap(zoom: number): number {
   return zoom <= 11 ? 20 : zoom <= 12 ? 60 : zoom <= 13 ? 150 : 500;
+}
+
+/**
+ * The zones that get a marker: those in view, nearest the middle first, up
+ * to the zoom's cap. `keepId` (the barangay the resident's screen is about)
+ * keeps its marker whenever it is in view, even past the cap.
+ */
+export function zonesInView(zones: Zone[], centre: [number, number], zoom: number, keepId?: string): Zone[] {
+  const radius = viewportRadiusDeg(zoom);
+  // A degree of longitude is shorter than one of latitude away from the equator.
+  const cosLat = Math.cos((centre[0] * Math.PI) / 180);
+  const inView = zones
+    .filter((z) => Math.abs(z.lat - centre[0]) < radius && Math.abs(z.lng - centre[1]) < radius)
+    .map((z) => ({ z, d: (z.lat - centre[0]) ** 2 + ((z.lng - centre[1]) * cosLat) ** 2 }))
+    .sort((a, b) => a.d - b.d)
+    .map(({ z }) => z);
+  const shown = inView.slice(0, viewportMarkerCap(zoom));
+  if (keepId && !shown.some((z) => z.id === keepId)) {
+    const kept = inView.find((z) => z.id === keepId);
+    if (kept) shown.push(kept);
+  }
+  return shown;
 }

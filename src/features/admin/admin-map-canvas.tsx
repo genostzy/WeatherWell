@@ -27,7 +27,7 @@ import {
   type OfficialMarkerType,
 } from "@/lib/official-markers";
 import { MapShell } from "@/features/map/map-shell";
-import { ViewportTracker, viewportRadiusDeg, viewportMarkerCap } from "@/features/map/viewport-tracker";
+import { ViewportTracker, zonesInView } from "@/features/map/viewport-tracker";
 import { HazardBackdropLayer } from "@/features/map/hazard-backdrop-layer";
 import { PoiMarkerLayer } from "@/features/map/poi-marker-layer";
 import { HistoricalEventsLayer } from "@/features/map/historical-events-layer";
@@ -154,14 +154,7 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
    * stays on the full list: a community pin or cascade line has to resolve
    * its own zone regardless of what's currently in view.
    */
-  const radiusDeg = viewportRadiusDeg(zoom);
-  const markerCap = viewportMarkerCap(zoom);
-  const visibleZones = useMemo(() => {
-    const filtered = zones.filter(
-      (z) => Math.abs(z.lat - viewCenter[0]) < radiusDeg && Math.abs(z.lng - viewCenter[1]) < radiusDeg
-    );
-    return filtered.slice(0, markerCap);
-  }, [zones, viewCenter, radiusDeg, markerCap]);
+  const visibleZones = useMemo(() => zonesInView(zones, viewCenter, zoom), [zones, viewCenter, zoom]);
 
   const zoneById = new Map(zones.map((zone) => [zone.id, zone]));
 
