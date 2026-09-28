@@ -68,3 +68,11 @@ describe("ConfirmCentrePanel (idea 10)", () => {
     expect(await screen.findByText(/saved/i)).toBeInTheDocument();
   });
 });
+
+describe("ConfirmCentrePanel with no suggestions", () => {
+  it("offers placing the centre on the map even with no suggestions", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => [] }));
+    render(<ConfirmCentrePanel zone={placeholder} />);
+    expect(await screen.findByRole("button", { name: /place it on the map/i })).toBeInTheDocument();
+  });
+});

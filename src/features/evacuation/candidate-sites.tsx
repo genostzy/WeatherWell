@@ -1,18 +1,26 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { MapPinned } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { SkeletonRows } from "@/components/ui/skeleton";
+import { Skeleton, SkeletonRows } from "@/components/ui/skeleton";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { friendlyError } from "@/lib/friendly-error";
 import { hasRealEvacuationCenter } from "@/lib/zone-data-quality";
 import type { CandidateKind, CandidateSite } from "@/lib/osm-candidates";
 import type { LocalizedText, Zone } from "@/lib/types";
+import { CAPACITY, SAVED } from "./centre-copy";
+
+// Leaflet reads window as it loads, so the map comes only in the browser, and only when asked for.
+const PlaceCentreOnMap = dynamic(() => import("./place-centre-on-map").then((m) => m.PlaceCentreOnMap), {
+  ssr: false,
+  loading: () => <Skeleton className="h-[280px] w-full rounded-xl sm:h-[400px] lg:h-[600px]" />,
+});
 
 const LIKELY: LocalizedText = {
   en: "Likely evacuation sites near you — not confirmed by your barangay",
@@ -22,15 +30,11 @@ const LOOKING: LocalizedText = { en: "Looking for nearby schools and halls…", 
 const SOURCE: LocalizedText = { en: "From OpenStreetMap.", fil: "Mula sa OpenStreetMap." };
 const OFFICIAL_TITLE: LocalizedText = { en: "Set your evacuation centre", fil: "Itakda ang evacuation center" };
 const OFFICIAL_HINT: LocalizedText = {
-  en: "Nearby schools and halls from OpenStreetMap. Confirm the one your barangay uses; residents see it instead of the placeholder.",
-  fil: "Mga kalapit na paaralan at hall mula sa OpenStreetMap. Kumpirmahin ang ginagamit ng barangay; ito na ang makikita ng mga residente.",
+  en: "Pick a nearby school or hall from OpenStreetMap, or place your centre on the map. Residents see it instead of the placeholder.",
+  fil: "Pumili ng kalapit na paaralan o hall mula sa OpenStreetMap, o ilagay ang center sa mapa. Ito na ang makikita ng mga residente.",
 };
-const CAPACITY: LocalizedText = { en: "Capacity (people)", fil: "Kapasidad (tao)" };
 const CONFIRM: LocalizedText = { en: "Confirm as our centre", fil: "Kumpirmahin bilang aming center" };
-const SAVED: LocalizedText = {
-  en: "Saved — residents will see it the next time their app loads.",
-  fil: "Na-save — makikita ito ng mga residente sa susunod na buksan nila ang app.",
-};
+const PLACE_ON_MAP: LocalizedText = { en: "Place it on the map", fil: "Ilagay sa mapa" };
 const KIND: Record<CandidateKind, LocalizedText> = {
   school: { en: "School", fil: "Paaralan" },
   hall: { en: "Barangay/town hall", fil: "Barangay/munisipyo" },
@@ -93,7 +97,10 @@ export function CandidateSites({ zone }: { zone: Zone }) {
   );
 }
 
-/** For an official: turn a suggestion into the barangay's real centre. */
+/**
+ * For an official: turn a suggestion into the barangay's real centre, or, when
+ * OpenStreetMap does not know it, place it on the map.
+ */
 export function ConfirmCentrePanel({ zone }: { zone: Zone }) {
   const { lang } = useLanguage();
   const sites = useCandidateSites(zone.id, true) ?? [];
@@ -102,8 +109,7 @@ export function ConfirmCentrePanel({ zone }: { zone: Zone }) {
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  if (sites.length === 0) return null;
+  const [placing, setPlacing] = useState(false);
 
   async function confirm(site: CandidateSite) {
     const key = `${site.lat},${site.lng}`;
@@ -174,6 +180,13 @@ export function ConfirmCentrePanel({ zone }: { zone: Zone }) {
           <p role="alert" className="text-sm text-destructive">
             {friendlyError(error, lang)}
           </p>
+        )}
+        {placing ? (
+          <PlaceCentreOnMap zone={zone} />
+        ) : (
+          <Button type="button" variant="outline" onClick={() => setPlacing(true)}>
+            <span lang={lang}>{t(PLACE_ON_MAP, lang)}</span>
+          </Button>
         )}
       </CardContent>
     </Card>
