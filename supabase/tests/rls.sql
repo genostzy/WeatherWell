@@ -3305,23 +3305,23 @@ begin
   set local role postgres;
   perform set_config('request.jwt.claims', '', true);
   insert into auth.users (id) values
-    ('e5000000-0000-4000-8000-000000000001'), ('e5000000-0000-4000-8000-000000000002'),
-    ('e5000000-0000-4000-8000-000000000003'), ('e5000000-0000-4000-8000-000000000004'),
-    ('e5000000-0000-4000-8000-000000000005');
+    ('b5000000-0000-4000-8000-000000000001'), ('b5000000-0000-4000-8000-000000000002'),
+    ('b5000000-0000-4000-8000-000000000003'), ('b5000000-0000-4000-8000-000000000004'),
+    ('b5000000-0000-4000-8000-000000000005');
   insert into public.zones
     (id, psgc_barangay_code, name, evacuation_route_text, lat, lng, evacuation_route_path, hotline_number)
   values ('tests-fixture-zone-details', '9900000061', 'Test Zone Details', '{"en":"x","fil":"x"}'::jsonb,
           16.0288, 120.4366, '[]'::jsonb, '00000000000');
   insert into public.profiles (id, role, area_code, display_name) values
-    ('e5000000-0000-4000-8000-000000000001', 'operator', '9900000061', 'Test Kagawad'),
-    ('e5000000-0000-4000-8000-000000000003', 'operator', '9900000062', 'Test Other Kagawad'),
-    ('e5000000-0000-4000-8000-000000000004', 'operator', '9900000', 'Test MDRRMO'),
-    ('e5000000-0000-4000-8000-000000000005', 'admin', null, 'Test Admin')
+    ('b5000000-0000-4000-8000-000000000001', 'operator', '9900000061', 'Test Kagawad'),
+    ('b5000000-0000-4000-8000-000000000003', 'operator', '9900000062', 'Test Other Kagawad'),
+    ('b5000000-0000-4000-8000-000000000004', 'operator', '9900000', 'Test MDRRMO'),
+    ('b5000000-0000-4000-8000-000000000005', 'admin', null, 'Test Admin')
   on conflict (id) do update set role = excluded.role, area_code = excluded.area_code, display_name = excluded.display_name;
 
   -- B1: a resident, and an official for another barangay, are refused.
   set local role authenticated;
-  foreach u in array array['e5000000-0000-4000-8000-000000000002', 'e5000000-0000-4000-8000-000000000003'] loop
+  foreach u in array array['b5000000-0000-4000-8000-000000000002', 'b5000000-0000-4000-8000-000000000003'] loop
     perform set_config('request.jwt.claims', json_build_object('sub', u, 'role', 'authenticated')::text, true);
     begin
       perform public.set_barangay_details('tests-fixture-zone-details', array['0917 123 4567'], 'Go', '');
@@ -3332,7 +3332,7 @@ begin
 
   -- B2: the barangay's own official saves; trimmed, blanks dropped, English stored as written (the phone shows it
   -- for Filipino too, marked as English), logged, returned.
-  perform set_config('request.jwt.claims', '{"sub":"e5000000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+  perform set_config('request.jwt.claims', '{"sub":"b5000000-0000-4000-8000-000000000001","role":"authenticated"}', true);
   saved := public.set_barangay_details('tests-fixture-zone-details',
     array['  0917 123 4567 ', '', '(075) 522-1234'], '  Go to Nilombot Elementary School. ', '');
   reset role;
@@ -3354,7 +3354,7 @@ begin
 
   -- B3: the town's official saves (Filipino only, stored as written), and so does the admin.
   set local role authenticated;
-  perform set_config('request.jwt.claims', '{"sub":"e5000000-0000-4000-8000-000000000004","role":"authenticated"}', true);
+  perform set_config('request.jwt.claims', '{"sub":"b5000000-0000-4000-8000-000000000004","role":"authenticated"}', true);
   perform public.set_barangay_details('tests-fixture-zone-details', array['0918 000 1111'], '', 'Pumunta sa paaralan.');
   reset role;
   select evacuation_route_text into z from public.zones where id = 'tests-fixture-zone-details';
@@ -3364,7 +3364,7 @@ begin
 
   -- B4: no numbers stores the placeholder, so residents see the 911 fallback.
   set local role authenticated;
-  perform set_config('request.jwt.claims', '{"sub":"e5000000-0000-4000-8000-000000000005","role":"authenticated"}', true);
+  perform set_config('request.jwt.claims', '{"sub":"b5000000-0000-4000-8000-000000000005","role":"authenticated"}', true);
   perform public.set_barangay_details('tests-fixture-zone-details', array[]::text[], 'Go to the school.', 'Pumunta sa paaralan.');
   reset role;
   select hotline_number, extra_hotlines into z from public.zones where id = 'tests-fixture-zone-details';
@@ -3374,7 +3374,7 @@ begin
 
   -- B5: bad input is refused: four numbers, letters, two digits, all zeros, blank and over-long instructions.
   set local role authenticated;
-  perform set_config('request.jwt.claims', '{"sub":"e5000000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+  perform set_config('request.jwt.claims', '{"sub":"b5000000-0000-4000-8000-000000000001","role":"authenticated"}', true);
   for bad in select * from (values
       (array['0917 123 4567', '0918 123 4567', '0919 123 4567', '0920 123 4567'], 'Go', ''),
       (array['abc'], 'Go', ''), (array['1-2'], 'Go', ''), (array['000 000'], 'Go', ''),
@@ -3405,17 +3405,17 @@ declare z record; n int;
 begin
   set local role postgres;
   perform set_config('request.jwt.claims', '', true);
-  insert into auth.users (id) values ('e6000000-0000-4000-8000-000000000001');
+  insert into auth.users (id) values ('b6000000-0000-4000-8000-000000000001');
   insert into public.zones
     (id, psgc_barangay_code, name, evacuation_route_text, lat, lng, evacuation_route_path, hotline_number)
   values ('tests-fixture-zone-details-2', '9900000071', 'Test Zone Details 2', '{"en":"x","fil":"x"}'::jsonb,
           16.0288, 120.4366, '[]'::jsonb, '00000000000');
   insert into public.profiles (id, role, area_code, display_name) values
-    ('e6000000-0000-4000-8000-000000000001', 'operator', '9900000071', 'Test Tanod')
+    ('b6000000-0000-4000-8000-000000000001', 'operator', '9900000071', 'Test Tanod')
   on conflict (id) do update set role = excluded.role, area_code = excluded.area_code, display_name = excluded.display_name;
 
   set local role authenticated;
-  perform set_config('request.jwt.claims', '{"sub":"e6000000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+  perform set_config('request.jwt.claims', '{"sub":"b6000000-0000-4000-8000-000000000001","role":"authenticated"}', true);
   -- B7: a box holding only a newline or a tab is blank, and numbers lose tabs and newlines around them.
   perform public.set_barangay_details('tests-fixture-zone-details-2', array[E'\t0917 123 4567\n'], E'\n\t ', 'Pumunta sa paaralan.');
   -- C5: a centre confirmed without a capacity or a status is still marked confirmed.
