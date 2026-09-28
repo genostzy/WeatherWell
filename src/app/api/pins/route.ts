@@ -37,7 +37,7 @@ export async function GET() {
   const [pins, votes] = await Promise.all([
     supabase
       .from("community_pins")
-      .select("id, zone_id, status_tag, caption, lat, lng, author_id, created_at, removed, removed_reason")
+      .select("id, zone_id, status_tag, caption, lat, lng, author_id, created_at, removed, removed_reason, photo_path")
       .order("created_at", { ascending: false })
       .limit(500),
     supabase.from("pin_votes").select("pin_id, direction, voter_id").limit(5000),

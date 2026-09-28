@@ -23,6 +23,7 @@ export interface PinRow {
   created_at: string;
   removed: boolean;
   removed_reason: string | null;
+  photo_path: string | null;
 }
 
 export interface PinTally {
@@ -52,6 +53,8 @@ export interface MappedPin {
    * restoring and one already judged.
    */
   removedReason?: PinRemovalReason;
+  /** A path in the private pin-photos bucket; only an official's session can sign a link to it. */
+  photoPath?: string;
 }
 
 /**
@@ -89,6 +92,7 @@ export function toPins(rows: PinRow[], votes: PinTally[], callerId: string | und
       authorId: row.author_id,
       removed: row.removed,
       removedReason: (row.removed_reason as PinRemovalReason | null) ?? undefined,
+      ...(row.photo_path ? { photoPath: row.photo_path } : {}),
     };
   });
 }

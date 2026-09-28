@@ -9,6 +9,13 @@ vi.mock("@/lib/auth/anonymous-session", () => ({
   useSessionUserId: () => null,
 }));
 
+// Officials sign a pin photo's link with their own session (see pin-photo-thumb).
+vi.mock("@/lib/supabase/browser", () => ({
+  getBrowserClient: () => ({
+    storage: { from: () => ({ createSignedUrl: async () => ({ data: { signedUrl: "https://signed/x.jpg" }, error: null }) }) },
+  }),
+}));
+
 import { CommunityPinModerationPanel } from "./community-pin-moderation-panel";
 import { renderWithData, FIXTURE_REFERENCE_DATA } from "@/test-utils/render-with-data";
 import { addCommunityPin, type CommunityPin } from "@/lib/community-pins";
@@ -204,3 +211,28 @@ function removedServerPin(over: Partial<CommunityPin>): CommunityPin {
     ...over,
   };
 }
+
+describe("CommunityPinModerationPanel: photos", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("shows a pin's photo to officials", async () => {
+    localStorage.clear();
+    const pin: CommunityPin = {
+      id: "p9",
+      zoneId: FIXTURE_REFERENCE_DATA.zones[0].id,
+      statusTag: "road_blocked",
+      caption: "Fallen tree",
+      photoPath: "u1/x.jpg",
+      lat: 0,
+      lng: 0,
+      upvotes: 0,
+      downvotes: 0,
+      createdAt: new Date().toISOString(),
+      authorId: "u1",
+      removed: false,
+    };
+    servePins([pin]);
+    renderWithData(<CommunityPinModerationPanel zones={FIXTURE_REFERENCE_DATA.zones} />);
+    expect(await screen.findByRole("button", { name: /view photo/i })).toBeInTheDocument();
+  });
+});

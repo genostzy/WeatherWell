@@ -18,11 +18,14 @@ export function PhotoLightbox({
   photoDataUrl,
   statusTag,
   caption,
+  note = UNVERIFIED_NOTE,
   onClose,
 }: {
   photoDataUrl: string;
   statusTag: PinStatusTag;
   caption: string;
+  /** What the viewer should know about where the photo came from. */
+  note?: LocalizedText;
   onClose: () => void;
 }) {
   const { lang } = useLanguage();
@@ -45,7 +48,7 @@ export function PhotoLightbox({
           <p className="font-medium">{t(PIN_STATUS_LABEL[statusTag], lang)}</p>
           {caption && <p className="text-sm">{caption}</p>}
           <p lang={lang} className="text-xs text-muted-foreground">
-            {t(UNVERIFIED_NOTE, lang)}
+            {t(note, lang)}
           </p>
         </div>
       </div>

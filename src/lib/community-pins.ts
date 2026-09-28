@@ -34,6 +34,8 @@ export interface CommunityPin {
    * photo, and the viewers (map popup, lightbox) already handle its absence.
    */
   photoDataUrl?: string;
+  /** A photo only officials see, through a signed link (see PinPhotoThumb). */
+  photoPath?: string;
   lat: number;
   lng: number;
   upvotes: number;

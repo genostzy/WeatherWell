@@ -16,6 +16,7 @@ import {
 import { useOutbox } from "@/lib/outbox/outbox";
 import { PIN_STATUS_LABEL, PIN_STATUS_COLOR, type PinRemovalReason } from "@/lib/community-pin";
 import { useManagesZone } from "@/lib/auth/official-context";
+import { PinPhotoThumb } from "@/features/admin/pin-photo-thumb";
 import type { LanguageCode, LocalizedText, Zone } from "@/lib/types";
 
 const TITLE: LocalizedText = { en: "Community Pin Moderation", fil: "Pagmo-moderate ng Community Pins" };
@@ -192,6 +193,7 @@ function ActivePinRow({
           )}
         </div>
         {pin.caption && <p className="text-sm break-words">{pin.caption}</p>}
+        <PinPhotoThumb pin={pin} />
         <p className="text-xs text-muted-foreground tabular-nums">
           ▲ {pin.upvotes} · ▼ {pin.downvotes} · {netScore >= 0 ? "+" : ""}
           {netScore} {t(NET_SCORE, lang)}

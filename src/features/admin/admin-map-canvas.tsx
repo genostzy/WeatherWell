@@ -29,6 +29,7 @@ import {
 import { MapShell } from "@/features/map/map-shell";
 import { ViewportTracker, zonesInView } from "@/features/map/viewport-tracker";
 import { HazardBackdropLayer } from "@/features/map/hazard-backdrop-layer";
+import { PinPhotoThumb } from "@/features/admin/pin-photo-thumb";
 import { PoiMarkerLayer } from "@/features/map/poi-marker-layer";
 import { HistoricalEventsLayer } from "@/features/map/historical-events-layer";
 import { MarkerLegend } from "@/features/map/marker-legend";
@@ -422,6 +423,7 @@ export function AdminMapCanvas({ zones }: { zones: Zone[] }) {
                     </p>
                   )}
                   {pin.caption && <p>{pin.caption}</p>}
+                  <PinPhotoThumb pin={pin} />
                   {pin.photoDataUrl && (
                     /* eslint-disable-next-line @next/next/no-img-element -- local/data URL, not a remote image next/image would optimize */
                     <img
