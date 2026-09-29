@@ -87,7 +87,7 @@ describe("GET /api/historical-events", () => {
   it("caps the zoneIds list rather than passing an unbounded query", async () => {
     const many = Array.from({ length: 600 }, (_, i) => `zone-${i}`).join(",");
 
-    const inSpy = vi.fn((_column: string, ids: string[]) => ({
+    const inSpy = vi.fn<(column: string, ids: string[]) => unknown>(() => ({
       order: () => ({ returns: () => Promise.resolve({ data: [], error: null }) }),
     }));
     from.mockReturnValue({ select: () => ({ in: inSpy }) });
