@@ -3,8 +3,8 @@
 ## State
 
 - `mvp` was merged into `v1` on 25 September. `v1` is the default branch and the production branch; `mvp` stays at `0b9f0fd` for reference.
-- **Two features are built and reviewed on `v1` but not pushed and not released** (29 September): pin types and photos for officials, and a Find safe evacuation center that points somewhere safe. Production is still `4f592b6`. They are the first two sections below.
-- **Production runs `4f592b6`** (officials fill in their barangay's details, below, released on 28 September). Before it ran `dea649b` (changing and viewing a barangay, below), and before that `d4ac54a` (the review fixes below), released later on 26 September. Before that, `ddf7293` was released as `dpl_DAEpr9WuSe9jkLvzPLWoHsPcQf8B` after CI run #115 passed, shipping these commits on top of `8fa9dd9`:
+- **Production runs `37a793c`**, released on 29 September as `dpl_64s7sTC5FzB3Wv8ZgNnvPzigprpa` after CI run #121 passed: pin types and photos for officials, and a Find safe evacuation center that points somewhere safe. They are the first two sections below.
+- Before that, production ran `4f592b6` (officials fill in their barangay's details, below, released on 28 September). Before it ran `dea649b` (changing and viewing a barangay, below), and before that `d4ac54a` (the review fixes below), released later on 26 September. Before that, `ddf7293` was released as `dpl_DAEpr9WuSe9jkLvzPLWoHsPcQf8B` after CI run #115 passed, shipping these commits on top of `8fa9dd9`:
 
 | Commit | What |
 |---|---|
@@ -20,9 +20,9 @@
 - `pg_cron` now starts the GitHub workflows on time. The owner put the token in Vault at 02:18 UTC on 26 September, and the first dispatched Monitor run started at 02:30 UTC and passed.
 - The Nilombot test alert (yellow, set by Test Official at 22:17 on 25 September) was lifted at 02:21 UTC on 26 September. The action record shows it as cleared by the System owner. No push or email went out, because it was lifted in the database, not through the app.
 
-### Pin types and photos for officials, 29 September (built, not released)
+### Pin types and photos for officials, 29 September
 
-A pin now says what is happening: Flood (flooded, rising, receding or impassable), Road blocked, Landslide, Power line down or Other. A resident can add one photo to a new pin; only officials see it, for 7 days. Designed in `docs/superpowers/specs/2026-09-28-pin-types-and-photos-design.md`, planned in `docs/superpowers/plans/2026-09-28-pin-types-and-photos.md`, and reviewed by a fresh reviewer at the end. **On `v1`, not pushed and not released.** Alongside it, a barangay's marker no longer vanishes when you zoom in on it (`0e20a16`: the cap on markers kept the wrong barangays, and 5,898 lost theirs at some zooms; none do now).
+A pin now says what is happening: Flood (flooded, rising, receding or impassable), Road blocked, Landslide, Power line down or Other. A resident can add one photo to a new pin; only officials see it, for 7 days. Designed in `docs/superpowers/specs/2026-09-28-pin-types-and-photos-design.md`, planned in `docs/superpowers/plans/2026-09-28-pin-types-and-photos.md`, and reviewed by a fresh reviewer at the end. **Released on 29 September (`dpl_64s7sTC5FzB3Wv8ZgNnvPzigprpa`).** Alongside it, a barangay's marker no longer vanishes when you zoom in on it (`0e20a16`: the cap on markers kept the wrong barangays, and 5,898 lost theirs at some zooms; none do now).
 
 | Commit | What |
 |---|---|
@@ -39,10 +39,11 @@ A pin now says what is happening: Flood (flooded, rising, receding or impassable
 - Not fixed, minor: Send pressed while the photo is still being shrunk sends the pin without it; the cleanup deletes files before clearing `photo_path`, so a very large backlog could leave pins pointing at deleted photos ("Photo unavailable"); a momentary failure of `attach_pin_photo` loses the photo; the camera opens directly (`capture`), so a photo already in the gallery cannot be picked; thumbnails download the whole photo; one database test is missing (an attached photo over an hour old on a live pin is not deleted).
 - **A phone still running the v21 code** throws on a pin type it does not know and shows the error card until it reloads. Navigations are network-first, so the next visit fixes it.
 - Anyone with an anonymous session can upload files of up to 500 KB into their own folder, with no per-account cap; unattached files go within about 25 hours. A per-account count in the storage policy is the follow-up.
+- Checked on production after the release: `/api/cleanup-pin-photos` answers 401 without the cron secret; the page's security policy lists Supabase in `img-src`; `/api/pins` and the pages answer. **Not tried by hand:** a real photo upload by a resident and the view by an official (needs their sessions), and the cron's first run (03:00 UTC on 30 September; Vercel → Logs → Crons).
 
-### Find safe evacuation center, 29 September (built, not released)
+### Find safe evacuation center, 29 September
 
-"Find safe evacuation center" and "Find safe area" now point somewhere safe. Before, they picked by list order (in a barangay under Evacuate, the next barangay in the nationwide list: hundreds of kilometres away), drew the line from the barangay's point, checked a placeholder path and used a car router. Designed in `docs/superpowers/specs/2026-09-28-find-safe-evacuation-centre-design.md`, planned in `docs/superpowers/plans/2026-09-28-find-safe-evacuation-centre.md`, and reviewed by a fresh reviewer at the end. **On `v1`, not pushed and not released.**
+"Find safe evacuation center" and "Find safe area" now point somewhere safe. Before, they picked by list order (in a barangay under Evacuate, the next barangay in the nationwide list: hundreds of kilometres away), drew the line from the barangay's point, checked a placeholder path and used a car router. Designed in `docs/superpowers/specs/2026-09-28-find-safe-evacuation-centre-design.md`, planned in `docs/superpowers/plans/2026-09-28-find-safe-evacuation-centre.md`, and reviewed by a fresh reviewer at the end. **Released on 29 September (`dpl_64s7sTC5FzB3Wv8ZgNnvPzigprpa`).**
 
 | Commit | What |
 |---|---|
@@ -56,6 +57,7 @@ A pin now says what is happening: Flood (flooded, rising, receding or impassable
 - What it does: confirmed centres first, else likely sites from OpenStreetMap (marked "Not confirmed by your barangay"); a place in a barangay under Warning or Evacuate, or a full centre, is skipped. Alternatives are checked against barangays under alert (500 m of their point) and against standing Road blocked, Landslide, Power line down or Impassable pins from the last 24 hours (50 m). If every route passes something, the least affected is shown and says what is on it. Offline it gives a straight line to the nearest usable confirmed centre; if the router does not answer, a straight line, marked. The call button (the barangay's hotline, else 911) always shows.
 - **The review's fixes:** likely sites inside a barangay under alert were offered (the plan had dropped the spec's rule); a neighbour under Evacuate beside the start made every route unclean in a city; the pins checked were the copy the phone kept from when the app opened; the phone gave up on the likely-site search at 15 seconds when the server may take 33; a dead router was asked again for every place; thousands of barangays under alert froze a tap.
 - Not fixed, minor: a straight line that passes something is drawn dashed red with no explanation; "turn on location" also shows while a fix is still coming; "a Impassable pin"; "Find safe area" in a barangay with no alert names your own barangay.
+- Checked on production after the release: service worker v23 is served; `/api/route` answers with a real walking route from FOSSGIS (one route, not several, for the pair tried: 5.9 km, 79 minutes), and with 400 for a bad body and 405 for GET; `/api/health` reports the database ok with no recent errors; `/`, `/evacuation`, `/report`, `/map`, `/resident`, `/onboarding`, `/sign-in` and `/admin` answer. **Not tried by hand:** the walk coming into view on a phone (`FitRoute`) and the panel with a live position.
 - **Limits to know:** the FOSSGIS router is a volunteer service with a fair-use policy, and `/api/route` is open with no rate limit; self-hosting the router is the follow-up. `/api/alerts` returns at most 1,000 rows, so in a very large event some barangays under alert are invisible to the whole app. Bringing a route into view (`FitRoute`) and the alternatives FOSSGIS returns were not exercised in a real browser.
 
 ### Officials fill in their barangay's details, 28 September
@@ -136,7 +138,7 @@ A self-review of `0b9f0fd..ddf7293` (the review agents hit their usage limit) fo
 
 1. **Remove the leftover `mapandanofficial@weatherwell.com` account.** It is still appointed as a municipal official for Mapandan. Remove it at `/admin/officials` while signed in as the admin, so the record names who removed it; then delete the user in Supabase → Authentication → Users. Deleting the user alone also works, because its profile and appointment go with it.
 2. **Pilot drill** with a barangay, then log its feedback as incorporated or deferred.
-3. **Before releasing pins and Find safe evacuation center:** on the preview, add one photo to a pin as a resident and open it as an official (this proves the upload with the insert-only policy, the one-hour link and the page's security policy); tap Find safe evacuation center once and check the walk comes into view. After the release, check in Vercel that the new cron (`/api/cleanup-pin-photos`) ran.
+3. **Try the two new features on production:** add one photo to a pin as a resident and open it as an official (this proves the upload with the insert-only policy, the one-hour link and the page's security policy); tap Find safe evacuation center once and check the walk comes into view. After 03:00 UTC on 30 September, check in Vercel (Logs → Crons) that `/api/cleanup-pin-photos` ran.
 
 ## Owner's decisions (26 September)
 
