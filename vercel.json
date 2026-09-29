@@ -11,6 +11,10 @@
       "schedule": "0 1 * * *"
     },
     {
+      "path": "/api/cleanup-pin-photos",
+      "schedule": "0 3 * * *"
+    },
+    {
       "path": "/api/cron/typhoon",
       "schedule": "0 2 * * *"
     }
