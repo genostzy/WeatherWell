@@ -1,6 +1,7 @@
 import { resolveEffectiveCenterStatus } from "./center-status";
 import type { PinStatusTag } from "./community-pin";
 import type { CommunityPin } from "./community-pins";
+import { findNearestZone } from "./nearest-zone";
 import type { CandidateSite } from "./osm-candidates";
 import type { RouteOption, RouteResponse } from "./route-types";
 import type { Zone } from "./types";
@@ -119,6 +120,34 @@ export function distanceToRouteMeters(point: LatLng, polyline: [number, number][
   return closestOnRoute(point, polyline).distanceM;
 }
 
+/** The corners of the box around a route. */
+function boundsOf(polyline: [number, number][]): { south: number; west: number; north: number; east: number } | null {
+  if (polyline.length === 0) return null;
+  let south = Infinity;
+  let west = Infinity;
+  let north = -Infinity;
+  let east = -Infinity;
+  for (const [lat, lng] of polyline) {
+    if (lat < south) south = lat;
+    if (lat > north) north = lat;
+    if (lng < west) west = lng;
+    if (lng > east) east = lng;
+  }
+  return { south, west, north, east };
+}
+
+/**
+ * True when a point is too far outside a route's box to be within `clearanceM`
+ * of the route. It lets thousands of barangays under alert, almost all of them
+ * hundreds of kilometres away, be ruled out without walking the route for each
+ * one: a phone did that for seconds, per tap, in exactly the storm that matters.
+ */
+function outsideBox(point: LatLng, box: NonNullable<ReturnType<typeof boundsOf>>, clearanceM: number): boolean {
+  const dLat = clearanceM / M_PER_DEG;
+  const dLng = clearanceM / (M_PER_DEG * Math.cos((point.lat * Math.PI) / 180));
+  return point.lat < box.south - dLat || point.lat > box.north + dLat || point.lng < box.west - dLng || point.lng > box.east + dLng;
+}
+
 /** The pins that count against a route: standing, made in the last 24 hours, and a kind that blocks a walk. */
 export function blockingPins(pins: CommunityPin[], now: number): CommunityPin[] {
   return pins.filter((pin) => {
@@ -130,16 +159,23 @@ export function blockingPins(pins: CommunityPin[], now: number): CommunityPin[] 
 
 /**
  * What a route passes: each blocking pin within 50 m, and each barangay under
- * alert within 500 m of its point, except the one the resident starts in.
- * `pins` are the ones that count (see blockingPins). A pin problem says how far
- * along the walk it is, to the nearest 10 m.
+ * alert within 500 m of its point, except the one the resident starts in and
+ * any whose point is within 500 m of where the walk starts: every route begins
+ * beside those, and in a city, where barangay points are 150 to 250 m apart and
+ * a flood alerts the block together, counting them would make every route
+ * unclean. `pins` are the ones that count (see blockingPins). A pin problem says
+ * how far along the walk it is, to the nearest 10 m.
  */
 export function routeProblems(
   polyline: [number, number][],
   { dangerZones, pins, startZoneId }: { dangerZones: Zone[]; pins: CommunityPin[]; startZoneId: string | null }
 ): RouteProblem[] {
+  const box = boundsOf(polyline);
+  const start: LatLng | null = polyline.length > 0 ? { lat: polyline[0][0], lng: polyline[0][1] } : null;
+
   const pinProblems: Extract<RouteProblem, { kind: "pin" }>[] = [];
   for (const pin of pins) {
+    if (box && outsideBox(pin, box, PIN_CLEARANCE_M)) continue;
     const nearest = closestOnRoute(pin, polyline);
     if (nearest.distanceM <= PIN_CLEARANCE_M) {
       pinProblems.push({ kind: "pin", pin, metresFromStart: Math.round(nearest.alongM / 10) * 10 });
@@ -151,6 +187,8 @@ export function routeProblems(
   const zoneProblems: RouteProblem[] = [];
   for (const zone of dangerZones) {
     if (zone.id === startZoneId) continue;
+    if (box && outsideBox(zone, box, ZONE_CLEARANCE_M)) continue;
+    if (start && metresBetween(start, zone) <= ZONE_CLEARANCE_M) continue;
     if (closestOnRoute(zone, polyline).distanceM <= ZONE_CLEARANCE_M) zoneProblems.push({ kind: "zone", zone });
   }
   return [...pinProblems, ...zoneProblems];
@@ -230,28 +268,43 @@ async function chooseRoute(candidates: Destination[], input: SearchInput): Promi
     let best: { route: RouteOption; problems: RouteProblem[] } | null = null;
     for (const route of response.routes) {
       const problems = routeProblems(route.polyline, { dangerZones, pins, startZoneId: input.startZoneId });
-      if (problems.length === 0) {
+      // A straight line says nothing about the roads, so it never makes a farther place look clean
+      // while a real route to a nearer one is known.
+      if (problems.length === 0 && (!response.fallback || !nearest)) {
         return { status: "found", destination, route, problems: [], fallback: response.fallback };
       }
       if (!best || problems.length < best.problems.length) best = { route, problems };
     }
     nearest ??= { status: "found", destination, route: best?.route, problems: best?.problems ?? [], fallback: response.fallback };
+    // The router is not answering. Each ask of it costs the resident up to 8 seconds, and the next
+    // place's answer would be a straight line too: stop here, with the nearest place.
+    if (response.fallback) break;
   }
   return nearest as SafeRouteResult;
 }
 
-/** Likely sites from OpenStreetMap, for a barangay with no confirmed centre in reach. A failed search is an empty one. */
-async function likelySites(from: LatLng, fetchLikelySites: () => Promise<CandidateSite[]>): Promise<Destination[]> {
+/**
+ * Likely sites from OpenStreetMap, for a barangay with no confirmed centre in
+ * reach. A failed search is an empty one. A site inside a barangay under
+ * Warning or Evacuate is dropped, as a confirmed centre there would be: the app
+ * knows barangay points, not boundaries, so a site belongs to the barangay whose
+ * point is nearest it. Without this the resident is sent, at the moment the
+ * button matters, to the school next door, inside the alert.
+ */
+async function likelySites(input: SearchInput & { fetchLikelySites: () => Promise<CandidateSite[]> }): Promise<Destination[]> {
   let sites: CandidateSite[] = [];
   try {
-    const found = await fetchLikelySites();
+    const found = await input.fetchLikelySites();
     if (Array.isArray(found)) sites = found;
   } catch {
     // The search is a bonus; nothing found is a fair answer.
   }
-  return withinReach(sites, from, (site) => site).map(
-    (site): Destination => ({ kind: "likely", site, name: site.name, lat: site.lat, lng: site.lng })
-  );
+  return withinReach(sites, input.from, (site) => site)
+    .filter((site) => {
+      const barangay = findNearestZone(site, input.zones)?.zone;
+      return !barangay || !isUnderAlert(input.statusOf(barangay.id));
+    })
+    .map((site): Destination => ({ kind: "likely", site, name: site.name, lat: site.lat, lng: site.lng }));
 }
 
 /**
@@ -261,7 +314,7 @@ async function likelySites(from: LatLng, fetchLikelySites: () => Promise<Candida
  */
 export async function findSafeDestination(input: SearchInput & { fetchLikelySites: () => Promise<CandidateSite[]> }): Promise<SafeRouteResult> {
   let candidates = usableCentres(input);
-  if (candidates.length === 0) candidates = await likelySites(input.from, input.fetchLikelySites);
+  if (candidates.length === 0) candidates = await likelySites(input);
   return chooseRoute(candidates, input);
 }
 

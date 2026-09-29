@@ -174,10 +174,45 @@ describe("routeProblems", () => {
     expect(routeProblems(walk, { dangerZones: [farZone], pins: [farPin], startZoneId: null })).toEqual([]);
   });
 
-  it("does not count the barangay the resident starts in", () => {
-    const start = zone("start", at(9000, 9000), { lat: at(100, 0).lat, lng: at(100, 0).lng });
+  it("does not count the barangay the resident starts in, even when its point is well away from where the walk starts", () => {
+    // A rural barangay is large: its point can be a kilometre from a resident who is still in it.
+    const start = zone("start", at(9000, 9000), { lat: at(400, 1200).lat, lng: at(400, 1200).lng });
     expect(routeProblems(walk, { dangerZones: [start], pins: [], startZoneId: "start" })).toEqual([]);
     expect(routeProblems(walk, { dangerZones: [start], pins: [], startZoneId: "elsewhere" })).toEqual([{ kind: "zone", zone: start }]);
+  });
+
+  it("does not count a barangay under alert whose point is within reach of where the walk starts, whichever barangay that is", () => {
+    // A dense city: barangay points sit 150 to 250 m apart and a flood alerts the block together, so every
+    // walk begins beside a neighbour under Evacuate that no walk can avoid.
+    const beside = zone("beside", at(9000, 9000), { lat: at(200, 0).lat, lng: at(200, 0).lng });
+    const alongTheWay = zone("along", at(9000, 9000), { lat: at(200, 1500).lat, lng: at(200, 1500).lng });
+    expect(routeProblems(walk, { dangerZones: [beside, alongTheWay], pins: [], startZoneId: null })).toEqual([
+      { kind: "zone", zone: alongTheWay },
+    ]);
+  });
+
+  it("does not walk the whole route for a barangay or a pin nowhere near it", () => {
+    // In a big storm thousands of barangays are under alert; each one against every segment froze a phone.
+    let reads = 0;
+    const points = Array.from({ length: 400 }, (_, i) => {
+      const p = at(0, i * 10);
+      return [p.lat, p.lng] as [number, number];
+    });
+    const watched = new Proxy(points, {
+      get(target, prop, receiver) {
+        if (typeof prop === "string" && /^[0-9]+$/.test(prop)) reads++;
+        return Reflect.get(target, prop, receiver);
+      },
+    });
+    const faraway = Array.from({ length: 2000 }, (_, i) => {
+      const p = at(30_000 + i, 40_000);
+      return zone(`far-${i}`, at(9000, 9000), { lat: p.lat, lng: p.lng });
+    });
+    const farPins = Array.from({ length: 500 }, (_, i) => pin(`p${i}`, "road_blocked", at(20_000, 50_000 + i)));
+
+    expect(routeProblems(watched, { dangerZones: faraway, pins: farPins, startZoneId: null })).toEqual([]);
+
+    expect(reads).toBeLessThan(points.length * 4);
   });
 });
 
@@ -393,6 +428,77 @@ describe("findSafeDestination", () => {
     }));
     const result = await findSafeDestination(input({ zones, pins: [blocker], fetchRoutes: straight }));
     expect(result).toMatchObject({ fallback: true, problems: [{ kind: "pin", pin: { id: "p1" } }] });
+  });
+
+  it("asks the router about one place, not three, once it has stopped answering", async () => {
+    // Each ask of a router that is down costs the resident up to 8 seconds, and a straight line
+    // that passes a pin is no reason to try another place: it says nothing about the roads.
+    const zones = [1, 2, 3].map((n) => zone(`z${n}`, at(0, n * 1000)));
+    const blocker = pin("p1", "road_blocked", at(10, 500));
+    const straight = vi.fn(async (from: LatLng, to: LatLng): Promise<RouteResponse> => ({
+      routes: [{ polyline: line(from, to), distanceMeters: null, durationSeconds: null }],
+      fallback: true,
+    }));
+
+    const result = await findSafeDestination(input({ zones, pins: [blocker], fetchRoutes: straight }));
+
+    expect(straight).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({ status: "found", fallback: true, destination: { name: "z1 school" } });
+  });
+
+  it("keeps the nearest place's real route when the router stops answering for the next place", async () => {
+    const zones = [zone("near", at(0, 2000)), zone("next", at(4000, 0))];
+    const blocker = pin("p1", "road_blocked", at(20, 1000));
+    const real = line(HOME, at(0, 2000));
+    const fetchRoutes = vi
+      .fn<(from: LatLng, to: LatLng) => Promise<RouteResponse>>()
+      .mockResolvedValueOnce({ routes: [option(real)], fallback: false })
+      .mockResolvedValueOnce({ routes: [{ polyline: line(HOME, at(4000, 0)), distanceMeters: null, durationSeconds: null }], fallback: true });
+
+    const result = await findSafeDestination(input({ zones, pins: [blocker], fetchRoutes }));
+
+    expect(fetchRoutes).toHaveBeenCalledTimes(2);
+    expect(result).toMatchObject({ destination: { name: "near school" }, fallback: false, problems: [{ kind: "pin" }] });
+  });
+
+  it("does not send a resident to a likely site inside a barangay under alert", async () => {
+    // Their barangay is under Warning and has no confirmed centre, so the search falls to OpenStreetMap,
+    // whose schools and halls within 2 km of it sit in that same barangay, then in a neighbour with no alert.
+    const own = zone("own", at(0, 100), { evacuationCenterName: "", lat: at(100, 0).lat, lng: at(100, 0).lng });
+    const next = zone("next", at(5000, 5000), { evacuationCenterName: "", lat: at(4000, 0).lat, lng: at(4000, 0).lng });
+    const sites = [site("Own Barangay Hall", at(150, 100)), site("Next Barangay School", at(4100, 100))];
+
+    const result = await findSafeDestination(
+      input({ startZoneId: "own", zones: [own, next], statusOf: statuses({ own: "dangerous" }), fetchLikelySites: async () => sites })
+    );
+
+    expect(result.destination).toMatchObject({ kind: "likely", name: "Next Barangay School" });
+    expect(result.problems).toEqual([]);
+  });
+
+  it("says nothing is near when every likely site lies inside a barangay under alert", async () => {
+    const own = zone("own", at(0, 100), { evacuationCenterName: "", lat: at(100, 0).lat, lng: at(100, 0).lng });
+    const sites = [site("Own Barangay Hall", at(150, 100)), site("Own Elementary School", at(600, 300))];
+    const fetchRoutes = straightRouter();
+
+    const result = await findSafeDestination(
+      input({ startZoneId: "own", zones: [own], statusOf: statuses({ own: "hazardous" }), fetchLikelySites: async () => sites, fetchRoutes })
+    );
+
+    expect(result).toEqual({ status: "none", problems: [], fallback: false });
+    expect(fetchRoutes).not.toHaveBeenCalled();
+  });
+
+  it("is not made unclean by a neighbouring barangay under Evacuate that sits beside where the walk starts", async () => {
+    const own = zone("own", at(0, 100), { lat: at(100, 0).lat, lng: at(100, 0).lng });
+    const neighbour = zone("neighbour", at(9000, 9000), { lat: at(200, 50).lat, lng: at(200, 50).lng });
+    const destination = zone("safe", at(0, 3000));
+
+    const result = await findSafeDestination(
+      input({ startZoneId: "own", zones: [own, neighbour, destination], statusOf: statuses({ own: "hazardous", neighbour: "hazardous" }) })
+    );
+
+    expect(result).toMatchObject({ destination: { name: "safe school" }, problems: [] });
   });
 });
 
