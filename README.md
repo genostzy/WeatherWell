@@ -95,7 +95,7 @@ npm run dev
 | `CRON_SECRET` | Guards the cron routes (also a GitHub Actions secret) |
 | `GMAIL_USER`, `GMAIL_APP_PASSWORD` | Email alerts, sent from WeatherWell's own Gmail account (PRD Setup step 8) |
 | `APP_URL` | Optional: where links in emails point (defaults to production) |
-| `OSRM_BASE_URL` | Optional routing server (defaults to the public one) |
+| `OSRM_BASE_URL` | Optional routing server (defaults to the free FOSSGIS walking router) |
 
 Then open http://localhost:3000. The first visit runs onboarding.
 

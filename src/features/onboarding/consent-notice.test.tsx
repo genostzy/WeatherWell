@@ -23,11 +23,23 @@ describe("ConsentNotice", () => {
     expect(screen.getByText(/don't send reports, pins or check-ins/i)).toBeInTheDocument();
   });
 
-  it("names OSRM, the route planner that receives the position when it works out directions (privacy review)", () => {
+  it("names the walking route planner, the service that receives the position when it works out directions (privacy review)", () => {
     render(<ConsentNotice onAccept={() => {}} />);
-    expect(screen.getByText(/uses your location to suggest your barangay/i)).toHaveTextContent(
-      /OSRM.*receives your position/i
+    const item = screen.getByText(/uses your location to suggest your barangay/i);
+    expect(item).toHaveTextContent(/walking route planner run by FOSSGIS \(routing\.openstreetmap\.de\), which receives your position/i);
+    // The old router is gone from the notice: consent is to what is collected now.
+    expect(item).not.toHaveTextContent(/router\.project-osrm\.org|OSRM/i);
+  });
+
+  it("names the walking route planner in Filipino too", () => {
+    render(
+      <LanguageProvider initialLang="fil">
+        <ConsentNotice onAccept={() => {}} />
+      </LanguageProvider>
     );
+    const item = screen.getByText(/upang imungkahi ang iyong barangay/i);
+    expect(item).toHaveTextContent(/route planner ng FOSSGIS \(routing\.openstreetmap\.de\), na tumatanggap ng iyong posisyon/i);
+    expect(item).not.toHaveTextContent(/router\.project-osrm\.org|OSRM/i);
   });
 
   it("cites the Data Privacy Act so the legal basis is visible", () => {

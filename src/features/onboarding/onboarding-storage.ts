@@ -10,7 +10,7 @@ const CONSENT_KEY = "weatherwell.consent";
  * not onboarded, so the gate shows them the new one: RA 10173 consent is to
  * what is collected now, not to what used to be.
  */
-export const CONSENT_VERSION = "2026-09-25";
+export const CONSENT_VERSION = "2026-09-28";
 
 function read(key: string): string | null {
   if (typeof window === "undefined") return null;

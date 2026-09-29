@@ -28,12 +28,20 @@ describe("consent is versioned (privacy review)", () => {
     expect(hasOnboarded()).toBe(true);
   });
 
+  it("asks again of a resident who accepted the notice before it named the walking route planner", () => {
+    window.localStorage.setItem("weatherwell.consent", "2026-09-25");
+    expect(hasConsented()).toBe(false);
+
+    window.localStorage.setItem("weatherwell.consent", "2026-09-28");
+    expect(hasConsented()).toBe(true);
+  });
+
   it("gets a new version whenever what the notice says changes", () => {
     // Changed the notice? Bump CONSENT_VERSION, so everyone who accepted the
     // old one sees the new one, then record the new fingerprint here.
     expect({ version: CONSENT_VERSION, text: fingerprint(JSON.stringify(CONSENT_ITEMS)) }).toEqual({
-      version: "2026-09-25",
-      text: "a8085da0",
+      version: "2026-09-28",
+      text: "a2225691",
     });
   });
 });
