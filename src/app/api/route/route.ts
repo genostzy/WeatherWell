@@ -1,27 +1,18 @@
 import { NextResponse } from "next/server";
+import type { RouteOption, RouteResponse } from "@/lib/route-types";
 
 export const dynamic = "force-dynamic";
 
 /**
- * OSRM routing configuration.
- * V1 uses the public demo server. Production should self-host OSRM
- * on Render with the Philippine road network for reliability.
+ * The free walking router FOSSGIS runs for OpenStreetMap: no key, no account.
+ * Its usage policy asks for a User-Agent that names the app. A self-hosted
+ * router later goes in OSRM_BASE_URL.
  */
-const OSRM_BASE_URL = process.env.OSRM_BASE_URL ?? "https://router.project-osrm.org";
-
-interface OSRMRoute {
-  geometry: {
-    coordinates: [number, number][];
-    type: string;
-  };
-  distance: number; // meters
-  duration: number; // seconds
-}
-
-interface OSRMResponse {
-  code: string;
-  routes: OSRMRoute[];
-}
+const ROUTER_BASE_URL = process.env.OSRM_BASE_URL ?? "https://routing.openstreetmap.de/routed-foot";
+const USER_AGENT = "WeatherWell (flood evacuation app)";
+/** Alternatives asked for besides the router's first choice: the screen prefers the first one that avoids alerts and blocked roads. */
+const ALTERNATIVES = 3;
+const TIMEOUT_MS = 8_000;
 
 /** A [lat, lng] pair of numbers, or null. */
 function point(value: unknown): [number, number] | null {
@@ -30,12 +21,36 @@ function point(value: unknown): [number, number] | null {
     : null;
 }
 
+/** One route from the router's answer, in [lat, lng] order, or null when it carries no usable line. */
+function optionOf(route: unknown): RouteOption | null {
+  const { geometry, distance, duration } = (route ?? {}) as {
+    geometry?: { coordinates?: unknown };
+    distance?: unknown;
+    duration?: unknown;
+  };
+  const coordinates = geometry?.coordinates;
+  if (!Array.isArray(coordinates) || coordinates.length < 2) return null;
+  const polyline: [number, number][] = [];
+  for (const pair of coordinates) {
+    // The router writes [lng, lat], the GeoJSON order.
+    const lngLat = point(pair);
+    if (!lngLat) return null;
+    polyline.push([lngLat[1], lngLat[0]]);
+  }
+  return {
+    polyline,
+    distanceMeters: typeof distance === "number" ? Math.round(distance) : null,
+    durationSeconds: typeof duration === "number" ? Math.round(duration) : null,
+  };
+}
+
 /**
  * POST /api/route with { from: [lat, lng], to: [lat, lng] }
  *
- * Returns a real road-network route from OSRM.
- * Falls back to a straight line if OSRM is unavailable. A POST body, never a
- * query string: `from` is where the resident stands, and request logs and
+ * Answers { routes, fallback }: every walking route the router offers, the
+ * router's first choice first. If the router is down, slow or has no route, one
+ * straight line between the points, marked `fallback: true`. A POST body, never
+ * a query string: `from` is where the resident stands, and request logs and
  * browser history keep an address.
  */
 export async function POST(request: Request) {
@@ -51,47 +66,31 @@ export async function POST(request: Request) {
   const [toLat, toLng] = to;
 
   try {
-    // OSRM uses lng,lat order (GeoJSON convention)
-    const osrmUrl = `${OSRM_BASE_URL}/route/v1/driving/${fromLng},${fromLat};${toLng},${toLat}?overview=full&geometries=geojson&steps=false`;
+    // The router takes lng,lat order (the GeoJSON convention).
+    const url = `${ROUTER_BASE_URL}/route/v1/foot/${fromLng},${fromLat};${toLng},${toLat}?overview=full&geometries=geojson&alternatives=${ALTERNATIVES}`;
 
-    const res = await fetch(osrmUrl, {
-      signal: AbortSignal.timeout(10_000),
+    const res = await fetch(url, {
+      headers: { "User-Agent": USER_AGENT },
+      signal: AbortSignal.timeout(TIMEOUT_MS),
     });
 
     if (!res.ok) {
-      throw new Error(`OSRM returned ${res.status}`);
+      throw new Error(`router returned ${res.status}`);
     }
 
-    const data: OSRMResponse = await res.json();
+    const data = (await res.json()) as { code?: unknown; routes?: unknown };
+    const routes = Array.isArray(data.routes)
+      ? data.routes.map(optionOf).filter((route): route is RouteOption => route !== null)
+      : [];
 
-    if (data.code !== "Ok" || !data.routes.length) {
+    if (data.code !== "Ok" || routes.length === 0) {
       throw new Error("No route found");
     }
 
-    const route = data.routes[0];
-
-    // Convert OSRM [lng, lat] to our [lat, lng] format
-    const polyline: [number, number][] = route.geometry.coordinates.map(
-      ([lng, lat]) => [lat, lng]
-    );
-
-    return NextResponse.json({
-      polyline,
-      distanceMeters: Math.round(route.distance),
-      durationSeconds: Math.round(route.duration),
-    });
+    return NextResponse.json({ routes, fallback: false } satisfies RouteResponse);
   } catch {
     // Fallback: straight line between points
-    const polyline: [number, number][] = [
-      [fromLat, fromLng],
-      [toLat, toLng],
-    ];
-
-    return NextResponse.json({
-      polyline,
-      distanceMeters: null,
-      durationSeconds: null,
-      fallback: true,
-    });
+    const straight: RouteOption = { polyline: [from, to], distanceMeters: null, durationSeconds: null };
+    return NextResponse.json({ routes: [straight], fallback: true } satisfies RouteResponse);
   }
 }
