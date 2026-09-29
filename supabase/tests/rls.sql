@@ -193,8 +193,10 @@ select tests.expect_allowed(
 -- way out. Against an empty table this UPDATE would match zero rows and
 -- succeed trivially (RLS filters rows, it does not raise) — so a real pin
 -- owned by 1111... is inserted first, as postgres, bypassing RLS.
+-- status_tag must be one community_pins_status_tag_check allows (flooded,
+-- rising, receding, impassable, road_blocked, landslide, power_line_down, other).
 insert into public.community_pins (zone_id, status_tag, caption, lat, lng, author_id)
-values ('tests-fixture-zone', 'passable', 'fixture pin', 14.0, 121.0,
+values ('tests-fixture-zone', 'flooded', 'fixture pin', 14.0, 121.0,
         '11111111-1111-1111-1111-111111111111');
 
 select tests.as_user('11111111-1111-1111-1111-111111111111');
@@ -688,7 +690,7 @@ select tests.as_anon();
 select tests.expect_denied(
   'anon cannot create a pin',
   $$insert into public.community_pins (zone_id, status_tag, caption, lat, lng, author_id)
-    values ('tests-fixture-zone', 'passable', 'anon pin', 14.0, 121.0,
+    values ('tests-fixture-zone', 'flooded', 'anon pin', 14.0, 121.0,
             '11111111-1111-1111-1111-111111111111')$$);
 
 select tests.as_anon();
@@ -724,7 +726,7 @@ select tests.as_user('11111111-1111-1111-1111-111111111111');
 select tests.expect_denied(
   'a resident cannot insert a pin that is already removed',
   $$insert into public.community_pins (zone_id, status_tag, caption, lat, lng, author_id, removed)
-    values ('tests-fixture-zone', 'passable', 'born-removed pin', 14.4, 121.4,
+    values ('tests-fixture-zone', 'flooded', 'born-removed pin', 14.4, 121.4,
             '11111111-1111-1111-1111-111111111111', true)$$);
 
 -- The pairing half, and also the "a resident CAN insert their own pin" case
@@ -737,7 +739,7 @@ select tests.as_user('11111111-1111-1111-1111-111111111111');
 select tests.expect_allowed(
   'a resident CAN insert their own pin when removed is left to its default',
   $$insert into public.community_pins (zone_id, status_tag, caption, lat, lng, author_id)
-    values ('tests-fixture-zone', 'passable', 'ordinary resident pin', 14.5, 121.5,
+    values ('tests-fixture-zone', 'flooded', 'ordinary resident pin', 14.5, 121.5,
             '11111111-1111-1111-1111-111111111111')$$);
 
 -- ---------------------------------------------------------------------------
@@ -751,7 +753,7 @@ select tests.as_user('11111111-1111-1111-1111-111111111111');
 select tests.expect_denied(
   'a resident cannot backdate a pin''s created_at',
   $$insert into public.community_pins (zone_id, status_tag, caption, lat, lng, author_id, created_at)
-    values ('tests-fixture-zone', 'passable', 'backdated pin', 14.6, 121.6,
+    values ('tests-fixture-zone', 'flooded', 'backdated pin', 14.6, 121.6,
             '11111111-1111-1111-1111-111111111111', now() - interval '30 days')$$);
 
 select tests.as_user('11111111-1111-1111-1111-111111111111');
