@@ -3,7 +3,8 @@
 ## State
 
 - `mvp` was merged into `v1` on 25 September. `v1` is the default branch and the production branch; `mvp` stays at `0b9f0fd` for reference.
-- **Production runs `37a793c`**, released on 29 September as `dpl_64s7sTC5FzB3Wv8ZgNnvPzigprpa` after CI run #121 passed: pin types and photos for officials, and a Find safe evacuation center that points somewhere safe. They are the first two sections below.
+- **Production runs `37a793c`**, released on 29 September as `dpl_64s7sTC5FzB3Wv8ZgNnvPzigprpa` after CI run #121 passed: pin types and photos for officials, and a Find safe evacuation center that points somewhere safe. They are the second and third sections below.
+- **On `v1`, not pushed and not released** (29 September): Next.js 16.3.7 for a security fix, and limits on how often `/api/route` asks the walking router. The first section below.
 - Before that, production ran `4f592b6` (officials fill in their barangay's details, below, released on 28 September). Before it ran `dea649b` (changing and viewing a barangay, below), and before that `d4ac54a` (the review fixes below), released later on 26 September. Before that, `ddf7293` was released as `dpl_DAEpr9WuSe9jkLvzPLWoHsPcQf8B` after CI run #115 passed, shipping these commits on top of `8fa9dd9`:
 
 | Commit | What |
@@ -19,6 +20,20 @@
 - Checked on production after the release: the 8 public pages tried each have their own title, `/api/health` reports the database ok with no recent errors, and `/api/alert-bars` answers (no barangay's bar has moved yet).
 - `pg_cron` now starts the GitHub workflows on time. The owner put the token in Vault at 02:18 UTC on 26 September, and the first dispatched Monitor run started at 02:30 UTC and passed.
 - The Nilombot test alert (yellow, set by Test Official at 22:17 on 25 September) was lifted at 02:21 UTC on 26 September. The action record shows it as cleared by the System owner. No push or email went out, because it was lifted in the database, not through the app.
+
+### Next.js security update and the router's limits, 29 September (built, not released)
+
+A follow-up to a check of the running app. **On `v1`, not pushed and not released.**
+
+| Commit | What |
+|---|---|
+| `0655bed` | Next.js 16.3.7, which carries 16.3.6's fix for GHSA-vcvr-r3jv-pc5j (remote code execution in `next/og`'s `ImageResponse`; WeatherWell does not use `next/og`, so it was not exposed); `npm audit fix` (fast-uri and undici, used only by shadcn's command-line tools; the audit now finds nothing); the last two lint warnings; service worker v24 |
+| `9594c28` | `/api/route` asks FOSSGIS at most 10 times in any 10 seconds for the whole app, and takes 20 requests a minute from one address; past either it answers 429 and the screen draws the marked straight line. The limiter moves to `src/lib/rate-limit.ts`, which `/api/push` now uses too (same limit, 10 a minute) |
+
+- **No database change.** The service worker goes to v24 for the deploy.
+- **Why these numbers:** FOSSGIS's usage policy allows one request a second at most, from the whole app. A search asks about up to 3 places, so 20 a minute is several searches from one address, with room for the many phones a mobile carrier puts behind one address. In a surge of more than about one search a second across the town, the extra residents get the marked straight line until the budget refills; self-hosting the router is still the fix for that.
+- **The counts live in each server instance's memory**, so two warm instances allow twice as much. A shared count in the database is the upgrade if that ever matters.
+- **Found on the way, not done:** FOSSGIS's policy also asks for a "fix the map" link (https://www.openstreetmap.org/fixthemap) beside the OpenStreetMap credit; the map's credit in `src/features/map/map-shell.tsx` has none yet.
 
 ### Pin types and photos for officials, 29 September
 
@@ -58,7 +73,7 @@ A pin now says what is happening: Flood (flooded, rising, receding or impassable
 - **The review's fixes:** likely sites inside a barangay under alert were offered (the plan had dropped the spec's rule); a neighbour under Evacuate beside the start made every route unclean in a city; the pins checked were the copy the phone kept from when the app opened; the phone gave up on the likely-site search at 15 seconds when the server may take 33; a dead router was asked again for every place; thousands of barangays under alert froze a tap.
 - Not fixed, minor: a straight line that passes something is drawn dashed red with no explanation; "turn on location" also shows while a fix is still coming; "a Impassable pin"; "Find safe area" in a barangay with no alert names your own barangay.
 - Checked on production after the release: service worker v23 is served; `/api/route` answers with a real walking route from FOSSGIS (one route, not several, for the pair tried: 5.9 km, 79 minutes), and with 400 for a bad body and 405 for GET; `/api/health` reports the database ok with no recent errors; `/`, `/evacuation`, `/report`, `/map`, `/resident`, `/onboarding`, `/sign-in` and `/admin` answer. **Not tried by hand:** the walk coming into view on a phone (`FitRoute`) and the panel with a live position.
-- **Limits to know:** the FOSSGIS router is a volunteer service with a fair-use policy, and `/api/route` is open with no rate limit; self-hosting the router is the follow-up. `/api/alerts` returns at most 1,000 rows, so in a very large event some barangays under alert are invisible to the whole app. Bringing a route into view (`FitRoute`) and the alternatives FOSSGIS returns were not exercised in a real browser.
+- **Limits to know:** the FOSSGIS router is a volunteer service that allows one request a second; `/api/route` keeps to that since `9594c28` (the first section above), and self-hosting the router is the follow-up. `/api/alerts` returns at most 1,000 rows, so in a very large event some barangays under alert are invisible to the whole app. Bringing a route into view (`FitRoute`) and the alternatives FOSSGIS returns were not exercised in a real browser.
 
 ### Officials fill in their barangay's details, 28 September
 
@@ -157,7 +172,8 @@ A self-review of `0b9f0fd..ddf7293` (the review agents hit their usage limit) fo
   - Real hazard data: every barangay's hazard is "Unknown", so the map's Hazards layer draws nothing until it is loaded.
   - The prediction engine, so `predicted_timing` stays empty and the loop compares outcomes, not timings.
   - The cascade heads-up downstream.
-  - Self-hosted routing: directions use FOSSGIS's free walking router, a volunteer service with a fair-use policy; `/api/route` has no rate limit.
+  - Self-hosted routing: directions use FOSSGIS's free walking router, a volunteer service that allows one request a second; past that, residents get the marked straight line.
+  - The "fix the map" link FOSSGIS's policy asks for beside the OpenStreetMap credit.
   - A per-account cap on pin photo uploads.
   - Geofence and rate limit for pins and votes.
   - Data export and deletion (RA 10173 Article 16).
@@ -176,7 +192,7 @@ A self-review of `0b9f0fd..ddf7293` (the review agents hit their usage limit) fo
 
 - App: `npm run lint`, `npm run typecheck`, `npm test`, `npm run knip`, `npm run build`.
 - Database: start Supabase the way CI does, then run `helpers.sql`, `reference-tables.sql`, `rls.sql`, `abuse.sql`, `accounts.sql` and `calibration.sql` with `psql` (see `.github/workflows/ci.yml`).
-- Last run, 29 September, locally: 1,890 app tests pass; lint (two old warnings in a test), typecheck, knip and build are clean. The database suites run in CI on every push.
+- Last run, 29 September, locally: 1,901 app tests pass; lint, typecheck, knip and build are clean, with no warnings. The database suites run in CI on every push.
 
 ## Where things live
 
@@ -189,4 +205,5 @@ A self-review of `0b9f0fd..ddf7293` (the review agents hit their usage limit) fo
 - Changing and viewing a barangay: `src/features/zones/change-barangay-dialog.tsx`, `barangay-bar.tsx` and `use-viewed-zone.ts`; `src/lib/where-you-are.ts` (`HOME_RADIUS_METERS`); `src/lib/follow-email-alerts.ts`; `followPushSubscription` in `src/lib/push-subscription.ts`; `pageWithQuery` in `public/sw.js`.
 - Pin types and photos: `src/lib/community-pin.ts` (the kinds and their labels), `src/lib/pin-photo.ts` (shrink and upload), `src/features/admin/pin-photo-thumb.tsx`, `src/app/api/cleanup-pin-photos/route.ts`, the `20260928132821` migration and the PT block in `supabase/tests/rls.sql`.
 - Find safe evacuation center: `src/lib/safe-route.ts` (the rules), `src/features/homepage-map/use-safe-route.ts` and `safe-route-panel.tsx`, `src/app/api/route/route.ts`.
+- Rate limits: `src/lib/rate-limit.ts`, used by `src/app/api/route/route.ts` and `src/app/api/push/route.ts`.
 - Consent notice: `CONSENT_ITEMS` in `src/features/onboarding/consent-notice.tsx`, versioned by `CONSENT_VERSION` in `onboarding-storage.ts`.
