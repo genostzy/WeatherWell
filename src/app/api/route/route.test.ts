@@ -1,12 +1,18 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { POST as RoutePost } from "./route";
 
+// The shared count: the route asks the database through the service role.
+const { rpc } = vi.hoisted(() => ({ rpc: vi.fn() }));
+vi.mock("@supabase/supabase-js", () => ({ createClient: () => ({ rpc }) }));
+
 const fetchMock = vi.fn();
 const start = new Date("2026-09-29T12:00:00Z").getTime();
 let POST: typeof RoutePost;
 
 beforeEach(async () => {
   fetchMock.mockReset();
+  rpc.mockReset();
+  rpc.mockResolvedValue({ data: true, error: null });
   vi.stubGlobal("fetch", fetchMock);
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(start);
@@ -159,5 +165,51 @@ describe("POST /api/route", () => {
     fetchMock.mockResolvedValue(answered());
 
     expect((await post({ from, to }, "198.51.100.1")).status).toBe(200);
+  });
+
+  it("counts each walk in the database too, shared by every server instance, with the caller's address only as a keyed hash", async () => {
+    fetchMock.mockResolvedValue(answered());
+    await post({ from, to }, "203.0.113.7");
+    await post({ from, to }, "203.0.113.7");
+    await post({ from, to }, "198.51.100.1");
+
+    const keys: string[] = rpc.mock.calls.map(([, args]) => args.p_key);
+    const callerKeys = keys.filter((key) => key.startsWith("route:caller:"));
+    expect(callerKeys).toHaveLength(3);
+    expect(callerKeys[1]).toBe(callerKeys[0]);
+    expect(callerKeys[2]).not.toBe(callerKeys[0]);
+    expect(keys.join(" ")).not.toContain("203.0.113.7");
+    expect(rpc).toHaveBeenCalledWith("take_rate_limit", { p_key: callerKeys[0], p_max: 20, p_window_seconds: 60 });
+    expect(rpc).toHaveBeenCalledWith("take_rate_limit", { p_key: "route:router", p_max: 10, p_window_seconds: 10 });
+  });
+
+  it("answers 429 without asking the router when the shared count refuses this caller, and spends none of the router's budget", async () => {
+    rpc.mockImplementation(async (_name: string, args: { p_key: string }) => ({ data: !args.p_key.startsWith("route:caller:"), error: null }));
+
+    expect((await post({ from, to })).status).toBe(429);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(rpc.mock.calls.map(([, args]) => args.p_key)).not.toContain("route:router");
+  });
+
+  it("answers 429 without asking the router when the app's shared router budget is spent", async () => {
+    rpc.mockImplementation(async (_name: string, args: { p_key: string }) => ({ data: args.p_key !== "route:router", error: null }));
+
+    expect((await post({ from, to })).status).toBe(429);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("goes ahead when the database cannot count: a walk matters more than the count", async () => {
+    fetchMock.mockResolvedValue(answered());
+    rpc.mockResolvedValue({ data: null, error: { message: "down" } });
+    expect((await post({ from, to })).status).toBe(200);
+
+    rpc.mockRejectedValue(new Error("network"));
+    expect((await post({ from, to }, "198.51.100.1")).status).toBe(200);
+  });
+
+  it("asks the database nothing for a malformed request", async () => {
+    await post({ from });
+
+    expect(rpc).not.toHaveBeenCalled();
   });
 });

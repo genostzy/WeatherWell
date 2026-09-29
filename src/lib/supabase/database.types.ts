@@ -1067,6 +1067,10 @@ export type Database = {
         Args: { p_zone_id: string }
         Returns: undefined
       }
+      take_rate_limit: {
+        Args: { p_key: string; p_max: number; p_window_seconds: number }
+        Returns: boolean
+      }
       town_appoint_barangay_official: {
         Args: { p_display_name: string; p_email: string; p_zone_id: string }
         Returns: string

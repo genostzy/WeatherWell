@@ -393,4 +393,30 @@ begin
   raise notice 'ok R1-R6: rejections burn, confirmations reward, verdicts cannot be forged';
 end $$;
 
+-- Request limits (public.take_rate_limit), which /api/route counts through so
+-- every server instance shares one count. Only the server, with the service
+-- role, may count; a count refuses past its limit and keeps keys apart.
+select tests.as_anon();
+select tests.expect_denied('L1a: count a request without signing in',
+  $$select public.take_rate_limit('route:router', 10, 10)$$);
+select tests.as_user('ab000000-0000-4000-8000-000000000024');
+select tests.expect_denied('L1b: count a request as a signed-in resident',
+  $$select public.take_rate_limit('route:router', 10, 10)$$);
+
+do $$
+declare
+  v_seen boolean[] := '{}';
+begin
+  set local role service_role;
+  for i in 1..3 loop
+    v_seen := v_seen || public.take_rate_limit('abuse:l2', 2, 60);
+  end loop;
+  v_seen := v_seen || public.take_rate_limit('abuse:l2-other', 2, 60);
+  reset role;
+  if v_seen is distinct from array[true, true, false, true] then
+    raise exception using errcode = 'TSTFL', message = format('L2: expected {t,t,f,t}, got %s', v_seen);
+  end if;
+  raise notice 'ok L1-L2: only the server counts; a count refuses past its limit and keeps keys apart';
+end $$;
+
 rollback;

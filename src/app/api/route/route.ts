@@ -1,4 +1,6 @@
+import { createHmac } from "node:crypto";
 import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 import { clientIp, createRateLimiter } from "@/lib/rate-limit";
 import type { RouteOption, RouteResponse } from "@/lib/route-types";
 
@@ -19,15 +21,42 @@ const TIMEOUT_MS = 8_000;
  * FOSSGIS allows one request a second at most, from the whole app. Ten in any
  * ten seconds keeps to that and still lets a few residents search at once.
  */
-const routerBudget = createRateLimiter(10, 10_000);
+const ROUTER_BUDGET = { max: 10, windowSeconds: 10 };
 /**
  * One address can't spend that budget alone. A search asks about up to 3
  * places, so 20 a minute is several searches, with room for the many phones a
  * mobile carrier puts behind one address.
  */
-const perCaller = createRateLimiter(20, 60_000);
+const PER_CALLER = { max: 20, windowSeconds: 60 };
+
+// Counted first in this instance's memory, which stops a flood before it
+// reaches the database, then exactly, in the database (sharedCountAllows).
+const routerBudget = createRateLimiter(ROUTER_BUDGET.max, ROUTER_BUDGET.windowSeconds * 1000);
+const perCaller = createRateLimiter(PER_CALLER.max, PER_CALLER.windowSeconds * 1000);
 
 const tooMany = () => NextResponse.json({ error: "Too many requests" }, { status: 429 });
+
+/**
+ * The exact count, which every server instance shares (public.take_rate_limit):
+ * the caller first, so a refused caller spends none of the router's budget. The
+ * address is kept only as a keyed hash. If the database cannot answer, the walk
+ * goes ahead: a resident's route matters more than the count.
+ */
+async function sharedCountAllows(ip: string): Promise<boolean> {
+  try {
+    const secret = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+    const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, secret);
+    const take = async (key: string, { max, windowSeconds }: { max: number; windowSeconds: number }) => {
+      // A failed call leaves data null, which lets the walk go ahead too.
+      const { data } = await supabase.rpc("take_rate_limit", { p_key: key, p_max: max, p_window_seconds: windowSeconds });
+      return data !== false;
+    };
+    const caller = `route:caller:${createHmac("sha256", secret).update(ip).digest("base64url").slice(0, 22)}`;
+    return (await take(caller, PER_CALLER)) && (await take("route:router", ROUTER_BUDGET));
+  } catch {
+    return true;
+  }
+}
 
 /** A [lat, lng] pair of numbers, or null. */
 function point(value: unknown): [number, number] | null {
@@ -81,6 +110,7 @@ export async function POST(request: Request) {
   }
 
   if (!routerBudget("router")) return tooMany();
+  if (!(await sharedCountAllows(clientIp(request)))) return tooMany();
 
   const [fromLat, fromLng] = from;
   const [toLat, toLng] = to;
