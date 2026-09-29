@@ -4,7 +4,8 @@ const ContentSecurityPolicy = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob: https://*.tile.openstreetmap.org https://unpkg.com",
+  // Supabase Storage too: an official's pin photo is loaded from a signed link on the project's own host.
+  "img-src 'self' data: blob: https://*.tile.openstreetmap.org https://unpkg.com https://*.supabase.co",
   "font-src 'self'",
   // Tiles too: sw.js fetch()es them under this same policy (connect-src, not img-src).
   "connect-src 'self' https://*.supabase.co https://*.supabase.in wss://*.supabase.co https://*.tile.openstreetmap.org",
