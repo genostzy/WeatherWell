@@ -5,7 +5,7 @@ import { NAV_ACTIVE } from "@/components/nav-active";
 import { PushPrompt } from "@/features/onboarding/push-prompt";
 import { OfficialBanner } from "@/features/auth/official-banner";
 import dynamic from "next/dynamic";
-import { ShieldCheck, Building2, Droplet, X } from "lucide-react";
+import { ShieldCheck, Building2, MapPin, X } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
@@ -48,13 +48,13 @@ const FIND_SAFE_EVACUATION_CENTER: LocalizedText = {
   en: "Find safe evacuation center",
   fil: "Hanapin ang ligtas na evacuation center",
 };
-const ADD_FLOOD_PIN: LocalizedText = { en: "Add flood pin", fil: "Magdagdag ng flood pin" };
+const ADD_PIN: LocalizedText = { en: "Add pin", fil: "Magdagdag ng pin" };
 const CANCEL_ADD_PIN: LocalizedText = { en: "Cancel adding pin", fil: "Kanselahin ang pagdagdag ng pin" };
 const TAP_MAP_TO_PLACE: LocalizedText = {
   en: "Tap the map to drop your pin",
   fil: "Pindutin ang mapa para ilagay ang pin",
 };
-const PIN_DIALOG_LABEL: LocalizedText = { en: "Flood pin details", fil: "Detalye ng flood pin" };
+const PIN_DIALOG_LABEL: LocalizedText = { en: "Pin details", fil: "Detalye ng pin" };
 const CLOSE_DIALOG: LocalizedText = { en: "Close", fil: "Isara" };
 const DELETE_PIN_TITLE: LocalizedText = { en: "Delete this pin?", fil: "Burahin ang pin na ito?" };
 const DELETE_PIN_BODY: LocalizedText = {
@@ -262,9 +262,9 @@ export function HomepageMap({ zones, myZoneId }: { zones: Zone[]; myZoneId?: str
           {isPlacingPin ? (
             <X aria-hidden="true" className="h-4 w-4 shrink-0" />
           ) : (
-            <Droplet aria-hidden="true" className="h-4 w-4 shrink-0" />
+            <MapPin aria-hidden="true" className="h-4 w-4 shrink-0" />
           )}
-          {t(isPlacingPin ? CANCEL_ADD_PIN : ADD_FLOOD_PIN, lang)}
+          {t(isPlacingPin ? CANCEL_ADD_PIN : ADD_PIN, lang)}
         </button>
       </div>
 

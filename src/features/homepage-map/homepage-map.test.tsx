@@ -94,6 +94,12 @@ describe("HomepageMap", () => {
     expect(screen.getByText(`Viewing ${shown.name}. Your alerts still come for ${mine.name}.`)).toBeInTheDocument();
   });
 
+  it("offers to add a pin of any kind, not only a flood pin", () => {
+    const [mine, shown] = FIXTURE_REFERENCE_DATA.zones;
+    renderWithData(<HomepageMap zones={[shown, mine]} myZoneId={mine.id} />);
+    expect(screen.getByRole("button", { name: "Add pin" })).toBeInTheDocument();
+  });
+
   it("renders the direction-to-safety compass label localized, not as a bare code", async () => {
     // zone-1's evacuation center sits due north (same lng) of this stubbed live
     // position, so getBearingAndDistance deterministically returns "N".

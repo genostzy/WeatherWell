@@ -28,10 +28,10 @@ export interface CommunityPin {
   /** Free text typed by the resident — never auto-translated, unlike the app's own LocalizedText copy. */
   caption: string;
   /**
-   * Kept on the interface, never written by this store. Photo upload has no
-   * server side yet: `photo_path` was revoked from the resident's insert
-   * grant, and there is no bucket behind it. A pin created today has no
-   * photo, and the viewers (map popup, lightbox) already handle its absence.
+   * Kept on the interface, never written by this store: a pin's photo lives in
+   * the private pin-photos bucket, as `photoPath` below, and only officials can
+   * see it. The viewers (map popup, lightbox) still handle this field and its
+   * absence.
    */
   photoDataUrl?: string;
   /** A photo only officials see, through a signed link (see PinPhotoThumb). */
@@ -365,10 +365,9 @@ export function isOwnPin(pin: CommunityPin, userId: string | null): boolean {
 }
 
 /**
- * A resident correcting their own pin. `CommunityPinFormValues` carries no
- * photo field — pin photos remain out of scope pending consent and
- * retention rules — so there is nothing photo-related to drop here. See
- * CommunityPin.photoDataUrl.
+ * A resident correcting their own pin: its type and description. A photo is
+ * added only when a pin is created, so a correction carries none (see
+ * CommunityPinFormValues.photoPath).
  */
 export function updateCommunityPin(
   pinId: string,
