@@ -3,6 +3,7 @@
 ## State
 
 - `mvp` was merged into `v1` on 25 September. `v1` is the default branch and the production branch; `mvp` stays at `0b9f0fd` for reference.
+- **On `v1`, not pushed and not released** (29 September): the server functions in Tokyo, a weekly encrypted backup, and `/api/route`'s limits counted exactly in the database. The first section below.
 - **Production runs `12a24c6`**, promoted on 29 September from the Vercel dashboard after CI run #125 passed (the Vercel connector was failing, so its deployment id is not recorded here): the "Fix the map" link beside the map's OpenStreetMap credit (`c2bc778`). The first section below.
 - Before that, production ran `b7b17e6` (`dpl_7hvjZwFretu7RPNuynnSstp6VoJT`, CI run #123): Next.js 16.3.7 for a security fix, and limits on how often `/api/route` asks the walking router. Also the first section below.
 - Earlier on 29 September it ran `37a793c` (`dpl_64s7sTC5FzB3Wv8ZgNnvPzigprpa`, CI run #121): pin types and photos for officials, and a Find safe evacuation center that points somewhere safe. They are the second and third sections below.
@@ -22,6 +23,20 @@
 - `pg_cron` now starts the GitHub workflows on time. The owner put the token in Vault at 02:18 UTC on 26 September, and the first dispatched Monitor run started at 02:30 UTC and passed.
 - The Nilombot test alert (yellow, set by Test Official at 22:17 on 25 September) was lifted at 02:21 UTC on 26 September. The action record shows it as cleared by the System owner. No push or email went out, because it was lifted in the database, not through the app.
 
+### Tokyo region, weekly backups and exact route limits, 29 September (built, not released)
+
+Three of the recommendations the owner said to do all of. The other four (a barangay flood profile with the downstream heads-up, residents' data rights, limits for pins, votes and photos, and a rain heads-up) are specs waiting for the owner's review. **On `v1`, not pushed and not released.**
+
+| Commit | What |
+|---|---|
+| `4aa3f35` | The server functions run in Tokyo (`"regions": ["hnd1"]` in `vercel.json`), beside the database (`ap-northeast-1`). In Washington every database call crossed the Pacific: timed from the Philippines, `/api/pins` took 0.7 to 1.2 s and `/api/health` 1.4 to 2.6 s, against 0.2 s for a static file |
+| `521adc3` | `.github/workflows/backup.yml`: every week, the roles, schema, data and migration history, encrypted with gpg (AES-256) and kept 30 days as an artifact of the run; `pg_cron` starts it on time (`20260929144202_dispatch_backup`). README: Backups, for setting it up and restoring |
+| `1baedad` | `public.take_rate_limit` counts requests in `private.rate_limit_counts` (`20260929144851_rate_limits`); `/api/route` asks it after its in-memory first line, the caller first and its address only as a keyed hash, then the app-wide router budget. If the database cannot answer, the walk goes ahead. `abuse.sql` L1-L2 |
+
+- **Both migrations are live already.** `dispatch_backup` adds a weekly `pg_cron` job; `rate_limits` adds a private table, a function only the service role may call, and an hourly clean-up job. Both only add, and the running code does not use them until the release. The rate limit was checked on the live database in a block that rolled back: the server's calls counted `{t,t,f,t}`, and anonymous and signed-in callers were refused; nothing was left behind.
+- **The backup needs two secrets from the owner** (README, Backups): `SUPABASE_DB_URL`, the Session pooler connection string with the database password in it, and `BACKUP_PASSPHRASE`, kept somewhere outside GitHub too. Until they are there, each weekly run fails and emails the owner. Then run Actions → Backup once and check the run ends with a `.gpg` artifact.
+- **After the release:** `x-vercel-id` should read `sin1::hnd1::…`, `/api/pins` and `/api/health` should answer in a few hundred milliseconds, a route should still come back, and `route:` keys should appear in `private.rate_limit_counts`.
+
 ### Next.js security update and the router's limits, 29 September
 
 A follow-up to a check of the running app. **Released on 29 September (`dpl_7hvjZwFretu7RPNuynnSstp6VoJT`).**
@@ -33,7 +48,7 @@ A follow-up to a check of the running app. **Released on 29 September (`dpl_7hvj
 
 - **No database change.** The service worker goes to v24 for the deploy.
 - **Why these numbers:** FOSSGIS's usage policy allows one request a second at most, from the whole app. A search asks about up to 3 places, so 20 a minute is several searches from one address, with room for the many phones a mobile carrier puts behind one address. In a surge of more than about one search a second across the town, the extra residents get the marked straight line until the budget refills; self-hosting the router is still the fix for that.
-- **The counts live in each server instance's memory**, so two warm instances allow twice as much. A shared count in the database is the upgrade if that ever matters.
+- **The counts live in each server instance's memory**, so two warm instances allow twice as much. A shared count in the database is the upgrade if that ever matters. (Done since `1baedad`, the first section above.)
 - Checked on production after the release: service worker v24 is served; `/api/health` reports the database ok with no recent errors; `/`, `/evacuation`, `/report`, `/map`, `/resident`, `/onboarding`, `/sign-in` and `/admin` answer; `/api/route` returns a real walking route (the same 5.9 km pair as before) and 405 for GET; `/api/cleanup-pin-photos` answers 401 without the secret.
 - **The limit works, but production splits the counts across at least two server instances.** 26 quick requests from one address all passed; in 80 more, the first 429 came at the 12th, and 29 were refused. So the real ceilings are a few times 20 a minute per address and 10 in 10 seconds for the app, which can still be more than FOSSGIS's one a second in a surge. A made-up `X-Forwarded-For` does not get round it (10 of 12 were still refused), so Vercel sets the address the route sees. A shared count in the database would make the limits exact.
 - **"Fix the map"** (released later on 29 September): FOSSGIS's policy also asks for a "fix the map" link (https://www.openstreetmap.org/fixthemap) beside the OpenStreetMap credit. `c2bc778` adds it to the credit in `src/features/map/map-shell.tsx`, which every map in the app uses, split by Leaflet's own separator, which screen readers skip; service worker v25. Checked on production after the release: v25 is served, `/api/health` reports the database ok with no recent errors, the pages (with `/admin/map`) answer, and the shipped map code carries the link. Not looked at on a phone: every map sits behind the consent notice or a sign-in.
@@ -156,7 +171,8 @@ A self-review of `0b9f0fd..ddf7293` (the review agents hit their usage limit) fo
 
 1. **Remove the leftover `mapandanofficial@weatherwell.com` account.** It is still appointed as a municipal official for Mapandan. Remove it at `/admin/officials` while signed in as the admin, so the record names who removed it; then delete the user in Supabase → Authentication → Users. Deleting the user alone also works, because its profile and appointment go with it.
 2. **Pilot drill** with a barangay, then log its feedback as incorporated or deferred.
-3. **Try the two new features on production:** add one photo to a pin as a resident and open it as an official (this proves the upload with the insert-only policy, the one-hour link and the page's security policy); tap Find safe evacuation center once and check the walk comes into view. After 03:00 UTC on 30 September, check in Vercel (Logs → Crons) that `/api/cleanup-pin-photos` ran.
+3. **Add the two backup secrets** and run Actions → Backup once (README, Backups).
+4. **Try the two new features on production:** add one photo to a pin as a resident and open it as an official (this proves the upload with the insert-only policy, the one-hour link and the page's security policy); tap Find safe evacuation center once and check the walk comes into view. After 03:00 UTC on 30 September, check in Vercel (Logs → Crons) that `/api/cleanup-pin-photos` ran.
 
 ## Owner's decisions (26 September)
 
@@ -194,7 +210,7 @@ A self-review of `0b9f0fd..ddf7293` (the review agents hit their usage limit) fo
 
 - App: `npm run lint`, `npm run typecheck`, `npm test`, `npm run knip`, `npm run build`.
 - Database: start Supabase the way CI does, then run `helpers.sql`, `reference-tables.sql`, `rls.sql`, `abuse.sql`, `accounts.sql` and `calibration.sql` with `psql` (see `.github/workflows/ci.yml`).
-- Last run, 29 September, locally: 1,901 app tests pass; lint, typecheck, knip and build are clean, with no warnings. The database suites run in CI on every push.
+- Last run, 29 September, locally: 1,907 app tests pass; lint, typecheck, knip and build are clean, with no warnings. The database suites run in CI on every push.
 
 ## Where things live
 
@@ -207,5 +223,6 @@ A self-review of `0b9f0fd..ddf7293` (the review agents hit their usage limit) fo
 - Changing and viewing a barangay: `src/features/zones/change-barangay-dialog.tsx`, `barangay-bar.tsx` and `use-viewed-zone.ts`; `src/lib/where-you-are.ts` (`HOME_RADIUS_METERS`); `src/lib/follow-email-alerts.ts`; `followPushSubscription` in `src/lib/push-subscription.ts`; `pageWithQuery` in `public/sw.js`.
 - Pin types and photos: `src/lib/community-pin.ts` (the kinds and their labels), `src/lib/pin-photo.ts` (shrink and upload), `src/features/admin/pin-photo-thumb.tsx`, `src/app/api/cleanup-pin-photos/route.ts`, the `20260928132821` migration and the PT block in `supabase/tests/rls.sql`.
 - Find safe evacuation center: `src/lib/safe-route.ts` (the rules), `src/features/homepage-map/use-safe-route.ts` and `safe-route-panel.tsx`, `src/app/api/route/route.ts`.
-- Rate limits: `src/lib/rate-limit.ts`, used by `src/app/api/route/route.ts` and `src/app/api/push/route.ts`.
+- Rate limits: `src/lib/rate-limit.ts` (in memory, per instance), used by `src/app/api/route/route.ts` and `src/app/api/push/route.ts`; the exact count is `public.take_rate_limit` (`20260929144851_rate_limits`).
+- Backups: `.github/workflows/backup.yml`, `20260929144202_dispatch_backup`, README "Backups".
 - Consent notice: `CONSENT_ITEMS` in `src/features/onboarding/consent-notice.tsx`, versioned by `CONSENT_VERSION` in `onboarding-storage.ts`.
