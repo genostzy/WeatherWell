@@ -3,8 +3,8 @@
 ## State
 
 - `mvp` was merged into `v1` on 25 September. `v1` is the default branch and the production branch; `mvp` stays at `0b9f0fd` for reference.
-- **Production runs `37a793c`**, released on 29 September as `dpl_64s7sTC5FzB3Wv8ZgNnvPzigprpa` after CI run #121 passed: pin types and photos for officials, and a Find safe evacuation center that points somewhere safe. They are the second and third sections below.
-- **On `v1`, not pushed and not released** (29 September): Next.js 16.3.7 for a security fix, and limits on how often `/api/route` asks the walking router. The first section below.
+- **Production runs `b7b17e6`**, released on 29 September as `dpl_7hvjZwFretu7RPNuynnSstp6VoJT` after CI run #123 passed: Next.js 16.3.7 for a security fix, and limits on how often `/api/route` asks the walking router. The first section below.
+- Earlier on 29 September it ran `37a793c` (`dpl_64s7sTC5FzB3Wv8ZgNnvPzigprpa`, CI run #121): pin types and photos for officials, and a Find safe evacuation center that points somewhere safe. They are the second and third sections below.
 - Before that, production ran `4f592b6` (officials fill in their barangay's details, below, released on 28 September). Before it ran `dea649b` (changing and viewing a barangay, below), and before that `d4ac54a` (the review fixes below), released later on 26 September. Before that, `ddf7293` was released as `dpl_DAEpr9WuSe9jkLvzPLWoHsPcQf8B` after CI run #115 passed, shipping these commits on top of `8fa9dd9`:
 
 | Commit | What |
@@ -21,9 +21,9 @@
 - `pg_cron` now starts the GitHub workflows on time. The owner put the token in Vault at 02:18 UTC on 26 September, and the first dispatched Monitor run started at 02:30 UTC and passed.
 - The Nilombot test alert (yellow, set by Test Official at 22:17 on 25 September) was lifted at 02:21 UTC on 26 September. The action record shows it as cleared by the System owner. No push or email went out, because it was lifted in the database, not through the app.
 
-### Next.js security update and the router's limits, 29 September (built, not released)
+### Next.js security update and the router's limits, 29 September
 
-A follow-up to a check of the running app. **On `v1`, not pushed and not released.**
+A follow-up to a check of the running app. **Released on 29 September (`dpl_7hvjZwFretu7RPNuynnSstp6VoJT`).**
 
 | Commit | What |
 |---|---|
@@ -33,6 +33,8 @@ A follow-up to a check of the running app. **On `v1`, not pushed and not release
 - **No database change.** The service worker goes to v24 for the deploy.
 - **Why these numbers:** FOSSGIS's usage policy allows one request a second at most, from the whole app. A search asks about up to 3 places, so 20 a minute is several searches from one address, with room for the many phones a mobile carrier puts behind one address. In a surge of more than about one search a second across the town, the extra residents get the marked straight line until the budget refills; self-hosting the router is still the fix for that.
 - **The counts live in each server instance's memory**, so two warm instances allow twice as much. A shared count in the database is the upgrade if that ever matters.
+- Checked on production after the release: service worker v24 is served; `/api/health` reports the database ok with no recent errors; `/`, `/evacuation`, `/report`, `/map`, `/resident`, `/onboarding`, `/sign-in` and `/admin` answer; `/api/route` returns a real walking route (the same 5.9 km pair as before) and 405 for GET; `/api/cleanup-pin-photos` answers 401 without the secret.
+- **The limit works, but production splits the counts across at least two server instances.** 26 quick requests from one address all passed; in 80 more, the first 429 came at the 12th, and 29 were refused. So the real ceilings are a few times 20 a minute per address and 10 in 10 seconds for the app, which can still be more than FOSSGIS's one a second in a surge. A made-up `X-Forwarded-For` does not get round it (10 of 12 were still refused), so Vercel sets the address the route sees. A shared count in the database would make the limits exact.
 - **Found on the way, not done:** FOSSGIS's policy also asks for a "fix the map" link (https://www.openstreetmap.org/fixthemap) beside the OpenStreetMap credit; the map's credit in `src/features/map/map-shell.tsx` has none yet.
 
 ### Pin types and photos for officials, 29 September
