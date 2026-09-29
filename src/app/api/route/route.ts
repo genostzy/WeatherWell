@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { clientIp, createRateLimiter } from "@/lib/rate-limit";
 import type { RouteOption, RouteResponse } from "@/lib/route-types";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +14,20 @@ const USER_AGENT = "WeatherWell (flood evacuation app)";
 /** Alternatives asked for besides the router's first choice: the screen prefers the first one that avoids alerts and blocked roads. */
 const ALTERNATIVES = 3;
 const TIMEOUT_MS = 8_000;
+
+/**
+ * FOSSGIS allows one request a second at most, from the whole app. Ten in any
+ * ten seconds keeps to that and still lets a few residents search at once.
+ */
+const routerBudget = createRateLimiter(10, 10_000);
+/**
+ * One address can't spend that budget alone. A search asks about up to 3
+ * places, so 20 a minute is several searches, with room for the many phones a
+ * mobile carrier puts behind one address.
+ */
+const perCaller = createRateLimiter(20, 60_000);
+
+const tooMany = () => NextResponse.json({ error: "Too many requests" }, { status: 429 });
 
 /** A [lat, lng] pair of numbers, or null. */
 function point(value: unknown): [number, number] | null {
@@ -51,9 +66,12 @@ function optionOf(route: unknown): RouteOption | null {
  * router's first choice first. If the router is down, slow or has no route, one
  * straight line between the points, marked `fallback: true`. A POST body, never
  * a query string: `from` is where the resident stands, and request logs and
- * browser history keep an address.
+ * browser history keep an address. Past either limit above it answers 429
+ * without asking the router, and the screen draws the same marked straight line.
  */
 export async function POST(request: Request) {
+  if (!perCaller(clientIp(request))) return tooMany();
+
   const body = (await request.json().catch(() => null)) as { from?: unknown; to?: unknown } | null;
   const from = point(body?.from);
   const to = point(body?.to);
@@ -61,6 +79,8 @@ export async function POST(request: Request) {
   if (!from || !to) {
     return NextResponse.json({ error: "from and to required as [lat, lng]" }, { status: 400 });
   }
+
+  if (!routerBudget("router")) return tooMany();
 
   const [fromLat, fromLng] = from;
   const [toLat, toLng] = to;

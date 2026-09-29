@@ -79,6 +79,21 @@ describe("POST /api/push", () => {
 
     expect(response.status).toBe(503);
   });
+
+  it("refuses an address's 11th request in a minute with 429, and sends nothing for it", async () => {
+    const fromOneAddress = () =>
+      POST(
+        new Request("https://weatherwell.app/api/push", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", authorization: "Bearer test-secret", "x-forwarded-for": "203.0.113.7" },
+          body: JSON.stringify(validBody),
+        })
+      );
+
+    for (let i = 0; i < 10; i++) expect((await fromOneAddress()).status).toBe(200);
+    expect((await fromOneAddress()).status).toBe(429);
+    expect(sendZonePush).toHaveBeenCalledTimes(10);
+  });
 });
 
 describe("GET /api/push", () => {

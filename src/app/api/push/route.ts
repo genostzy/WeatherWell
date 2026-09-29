@@ -1,46 +1,13 @@
 import { NextResponse } from "next/server";
 import { isAuthorizedCronRequest } from "@/lib/cron-auth";
+import { clientIp, createRateLimiter } from "@/lib/rate-limit";
 import { sendZonePush } from "@/lib/send-zone-push";
 
 export const dynamic = "force-dynamic";
 
-/**
- * Simple in-memory rate limiter.
- * Tracks request counts per IP with a sliding window.
- * Resets on server restart (acceptable for a rate limiter).
- */
-const rateLimitMap = new Map<string, { count: number; windowStart: number }>();
-const RATE_LIMIT_MAX = 10;
-const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
+/** Ten sends a minute from one address, on top of the cron secret. */
+const allow = createRateLimiter(10, 60_000);
 
-function checkRateLimit(ip: string): boolean {
-  const now = Date.now();
-  const entry = rateLimitMap.get(ip);
-
-  if (!entry || now - entry.windowStart > RATE_LIMIT_WINDOW_MS) {
-    rateLimitMap.set(ip, { count: 1, windowStart: now });
-    return true;
-  }
-
-  if (entry.count >= RATE_LIMIT_MAX) {
-    return false;
-  }
-
-  entry.count++;
-  return true;
-}
-
-// Periodic cleanup of stale entries (every 5 minutes)
-if (typeof setInterval !== "undefined") {
-  setInterval(() => {
-    const now = Date.now();
-    for (const [ip, entry] of rateLimitMap) {
-      if (now - entry.windowStart > RATE_LIMIT_WINDOW_MS * 5) {
-        rateLimitMap.delete(ip);
-      }
-    }
-  }, RATE_LIMIT_WINDOW_MS * 5);
-}
 
 /**
  * POST /api/push
@@ -59,9 +26,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const forwarded = request.headers.get("x-forwarded-for");
-  const ip = forwarded?.split(",")[0]?.trim() ?? "unknown";
-  if (!checkRateLimit(ip)) {
+  if (!allow(clientIp(request))) {
     return NextResponse.json(
       { error: "Rate limit exceeded. Try again later." },
       { status: 429 }

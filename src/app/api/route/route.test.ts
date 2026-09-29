@@ -1,19 +1,29 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { POST } from "./route";
+import type { POST as RoutePost } from "./route";
 
 const fetchMock = vi.fn();
+const start = new Date("2026-09-29T12:00:00Z").getTime();
+let POST: typeof RoutePost;
 
-beforeEach(() => {
+beforeEach(async () => {
   fetchMock.mockReset();
   vi.stubGlobal("fetch", fetchMock);
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(start);
+  // The limits count inside the module, so every test starts from a fresh copy.
+  vi.resetModules();
+  ({ POST } = await import("./route"));
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
-const post = (body: unknown) => POST(new Request("https://x/api/route", { method: "POST", body: JSON.stringify(body) }));
+/** A request from one caller; `ip` sends it from another address. */
+const post = (body: unknown, ip = "203.0.113.7") =>
+  POST(new Request("https://x/api/route", { method: "POST", headers: { "x-forwarded-for": ip }, body: JSON.stringify(body) }));
 
 const from: [number, number] = [16.0288, 120.4366];
 const to: [number, number] = [16.03, 120.44];
@@ -23,6 +33,12 @@ const routerRoute = (coordinates: [number, number][], distance: number, duration
   geometry: { type: "LineString", coordinates },
   distance,
   duration,
+});
+
+/** The router answering with one route. */
+const answered = () => ({
+  ok: true,
+  json: async () => ({ code: "Ok", routes: [routerRoute([[120.4366, 16.0288], [120.44, 16.03]], 500, 400)] }),
 });
 
 describe("POST /api/route", () => {
@@ -106,5 +122,42 @@ describe("POST /api/route", () => {
     expect((await post({ from: [16.02, 120.45] })).status).toBe(400);
     expect((await post({ from: ["16.02", 120.45], to: [16.03, 120.46] })).status).toBe(400);
     expect((await post(null)).status).toBe(400);
+  });
+
+  it("asks the router at most 10 times in 10 seconds for everyone together, and answers 429 past that (FOSSGIS allows one a second)", async () => {
+    fetchMock.mockResolvedValue(answered());
+    for (let i = 0; i < 10; i++) expect((await post({ from, to }, `203.0.113.${i}`)).status).toBe(200);
+
+    expect((await post({ from, to }, "198.51.100.1")).status).toBe(429);
+    expect(fetchMock).toHaveBeenCalledTimes(10);
+
+    vi.setSystemTime(start + 9_999);
+    expect((await post({ from, to }, "198.51.100.1")).status).toBe(429);
+
+    vi.setSystemTime(start + 10_000);
+    expect((await post({ from, to }, "198.51.100.1")).status).toBe(200);
+  });
+
+  it("answers 429 to one caller's 21st request in a minute, so one address can't spend the router's budget", async () => {
+    fetchMock.mockResolvedValue(answered());
+    for (let i = 0; i < 20; i++) {
+      vi.setSystemTime(start + i * 1_000);
+      expect((await post({ from, to })).status).toBe(200);
+    }
+
+    vi.setSystemTime(start + 59_999);
+    expect((await post({ from, to })).status).toBe(429);
+    expect(fetchMock).toHaveBeenCalledTimes(20);
+    expect((await post({ from, to }, "198.51.100.1")).status).toBe(200);
+
+    vi.setSystemTime(start + 60_000);
+    expect((await post({ from, to })).status).toBe(200);
+  });
+
+  it("spends none of the router's budget on a request it refuses as malformed", async () => {
+    for (let i = 0; i < 10; i++) expect((await post({ from }, `203.0.113.${i}`)).status).toBe(400);
+    fetchMock.mockResolvedValue(answered());
+
+    expect((await post({ from, to }, "198.51.100.1")).status).toBe(200);
   });
 });
