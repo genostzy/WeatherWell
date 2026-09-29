@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useAlerts } from "@/lib/alerts-store";
-import { useCommunityPins } from "@/lib/community-pins";
+import { PENDING_AUTHOR_ID, useCommunityPins, type CommunityPin } from "@/lib/community-pins";
 import type { CandidateSite } from "@/lib/osm-candidates";
 import type { RouteResponse } from "@/lib/route-types";
 import {
@@ -21,7 +21,16 @@ import { getZoneStatus, type ZoneStatus } from "@/lib/zone-status";
 
 /** Longer than the server's 8 seconds for the router, so a slow router answers with its straight line rather than with nothing. */
 const ROUTE_WAIT_MS = 12_000;
-const SITES_WAIT_MS = 15_000;
+/**
+ * As long as the server may take: two Overpass mirrors at 8 seconds each, then
+ * Nominatim's two searches at 8 seconds and a 1.1 second pause, about 33. Giving
+ * up sooner tells a resident "no evacuation centre found near you" when the
+ * fallback was about to find some; the answer is cached at the edge for a day
+ * once it comes, so only the first request for a barangay is ever slow.
+ */
+const SITES_WAIT_MS = 40_000;
+/** The pins are a check on the walk, not the walk: a slow answer is not worth waiting for. */
+const PINS_WAIT_MS = 5_000;
 
 /**
  * A signal that aborts after `ms`. Not AbortSignal.timeout: iOS 15 and older
@@ -72,6 +81,26 @@ async function fetchLikelySites(zoneId: string): Promise<CandidateSite[]> {
   return (await res.json()) as CandidateSite[];
 }
 
+/**
+ * The pins as the server has them now, with any this phone queued and the
+ * server has not seen laid over them. The pins already on screen are only as
+ * fresh as the app's last open: the service worker answers a plain /api/pins
+ * from its cache, so a road blocked an hour ago could be called clear. A query
+ * string sends the request to the network first (the value only has to differ,
+ * it is never stored). If the server cannot be asked, the pins already loaded.
+ */
+async function pinsNow(known: CommunityPin[]): Promise<CommunityPin[]> {
+  try {
+    const res = await fetch(`/api/pins?at=${Date.now()}`, { signal: timeoutSignal(PINS_WAIT_MS) });
+    if (!res.ok) return known;
+    const now = new Map((await res.json() as CommunityPin[]).map((pin) => [pin.id, pin]));
+    for (const pin of known) if (pin.authorId === PENDING_AUTHOR_ID && !now.has(pin.id)) now.set(pin.id, pin);
+    return [...now.values()];
+  } catch {
+    return known;
+  }
+}
+
 /** A barangay's centre when it has a real one, else the barangay's own point. */
 function destinationOf(zone: Zone): Destination {
   return hasRealEvacuationCenter(zone)
@@ -120,6 +149,10 @@ export function useSafeRoute({
   const lastSearch = useRef<Search | null>(null);
 
   function run(search: Search) {
+    // A tap on a barangay this screen does not hold changes nothing, and must not cancel a search in progress.
+    const zone = search.kind === "zone" ? zones.find((z) => z.id === search.zoneId) : undefined;
+    if (search.kind === "zone" && !zone) return;
+
     lastSearch.current = search;
     const id = ++latest.current;
     const from: LatLng = livePosition ?? { lat: startZone.lat, lng: startZone.lng };
@@ -130,10 +163,7 @@ export function useSafeRoute({
     const statusById = new Map<string, ZoneStatus>();
     for (const alert of alerts) if (alert.isActive) statusById.set(alert.zoneId, getZoneStatus(alert));
     const statusOf = (zoneId: string): ZoneStatus => statusById.get(zoneId) ?? "safe";
-    const context = { from, startZoneId: startZone.id, zones, statusOf, pins, now: Date.now() };
-
-    const zone = search.kind === "zone" ? zones.find((z) => z.id === search.zoneId) : undefined;
-    if (search.kind === "zone" && !zone) return;
+    const context = { from, startZoneId: startZone.id, zones, statusOf, now: Date.now() };
 
     if (isOffline) {
       const nearest =
@@ -145,13 +175,15 @@ export function useSafeRoute({
 
     setResult(null);
     setSearching(true);
-    const answer =
-      search.kind === "centre"
-        ? findSafeDestination({ ...context, fetchRoutes, fetchLikelySites: () => fetchLikelySites(startZone.id) })
-        : search.kind === "area"
-          ? findSafeArea({ ...context, fetchRoutes })
-          : routeToDestination(destinationOf(zone!), { ...context, fetchRoutes });
-    answer
+    pinsNow(pins)
+      .then((current) => {
+        const searchContext = { ...context, pins: current, fetchRoutes };
+        return search.kind === "centre"
+          ? findSafeDestination({ ...searchContext, fetchLikelySites: () => fetchLikelySites(startZone.id) })
+          : search.kind === "area"
+            ? findSafeArea(searchContext)
+            : routeToDestination(destinationOf(zone!), searchContext);
+      })
       // Never a spinner forever: whatever went wrong, the resident is told nothing was found and can still call.
       .catch((): SafeRouteResult => ({ status: "none", problems: [], fallback: false }))
       .then((found) => {

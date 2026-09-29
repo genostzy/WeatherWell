@@ -8,7 +8,7 @@ import { MOCK_ALERTS } from "@/lib/mock-data";
 import type { CandidateSite } from "@/lib/osm-candidates";
 import type { CommunityPin } from "@/lib/community-pins";
 import type { RouteResponse } from "@/lib/route-types";
-import type { AlertRecord } from "@/lib/types";
+import type { AlertRecord, Zone } from "@/lib/types";
 
 // useCommunityPins asks who the resident is; in a test that must not reach Supabase.
 vi.mock("@/lib/auth/anonymous-session", () => ({
@@ -29,8 +29,11 @@ function withZoneAlert(zoneId: string, changes: Partial<AlertRecord>): AlertReco
 type Position = { lat: number; lng: number } | null;
 type Props = { livePosition: Position };
 
-function renderSafeRoute(alerts: AlertRecord[] = MOCK_ALERTS, livePosition: Position = null) {
-  return renderHook(({ livePosition }: Props) => useSafeRoute({ zones, livePosition, startZone: zone1 }), {
+/** Zone 4 without a confirmed centre (its name is the seed's blank): the search then falls to OpenStreetMap. */
+const zonesWithoutCentre4: Zone[] = zones.map((z) => (z.id === zone4.id ? { ...z, evacuationCenterName: "" } : z));
+
+function renderSafeRoute(alerts: AlertRecord[] = MOCK_ALERTS, livePosition: Position = null, onScreen: Zone[] = zones) {
+  return renderHook(({ livePosition }: Props) => useSafeRoute({ zones: onScreen, livePosition, startZone: zone1 }), {
     initialProps: { livePosition } as Props,
     wrapper: ({ children }: { children: ReactNode }) => createElement(AlertsContext.Provider, { value: alerts }, children),
   });
@@ -50,7 +53,10 @@ function stubNetwork(
   options: {
     route?: (call: Call) => Promise<RouteResponse> | RouteResponse;
     sites?: CandidateSite[] | Error;
+    /** What /api/pins answers on the map's own mount fetch, which the service worker may serve from an old copy. */
     pins?: CommunityPin[];
+    /** What it answers a request with a query string, which the service worker sends to the network first. */
+    pinsNow?: CommunityPin[] | Error;
   } = {}
 ) {
   const calls: Call[] = [];
@@ -69,7 +75,11 @@ function stubNetwork(
         if (options.sites instanceof Error) throw options.sites;
         return { ok: true, json: async () => options.sites ?? [] };
       }
-      if (url.startsWith("/api/pins")) return { ok: true, json: async () => options.pins ?? [] };
+      if (url.startsWith("/api/pins")) {
+        const asked = url.includes("?");
+        if (asked && options.pinsNow instanceof Error) throw options.pinsNow;
+        return { ok: true, json: async () => (asked && options.pinsNow ? options.pinsNow : options.pins) ?? [] };
+      }
       return { ok: true, json: async () => [] };
     })
   );
@@ -180,18 +190,122 @@ describe("useSafeRoute", () => {
     expect(result.current.result?.problems).toMatchObject([{ kind: "zone", zone: { id: zone2.id } }]);
   });
 
-  it("asks OpenStreetMap for likely sites, by barangay and not by position, only when no confirmed centre is in reach", async () => {
-    const site: CandidateSite = { name: "Nilombot Barangay Hall", kind: "hall", lat: 16.03, lng: 120.437, distanceM: 150 };
-    const { calls } = stubNetwork({ sites: [site] });
-    // Zone 4 under Warning as well: every centre in reach is under an alert.
-    const { result } = renderSafeRoute(withZoneAlert("zone-4", { severity: "red" }), HERE);
+  it("asks OpenStreetMap for likely sites, by barangay and not by position, only when no confirmed centre is in reach, and passes over those inside a barangay under alert", async () => {
+    // The hall is in zone 1, under Warning; the school is by zone 4, which has no confirmed centre but no alert either.
+    const hall: CandidateSite = { name: "Nilombot Barangay Hall", kind: "hall", lat: 16.03, lng: 120.437, distanceM: 150 };
+    const school: CandidateSite = { name: "Santa Barbara Elementary School", kind: "school", lat: zone4.lat + 0.0005, lng: zone4.lng, distanceM: 55 };
+    const { calls } = stubNetwork({ sites: [hall, school] });
+    const { result } = renderSafeRoute(MOCK_ALERTS, HERE, zonesWithoutCentre4);
 
     act(() => result.current.findCentre());
     await waitFor(() => expect(result.current.result).not.toBeNull());
 
     const asked = calls.find((c) => c.url.startsWith("/api/evacuation-candidates"))!;
     expect(asked.url).toBe(`/api/evacuation-candidates?zoneId=${zone1.id}`);
-    expect(result.current.result?.destination).toMatchObject({ kind: "likely", name: "Nilombot Barangay Hall" });
+    expect(result.current.result?.destination).toMatchObject({ kind: "likely", name: "Santa Barbara Elementary School" });
+  });
+
+  it("waits for the likely-site search as long as the server may take, about 33 seconds, not 15", async () => {
+    // Overpass and then Nominatim both slow: the server answers after 30 seconds, as fetch does unless it was aborted.
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const school: CandidateSite = { name: "Santa Barbara Elementary School", kind: "school", lat: zone4.lat + 0.0005, lng: zone4.lng, distanceM: 55 };
+      vi.stubGlobal(
+        "fetch",
+        vi.fn((input: string, init?: RequestInit) => {
+          const url = String(input);
+          if (url.startsWith("/api/evacuation-candidates")) {
+            return new Promise((resolve, reject) => {
+              const timer = setTimeout(() => resolve({ ok: true, json: async () => [school] }), 30_000);
+              init?.signal?.addEventListener("abort", () => {
+                clearTimeout(timer);
+                reject(new DOMException("aborted", "AbortError"));
+              });
+            });
+          }
+          if (url === "/api/route") {
+            const body = JSON.parse(String(init?.body));
+            return Promise.resolve({ ok: true, json: async () => ({ routes: [{ polyline: [body.from, body.to], distanceMeters: 1, durationSeconds: 1 }], fallback: false }) });
+          }
+          return Promise.resolve({ ok: true, json: async () => [] });
+        })
+      );
+      const { result } = renderSafeRoute(MOCK_ALERTS, HERE, zonesWithoutCentre4);
+
+      act(() => result.current.findCentre());
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30_000);
+      });
+
+      expect(result.current.result?.destination).toMatchObject({ kind: "likely", name: "Santa Barbara Elementary School" });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  describe("the pins the walk is checked against", () => {
+    const midway = { lat: (HERE.lat + zone4.evacuationCenterLat) / 2, lng: (HERE.lng + zone4.evacuationCenterLng) / 2 };
+    const tree: CommunityPin = {
+      id: "p1",
+      zoneId: zone1.id,
+      statusTag: "road_blocked",
+      caption: "Fallen tree",
+      lat: midway.lat,
+      lng: midway.lng,
+      upvotes: 0,
+      downvotes: 0,
+      createdAt: new Date().toISOString(),
+      authorId: "u1",
+      removed: false,
+    };
+
+    it("asks the server for them as they are now, not the copy the phone kept from when the app opened", async () => {
+      // The map's own mount fetch is answered from the service worker's cache, which may be yesterday's.
+      const { calls } = stubNetwork({ pins: [], pinsNow: [tree] });
+      const { result } = renderSafeRoute(MOCK_ALERTS, HERE);
+      await act(async () => {});
+
+      act(() => result.current.findCentre());
+      await waitFor(() => expect(result.current.result).not.toBeNull());
+
+      expect(calls.some((c) => c.url.startsWith("/api/pins?"))).toBe(true);
+      expect(result.current.result?.problems).toMatchObject([{ kind: "pin", pin: { id: "p1" } }]);
+    });
+
+    it("falls back to the pins already loaded when the server cannot be asked", async () => {
+      stubNetwork({ pins: [tree], pinsNow: new Error("no signal") });
+      const { result } = renderSafeRoute(MOCK_ALERTS, HERE);
+      await act(async () => {});
+
+      act(() => result.current.findCentre());
+      await waitFor(() => expect(result.current.result).not.toBeNull());
+
+      expect(result.current.result?.problems).toMatchObject([{ kind: "pin", pin: { id: "p1" } }]);
+    });
+
+    it("keeps a pin still queued on this phone, which the server has not seen yet", async () => {
+      const { addCommunityPin } = await import("@/lib/community-pins");
+      stubNetwork({ pins: [], pinsNow: [] });
+      addCommunityPin({ zoneId: zone1.id, statusTag: "road_blocked", caption: "Just placed", lat: midway.lat, lng: midway.lng });
+      const { result } = renderSafeRoute(MOCK_ALERTS, HERE);
+      await act(async () => {});
+
+      act(() => result.current.findCentre());
+      await waitFor(() => expect(result.current.result).not.toBeNull());
+
+      expect(result.current.result?.problems).toMatchObject([{ kind: "pin", pin: { caption: "Just placed" } }]);
+    });
+  });
+
+  it("ignores a tap on a barangay it does not know, and lets the search in progress finish", async () => {
+    stubNetwork();
+    const { result } = renderSafeRoute(MOCK_ALERTS, HERE);
+
+    act(() => result.current.findCentre());
+    act(() => result.current.routeToZone("nowhere"));
+    await waitFor(() => expect(result.current.result).not.toBeNull());
+
+    expect(result.current.searching).toBe(false);
   });
 
   it("says nothing is near, rather than failing, when the likely-site search fails", async () => {

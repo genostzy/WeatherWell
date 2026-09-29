@@ -304,20 +304,55 @@ describe("HomepageMap: find a safe place", () => {
     expect(directions.queryByText(/^Avoids barangays under Warning or Evacuate/)).not.toBeInTheDocument();
   });
 
-  it("marks a place OpenStreetMap suggested as not confirmed by the barangay", async () => {
+  it("marks a place OpenStreetMap suggested as not confirmed by the barangay, and passes over one inside a barangay under alert", async () => {
     standingAt(null);
-    const site: CandidateSite = { name: "Nilombot Barangay Hall", kind: "hall", lat: zone1.lat + 0.005, lng: zone1.lng, distanceM: 550 };
-    stubNetwork({ sites: [site] });
+    // Zone 4 has no confirmed centre, so the search falls to likely sites. The hall is in zone 1, which is
+    // under Warning; the school is by zone 4, which has no alert.
+    const hall: CandidateSite = { name: "Nilombot Barangay Hall", kind: "hall", lat: zone1.lat + 0.001, lng: zone1.lng, distanceM: 110 };
+    const school: CandidateSite = { name: "Santa Barbara Elementary School", kind: "school", lat: zone4.lat + 0.0005, lng: zone4.lng, distanceM: 55 };
+    stubNetwork({ sites: [hall, school] });
     const user = userEvent.setup();
-    // Zone 4 under Warning too: no confirmed centre is usable, so the search falls to likely sites.
-    const alerts = MOCK_ALERTS.map((a) => (a.zoneId === zone4.id ? { ...a, severity: "red" as const } : a));
-    renderWithData(<HomepageMap zones={FIXTURE_REFERENCE_DATA.zones} />, { alerts });
+    const zones = FIXTURE_REFERENCE_DATA.zones.map((z) => (z.id === zone4.id ? { ...z, evacuationCenterName: "" } : z));
+    renderWithData(<HomepageMap zones={zones} />);
 
     await user.click(findCentre());
 
     const directions = await panel();
-    expect(await directions.findByText(/walk to Nilombot Barangay Hall$/)).toBeInTheDocument();
+    expect(await directions.findByText(/walk to Santa Barbara Elementary School$/)).toBeInTheDocument();
     expect(directions.getByText("Not confirmed by your barangay")).toBeInTheDocument();
+    expect(directions.queryByText(/Nilombot Barangay Hall/)).not.toBeInTheDocument();
+  });
+
+  it("shows the call button while it is still searching, not only after", async () => {
+    standingAt(null);
+    // The route planner never answers.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: string) => (String(input) === "/api/route" ? new Promise(() => {}) : Promise.resolve({ ok: true, json: async () => [] })))
+    );
+    const user = userEvent.setup();
+    renderWithData(<HomepageMap zones={FIXTURE_REFERENCE_DATA.zones} />);
+
+    await user.click(findCentre());
+
+    const directions = await panel();
+    expect(directions.getByText("Finding the nearest safe place…")).toBeInTheDocument();
+    expect(directions.getByRole("link", { name: `Call ${zone1.hotlineNumber}` })).toBeInTheDocument();
+    expect(directions.queryByRole("button", { name: "Recalculate" })).not.toBeInTheDocument();
+  });
+
+  it("announces what a search found, but not the compass line that changes with every step", async () => {
+    standingAt({ lat: 16.029, lng: 120.436 });
+    stubNetwork();
+    const user = userEvent.setup();
+    renderWithData(<HomepageMap zones={FIXTURE_REFERENCE_DATA.zones} />);
+
+    await user.click(findCentre());
+
+    const directions = await panel();
+    expect((await directions.findByText(/min walk to/)).closest("[aria-live]")).not.toBeNull();
+    const compass = directions.getByText(new RegExp(`m (N|NE|E|SE|S|SW|W|NW) to ${zone4.evacuationCenterName}$`));
+    expect(compass.closest("[aria-live]")).toBeNull();
   });
 
   it("Find safe area names the nearest barangay with no alert", async () => {

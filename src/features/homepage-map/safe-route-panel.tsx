@@ -123,41 +123,41 @@ export function SafeRoutePanel({
   const number = hotlinesOf(startZone)[0] ?? "911";
 
   return (
-    <section
-      aria-label={t(PANEL_LABEL, lang)}
-      aria-busy={searching}
-      aria-live="polite"
-      className="space-y-2 rounded-xl border-2 border-border p-3 text-sm"
-    >
-      {searching && (
-        <p lang={lang} className="text-muted-foreground">
-          {t(SEARCHING, lang)}
-        </p>
-      )}
+    <section aria-label={t(PANEL_LABEL, lang)} aria-busy={searching} className="space-y-2 rounded-xl border-2 border-border p-3 text-sm">
+      {/* Announced when a search ends. The compass line below is deliberately outside: it changes with every GPS fix. */}
+      <div aria-live="polite" className="space-y-2 empty:hidden">
+        {searching && (
+          <p lang={lang} className="text-muted-foreground">
+            {t(SEARCHING, lang)}
+          </p>
+        )}
 
-      {!searching && result && !found && (
-        <p lang={lang} className="font-medium break-words">
-          {t(action === "safe-area" ? NO_AREA : NO_CENTRE, lang)}
+        {!searching && result && !found && (
+          <p lang={lang} className="font-medium break-words">
+            {t(action === "safe-area" ? NO_AREA : NO_CENTRE, lang)}
+          </p>
+        )}
+
+        {!searching && found && destination && destination.kind === "area" && action === "safe-area" && (
+          <p lang={lang} className="font-medium break-words">
+            {t(nearestArea(destination.name), lang)}
+          </p>
+        )}
+        {!searching && found && destination && walk && (
+          <p lang={lang} className="font-medium break-words">
+            {t(walkLine(formatDistance(walk.metres), walk.minutes, destination.name), lang)}
+          </p>
+        )}
+      </div>
+
+      {!searching && found && destination && direction && (
+        <p lang={lang} className={walk ? "break-words text-muted-foreground" : "font-medium break-words"}>
+          {`${Math.round(direction.distanceMeters)}m ${t(COMPASS_LABEL[direction.compassLabel], lang)} ${t(TO, lang)} ${destination.name}`}
         </p>
       )}
 
       {!searching && found && destination && (
-        <>
-          {destination.kind === "area" && action === "safe-area" && (
-            <p lang={lang} className="font-medium break-words">
-              {t(nearestArea(destination.name), lang)}
-            </p>
-          )}
-          {walk && (
-            <p lang={lang} className="font-medium break-words">
-              {t(walkLine(formatDistance(walk.metres), walk.minutes, destination.name), lang)}
-            </p>
-          )}
-          {direction && (
-            <p lang={lang} className={walk ? "break-words text-muted-foreground" : "font-medium break-words"}>
-              {`${Math.round(direction.distanceMeters)}m ${t(COMPASS_LABEL[direction.compassLabel], lang)} ${t(TO, lang)} ${destination.name}`}
-            </p>
-          )}
+        <div aria-live="polite" className="space-y-2">
           {destination.kind === "likely" && (
             <p lang={lang} className="font-medium">
               {t(NOT_CONFIRMED, lang)}
@@ -195,24 +195,25 @@ export function SafeRoutePanel({
               })}
             </ul>
           )}
-        </>
+        </div>
       )}
 
-      {!searching && result && (
-        <div className="grid grid-cols-1 gap-2 pt-1 sm:grid-cols-2">
-          <a
-            href={telHref(number)}
-            className="flex min-h-11 items-center justify-center gap-2 rounded-xl border-2 border-border px-4 text-sm font-bold outline-none hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring"
-          >
-            <Phone aria-hidden="true" className="h-4 w-4 shrink-0" />
-            <span lang={lang}>{t(callLabel(number), lang)}</span>
-          </a>
+      {/* Always there: a way to call must not wait on a router that is slow to answer. */}
+      <div className="grid grid-cols-1 gap-2 pt-1 sm:grid-cols-2">
+        <a
+          href={telHref(number)}
+          className="flex min-h-11 items-center justify-center gap-2 rounded-xl border-2 border-border px-4 text-sm font-bold outline-none hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring"
+        >
+          <Phone aria-hidden="true" className="h-4 w-4 shrink-0" />
+          <span lang={lang}>{t(callLabel(number), lang)}</span>
+        </a>
+        {!searching && (
           <Button type="button" variant="outline" size="lg" onClick={recalculate} className="rounded-xl border-2 text-sm font-bold">
             <RefreshCw aria-hidden="true" className="h-4 w-4 shrink-0" />
             <span lang={lang}>{t(RECALCULATE, lang)}</span>
           </Button>
-        </div>
-      )}
+        )}
+      </div>
     </section>
   );
 }
