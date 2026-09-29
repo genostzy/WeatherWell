@@ -8,6 +8,13 @@ import { t } from "@/lib/i18n";
 import type { LocalizedText } from "@/lib/types";
 
 const LOADING_MAP: LocalizedText = { en: "Loading map…", fil: "Kinukuha ang mapa…" };
+/**
+ * OpenStreetMap's credit, and the "fix the map" link the FOSSGIS walking
+ * router's usage policy asks for, split by Leaflet's own separator, which
+ * screen readers skip.
+ */
+const TILE_ATTRIBUTION =
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors <span aria-hidden="true">|</span> <a href="https://www.openstreetmap.org/fixthemap">Fix the map</a>';
 import "leaflet/dist/leaflet.css";
 
 /** Leaflet's own corner-positioning system — "topleft" | "topright" | "bottomleft" | "bottomright". */
@@ -100,7 +107,7 @@ export function MapShell({
           style={{ height: "100%", width: "100%" }}
         >
           <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            attribution={TILE_ATTRIBUTION}
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             eventHandlers={{ load: () => setTilesLoaded(true) }}
           />
