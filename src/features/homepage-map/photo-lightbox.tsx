@@ -6,7 +6,7 @@ import { t } from "@/lib/i18n";
 import { PIN_STATUS_LABEL, type PinStatusTag } from "@/lib/community-pin";
 import type { LocalizedText } from "@/lib/types";
 
-const PHOTO_LABEL: LocalizedText = { en: "Flood pin photo", fil: "Larawan ng flood pin" };
+const PHOTO_LABEL: LocalizedText = { en: "Pin photo", fil: "Larawan ng pin" };
 const CLOSE: LocalizedText = { en: "Close photo", fil: "Isara ang larawan" };
 const UNVERIFIED_NOTE: LocalizedText = {
   en: "Unverified community photo — kept on the device that reported it, never uploaded.",

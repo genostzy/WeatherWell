@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { PhotoLightbox } from "@/features/homepage-map/photo-lightbox";
 import { getBrowserClient } from "@/lib/supabase/browser";
@@ -65,15 +66,19 @@ export function PinPhotoThumb({ pin }: { pin: CommunityPin }) {
         <img src={url} alt="" className="h-12 w-12 rounded object-cover" />
         <span lang={lang}>{t(VIEW_PHOTO, lang)}</span>
       </button>
-      {open && (
-        <PhotoLightbox
-          photoDataUrl={url}
-          statusTag={pin.statusTag}
-          caption={pin.caption}
-          note={OFFICIAL_NOTE}
-          onClose={() => setOpen(false)}
-        />
-      )}
+      {/* Out of this tree, onto the page: on the Operations map this sits in a Leaflet popup, which is
+          positioned with a CSS transform and would clip a full-page overlay to its own box. */}
+      {open &&
+        createPortal(
+          <PhotoLightbox
+            photoDataUrl={url}
+            statusTag={pin.statusTag}
+            caption={pin.caption}
+            note={OFFICIAL_NOTE}
+            onClose={() => setOpen(false)}
+          />,
+          document.body
+        )}
     </>
   );
 }

@@ -45,6 +45,28 @@ describe("PinPhotoThumb (officials see a pin's photo)", () => {
     expect(screen.getByText(/unverified photo sent by a resident\. deleted after 7 days/i)).toBeInTheDocument();
   });
 
+  it("opens the photo over the whole page, not inside a map popup that would clip it", async () => {
+    createSignedUrl.mockResolvedValue({ data: { signedUrl: "https://signed/x.jpg" }, error: null });
+    const user = userEvent.setup();
+    // A Leaflet popup is positioned with a CSS transform, which turns a
+    // position:fixed child into one sized and clipped by the popup.
+    renderWithData(
+      <div data-testid="popup">
+        <PinPhotoThumb pin={{ ...pin, photoPath: "u1/x.jpg" }} />
+      </div>
+    );
+    await user.click(await screen.findByRole("button", { name: /view photo/i }));
+    expect(screen.getByTestId("popup")).not.toContainElement(screen.getByRole("dialog"));
+  });
+
+  it("names the viewer for any kind of pin, not only floods", async () => {
+    createSignedUrl.mockResolvedValue({ data: { signedUrl: "https://signed/x.jpg" }, error: null });
+    const user = userEvent.setup();
+    renderWithData(<PinPhotoThumb pin={{ ...pin, photoPath: "u1/x.jpg" }} />);
+    await user.click(await screen.findByRole("button", { name: /view photo/i }));
+    expect(screen.getByRole("dialog")).toHaveAccessibleName("Pin photo");
+  });
+
   it("says the photo can't be shown when signing fails", async () => {
     createSignedUrl.mockResolvedValue({ data: null, error: { message: "denied" } });
     renderWithData(<PinPhotoThumb pin={{ ...pin, photoPath: "u1/x.jpg" }} />);
