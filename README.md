@@ -187,6 +187,9 @@ Conventions worth knowing before editing:
   minutes. GitHub starts scheduled runs late, so Supabase's `pg_cron`
   also starts them on time, once a GitHub token is in Vault (PRD Setup
   step 10).
+- Vercel crons (`vercel.json`), daily: `/api/threshold-check`, `/api/cleanup-weather`,
+  `/api/cleanup-pin-photos` (deletes pin photos after 7 days, when their pin is
+  removed, or when never attached) and `/api/cron/typhoon`. Each needs `CRON_SECRET`.
 - Migrations apply to the one live database immediately: ship app code
   before any migration that removes something the deployed code reads.
 - Older branches are kept as tags: `archive/hi-fi` (phase 1 UI), `archive/v0`,
