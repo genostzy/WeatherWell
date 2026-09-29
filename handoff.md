@@ -141,7 +141,7 @@ A self-review of `0b9f0fd..ddf7293` (the review agents hit their usage limit) fo
   - **Undo is still 3 seconds.** WCAG 2.2.1 prefers 20 seconds or a way to extend it, but a longer undo holds every report back that much longer before it is sent.
   - **Page titles stay in English** when the app is in Filipino. Localizing them needs the language to reach the server (a cookie), because Next.js metadata is rendered there.
 - Not fixed, minor: each component that shows a bar fetches `/api/alert-bars` itself (the CDN caches it for 60 seconds).
-- The live database has a leftover `tests` schema from an earlier test run (helper functions only; no client can reach it). It can be removed with `drop schema tests cascade;`.
+- The leftover `tests` schema (5 helper functions from an earlier test run, among them `as_user`) was dropped from the live database on 29 September, at the owner's word. A rolled-back check on the live database now runs `supabase/tests/helpers.sql` inside its own transaction first, so the helpers go when it rolls back.
 
 ## Stage 4 exit criteria
 
