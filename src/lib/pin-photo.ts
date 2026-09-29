@@ -45,11 +45,13 @@ export async function shrinkPhoto(file: Blob): Promise<Blob> {
 }
 
 /**
- * Uploads a shrunk photo into this account's own folder of the private
- * pin-photos bucket (only officials can read it). The path, or null on any
- * failure: the pin then goes without it.
+ * How long a photo may take before the pin goes without it. A phone can report
+ * a connection while the network is too congested to carry a photo (a typhoon,
+ * a crowded cell), and the pin must not wait on it.
  */
-export async function uploadPinPhoto(photo: Blob): Promise<string | null> {
+const UPLOAD_TIMEOUT_MS = 20_000;
+
+async function upload(photo: Blob): Promise<string | null> {
   try {
     const userId = await ensureAnonymousSession();
     if (!userId) return null;
@@ -60,5 +62,23 @@ export async function uploadPinPhoto(photo: Blob): Promise<string | null> {
     return error ? null : path;
   } catch {
     return null;
+  }
+}
+
+/**
+ * Uploads a shrunk photo into this account's own folder of the private
+ * pin-photos bucket (only officials can read it). The path, or null on any
+ * failure or a stall: the pin then goes without it. An upload that finishes
+ * after the wait leaves a file no pin points to, which the daily cleanup deletes.
+ */
+export async function uploadPinPhoto(photo: Blob): Promise<string | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const stalled = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), UPLOAD_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([upload(photo), stalled]);
+  } finally {
+    clearTimeout(timer);
   }
 }

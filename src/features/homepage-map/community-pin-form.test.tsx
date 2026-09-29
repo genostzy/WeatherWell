@@ -70,6 +70,16 @@ describe("CommunityPinForm", () => {
     expect(document.querySelector('input[type="file"]')).not.toBeInTheDocument();
   });
 
+  it("is titled for any kind of report, not only floods", () => {
+    const { unmount } = render(<CommunityPinForm onSubmit={() => {}} onCancel={() => {}} />);
+    expect(screen.getByRole("heading", { name: "Report what's happening here" })).toBeInTheDocument();
+    unmount();
+    render(
+      <CommunityPinForm mode="edit" initialValues={{ statusTag: "landslide", caption: "x" }} onSubmit={() => {}} onCancel={() => {}} />
+    );
+    expect(screen.getByRole("heading", { name: "Edit your pin" })).toBeInTheDocument();
+  });
+
   it("tells the resident the pin itself — status, description, location — is shared with the barangay", () => {
     render(<CommunityPinForm onSubmit={() => {}} onCancel={() => {}} />);
     expect(screen.getByText(/is shared with the barangay/i)).toBeInTheDocument();
@@ -212,6 +222,65 @@ describe("CommunityPinForm: a photo for officials", () => {
     finish("u1/x.jpg");
     await vi.waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
     expect(uploadPinPhoto).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not queue a pin whose form was closed while its photo was uploading", async () => {
+    localStorage.setItem("weatherwell.pinPhotoNoticeSeen", "1");
+    let finish: (path: string) => void = () => {};
+    uploadPinPhoto.mockImplementation(() => new Promise((resolve) => (finish = resolve)));
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    const form = render(<CommunityPinForm onSubmit={onSubmit} onCancel={() => {}} />);
+    await fillAndPick(user);
+    await user.click(screen.getByRole("button", { name: /drop pin/i }));
+    form.unmount(); // Cancel, the X, or Escape
+    finish("u1/x.jpg");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("when the connection is lost after the photo was picked, says so and lets the pin go without it", async () => {
+    localStorage.setItem("weatherwell.pinPhotoNoticeSeen", "1");
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(<CommunityPinForm onSubmit={onSubmit} onCancel={() => {}} />);
+    await fillAndPick(user);
+    expect(screen.getByRole("img", { name: /photo to send/i })).toBeInTheDocument();
+    Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
+    await user.click(screen.getByRole("button", { name: /drop pin/i }));
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(uploadPinPhoto).not.toHaveBeenCalled();
+    expect(screen.getByText(/photos need a connection — the pin will be sent without it/i)).toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: /photo to send/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /drop pin/i }));
+    expect(onSubmit).toHaveBeenCalledWith({ statusTag: "flooded", caption: "Water at the gate" });
+  });
+
+  it("keeps no photo that was picked offline, so it is never sent under a message saying it won't be", async () => {
+    localStorage.setItem("weatherwell.pinPhotoNoticeSeen", "1");
+    Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(<CommunityPinForm onSubmit={onSubmit} onCancel={() => {}} />);
+    await fillAndPick(user);
+    expect(screen.queryByRole("img", { name: /photo to send/i })).not.toBeInTheDocument();
+    Object.defineProperty(navigator, "onLine", { configurable: true, value: true });
+    await user.click(screen.getByRole("button", { name: /drop pin/i }));
+    expect(uploadPinPhoto).not.toHaveBeenCalled();
+    expect(onSubmit).toHaveBeenCalledWith({ statusTag: "flooded", caption: "Water at the gate" });
+  });
+
+  it("puts focus on the first-photo notice's OK, and describes the notice by its text", async () => {
+    const user = userEvent.setup();
+    render(<CommunityPinForm onSubmit={() => {}} onCancel={() => {}} />);
+    await fillAndPick(user);
+    expect(screen.getByRole("button", { name: "OK" })).toHaveFocus();
+    expect(screen.getByRole("alertdialog")).toHaveAccessibleDescription(/only officials see this photo/i);
+  });
+
+  it("keeps a status region on the page before any photo message, so a screen reader hears the message when it comes", () => {
+    render(<CommunityPinForm onSubmit={() => {}} onCancel={() => {}} />);
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
   });
 
   it("keeps the form open when the upload fails, so the pin can go without the photo", async () => {

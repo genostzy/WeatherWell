@@ -59,4 +59,27 @@ describe("pin photos", () => {
     upload.mockResolvedValue({ error: { message: "too big" } });
     expect(await uploadPinPhoto(blobOf(10))).toBeNull();
   });
+
+  it("stops waiting for an upload that stalls, so the pin need not wait for its photo", async () => {
+    vi.useFakeTimers();
+    try {
+      upload.mockReturnValue(new Promise(() => {}));
+      const result = uploadPinPhoto(blobOf(10));
+      await vi.advanceTimersByTimeAsync(20_000);
+      expect(await result).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("leaves no timer running once an upload has finished", async () => {
+    vi.useFakeTimers();
+    try {
+      upload.mockResolvedValue({ error: null });
+      await uploadPinPhoto(blobOf(10));
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

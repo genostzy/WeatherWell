@@ -19,8 +19,8 @@ import {
 import type { LocalizedText } from "@/lib/types";
 import { PIN_PHOTO_NOTICE_KEY, shrinkPhoto, uploadPinPhoto } from "@/lib/pin-photo";
 
-const FORM_TITLE: LocalizedText = { en: "Report flood conditions here", fil: "Iulat ang kondisyon ng baha dito" };
-const EDIT_TITLE: LocalizedText = { en: "Edit your flood pin", fil: "I-edit ang iyong flood pin" };
+const FORM_TITLE: LocalizedText = { en: "Report what's happening here", fil: "Iulat ang nangyayari dito" };
+const EDIT_TITLE: LocalizedText = { en: "Edit your pin", fil: "I-edit ang iyong pin" };
 const KIND_LABEL: LocalizedText = { en: "What's happening?", fil: "Ano ang nangyayari?" };
 const WATER_LABEL: LocalizedText = { en: "How is the water?", fil: "Kumusta ang tubig?" };
 const CAPTION_LABEL: LocalizedText = { en: "Short description", fil: "Maikling paglalarawan" };
@@ -115,6 +115,22 @@ export function CommunityPinForm({
   // A second press can land before the disabled button re-renders.
   const busy = useRef(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  const noticeOk = useRef<HTMLButtonElement>(null);
+  // False once the form is gone (Cancel, the X, Escape): a photo that finishes
+  // shrinking or uploading after that must not act for it. The parent's onSubmit
+  // is the one captured when Send was pressed, so it would still queue the pin.
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+
+  // The notice holds the primary action back, so it takes focus: a screen reader is told why.
+  useEffect(() => {
+    if (awaitingNotice) noticeOk.current?.focus();
+  }, [awaitingNotice]);
 
   // The link is made when the photo is picked; this lets it go when the photo changes or the form closes.
   const previewUrl = photo?.url;
@@ -125,8 +141,14 @@ export function CommunityPinForm({
   }, [previewUrl]);
 
   function attach(shrunk: Blob) {
+    // A photo is sent only over a connection. A phone without one keeps none,
+    // so the preview never promises a photo that would not be sent.
+    if (!navigator.onLine) {
+      setPhotoMessage(NEEDS_CONNECTION);
+      return;
+    }
     setPhoto({ blob: shrunk, url: typeof URL.createObjectURL === "function" ? URL.createObjectURL(shrunk) : null });
-    setPhotoMessage(navigator.onLine ? null : NEEDS_CONNECTION);
+    setPhotoMessage(null);
   }
 
   async function pick(file: File | undefined) {
@@ -134,6 +156,7 @@ export function CommunityPinForm({
     setPhotoMessage(null);
     try {
       const shrunk = await shrinkPhoto(file);
+      if (!alive.current) return;
       if (noticeSeen()) attach(shrunk);
       else setAwaitingNotice(shrunk);
     } catch {
@@ -151,11 +174,20 @@ export function CommunityPinForm({
   async function send() {
     if (busy.current) return;
     const values: CommunityPinFormValues = { statusTag, caption: caption.trim() };
-    if (photo && navigator.onLine) {
+    if (photo) {
+      if (!navigator.onLine) {
+        // The signal went between picking the photo and sending: say so, and
+        // leave the form open so the pin can go without it.
+        removePhoto();
+        setPhotoMessage(NEEDS_CONNECTION);
+        return;
+      }
       busy.current = true;
       setSending(true);
       const path = await uploadPinPhoto(photo.blob);
       busy.current = false;
+      // Closed while the photo was uploading: the resident cancelled, so the pin is not sent.
+      if (!alive.current) return;
       setSending(false);
       if (!path) {
         removePhoto();
@@ -248,11 +280,17 @@ export function CommunityPinForm({
                 onChange={(event) => void pick(event.target.files?.[0])}
               />
               {awaitingNotice && (
-                <div role="alertdialog" aria-label={t(ADD_PHOTO, lang)} className="space-y-2 rounded-md border-2 border-border p-2">
-                  <p lang={lang} className="text-sm">
+                <div
+                  role="alertdialog"
+                  aria-label={t(ADD_PHOTO, lang)}
+                  aria-describedby="pin-photo-notice"
+                  className="space-y-2 rounded-md border-2 border-border p-2"
+                >
+                  <p id="pin-photo-notice" lang={lang} className="text-sm">
                     {t(PHOTO_NOTICE, lang)}
                   </p>
                   <Button
+                    ref={noticeOk}
                     type="button"
                     size="sm"
                     onClick={() => {
@@ -281,11 +319,10 @@ export function CommunityPinForm({
                   </Button>
                 </div>
               )}
-              {photoMessage && (
-                <p role="status" lang={lang} className="text-xs">
-                  {t(photoMessage, lang)}
-                </p>
-              )}
+              {/* Always on the page: a screen reader announces text added to a live region, not one that arrives with its text. */}
+              <p role="status" lang={lang} className="text-xs empty:hidden">
+                {photoMessage ? t(photoMessage, lang) : null}
+              </p>
             </div>
           )}
 
