@@ -1,8 +1,9 @@
-# Handoff — 28 September 2026
+# Handoff — 29 September 2026
 
 ## State
 
 - `mvp` was merged into `v1` on 25 September. `v1` is the default branch and the production branch; `mvp` stays at `0b9f0fd` for reference.
+- **Two features are built and reviewed on `v1` but not pushed and not released** (29 September): pin types and photos for officials, and a Find safe evacuation center that points somewhere safe. Production is still `4f592b6`. They are the first two sections below.
 - **Production runs `4f592b6`** (officials fill in their barangay's details, below, released on 28 September). Before it ran `dea649b` (changing and viewing a barangay, below), and before that `d4ac54a` (the review fixes below), released later on 26 September. Before that, `ddf7293` was released as `dpl_DAEpr9WuSe9jkLvzPLWoHsPcQf8B` after CI run #115 passed, shipping these commits on top of `8fa9dd9`:
 
 | Commit | What |
@@ -18,6 +19,44 @@
 - Checked on production after the release: the 8 public pages tried each have their own title, `/api/health` reports the database ok with no recent errors, and `/api/alert-bars` answers (no barangay's bar has moved yet).
 - `pg_cron` now starts the GitHub workflows on time. The owner put the token in Vault at 02:18 UTC on 26 September, and the first dispatched Monitor run started at 02:30 UTC and passed.
 - The Nilombot test alert (yellow, set by Test Official at 22:17 on 25 September) was lifted at 02:21 UTC on 26 September. The action record shows it as cleared by the System owner. No push or email went out, because it was lifted in the database, not through the app.
+
+### Pin types and photos for officials, 29 September (built, not released)
+
+A pin now says what is happening: Flood (flooded, rising, receding or impassable), Road blocked, Landslide, Power line down or Other. A resident can add one photo to a new pin; only officials see it, for 7 days. Designed in `docs/superpowers/specs/2026-09-28-pin-types-and-photos-design.md`, planned in `docs/superpowers/plans/2026-09-28-pin-types-and-photos.md`, and reviewed by a fresh reviewer at the end. **On `v1`, not pushed and not released.** Alongside it, a barangay's marker no longer vanishes when you zoom in on it (`0e20a16`: the cap on markers kept the wrong barangays, and 5,898 lost theirs at some zooms; none do now).
+
+| Commit | What |
+|---|---|
+| `ef46351` | DB: `community_pins_status_tag_check` (the 8 tags), the private `pin-photos` bucket (500 KB, JPEG or WebP), `attach_pin_photo`, `pin_photos_to_delete` |
+| `918aae3` | The five kinds in the pin form, the map, the legend and the lists |
+| `604e162` | Add a photo: shrunk on the phone (1280 px, at most 500 KB, which drops where it was taken), a one-time notice, sent for officials only |
+| `ad5f42c` | Officials see the photo through a one-hour link, on the barangay page and the Operations map |
+| `3370b74` | `/api/cleanup-pin-photos`, a daily Vercel cron (03:00 UTC): deletes photos after 7 days, when their pin is removed, or after an hour if never attached |
+| `8917185`, `2884a34` | A lint fix in the form; PRD and README |
+| `5f1050e`, `27c5fd8`, `7b56971`, `7703765`, `1ea661b` | The review's fixes, below |
+
+- **One migration, applied to the live database already:** `20260928132821_pin_types_and_photos`. It adds a constraint, a bucket, two policies and two functions. The old `rls.sql` fixtures used a tag the constraint refuses (`passable`), which would have stopped CI at the first fixture; fixed in `27c5fd8`, and checked once on the live database in a rolled-back transaction.
+- **The review's fixes:** the page's security policy blocked every photo for officials (`img-src` now lists Supabase); a form closed while its photo uploaded still queued the pin; a connection lost after picking a photo dropped it silently; a stalled upload held the pin back (20 seconds, then it goes without the photo); the full-size viewer opened inside a map popup and was clipped; the form, the add button and the viewer still said "flood".
+- Not fixed, minor: Send pressed while the photo is still being shrunk sends the pin without it; the cleanup deletes files before clearing `photo_path`, so a very large backlog could leave pins pointing at deleted photos ("Photo unavailable"); a momentary failure of `attach_pin_photo` loses the photo; the camera opens directly (`capture`), so a photo already in the gallery cannot be picked; thumbnails download the whole photo; one database test is missing (an attached photo over an hour old on a live pin is not deleted).
+- **A phone still running the v21 code** throws on a pin type it does not know and shows the error card until it reloads. Navigations are network-first, so the next visit fixes it.
+- Anyone with an anonymous session can upload files of up to 500 KB into their own folder, with no per-account cap; unattached files go within about 25 hours. A per-account count in the storage policy is the follow-up.
+
+### Find safe evacuation center, 29 September (built, not released)
+
+"Find safe evacuation center" and "Find safe area" now point somewhere safe. Before, they picked by list order (in a barangay under Evacuate, the next barangay in the nationwide list: hundreds of kilometres away), drew the line from the barangay's point, checked a placeholder path and used a car router. Designed in `docs/superpowers/specs/2026-09-28-find-safe-evacuation-centre-design.md`, planned in `docs/superpowers/plans/2026-09-28-find-safe-evacuation-centre.md`, and reviewed by a fresh reviewer at the end. **On `v1`, not pushed and not released.**
+
+| Commit | What |
+|---|---|
+| `4ed0266` | `POST /api/route` asks the free FOSSGIS walking router for alternatives, and falls back to a marked straight line |
+| `f9da984` | `src/lib/safe-route.ts`: the nearest usable place within 10 km and the first route that avoids barangays under Warning or Evacuate and blocking pins |
+| `1df151c` | The home screen: `use-safe-route.ts`, the panel, the route and the destination on the map. The old `use-route-finding.ts` and `route-hazard.ts` are gone |
+| `ffcaae7` | The consent notice names the walking route planner; `CONSENT_VERSION` `2026-09-28` (everyone sees the notice once more); service worker v23; PRD and README |
+| `ae7f233`, `de94eef` | The review's fixes, below |
+
+- **No database change.** The service worker goes to v23 and the consent version changes, so every phone shows the notice once and takes the new code on its next open.
+- What it does: confirmed centres first, else likely sites from OpenStreetMap (marked "Not confirmed by your barangay"); a place in a barangay under Warning or Evacuate, or a full centre, is skipped. Alternatives are checked against barangays under alert (500 m of their point) and against standing Road blocked, Landslide, Power line down or Impassable pins from the last 24 hours (50 m). If every route passes something, the least affected is shown and says what is on it. Offline it gives a straight line to the nearest usable confirmed centre; if the router does not answer, a straight line, marked. The call button (the barangay's hotline, else 911) always shows.
+- **The review's fixes:** likely sites inside a barangay under alert were offered (the plan had dropped the spec's rule); a neighbour under Evacuate beside the start made every route unclean in a city; the pins checked were the copy the phone kept from when the app opened; the phone gave up on the likely-site search at 15 seconds when the server may take 33; a dead router was asked again for every place; thousands of barangays under alert froze a tap.
+- Not fixed, minor: a straight line that passes something is drawn dashed red with no explanation; "turn on location" also shows while a fix is still coming; "a Impassable pin"; "Find safe area" in a barangay with no alert names your own barangay.
+- **Limits to know:** the FOSSGIS router is a volunteer service with a fair-use policy, and `/api/route` is open with no rate limit; self-hosting the router is the follow-up. `/api/alerts` returns at most 1,000 rows, so in a very large event some barangays under alert are invisible to the whole app. Bringing a route into view (`FitRoute`) and the alternatives FOSSGIS returns were not exercised in a real browser.
 
 ### Officials fill in their barangay's details, 28 September
 
@@ -97,6 +136,7 @@ A self-review of `0b9f0fd..ddf7293` (the review agents hit their usage limit) fo
 
 1. **Remove the leftover `mapandanofficial@weatherwell.com` account.** It is still appointed as a municipal official for Mapandan. Remove it at `/admin/officials` while signed in as the admin, so the record names who removed it; then delete the user in Supabase → Authentication → Users. Deleting the user alone also works, because its profile and appointment go with it.
 2. **Pilot drill** with a barangay, then log its feedback as incorporated or deferred.
+3. **Before releasing pins and Find safe evacuation center:** on the preview, add one photo to a pin as a resident and open it as an official (this proves the upload with the insert-only policy, the one-hour link and the page's security policy); tap Find safe evacuation center once and check the walk comes into view. After the release, check in Vercel that the new cron (`/api/cleanup-pin-photos`) ran.
 
 ## Owner's decisions (26 September)
 
@@ -105,6 +145,8 @@ A self-review of `0b9f0fd..ddf7293` (the review agents hit their usage limit) fo
 - Barangays: "My barangay + view others". Alerts come for the barangay a resident picks; a report counts where GPS says they are.
 - Home radius (28 September): 2 km stays. Within it, a report counts for the resident's own barangay.
 - Barangay details (28 September): one language is enough for the instructions; up to 3 hotline numbers; stored in the barangay's own row.
+- Pins and photos (29 September): photos for officials only, kept 7 days. The kinds: Flood (flooded, rising, receding, impassable), Road blocked, Landslide, Power line down, Other.
+- Find safe evacuation center (29 September): walking routes from routing.openstreetmap.de (so the consent version goes up); confirmed centres first, else likely sites, marked; prefer a route around blocking pins and barangays under Warning or Evacuate, and warn.
 
 ## Open work
 
@@ -113,7 +155,8 @@ A self-review of `0b9f0fd..ddf7293` (the review agents hit their usage limit) fo
   - Real hazard data: every barangay's hazard is "Unknown", so the map's Hazards layer draws nothing until it is loaded.
   - The prediction engine, so `predicted_timing` stays empty and the loop compares outcomes, not timings.
   - The cascade heads-up downstream.
-  - Self-hosted routing: directions use the public OSRM server's car profile.
+  - Self-hosted routing: directions use FOSSGIS's free walking router, a volunteer service with a fair-use policy; `/api/route` has no rate limit.
+  - A per-account cap on pin photo uploads.
   - Geofence and rate limit for pins and votes.
   - Data export and deletion (RA 10173 Article 16).
   - Clean-up of unused anonymous identities.
@@ -131,7 +174,7 @@ A self-review of `0b9f0fd..ddf7293` (the review agents hit their usage limit) fo
 
 - App: `npm run lint`, `npm run typecheck`, `npm test`, `npm run knip`, `npm run build`.
 - Database: start Supabase the way CI does, then run `helpers.sql`, `reference-tables.sql`, `rls.sql`, `abuse.sql`, `accounts.sql` and `calibration.sql` with `psql` (see `.github/workflows/ci.yml`).
-- Last run, 28 September, locally: 1,778 app tests pass; lint (two old warnings in a test), typecheck, knip and build are clean. The database suites run in CI on every push.
+- Last run, 29 September, locally: 1,890 app tests pass; lint (two old warnings in a test), typecheck, knip and build are clean. The database suites run in CI on every push.
 
 ## Where things live
 
@@ -142,4 +185,6 @@ A self-review of `0b9f0fd..ddf7293` (the review agents hit their usage limit) fo
 - Anti-abuse: the `20260925123429` migration and `supabase/tests/abuse.sql`.
 - Barangay details: `src/features/admin/barangay-details-form.tsx`, `src/features/evacuation/place-centre-on-map.tsx`, `src/lib/barangay-details.ts` (the rules, `telHref`, `instructionsFor`), `src/app/api/barangay-details/route.ts`, `applyDetailsOverlay` in `src/lib/reference-data/types.ts`, and the `20260928083830` and `20260928123726` migrations.
 - Changing and viewing a barangay: `src/features/zones/change-barangay-dialog.tsx`, `barangay-bar.tsx` and `use-viewed-zone.ts`; `src/lib/where-you-are.ts` (`HOME_RADIUS_METERS`); `src/lib/follow-email-alerts.ts`; `followPushSubscription` in `src/lib/push-subscription.ts`; `pageWithQuery` in `public/sw.js`.
+- Pin types and photos: `src/lib/community-pin.ts` (the kinds and their labels), `src/lib/pin-photo.ts` (shrink and upload), `src/features/admin/pin-photo-thumb.tsx`, `src/app/api/cleanup-pin-photos/route.ts`, the `20260928132821` migration and the PT block in `supabase/tests/rls.sql`.
+- Find safe evacuation center: `src/lib/safe-route.ts` (the rules), `src/features/homepage-map/use-safe-route.ts` and `safe-route-panel.tsx`, `src/app/api/route/route.ts`.
 - Consent notice: `CONSENT_ITEMS` in `src/features/onboarding/consent-notice.tsx`, versioned by `CONSENT_VERSION` in `onboarding-storage.ts`.
