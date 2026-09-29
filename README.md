@@ -192,8 +192,40 @@ Conventions worth knowing before editing:
   removed, or when never attached) and `/api/cron/typhoon`. Each needs `CRON_SECRET`.
 - Migrations apply to the one live database immediately: ship app code
   before any migration that removes something the deployed code reads.
+- The server functions run in Tokyo (`"regions": ["hnd1"]` in `vercel.json`),
+  beside the database (`ap-northeast-1`). In Washington, the default, every
+  database call crossed the Pacific and back.
 - Older branches are kept as tags: `archive/hi-fi` (phase 1 UI), `archive/v0`,
   `archive/mvp`.
+
+### Backups
+
+Supabase keeps no backups of free-plan projects, so `.github/workflows/backup.yml`
+makes one every week (Monday 02:30 in the Philippines; `pg_cron` starts it on
+time) and keeps each for 30 days as an encrypted artifact of its run.
+
+Set it up once, in GitHub → Settings → Secrets and variables → Actions:
+
+1. `SUPABASE_DB_URL`: the Session pooler connection string from Supabase →
+   Connect, with the database password in it. Nothing else in WeatherWell uses
+   that password, so it can be reset in Database → Settings if nobody has it.
+2. `BACKUP_PASSPHRASE`: a long random passphrase. Keep a copy outside GitHub:
+   without it the backups cannot be opened.
+
+Then start it once from Actions → Backup → Run workflow, and check that the run
+ends with a `.gpg` artifact.
+
+To restore, download the `.gpg` file from a Backup run, create a new Supabase
+project, and load it (Supabase docs: Backup and Restore using the CLI):
+
+```bash
+gpg --decrypt -o backup.tar.gz weatherwell-DATE-runN.tar.gz.gpg
+tar xzf backup.tar.gz
+psql --single-transaction --variable ON_ERROR_STOP=1 --file backup/roles.sql --file backup/schema.sql --command 'SET session_replication_role = replica' --file backup/data.sql --dbname "$NEW_DB_URL"
+psql --single-transaction --variable ON_ERROR_STOP=1 --file backup/history_schema.sql --file backup/history_data.sql --dbname "$NEW_DB_URL"
+```
+
+Pin photos in Storage are not in the backup; they are deleted after 7 days anyway.
 
 ## Documentation
 
