@@ -21,6 +21,7 @@ import {
   createCommunityPinMarkerIcon,
   createUserLocationIcon,
   createClusteredEvacMarkerIcon,
+  createDestinationMarkerIcon,
 } from "@/features/map/marker-icons";
 import { MarkerLegend } from "@/features/map/marker-legend";
 import { HazardTypeSelector, hazardMapTitle } from "@/features/map/hazard-type-selector";
@@ -50,6 +51,7 @@ const VIEW_PHOTO: LocalizedText = { en: "View full photo", fil: "Tingnan ang buo
 const MAP_OPTIONS: LocalizedText = { en: "Map options", fil: "Opsyon ng mapa" };
 const LOCATE_ME: LocalizedText = { en: "Locate me", fil: "Hanapin ako" };
 const YOUR_LOCATION: LocalizedText = { en: "Your location", fil: "Iyong lokasyon" };
+const DESTINATION: LocalizedText = { en: "Destination", fil: "Patutunguhan" };
 const SEARCH_PLACEHOLDER: LocalizedText = { en: "Search zone…", fil: "Maghanap ng zone…" };
 const LAYERS_TITLE: LocalizedText = { en: "Layers", fil: "Mga Layer" };
 const LAYER_STATUS: LocalizedText = { en: "Status", fil: "Status" };
@@ -97,6 +99,21 @@ function FlyToTarget({ target }: { target: { lat: number; lng: number } | null }
   return null;
 }
 
+/**
+ * Brings a new route into view when it is not already: a walk drawn off the
+ * edge of the screen shows the resident nothing. A route already on screen
+ * leaves the map where it is, so a tap on a marker does not move it.
+ */
+function FitRoute({ polyline }: { polyline: [number, number][] }) {
+  const map = useMap();
+  useEffect(() => {
+    // A map with no size (not laid out yet, or hidden) cannot fit anything.
+    if (polyline.length < 2 || map.getSize().x === 0) return;
+    if (!map.getBounds().contains(polyline)) map.fitBounds(polyline, { padding: [32, 32], maxZoom: 17 });
+  }, [map, polyline]);
+  return null;
+}
+
 function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371000;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -118,9 +135,8 @@ export function MapCanvas({
   zones,
   hazardType,
   onHazardTypeChange,
-  routeZone,
-  routeHazard,
-  effectiveRoutePolyline,
+  route,
+  destination,
   onSelectZone,
   isPlacingPin = false,
   onMapClickForPin,
@@ -133,9 +149,10 @@ export function MapCanvas({
   zones: Zone[];
   hazardType: HazardType;
   onHazardTypeChange: (type: HazardType) => void;
-  routeZone: Zone | null;
-  routeHazard: boolean;
-  effectiveRoutePolyline: [number, number][];
+  /** The walk to draw, teal, or dashed dark red when it passes an alert or a blocked road. */
+  route: { polyline: [number, number][]; problems: boolean } | null;
+  /** Where the walk ends. Marked, since a likely site has no other marker. */
+  destination: { lat: number; lng: number; name?: string } | null;
   onSelectZone: (zoneId: string) => void;
   isPlacingPin?: boolean;
   onMapClickForPin?: (lat: number, lng: number) => void;
@@ -516,14 +533,25 @@ export function MapCanvas({
 
         {showPoi && <PoiMarkerLayer zones={visibleZones} zoom={zoom} />}
 
-        {routeZone && effectiveRoutePolyline.length > 0 && (
-          <Polyline
-            positions={effectiveRoutePolyline}
-            pathOptions={{
-              color: routeHazard ? "#7f1d1d" : "#0f766e",
-              weight: 4,
-              dashArray: routeHazard ? "6 6" : undefined,
-            }}
+        {route && route.polyline.length > 0 && (
+          <>
+            <FitRoute polyline={route.polyline} />
+            <Polyline
+              positions={route.polyline}
+              pathOptions={{
+                color: route.problems ? "#7f1d1d" : "#0f766e",
+                weight: 4,
+                dashArray: route.problems ? "6 6" : undefined,
+              }}
+            />
+          </>
+        )}
+
+        {destination && (
+          <Marker
+            position={[destination.lat, destination.lng]}
+            icon={createDestinationMarkerIcon(destination.name ? `${t(DESTINATION, lang)} — ${destination.name}` : t(DESTINATION, lang))}
+            zIndexOffset={900}
           />
         )}
 

@@ -32,9 +32,8 @@ describe("MapCanvas", () => {
     zones: FIXTURE_REFERENCE_DATA.zones,
     hazardType: "flood" as const,
     onHazardTypeChange: () => {},
-    routeZone: null,
-    routeHazard: false,
-    effectiveRoutePolyline: [] as [number, number][],
+    route: null,
+    destination: null,
     onSelectZone: () => {},
   };
 
@@ -134,6 +133,44 @@ describe("MapCanvas", () => {
     expect(onSelectZone).toHaveBeenCalledWith(FIXTURE_REFERENCE_DATA.zones[0].id);
   });
 
+  describe("the route it is given", () => {
+    const walk = { polyline: [[16.0288, 120.4366], [16.0026, 120.4013]] as [number, number][], problems: false };
+    // The hazard backdrop draws thin interactive paths too; the route is the 4-pixel one.
+    const linePaths = (container: HTMLElement) => container.querySelectorAll('path.leaflet-interactive[stroke-width="4"]');
+
+    it("draws the route it is given, and none when there isn't one", () => {
+      const withRoute = renderWithData(<MapCanvas {...baseProps} route={walk} />);
+      expect(linePaths(withRoute.container)).toHaveLength(1);
+      withRoute.unmount();
+
+      const without = renderWithData(<MapCanvas {...baseProps} route={null} />);
+      expect(linePaths(without.container)).toHaveLength(0);
+    });
+
+    it("draws a route that passes something dashed and dark red, and a clean one solid teal", () => {
+      const clean = renderWithData(<MapCanvas {...baseProps} route={walk} />);
+      const cleanLine = linePaths(clean.container)[0];
+      expect(cleanLine).toHaveAttribute("stroke", "#0f766e");
+      expect(cleanLine).not.toHaveAttribute("stroke-dasharray");
+      clean.unmount();
+
+      const affected = renderWithData(<MapCanvas {...baseProps} route={{ ...walk, problems: true }} />);
+      const affectedLine = linePaths(affected.container)[0];
+      expect(affectedLine).toHaveAttribute("stroke", "#7f1d1d");
+      expect(affectedLine).toHaveAttribute("stroke-dasharray", "6 6");
+    });
+
+    it("marks where the walk ends, named, and nothing when there is no destination", () => {
+      const place = { lat: 16.0026, lng: 120.4013, name: "Santa Barbara Central School" };
+      const marked = renderWithData(<MapCanvas {...baseProps} route={walk} destination={place} />);
+      expect(screen.getByRole("img", { name: "Destination — Santa Barbara Central School" })).toBeInTheDocument();
+      marked.unmount();
+
+      renderWithData(<MapCanvas {...baseProps} />);
+      expect(screen.queryByRole("img", { name: /^Destination/ })).not.toBeInTheDocument();
+    });
+  });
+
   describe("community pin actions", () => {
     it("hands this resident's own pin back to onDeletePin rather than deleting it itself", async () => {
       // MapCanvas only reports the intent — HomepageMap owns the actual
@@ -202,9 +239,8 @@ describe("MapCanvas with no hazard data (I3)", () => {
           zones={FIXTURE_REFERENCE_DATA.zones}
           hazardType="landslide"
           onHazardTypeChange={() => {}}
-          routeZone={null}
-          routeHazard={false}
-          effectiveRoutePolyline={[]}
+          route={null}
+          destination={null}
           onSelectZone={() => {}}
         />,
         { data: { hazards: {} } }

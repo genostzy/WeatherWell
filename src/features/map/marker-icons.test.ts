@@ -4,6 +4,7 @@ import {
   createStatusMarkerIcon,
   createPoiMarkerIcon,
   createEvacuationMarkerIcon,
+  createDestinationMarkerIcon,
 } from "./marker-icons";
 import { SAFE_HEX } from "@/lib/zone-status";
 import { SEVERITY_HEX } from "@/lib/severity";
@@ -95,5 +96,14 @@ describe("createCommunityPinMarkerIcon: a glyph per kind", () => {
     expect(glyph(flood)).not.toBe(glyph(blocked));
     expect(flood).toContain("dashed");
     expect(blocked).toContain("dashed");
+  });
+});
+
+describe("createDestinationMarkerIcon", () => {
+  it("is a flag that carries its own label, and escapes it", () => {
+    const html = String(createDestinationMarkerIcon('Destination — "Rizal" <School>').options.html);
+    expect(html).toContain('role="img"');
+    expect(html).toContain("Destination — &quot;Rizal&quot; &lt;School&gt;");
+    expect(html).not.toContain("<School>");
   });
 });

@@ -265,11 +265,28 @@ export async function findSafeDestination(input: SearchInput & { fetchLikelySite
   return chooseRoute(candidates, input);
 }
 
-/** The nearest barangay with no alert at all, measured from the resident, and the way to its point. */
-export async function findSafeArea(input: SearchInput): Promise<SafeRouteResult> {
-  const safe = input.zones.filter((zone) => input.statusOf(zone.id) === "safe");
-  const candidates = withinReach(safe, input.from, (zone) => zone).map(
+/** The barangays with no alert at all within 10 km, nearest first, as places to walk to (the barangay's point). */
+export function usableAreas({
+  from,
+  zones,
+  statusOf,
+}: {
+  from: LatLng;
+  zones: Zone[];
+  statusOf: (zoneId: string) => ZoneStatus;
+}): Destination[] {
+  const safe = zones.filter((zone) => statusOf(zone.id) === "safe");
+  return withinReach(safe, from, (zone) => zone).map(
     (zone): Destination => ({ kind: "area", zone, name: zone.name, lat: zone.lat, lng: zone.lng })
   );
-  return chooseRoute(candidates, input);
+}
+
+/** The nearest barangay with no alert at all, measured from the resident, and the way to its point. */
+export async function findSafeArea(input: SearchInput): Promise<SafeRouteResult> {
+  return chooseRoute(usableAreas(input), input);
+}
+
+/** The way to a place the resident picked, checked like any other; no search for a better one. */
+export async function routeToDestination(destination: Destination, input: SearchInput): Promise<SafeRouteResult> {
+  return chooseRoute([destination], input);
 }

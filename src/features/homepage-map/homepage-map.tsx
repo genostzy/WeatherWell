@@ -9,9 +9,9 @@ import { ShieldCheck, Building2, MapPin, X } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
-import { getBearingAndDistance } from "./bearing-distance";
 import { useLivePosition } from "./use-live-position";
-import { useRouteFinding } from "./use-route-finding";
+import { useSafeRoute } from "./use-safe-route";
+import { SafeRoutePanel } from "./safe-route-panel";
 import { usePinFlow } from "./use-pin-flow";
 import { useGeofenceAlert } from "./use-geofence-alert";
 import { GeofenceAlertBanner } from "./geofence-alert-banner";
@@ -26,7 +26,6 @@ import { CommunityPinForm } from "./community-pin-form";
 import { PhotoLightbox } from "./photo-lightbox";
 import { OverlayDialog } from "@/components/overlay-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { hasRealEvacuationCenter, NO_VERIFIED_CENTER } from "@/lib/zone-data-quality";
 import { CoverageNote } from "@/features/zones/coverage-note";
 import { BarangayBar } from "@/features/zones/barangay-bar";
 import { findWhereYouAre } from "@/lib/where-you-are";
@@ -38,11 +37,6 @@ const MapCanvas = dynamic(() => import("./map-canvas").then((m) => m.MapCanvas),
   loading: () => <Skeleton className="h-[280px] w-full rounded-xl sm:h-[400px] lg:h-[600px]" />,
 });
 
-const TO: LocalizedText = { en: "to", fil: "papunta sa" };
-const PASSES_THROUGH_HAZARD: LocalizedText = {
-  en: "Passes through a hazardous area",
-  fil: "Dumadaan sa mapanganib na lugar",
-};
 const FIND_SAFE_AREA: LocalizedText = { en: "Find safe area", fil: "Hanapin ang ligtas na lugar" };
 const FIND_SAFE_EVACUATION_CENTER: LocalizedText = {
   en: "Find safe evacuation center",
@@ -63,18 +57,6 @@ const DELETE_PIN_BODY: LocalizedText = {
 };
 const DELETE: LocalizedText = { en: "Delete", fil: "Burahin" };
 const CANCEL: LocalizedText = { en: "Cancel", fil: "Kanselahin" };
-
-/** Compass codes returned by `getBearingAndDistance` */
-const COMPASS_LABEL: Record<string, LocalizedText> = {
-  N: { en: "N", fil: "Hilaga" },
-  NE: { en: "NE", fil: "Hilagang-Silangan" },
-  E: { en: "E", fil: "Silangan" },
-  SE: { en: "SE", fil: "Timog-Silangan" },
-  S: { en: "S", fil: "Timog" },
-  SW: { en: "SW", fil: "Timog-Kanluran" },
-  W: { en: "W", fil: "Kanluran" },
-  NW: { en: "NW", fil: "Hilagang-Kanluran" },
-};
 
 /**
  * `zones[0]` is the barangay on screen (mine, or one being viewed);
@@ -98,15 +80,10 @@ export function HomepageMap({ zones, myZoneId }: { zones: Zone[]; myZoneId?: str
   const whereYouAre = useMemo(() => findWhereYouAre(livePosition, zones, myZone), [livePosition, zones, myZone]);
   const forecast = useFloodForecast(zones[0]?.id);
 
-  const {
-    routeZone,
-    routeHazard,
-    notice,
-    effectiveRoutePolyline,
-    handleSelectZone,
-    handleFindSafeArea,
-    handleFindSafeEvacuationCenter,
-  } = useRouteFinding(zones);
+  // Where the resident is, else their own barangay: where a walk starts from when the phone has no position.
+  const startZone = whereYouAre ?? myZone;
+  const safeRoute = useSafeRoute({ zones, livePosition, startZone });
+  const found = safeRoute.result?.status === "found" ? safeRoute.result : null;
 
   const {
     isPlacingPin,
@@ -124,14 +101,6 @@ export function HomepageMap({ zones, myZoneId }: { zones: Zone[]; myZoneId?: str
     handleConfirmDeletePin,
     handlePinFormSubmit,
   } = usePinFlow(zones);
-
-  const directionToSafety =
-    routeZone && livePosition
-      ? getBearingAndDistance(livePosition, {
-          lat: routeZone.evacuationCenterLat,
-          lng: routeZone.evacuationCenterLng,
-        })
-      : null;
 
   return (
     <>
@@ -164,7 +133,7 @@ export function HomepageMap({ zones, myZoneId }: { zones: Zone[]; myZoneId?: str
             type="button"
             aria-pressed={activeAction === "safe-area"}
             onClick={() => {
-              handleFindSafeArea();
+              safeRoute.findArea();
               setActiveAction("safe-area");
             }}
             className={`flex min-h-16 flex-col items-center justify-center gap-1.5 rounded-xl border-2 px-3 py-3 text-center outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring ${
@@ -178,7 +147,7 @@ export function HomepageMap({ zones, myZoneId }: { zones: Zone[]; myZoneId?: str
             type="button"
             aria-pressed={activeAction === "evac-centre"}
             onClick={() => {
-              handleFindSafeEvacuationCenter();
+              safeRoute.findCentre();
               setRevealEvacuationCenters(true);
               setActiveAction("evac-centre");
             }}
@@ -191,29 +160,8 @@ export function HomepageMap({ zones, myZoneId }: { zones: Zone[]; myZoneId?: str
           </button>
         </div>
 
-        {/* Route info — only when a route is active, right under the action that made it */}
-        {routeZone && (directionToSafety || routeHazard || notice) && (
-          <div className="rounded-xl border-2 border-border p-3 text-sm">
-            {routeZone && directionToSafety && hasRealEvacuationCenter(routeZone) && (
-              <p className="font-medium break-words">
-                {Math.round(directionToSafety.distanceMeters)}m{" "}
-                {t(COMPASS_LABEL[directionToSafety.compassLabel], lang)} {t(TO, lang)}{" "}
-                {routeZone.evacuationCenterName}
-              </p>
-            )}
-            {routeZone && directionToSafety && !hasRealEvacuationCenter(routeZone) && (
-              <p lang={lang} className="font-medium break-words">
-                {t(NO_VERIFIED_CENTER, lang)}
-              </p>
-            )}
-            {routeZone && routeHazard && (
-              <p className="mt-1 rounded bg-severity-evacuate/20 px-2 py-0.5 font-medium text-severity-evacuate">
-                {t(PASSES_THROUGH_HAZARD, lang)}
-              </p>
-            )}
-            {notice && <p className="mt-1 text-muted-foreground">{t(notice, lang)}</p>}
-          </div>
-        )}
+        {/* What the last tap found, right under the buttons that made it */}
+        <SafeRoutePanel route={safeRoute} action={activeAction} startZone={startZone} livePosition={livePosition} />
 
         {/* Where GPS puts you, else your own barangay: never one you are only viewing. */}
         <QuickDepthReport
@@ -233,11 +181,10 @@ export function HomepageMap({ zones, myZoneId }: { zones: Zone[]; myZoneId?: str
           zones={zones}
           hazardType={hazardType}
           onHazardTypeChange={setHazardType}
-          routeZone={routeZone}
-          routeHazard={routeHazard}
-          effectiveRoutePolyline={effectiveRoutePolyline}
+          route={found?.route ? { polyline: found.route.polyline, problems: found.problems.length > 0 } : null}
+          destination={found?.destination ?? null}
           onSelectZone={(zoneId) => {
-            handleSelectZone(zoneId);
+            safeRoute.routeToZone(zoneId);
             setActiveAction(null);
           }}
           isPlacingPin={isPlacingPin}

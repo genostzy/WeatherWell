@@ -9,7 +9,10 @@ import {
   findSafeArea,
   findSafeDestination,
   routeProblems,
+  routeToDestination,
+  usableAreas,
   usableCentres,
+  type Destination,
   type LatLng,
 } from "./safe-route";
 import type { CandidateSite } from "./osm-candidates";
@@ -191,6 +194,36 @@ describe("usableCentres", () => {
     const list = usableCentres({ from: HOME, zones, statusOf: statuses({ unsafe: "hazardous" }) });
     expect(list.map((d) => d.name)).toEqual(["a school", "b school"]);
     expect(list[0]).toMatchObject({ kind: "centre", lat: zones[1].evacuationCenterLat, lng: zones[1].evacuationCenterLng });
+  });
+});
+
+describe("usableAreas", () => {
+  it("lists the barangays with no alert at all within 10 km, nearest first", () => {
+    const where = (id: string, point: LatLng) => zone(id, at(9000, 9000), { lat: point.lat, lng: point.lng });
+    const zones = [
+      where("later", at(0, 6000)),
+      where("nearer", at(3000, 0)),
+      where("yellow", at(0, 1000)),
+      where("hazardous", at(0, 1500)),
+      where("too-far", at(0, SAFE_RADIUS_M + 500)),
+    ];
+    const list = usableAreas({ from: HOME, zones, statusOf: statuses({ yellow: "cautionary", hazardous: "hazardous" }) });
+    expect(list.map((d) => d.name)).toEqual(["Barangay nearer", "Barangay later"]);
+    expect(list[0]).toMatchObject({ kind: "area", lat: at(3000, 0).lat, lng: at(3000, 0).lng });
+  });
+});
+
+describe("routeToDestination", () => {
+  it("checks the route to a place the resident picked the same way, without searching for another", async () => {
+    const picked: Destination = { kind: "centre", zone: zone("t", at(0, 2000)), name: "t school", ...at(0, 2000) };
+    const blocker = pin("p1", "road_blocked", at(10, 1000));
+    const fetchRoutes = straightRouter();
+
+    const result = await routeToDestination(picked, input({ pins: [blocker], fetchRoutes }));
+
+    // One place, one request, however blocked the way: the resident chose it.
+    expect(fetchRoutes).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({ status: "found", destination: picked, fallback: false, problems: [{ kind: "pin", pin: { id: "p1" } }] });
   });
 });
 

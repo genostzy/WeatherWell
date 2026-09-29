@@ -225,3 +225,17 @@ export function createOfficialMarkerIcon(type: OfficialMarkerType, label: string
     iconAnchor: [15, 15],
   });
 }
+
+/**
+ * Where a walk ends: a flag on teal, the same teal as the route line. Carries
+ * its own label (the place's name), since a likely site has no other marker on
+ * the map and the line would otherwise stop at nothing.
+ */
+export function createDestinationMarkerIcon(label: string): L.DivIcon {
+  return L.divIcon({
+    className: "destination-marker",
+    html: `<div role="img" aria-label="${escapeHtml(label)}" style="width:30px;height:30px;background:#0f766e;border:2px solid white;border-radius:8px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,0.4);"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" x2="4" y1="22" y2="15"></line></svg></div>`,
+    iconSize: [34, 34],
+    iconAnchor: [17, 17],
+  });
+}
