@@ -106,25 +106,26 @@ export function CommunityPinForm({
   );
   const statusTag: PinStatusTag = kind === "flood" ? waterTag : kind;
   const [caption, setCaption] = useState(initialValues?.caption ?? "");
-  const [photo, setPhoto] = useState<Blob | null>(null);
+  // The shrunk photo, and the local link its preview shows (null where the browser can't make one).
+  const [photo, setPhoto] = useState<{ blob: Blob; url: string | null } | null>(null);
   // Held until the resident has read the notice, the first time.
   const [awaitingNotice, setAwaitingNotice] = useState<Blob | null>(null);
   const [photoMessage, setPhotoMessage] = useState<LocalizedText | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   // A second press can land before the disabled button re-renders.
   const busy = useRef(false);
   const fileInput = useRef<HTMLInputElement>(null);
 
+  // The link is made when the photo is picked; this lets it go when the photo changes or the form closes.
+  const previewUrl = photo?.url;
   useEffect(() => {
-    if (!photo || typeof URL.createObjectURL !== "function") return;
-    const url = URL.createObjectURL(photo);
-    setPreview(url);
-    return () => URL.revokeObjectURL?.(url);
-  }, [photo]);
+    return () => {
+      if (previewUrl) URL.revokeObjectURL?.(previewUrl);
+    };
+  }, [previewUrl]);
 
   function attach(shrunk: Blob) {
-    setPhoto(shrunk);
+    setPhoto({ blob: shrunk, url: typeof URL.createObjectURL === "function" ? URL.createObjectURL(shrunk) : null });
     setPhotoMessage(navigator.onLine ? null : NEEDS_CONNECTION);
   }
 
@@ -143,7 +144,6 @@ export function CommunityPinForm({
 
   function removePhoto() {
     setPhoto(null);
-    setPreview(null);
     setPhotoMessage(null);
     if (fileInput.current) fileInput.current.value = "";
   }
@@ -154,7 +154,7 @@ export function CommunityPinForm({
     if (photo && navigator.onLine) {
       busy.current = true;
       setSending(true);
-      const path = await uploadPinPhoto(photo);
+      const path = await uploadPinPhoto(photo.blob);
       busy.current = false;
       setSending(false);
       if (!path) {
@@ -271,11 +271,11 @@ export function CommunityPinForm({
               )}
               {photo && (
                 <div className="flex items-center gap-2">
-                  {preview && (
+                  {photo.url && (
                     // eslint-disable-next-line @next/next/no-img-element -- a local blob: URL of the resident's own photo
-                    <img src={preview} alt={t(PHOTO_ALT, lang)} className="h-16 w-16 rounded-md object-cover" />
+                    <img src={photo.url} alt={t(PHOTO_ALT, lang)} className="h-16 w-16 rounded-md object-cover" />
                   )}
-                  {!preview && <span role="img" aria-label={t(PHOTO_ALT, lang)} className="h-16 w-16 rounded-md bg-muted" />}
+                  {!photo.url && <span role="img" aria-label={t(PHOTO_ALT, lang)} className="h-16 w-16 rounded-md bg-muted" />}
                   <Button type="button" size="sm" variant="outline" onClick={removePhoto}>
                     {t(REMOVE_PHOTO, lang)}
                   </Button>

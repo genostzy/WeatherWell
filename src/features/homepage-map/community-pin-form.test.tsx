@@ -183,6 +183,21 @@ describe("CommunityPinForm: a photo for officials", () => {
     expect(onSubmit).toHaveBeenCalledWith({ statusTag: "flooded", caption: "Water at the gate" });
   });
 
+  it("lets go of the preview link when the photo is removed, and when the form closes", async () => {
+    localStorage.setItem("weatherwell.pinPhotoNoticeSeen", "1");
+    const revoke = vi.fn();
+    URL.revokeObjectURL = revoke;
+    const user = userEvent.setup();
+    const form = render(<CommunityPinForm onSubmit={() => {}} onCancel={() => {}} />);
+    await fillAndPick(user);
+    await user.click(screen.getByRole("button", { name: /remove photo/i }));
+    expect(revoke).toHaveBeenCalledTimes(1);
+    expect(revoke).toHaveBeenCalledWith("blob:preview");
+    await user.upload(screen.getByLabelText(/add photo \(only officials see it\)/i), picked());
+    form.unmount();
+    expect(revoke).toHaveBeenCalledTimes(2);
+  });
+
   it("uploads once when Send is pressed twice", async () => {
     localStorage.setItem("weatherwell.pinPhotoNoticeSeen", "1");
     let finish: (path: string) => void = () => {};
