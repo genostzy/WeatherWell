@@ -878,6 +878,7 @@ export type Database = {
           lng: number
           municipality_name: string
           name: string
+          profile_set_at: string | null
           province_name: string
           psgc_barangay_code: string
         }
@@ -893,6 +894,7 @@ export type Database = {
           lng: number
           municipality_name?: string
           name: string
+          profile_set_at?: string | null
           province_name?: string
           psgc_barangay_code: string
         }
@@ -908,6 +910,7 @@ export type Database = {
           lng?: number
           municipality_name?: string
           name?: string
+          profile_set_at?: string | null
           province_name?: string
           psgc_barangay_code?: string
         }
@@ -1039,6 +1042,16 @@ export type Database = {
           p_hotlines: string[]
           p_instructions_en: string
           p_instructions_fil: string
+          p_zone_id: string
+        }
+        Returns: Json
+      }
+      set_barangay_profile: {
+        Args: {
+          p_downstream_zone_id: string
+          p_flood: string
+          p_landslide: string
+          p_storm_surge: string
           p_zone_id: string
         }
         Returns: Json

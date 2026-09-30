@@ -3544,4 +3544,108 @@ begin
   raise notice 'ok PT1-PT6: pin types, and pin photos only officials can read';
 end $$;
 
+-- FP1-FP5: officials set their barangay's flood profile and its downstream barangay.
+do $$
+declare z record; n int; saved jsonb; u text; bad record;
+begin
+  set local role postgres;
+  perform set_config('request.jwt.claims', '', true);
+  insert into auth.users (id) values
+    ('b6000000-0000-4000-8000-000000000001'), ('b6000000-0000-4000-8000-000000000002'),
+    ('b6000000-0000-4000-8000-000000000003');
+  insert into public.zones
+    (id, psgc_barangay_code, name, evacuation_route_text, lat, lng, evacuation_route_path, hotline_number)
+  values
+    ('tests-fixture-zone-profile', '9900000071', 'Test Zone Profile', '{"en":"x","fil":"x"}'::jsonb,
+     16.0288, 120.4366, '[]'::jsonb, '000'),
+    ('tests-fixture-zone-profile-near', '9900000072', 'Test Zone Near', '{"en":"x","fil":"x"}'::jsonb,
+     16.0288 + 5 / 111.32, 120.4366, '[]'::jsonb, '000'),
+    ('tests-fixture-zone-profile-far', '9900000073', 'Test Zone Far', '{"en":"x","fil":"x"}'::jsonb,
+     16.0288 + 25 / 111.32, 120.4366, '[]'::jsonb, '000');
+  insert into public.profiles (id, role, area_code, display_name) values
+    ('b6000000-0000-4000-8000-000000000001', 'operator', '9900000071', 'Test Profile Kagawad'),
+    ('b6000000-0000-4000-8000-000000000003', 'operator', '9900000072', 'Test Near Kagawad')
+  on conflict (id) do update set role = excluded.role, area_code = excluded.area_code, display_name = excluded.display_name;
+
+  -- FP1: a resident and another barangay's official are refused, and a caller with no session cannot call it.
+  set local role authenticated;
+  foreach u in array array['b6000000-0000-4000-8000-000000000002', 'b6000000-0000-4000-8000-000000000003'] loop
+    perform set_config('request.jwt.claims', json_build_object('sub', u, 'role', 'authenticated')::text, true);
+    begin
+      perform public.set_barangay_profile('tests-fixture-zone-profile', 'high', 'low', 'unknown', null);
+      raise exception using errcode = 'TSTFL', message = format('FP1: %s saved another barangay''s profile', u);
+    exception when insufficient_privilege then null;
+    end;
+  end loop;
+  reset role;
+  if has_function_privilege('anon', 'public.set_barangay_profile(text,text,text,text,text)', 'execute') then
+    raise exception using errcode = 'TSTFL', message = 'FP1: anon can set a flood profile';
+  end if;
+
+  -- FP2-FP3: the barangay's own official saves. The three levels are written although no row existed, the
+  -- downstream link and profile_set_at are set, one action is logged, and the saved profile is returned.
+  set local role authenticated;
+  perform set_config('request.jwt.claims', '{"sub":"b6000000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+  saved := public.set_barangay_profile('tests-fixture-zone-profile', 'high', 'low', 'unknown', 'tests-fixture-zone-profile-near');
+  reset role;
+  select count(*) into n from public.hazard_susceptibility
+   where (id, zone_id, hazard_type, risk_level) in (
+     ('tests-fixture-zone-profile-flood', 'tests-fixture-zone-profile', 'flood', 'high'),
+     ('tests-fixture-zone-profile-landslide', 'tests-fixture-zone-profile', 'landslide', 'low'),
+     ('tests-fixture-zone-profile-storm_surge', 'tests-fixture-zone-profile', 'storm_surge', 'unknown'));
+  if n <> 3 then raise exception using errcode = 'TSTFL', message = format('FP2: %s of 3 levels saved', n); end if;
+  select downstream_zone_id, profile_set_at into z from public.zones where id = 'tests-fixture-zone-profile';
+  if z.downstream_zone_id is distinct from 'tests-fixture-zone-profile-near' or z.profile_set_at is null then
+    raise exception using errcode = 'TSTFL', message = format('FP2: the barangay was not updated: %s', z);
+  end if;
+  if saved <> jsonb_build_object('id', 'tests-fixture-zone-profile', 'flood', 'high', 'landslide', 'low',
+       'storm_surge', 'unknown', 'downstream_zone_id', 'tests-fixture-zone-profile-near') then
+    raise exception using errcode = 'TSTFL', message = format('FP2: returned %s', saved);
+  end if;
+  select count(*) into n from public.official_actions
+   where zone_id = 'tests-fixture-zone-profile' and action = 'barangay.profile' and actor_name = 'Test Profile Kagawad'
+     and detail = '{"flood":"high","landslide":"low","storm_surge":"unknown","downstream":"tests-fixture-zone-profile-near"}'::jsonb;
+  if n <> 1 then raise exception using errcode = 'TSTFL', message = format('FP2: logged %s times', n); end if;
+
+  -- FP4: an unknown level, the barangay itself, a barangay 25 km away and an unknown id are refused;
+  -- null clears the link.
+  set local role authenticated;
+  perform set_config('request.jwt.claims', '{"sub":"b6000000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+  for bad in select * from (values
+      ('severe', 'low', 'low', null::text),
+      ('low', 'low', 'low', 'tests-fixture-zone-profile'),
+      ('low', 'low', 'low', 'tests-fixture-zone-profile-far'),
+      ('low', 'low', 'low', 'no-such-zone')) as b(flood, landslide, surge, downstream) loop
+    begin
+      perform public.set_barangay_profile('tests-fixture-zone-profile', bad.flood, bad.landslide, bad.surge, bad.downstream);
+      raise exception using errcode = 'TSTFL', message = format('FP4: accepted %s', bad);
+    exception when invalid_parameter_value then null;
+    end;
+  end loop;
+  perform public.set_barangay_profile('tests-fixture-zone-profile', 'high', 'low', 'unknown', null);
+  reset role;
+  if (select downstream_zone_id from public.zones where id = 'tests-fixture-zone-profile') is not null then
+    raise exception using errcode = 'TSTFL', message = 'FP4: null did not clear the downstream link';
+  end if;
+
+  -- FP5: a resident cannot change the levels or the link directly.
+  set local role authenticated;
+  perform set_config('request.jwt.claims', '{"sub":"b6000000-0000-4000-8000-000000000002","role":"authenticated"}', true);
+  begin
+    update public.hazard_susceptibility set risk_level = 'low' where id = 'tests-fixture-zone-profile-flood';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    update public.zones set downstream_zone_id = 'tests-fixture-zone-profile-near' where id = 'tests-fixture-zone-profile';
+  exception when insufficient_privilege then null;
+  end;
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+  if (select risk_level from public.hazard_susceptibility where id = 'tests-fixture-zone-profile-flood') <> 'high'
+     or (select downstream_zone_id from public.zones where id = 'tests-fixture-zone-profile') is not null then
+    raise exception using errcode = 'TSTFL', message = 'FP5: a resident changed a flood profile directly';
+  end if;
+  raise notice 'ok FP1-FP5: only a barangay''s officials set its flood profile, and only sensible values';
+end $$;
+
 rollback;
