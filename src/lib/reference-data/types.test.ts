@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { applyDetailsOverlay, toReferenceData } from "./types";
+import { applyDetailsOverlay, applyProfileOverlay, toReferenceData } from "./types";
 import { MOCK_ZONES } from "@/lib/mock-data";
 import { resolveEffectiveCenterStatus } from "@/lib/center-status";
 
@@ -121,6 +121,30 @@ describe("toReferenceData", () => {
   });
 });
 
+
+describe("applyProfileOverlay", () => {
+  it("lays an official's levels and downstream link over the static data", () => {
+    const [a, b] = MOCK_ZONES;
+    const data = { zones: [a, b], hazards: { [a.id]: { flood: "unknown" as const, dam_release: "low" as const } } };
+    const out = applyProfileOverlay(data, [
+      { id: a.id, flood: "high", landslide: "low", storm_surge: "unknown", downstream_zone_id: b.id },
+    ]);
+    expect(out.hazards[a.id]).toEqual({ flood: "high", landslide: "low", storm_surge: "unknown", dam_release: "low" });
+    expect(out.zones[0].downstreamZoneId).toBe(b.id);
+    expect(out.zones[1]).toBe(b);
+  });
+
+  it("clears a link set to none, and an empty feed changes nothing", () => {
+    const [a] = MOCK_ZONES;
+    const linked = { ...a, downstreamZoneId: "somewhere" };
+    const data = { zones: [linked], hazards: {} };
+    const out = applyProfileOverlay(data, [
+      { id: a.id, flood: "low", landslide: "low", storm_surge: "low", downstream_zone_id: null },
+    ]);
+    expect(out.zones[0].downstreamZoneId).toBeUndefined();
+    expect(applyProfileOverlay(data, [])).toBe(data);
+  });
+});
 
 describe("applyDetailsOverlay", () => {
   it("lays an official's numbers and instructions over the static barangay", () => {

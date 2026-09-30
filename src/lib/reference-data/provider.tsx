@@ -11,9 +11,11 @@ import type { AlertRecord, CenterStatus, LocalizedText } from "@/lib/types";
 import {
   applyCentreOverlay,
   applyDetailsOverlay,
+  applyProfileOverlay,
   expandReferenceData,
   type CentreOverlayRow,
   type DetailsOverlayRow,
+  type ProfileOverlayRow,
   type ReferenceData,
 } from "./types";
 
@@ -44,6 +46,9 @@ export const SetCenterStatusContext = createContext<((zoneId: string, status: Ce
  * SetCenterStatusContext: a refetch would get the service worker's cached copy.
  */
 export const SetBarangayDetailsContext = createContext<((row: DetailsOverlayRow) => void) | null>(null);
+
+/** The same for a barangay's flood profile once set_barangay_profile confirms it (see applyProfileOverlay). */
+export const SetBarangayProfileContext = createContext<((row: ProfileOverlayRow) => void) | null>(null);
 
 const LOADING: LocalizedText = { en: "Loading your zone…", fil: "Kinukuha ang iyong zone…" };
 const UNREACHABLE: LocalizedText = {
@@ -215,6 +220,21 @@ export function ReferenceDataProvider({
       .catch(() => undefined);
   }, []);
 
+  /** Officials' flood profiles, laid over the same way; a failure leaves the static levels showing. */
+  const loadProfileOverlay = useCallback(() => {
+    fetchWithTimeout("/api/barangay-profiles", FETCH_TIMEOUT_MS)
+      .then((response) => (response.ok ? (response.json() as Promise<ProfileOverlayRow[]>) : null))
+      .then((rows) => {
+        if (!Array.isArray(rows) || rows.length === 0) return;
+        setState((current) =>
+          current.status === "ready"
+            ? { ...current, data: { ...current.data, ...applyProfileOverlay(current.data, rows) } }
+            : current
+        );
+      })
+      .catch(() => undefined);
+  }, []);
+
   const load = useCallback(() => {
     Promise.all([
       fetchWithTimeout("/data/reference-data.json", FETCH_TIMEOUT_MS),
@@ -243,12 +263,13 @@ export function ReferenceDataProvider({
           });
           loadCentreOverlay();
           loadDetailsOverlay();
+          loadProfileOverlay();
         });
       })
       .catch(() => {
         setState({ status: "failed" });
       });
-  }, [loadCentreOverlay, loadDetailsOverlay]);
+  }, [loadCentreOverlay, loadDetailsOverlay, loadProfileOverlay]);
 
   /**
    * Re-reads alerts only, after an official's alert write is confirmed (C1).
@@ -302,6 +323,15 @@ export function ReferenceDataProvider({
     );
   }, []);
 
+  /** Patches one barangay's flood profile once set_barangay_profile confirms it (see SetBarangayProfileContext). */
+  const applyProfile = useCallback((row: ProfileOverlayRow) => {
+    setState((current) =>
+      current.status === "ready"
+        ? { ...current, data: { ...current.data, ...applyProfileOverlay(current.data, [row]) } }
+        : current
+    );
+  }, []);
+
   const retry = useCallback(() => {
     setState({ status: "loading" });
     load();
@@ -344,12 +374,14 @@ export function ReferenceDataProvider({
         // copies of the real onboarding page once its data happens to load.
         <SetCenterStatusContext.Provider value={applyCenterStatus}>
           <SetBarangayDetailsContext.Provider value={applyDetails}>
-            <AlertsContext.Provider value={state.alerts}>
-              <AlertsRefreshContext.Provider value={refreshAlerts}>
-                {!bypassGate && children}
-                {gatedExtras}
-              </AlertsRefreshContext.Provider>
-            </AlertsContext.Provider>
+            <SetBarangayProfileContext.Provider value={applyProfile}>
+              <AlertsContext.Provider value={state.alerts}>
+                <AlertsRefreshContext.Provider value={refreshAlerts}>
+                  {!bypassGate && children}
+                  {gatedExtras}
+                </AlertsRefreshContext.Provider>
+              </AlertsContext.Provider>
+            </SetBarangayProfileContext.Provider>
           </SetBarangayDetailsContext.Provider>
         </SetCenterStatusContext.Provider>
       )}

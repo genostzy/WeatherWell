@@ -264,6 +264,41 @@ export function applyDetailsOverlay(zones: Zone[], rows: DetailsOverlayRow[]): Z
   });
 }
 
+/** One barangay's official flood profile (set_barangay_profile), as /api/barangay-profiles lists it. */
+export interface ProfileOverlayRow {
+  id: string;
+  flood: HazardLevel;
+  landslide: HazardLevel;
+  storm_surge: HazardLevel;
+  downstream_zone_id: string | null;
+}
+
+/**
+ * An official's hazard levels and downstream barangay, laid over the static
+ * file like their details (applyDetailsOverlay). Other hazards a zone has
+ * (dam release, say) stay as they were; every other zone is the same object.
+ */
+export function applyProfileOverlay(
+  data: { zones: Zone[]; hazards: HazardsByZone },
+  rows: ProfileOverlayRow[]
+): { zones: Zone[]; hazards: HazardsByZone } {
+  if (rows.length === 0) return data;
+  const byZone = new Map(rows.map((r) => [r.id, r]));
+  const hazards: HazardsByZone = { ...data.hazards };
+  for (const r of rows) {
+    hazards[r.id] = { ...hazards[r.id], flood: r.flood, landslide: r.landslide, storm_surge: r.storm_surge };
+  }
+  const zones = data.zones.map((zone) => {
+    const row = byZone.get(zone.id);
+    if (!row) return zone;
+    const patched: Zone = { ...zone };
+    if (row.downstream_zone_id) patched.downstreamZoneId = row.downstream_zone_id;
+    else delete patched.downstreamZoneId;
+    return patched;
+  });
+  return { zones, hazards };
+}
+
 /** Row shapes as Postgres returns them — snake_case, centre nested by the join. */
 interface ZoneRow {
   id: string;

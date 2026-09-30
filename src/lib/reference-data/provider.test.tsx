@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor, act } from "@testing-library/react";
 import { ReferenceDataProvider, FETCH_TIMEOUT_MS } from "./provider";
-import { useZones, usePois, useHazardsForZone } from "./use-reference-data";
+import { useZones, usePois, useHazards, useHazardsForZone } from "./use-reference-data";
 import { useAlerts } from "@/lib/alerts-store";
 import { LanguageProvider } from "@/features/i18n/language-provider";
 import { ONBOARDED_KEY, markConsented } from "@/features/onboarding/onboarding-storage";
@@ -175,6 +175,49 @@ describe("ReferenceDataProvider", () => {
       </LanguageProvider>
     );
     expect(await screen.findByText("0917 123 4567")).toBeInTheDocument();
+  });
+
+  it("lays officials' flood profiles over the static hazards, and keeps them when the feed fails", async () => {
+    function FloodLevel() {
+      const hazards = useHazards();
+      return <span>{hazards["zone-1"]?.flood ?? "none"}</span>;
+    }
+    const reference = { zones: [{ id: "zone-1", name: "N", hotlineNumber: "000" }], pois: [], hazards: {} };
+    const profiles = [{ id: "zone-1", flood: "high", landslide: "low", storm_surge: "unknown", downstream_zone_id: null }];
+    (fetch as ReturnType<typeof vi.fn>).mockImplementation(async (url: string) => ({
+      ok: true,
+      json: async () =>
+        String(url).includes("/api/barangay-profiles")
+          ? profiles
+          : String(url).includes("/api/centres") || String(url).includes("/api/alerts") || String(url).includes("/api/barangay-details")
+            ? []
+            : reference,
+    }));
+    const first = render(
+      <LanguageProvider>
+        <ReferenceDataProvider>
+          <FloodLevel />
+        </ReferenceDataProvider>
+      </LanguageProvider>
+    );
+    expect(await screen.findByText("high")).toBeInTheDocument();
+    first.unmount();
+
+    (fetch as ReturnType<typeof vi.fn>).mockImplementation(async (url: string) =>
+      String(url).includes("/api/barangay-profiles")
+        ? { ok: false, json: async () => ({}) }
+        : { ok: true, json: async () => (String(url).includes("/api/") ? [] : reference) }
+    );
+    render(
+      <LanguageProvider>
+        <ReferenceDataProvider>
+          <FloodLevel />
+        </ReferenceDataProvider>
+      </LanguageProvider>
+    );
+    expect(await screen.findByText("none")).toBeInTheDocument();
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/barangay-profiles", expect.anything()));
+    expect(screen.getByText("none")).toBeInTheDocument();
   });
 
   it("keeps the static details when the feed fails", async () => {

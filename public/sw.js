@@ -95,8 +95,11 @@ const ALERTS_TIMEOUT_MS = 8000;
  * /api/barangay-details qualifies the same way: the zones table is readable
  * by anyone, the route uses the sessionless client, and the hotline is what a
  * resident with no data but a phone signal can still use.
+ * /api/barangay-profiles qualifies the same way: zones and hazard levels are
+ * readable by anyone, and the Hazards layer should show an official's levels
+ * offline too.
  */
-const PUBLIC_API_PATHS = ["/api/reports", "/api/pins", "/api/centres", "/api/barangay-details"];
+const PUBLIC_API_PATHS = ["/api/reports", "/api/pins", "/api/centres", "/api/barangay-details", "/api/barangay-profiles"];
 
 // /admin, /admin/map and /admin/simulation are deliberately NOT precached
 // here. Once /admin needs a sign-in, pre-downloading it would save the
