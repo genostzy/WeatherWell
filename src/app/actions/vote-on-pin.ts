@@ -38,12 +38,14 @@ async function callerId(
  * instant that ordering happens; on the next drain the pin will already be
  * there and the same vote will go through.
  */
-function classify(error: { code?: string; message?: string }): ActionResult {
+function classify(error: { code?: string; message?: string; hint?: string }): ActionResult {
   if (error.code === FOREIGN_KEY_VIOLATION) {
     return { ok: false, permanent: false, error: error.message ?? "Referenced pin is not here yet. Will retry." };
   }
   const permanent = error.code === INSUFFICIENT_PRIVILEGE || error.code === CHECK_VIOLATION;
-  return { ok: false, permanent, error: error.message ?? `Database error ${error.code ?? "(no code)"}` };
+  const result = { ok: false as const, permanent, error: error.message ?? `Database error ${error.code ?? "(no code)"}` };
+  // Thirty votes an hour (pin_votes_rate_limit): the vote waits in the outbox, as a held-back report does.
+  return error.hint === "rate_limited" ? { ...result, reason: "rate_limited" } : result;
 }
 
 export interface VoteOnPinInput {

@@ -52,12 +52,15 @@ function refused(what: string): ActionResult {
   return { ok: false, permanent: true, error: `That pin is not yours to ${what}, or no longer exists.` };
 }
 
-function classify(error: { code?: string; message?: string }): ActionResult {
+function classify(error: { code?: string; message?: string; hint?: string }): ActionResult {
   const permanent =
     error.code === INSUFFICIENT_PRIVILEGE ||
     error.code === CHECK_VIOLATION ||
     error.code === FOREIGN_KEY_VIOLATION;
-  return { ok: false, permanent, error: error.message ?? `Database error ${error.code ?? "(no code)"}` };
+  const result = { ok: false as const, permanent, error: error.message ?? `Database error ${error.code ?? "(no code)"}` };
+  // The database names its refusals by hint, as for reports: too far from the
+  // barangay (a CHECK violation, so permanent) or too many this hour (waits).
+  return error.hint === "too_far" || error.hint === "rate_limited" ? { ...result, reason: error.hint } : result;
 }
 
 /**

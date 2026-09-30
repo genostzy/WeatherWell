@@ -59,6 +59,21 @@ describe("voteOnPin", () => {
     expect(result).toEqual({ ok: false, permanent: false, error: expect.any(String) });
   });
 
+  it("lets a rate-limited vote wait, with the reason", async () => {
+    from.mockReturnValue({
+      upsert: vi.fn().mockResolvedValue({ error: { code: "P0001", hint: "rate_limited", message: "too many" } }),
+      select: vi.fn(),
+    });
+    const { voteOnPin } = await import("./vote-on-pin");
+
+    expect(await voteOnPin({ pinId: "pin-1", direction: 1 })).toEqual({
+      ok: false,
+      permanent: false,
+      reason: "rate_limited",
+      error: "too many",
+    });
+  });
+
   it("rejects a direction that is neither 1 nor -1 without contacting the database", async () => {
     const { voteOnPin } = await import("./vote-on-pin");
 

@@ -132,6 +132,24 @@ describe("createPin", () => {
     });
     expect(await createPin(validPin)).toMatchObject({ ok: false, permanent: false });
   });
+
+  it("refuses a pin too far from its barangay for good, with the reason", async () => {
+    getClaims.mockResolvedValue({ data: { claims: { sub: "real-user" } } });
+    from.mockReturnValue({
+      insert: vi.fn().mockResolvedValue({ error: { code: "23514", hint: "too_far", message: "too far" } }),
+    });
+    const { createPin } = await import("./pins");
+    expect(await createPin(validPin)).toEqual({ ok: false, permanent: true, reason: "too_far", error: "too far" });
+  });
+
+  it("lets a rate-limited pin wait, with the reason", async () => {
+    getClaims.mockResolvedValue({ data: { claims: { sub: "real-user" } } });
+    from.mockReturnValue({
+      insert: vi.fn().mockResolvedValue({ error: { code: "P0001", hint: "rate_limited", message: "too many" } }),
+    });
+    const { createPin } = await import("./pins");
+    expect(await createPin(validPin)).toEqual({ ok: false, permanent: false, reason: "rate_limited", error: "too many" });
+  });
 });
 
 describe("editPin", () => {
