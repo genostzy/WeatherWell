@@ -25,7 +25,13 @@
 
 ### Tokyo region, weekly backups and exact route limits, 29 September (built, not released)
 
-Three of the recommendations the owner said to do all of. The other four (a barangay flood profile with the downstream heads-up, residents' data rights, limits for pins, votes and photos, and a rain heads-up) are specs waiting for the owner's review. **On `v1`, not pushed and not released.**
+Three of the recommendations the owner said to do all of. The other four are specs waiting for the owner's review, in `docs/superpowers/specs/`:
+
+- `2026-09-29-flood-profile-and-downstream-heads-up-design.md`: officials set their barangay's flood, landslide and storm-surge levels and its downstream barangay; the Hazards layer shows them; Warning or Evacuate upstream tells the downstream officials (officials only, the owner's decision).
+- `2026-09-29-residents-data-rights-design.md`: download and delete in Settings; reports are anonymised, not deleted (the owner's decision).
+- `2026-09-29-pin-vote-photo-limits-design.md`: pins within 15 km of their barangay, 5 pins and 30 votes an hour, 10 photos a day.
+- `2026-09-29-rain-heads-up-design.md`: a Forecast advisory hours ahead of heavy rain for towns with officials (the owner chose this first step of prediction).
+ **On `v1`, not pushed and not released.**
 
 | Commit | What |
 |---|---|
