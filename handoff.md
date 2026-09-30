@@ -3,6 +3,7 @@
 ## State
 
 - `mvp` was merged into `v1` on 25 September. `v1` is the default branch and the production branch; `mvp` stays at `0b9f0fd` for reference.
+- **On `v1`, not pushed and not released** (30 September): limits for pins, votes and photos, the first of four approved plans. The first section below.
 - **Production runs `4057809`**, released on 30 September as `dpl_EsTauojzpkGCWE1QPBCdFRr34Q2U` after CI run #128 passed: the server functions in Tokyo, a weekly encrypted backup, and `/api/route`'s limits counted exactly in the database. The first section below.
 - Before that, production ran `12a24c6`, promoted on 29 September from the Vercel dashboard after CI run #125 passed (the Vercel connector was failing, so its deployment id is not recorded here): the "Fix the map" link beside the map's OpenStreetMap credit (`c2bc778`). The first section below.
 - Before that, production ran `b7b17e6` (`dpl_7hvjZwFretu7RPNuynnSstp6VoJT`, CI run #123): Next.js 16.3.7 for a security fix, and limits on how often `/api/route` asks the walking router. Also the first section below.
@@ -22,6 +23,19 @@
 - Checked on production after the release: the 8 public pages tried each have their own title, `/api/health` reports the database ok with no recent errors, and `/api/alert-bars` answers (no barangay's bar has moved yet).
 - `pg_cron` now starts the GitHub workflows on time. The owner put the token in Vault at 02:18 UTC on 26 September, and the first dispatched Monitor run started at 02:30 UTC and passed.
 - The Nilombot test alert (yellow, set by Test Official at 22:17 on 25 September) was lifted at 02:21 UTC on 26 September. The action record shows it as cleared by the System owner. No push or email went out, because it was lifted in the database, not through the app.
+
+### Limits for pins, votes and photos, 30 September (built, not released)
+
+The first of the four approved plans (`docs/superpowers/plans/2026-09-30-pin-vote-photo-limits.md`). **On `v1`, not pushed and not released.**
+
+| Commit | What |
+|---|---|
+| `d8b481c` | `20260930070414_pin_vote_photo_limits`, applied to the live database: a pin more than 15 km from its barangay is refused (`too_far`), and one account places 5 pins (officials not counted) and casts 30 votes an hour (`rate_limited`); the photo upload policy allows 10 a day, counted by `private.my_photo_uploads_today()`. `abuse.sql` P1-P4, V1-V2, PH1-PH2, L3 |
+| `e53b110` | `createPin` and `voteOnPin` return the refusal's reason |
+| `9f4df46` | The outbox badge names each limit; the pin form says when the day's photos are used up |
+
+- **The migration is live and refuses writes now.** Until the release, the production app shows a refused pin or vote as a generic failure and retries a rate-limited one later. The database holds 2 pins, so nobody is near a limit.
+- Checked on the live database in a script that rolled back: every new test block passes, and one real resident upload still works under the new policy (a policy's function call is resolved when the policy is made, so the uploader needs no access to `private`; only a direct call would).
 
 ### Tokyo region, weekly backups and exact route limits, 29 September
 
@@ -77,7 +91,7 @@ A pin now says what is happening: Flood (flooded, rising, receding or impassable
 - **The review's fixes:** the page's security policy blocked every photo for officials (`img-src` now lists Supabase); a form closed while its photo uploaded still queued the pin; a connection lost after picking a photo dropped it silently; a stalled upload held the pin back (20 seconds, then it goes without the photo); the full-size viewer opened inside a map popup and was clipped; the form, the add button and the viewer still said "flood".
 - Not fixed, minor: Send pressed while the photo is still being shrunk sends the pin without it; the cleanup deletes files before clearing `photo_path`, so a very large backlog could leave pins pointing at deleted photos ("Photo unavailable"); a momentary failure of `attach_pin_photo` loses the photo; the camera opens directly (`capture`), so a photo already in the gallery cannot be picked; thumbnails download the whole photo; one database test is missing (an attached photo over an hour old on a live pin is not deleted).
 - **A phone still running the v21 code** throws on a pin type it does not know and shows the error card until it reloads. Navigations are network-first, so the next visit fixes it.
-- Anyone with an anonymous session can upload files of up to 500 KB into their own folder, with no per-account cap; unattached files go within about 25 hours. A per-account count in the storage policy is the follow-up.
+- Anyone with an anonymous session can upload files of up to 500 KB into their own folder; unattached files go within about 25 hours. Since `20260930070414_pin_vote_photo_limits`, one account uploads at most 10 a day.
 - Checked on production after the release: `/api/cleanup-pin-photos` answers 401 without the cron secret; the page's security policy lists Supabase in `img-src`; `/api/pins` and the pages answer. **Not tried by hand:** a real photo upload by a resident and the view by an official (needs their sessions). The cron's first run happened: the database's API log shows `pin_photos_to_delete` answered 200 at 03:36 UTC on 30 September.
 
 ### Find safe evacuation center, 29 September
@@ -198,8 +212,6 @@ A self-review of `0b9f0fd..ddf7293` (the review agents hit their usage limit) fo
   - The prediction engine, so `predicted_timing` stays empty and the loop compares outcomes, not timings.
   - The cascade heads-up downstream.
   - Self-hosted routing: directions use FOSSGIS's free walking router, a volunteer service that allows one request a second; past that, residents get the marked straight line.
-  - A per-account cap on pin photo uploads.
-  - Geofence and rate limit for pins and votes.
   - Data export and deletion (RA 10173 Article 16).
   - Clean-up of unused anonymous identities.
 
