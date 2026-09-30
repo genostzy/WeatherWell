@@ -13,6 +13,9 @@
 --     flood report as an outlier. Outliers are flagged, never deleted.
 --   * New anonymous identities are limited only by Supabase Auth's per-IP
 --     sign-up rate limit.
+--   * A pin names its own barangay, and the phone names the nearest one, so
+--     the pin geofence (layer 10) refuses only spots far from every barangay.
+--     Pins anywhere else are bounded by the hourly count, not by place.
 begin;
 
 -- alerts_record_cleared is deferred to commit; this suite never commits.
@@ -480,7 +483,7 @@ do $$
 begin
   insert into auth.users (id, created_at)
     select ('ab300000-0000-4000-8000-0000000000' || lpad(g::text, 2, '0'))::uuid, now() - interval '2 days'
-      from generate_series(1, 12) g;
+      from generate_series(1, 13) g;
 end $$;
 
 -- P1: a pin 16 km from its barangay is refused for good; 14 km is accepted.
@@ -552,6 +555,24 @@ begin
     if v_hint is distinct from 'rate_limited' then raise; end if;
   end;
   raise notice 'ok P4: a replay under an existing id spends nothing';
+end $$;
+
+-- P4b: a replay once the hour's 5 pins have landed is still a duplicate (23505, which the outbox takes as
+-- delivered), not a wait: the pin is already on the map.
+do $$
+declare
+  v_first uuid;
+begin
+  v_first := tests.pin_as('ab300000-0000-4000-8000-000000000013', 'abuse-z4');
+  for i in 1..4 loop
+    perform tests.pin_as('ab300000-0000-4000-8000-000000000013', 'abuse-z4');
+  end loop;
+  begin
+    perform tests.pin_as('ab300000-0000-4000-8000-000000000013', 'abuse-z4', p_id => v_first);
+    raise exception using errcode = 'TSTFL', message = 'P4b: a pin under an existing id was accepted';
+  exception when unique_violation then null;
+  end;
+  raise notice 'ok P4b: a replay at the limit is a duplicate, not a wait';
 end $$;
 
 -- V1: 30 votes an hour, a change of mind counting once.
