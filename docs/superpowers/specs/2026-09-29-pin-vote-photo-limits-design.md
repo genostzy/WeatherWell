@@ -20,9 +20,9 @@ The owner asked for all the recommended changes and left the numbers to this des
 Nothing changes for anyone within the limits. Past them, the pin form, the vote buttons and the photo button say why, in the app's words, as a report's refusals already do:
 
 - a pin too far away: "This spot is too far from {barangay} to pin there." The pin is not queued;
-- too many pins: "You've added a lot of pins this hour. This one will be sent when the hour is up." It stays queued and the outbox retries it, as a held-back report does;
-- too many votes: "You've voted a lot this hour. Try again later." The vote is not kept;
-- too many photos: "You've added a lot of photos today. The pin will be sent without this one." The pin still goes.
+- too many pins: "Waiting: up to 5 pins an hour. It will send by itself." It stays queued and the outbox retries it, as a held-back report does;
+- too many votes: "Waiting: up to 30 votes an hour. It will send by itself." The vote stays queued, as a held-back report does (changed while planning, 30 September: votes already go through the outbox);
+- too many photos: "You've added a lot of photos today — drop the pin again to send it without this one." The form stays open, as for any failed upload (changed while planning: the form cannot speak after it closes).
 
 ## How it is built
 
