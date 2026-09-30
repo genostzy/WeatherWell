@@ -3,8 +3,8 @@
 ## State
 
 - `mvp` was merged into `v1` on 25 September. `v1` is the default branch and the production branch; `mvp` stays at `0b9f0fd` for reference.
-- **On `v1`, not pushed and not released** (29 September): the server functions in Tokyo, a weekly encrypted backup, and `/api/route`'s limits counted exactly in the database. The first section below.
-- **Production runs `12a24c6`**, promoted on 29 September from the Vercel dashboard after CI run #125 passed (the Vercel connector was failing, so its deployment id is not recorded here): the "Fix the map" link beside the map's OpenStreetMap credit (`c2bc778`). The first section below.
+- **Production runs `4057809`**, released on 30 September as `dpl_EsTauojzpkGCWE1QPBCdFRr34Q2U` after CI run #128 passed: the server functions in Tokyo, a weekly encrypted backup, and `/api/route`'s limits counted exactly in the database. The first section below.
+- Before that, production ran `12a24c6`, promoted on 29 September from the Vercel dashboard after CI run #125 passed (the Vercel connector was failing, so its deployment id is not recorded here): the "Fix the map" link beside the map's OpenStreetMap credit (`c2bc778`). The first section below.
 - Before that, production ran `b7b17e6` (`dpl_7hvjZwFretu7RPNuynnSstp6VoJT`, CI run #123): Next.js 16.3.7 for a security fix, and limits on how often `/api/route` asks the walking router. Also the first section below.
 - Earlier on 29 September it ran `37a793c` (`dpl_64s7sTC5FzB3Wv8ZgNnvPzigprpa`, CI run #121): pin types and photos for officials, and a Find safe evacuation center that points somewhere safe. They are the second and third sections below.
 - Before that, production ran `4f592b6` (officials fill in their barangay's details, below, released on 28 September). Before it ran `dea649b` (changing and viewing a barangay, below), and before that `d4ac54a` (the review fixes below), released later on 26 September. Before that, `ddf7293` was released as `dpl_DAEpr9WuSe9jkLvzPLWoHsPcQf8B` after CI run #115 passed, shipping these commits on top of `8fa9dd9`:
@@ -23,15 +23,15 @@
 - `pg_cron` now starts the GitHub workflows on time. The owner put the token in Vault at 02:18 UTC on 26 September, and the first dispatched Monitor run started at 02:30 UTC and passed.
 - The Nilombot test alert (yellow, set by Test Official at 22:17 on 25 September) was lifted at 02:21 UTC on 26 September. The action record shows it as cleared by the System owner. No push or email went out, because it was lifted in the database, not through the app.
 
-### Tokyo region, weekly backups and exact route limits, 29 September (built, not released)
+### Tokyo region, weekly backups and exact route limits, 29 September
 
-Three of the recommendations the owner said to do all of. The other four are specs waiting for the owner's review, in `docs/superpowers/specs/`:
+Three of the recommendations the owner said to do all of. The other four are specs the owner approved on 30 September, in `docs/superpowers/specs/`; their plans come next:
 
 - `2026-09-29-flood-profile-and-downstream-heads-up-design.md`: officials set their barangay's flood, landslide and storm-surge levels and its downstream barangay; the Hazards layer shows them; Warning or Evacuate upstream tells the downstream officials (officials only, the owner's decision).
 - `2026-09-29-residents-data-rights-design.md`: download and delete in Settings; reports are anonymised, not deleted (the owner's decision).
 - `2026-09-29-pin-vote-photo-limits-design.md`: pins within 15 km of their barangay, 5 pins and 30 votes an hour, 10 photos a day.
 - `2026-09-29-rain-heads-up-design.md`: a Forecast advisory hours ahead of heavy rain for towns with officials (the owner chose this first step of prediction).
- **On `v1`, not pushed and not released.**
+ **Released on 30 September (`dpl_EsTauojzpkGCWE1QPBCdFRr34Q2U`).**
 
 | Commit | What |
 |---|---|
@@ -41,7 +41,7 @@ Three of the recommendations the owner said to do all of. The other four are spe
 
 - **Both migrations are live already.** `dispatch_backup` adds a weekly `pg_cron` job; `rate_limits` adds a private table, a function only the service role may call, and an hourly clean-up job. Both only add, and the running code does not use them until the release. The rate limit was checked on the live database in a block that rolled back: the server's calls counted `{t,t,f,t}`, and anonymous and signed-in callers were refused; nothing was left behind.
 - **The backup needs two secrets from the owner** (README, Backups): `SUPABASE_DB_URL`, the Session pooler connection string with the database password in it, and `BACKUP_PASSPHRASE`, kept somewhere outside GitHub too. Until they are there, each weekly run fails and emails the owner. Then run Actions → Backup once and check the run ends with a `.gpg` artifact.
-- **After the release:** `x-vercel-id` should read `sin1::hnd1::…`, `/api/pins` and `/api/health` should answer in a few hundred milliseconds, a route should still come back, and `route:` keys should appear in `private.rate_limit_counts`.
+- Checked on production after the release: `x-vercel-id` reads `sin1::hnd1::…`; timed from the Philippines, `/api/health` answered in 0.33 to 0.60 s (1.4 to 2.6 s before) and `/api/pins` in 0.28 to 0.32 s (0.7 to 1.2 s before); a real walking route came back (5.9 km); that request left one `route:caller:<hash>` row and one `route:router` row in `private.rate_limit_counts`; health is ok and the pages answer. The service worker stays v25: no code that runs on the phone changed.
 
 ### Next.js security update and the router's limits, 29 September
 
@@ -78,7 +78,7 @@ A pin now says what is happening: Flood (flooded, rising, receding or impassable
 - Not fixed, minor: Send pressed while the photo is still being shrunk sends the pin without it; the cleanup deletes files before clearing `photo_path`, so a very large backlog could leave pins pointing at deleted photos ("Photo unavailable"); a momentary failure of `attach_pin_photo` loses the photo; the camera opens directly (`capture`), so a photo already in the gallery cannot be picked; thumbnails download the whole photo; one database test is missing (an attached photo over an hour old on a live pin is not deleted).
 - **A phone still running the v21 code** throws on a pin type it does not know and shows the error card until it reloads. Navigations are network-first, so the next visit fixes it.
 - Anyone with an anonymous session can upload files of up to 500 KB into their own folder, with no per-account cap; unattached files go within about 25 hours. A per-account count in the storage policy is the follow-up.
-- Checked on production after the release: `/api/cleanup-pin-photos` answers 401 without the cron secret; the page's security policy lists Supabase in `img-src`; `/api/pins` and the pages answer. **Not tried by hand:** a real photo upload by a resident and the view by an official (needs their sessions), and the cron's first run (03:00 UTC on 30 September; Vercel → Logs → Crons).
+- Checked on production after the release: `/api/cleanup-pin-photos` answers 401 without the cron secret; the page's security policy lists Supabase in `img-src`; `/api/pins` and the pages answer. **Not tried by hand:** a real photo upload by a resident and the view by an official (needs their sessions). The cron's first run happened: the database's API log shows `pin_photos_to_delete` answered 200 at 03:36 UTC on 30 September.
 
 ### Find safe evacuation center, 29 September
 
@@ -178,7 +178,7 @@ A self-review of `0b9f0fd..ddf7293` (the review agents hit their usage limit) fo
 1. **Remove the leftover `mapandanofficial@weatherwell.com` account.** It is still appointed as a municipal official for Mapandan. Remove it at `/admin/officials` while signed in as the admin, so the record names who removed it; then delete the user in Supabase → Authentication → Users. Deleting the user alone also works, because its profile and appointment go with it.
 2. **Pilot drill** with a barangay, then log its feedback as incorporated or deferred.
 3. **Add the two backup secrets** and run Actions → Backup once (README, Backups).
-4. **Try the two new features on production:** add one photo to a pin as a resident and open it as an official (this proves the upload with the insert-only policy, the one-hour link and the page's security policy); tap Find safe evacuation center once and check the walk comes into view. After 03:00 UTC on 30 September, check in Vercel (Logs → Crons) that `/api/cleanup-pin-photos` ran.
+4. **Try the two new features on production:** add one photo to a pin as a resident and open it as an official (this proves the upload with the insert-only policy, the one-hour link and the page's security policy); tap Find safe evacuation center once and check the walk comes into view. (The photo cleanup's first run is confirmed.)
 
 ## Owner's decisions (26 September)
 
