@@ -4,6 +4,8 @@ import { t } from "./i18n";
 import type { LanguageCode, LocalizedText } from "./types";
 import type { OfficialAction } from "./official-actions-mapper";
 import { describeBar } from "./weather-thresholds";
+import { PROFILE_LEVEL_LABEL } from "./barangay-profile";
+import type { HazardLevel } from "./hazards";
 
 /**
  * One sentence describing an official_actions entry, in the requested
@@ -48,6 +50,8 @@ export function describeAction(action: OfficialAction, lang: LanguageCode): stri
       return describeEngineTuned(detail, lang);
     case "barangay.details":
       return describeBarangayDetails(detail, lang);
+    case "barangay.profile":
+      return describeBarangayProfile(detail, lang);
     default:
       return t(
         { en: `Action recorded: ${action.action}`, fil: `Aksyong naitala: ${action.action}` },
@@ -143,6 +147,21 @@ function describeBarangayDetails(detail: Record<string, unknown>, lang: Language
       ? "walang hotline"
       : "no hotline";
   return lang === "fil" ? `Na-update ang detalye ng barangay: ${numbers}` : `Barangay details updated: ${numbers}`;
+}
+
+function describeBarangayProfile(detail: Record<string, unknown>, lang: LanguageCode): string {
+  const level = (value: unknown) => {
+    const label = PROFILE_LEVEL_LABEL[value as HazardLevel];
+    return label ? t(label, lang).toLowerCase() : String(value ?? "");
+  };
+  // Older records hold only the id; the name was added so the history reads plainly.
+  const downstream = detail.downstream_name ?? detail.downstream;
+  if (lang === "fil") {
+    const where = downstream ? `sa ibaba: ${String(downstream)}` : "walang barangay sa ibaba";
+    return `Itinakda ang profile sa baha: baha ${level(detail.flood)}, pagguho ng lupa ${level(detail.landslide)}, daluyong ${level(detail.storm_surge)}; ${where}.`;
+  }
+  const where = downstream ? `downstream ${String(downstream)}` : "no downstream barangay";
+  return `Flood profile set: flood ${level(detail.flood)}, landslide ${level(detail.landslide)}, storm surge ${level(detail.storm_surge)}; ${where}.`;
 }
 
 function describePasswordReset(detail: Record<string, unknown>, lang: LanguageCode): string {

@@ -3604,7 +3604,7 @@ begin
   end if;
   select count(*) into n from public.official_actions
    where zone_id = 'tests-fixture-zone-profile' and action = 'barangay.profile' and actor_name = 'Test Profile Kagawad'
-     and detail = '{"flood":"high","landslide":"low","storm_surge":"unknown","downstream":"tests-fixture-zone-profile-near"}'::jsonb;
+     and detail = '{"flood":"high","landslide":"low","storm_surge":"unknown","downstream":"tests-fixture-zone-profile-near","downstream_name":"Test Zone Near"}'::jsonb;
   if n <> 1 then raise exception using errcode = 'TSTFL', message = format('FP2: logged %s times', n); end if;
 
   -- FP4: an unknown level, the barangay itself, a barangay 25 km away and an unknown id are refused;

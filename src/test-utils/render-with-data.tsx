@@ -2,7 +2,12 @@ import { render, type RenderResult } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { LanguageProvider } from "@/features/i18n/language-provider";
-import { ReferenceDataContext, SetBarangayDetailsContext, SetCenterStatusContext } from "@/lib/reference-data/provider";
+import {
+  ReferenceDataContext,
+  SetBarangayDetailsContext,
+  SetBarangayProfileContext,
+  SetCenterStatusContext,
+} from "@/lib/reference-data/provider";
 import type { ReferenceData } from "@/lib/reference-data/types";
 import { AlertsContext, AlertsRefreshContext } from "@/lib/alerts-store";
 import { MOCK_ZONES, MOCK_POIS, MOCK_HAZARD_SUSCEPTIBILITY, MOCK_ALERTS } from "@/lib/mock-data";
@@ -55,6 +60,7 @@ const noSetCenterStatus = () => {};
 
 /** Likewise for an official's barangay details: the zones here are fixed. */
 const noSetBarangayDetails = () => {};
+const noSetBarangayProfile = () => {};
 
 export function renderWithData(
   ui: ReactElement,
@@ -74,11 +80,13 @@ export function renderWithData(
         <ReferenceDataContext.Provider value={data}>
           <SetCenterStatusContext.Provider value={noSetCenterStatus}>
             <SetBarangayDetailsContext.Provider value={noSetBarangayDetails}>
-              <AlertsContext.Provider value={alerts}>
-                <AlertsRefreshContext.Provider value={noRefresh}>
-                  <OfficialContext.Provider value={official}>{ui}</OfficialContext.Provider>
-                </AlertsRefreshContext.Provider>
-              </AlertsContext.Provider>
+              <SetBarangayProfileContext.Provider value={noSetBarangayProfile}>
+                <AlertsContext.Provider value={alerts}>
+                  <AlertsRefreshContext.Provider value={noRefresh}>
+                    <OfficialContext.Provider value={official}>{ui}</OfficialContext.Provider>
+                  </AlertsRefreshContext.Provider>
+                </AlertsContext.Provider>
+              </SetBarangayProfileContext.Provider>
             </SetBarangayDetailsContext.Provider>
           </SetCenterStatusContext.Provider>
         </ReferenceDataContext.Provider>

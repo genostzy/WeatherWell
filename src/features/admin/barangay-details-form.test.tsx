@@ -9,6 +9,11 @@ vi.mock("@/app/actions/set-barangay-details", () => ({
   setBarangayDetails: (...args: unknown[]) => setBarangayDetailsMock(...args),
 }));
 
+const setBarangayProfileMock = vi.fn();
+vi.mock("@/app/actions/set-barangay-profile", () => ({
+  setBarangayProfile: (...args: unknown[]) => setBarangayProfileMock(...args),
+}));
+
 import { BarangayDetailsForm } from "./barangay-details-form";
 
 const zone = { ...FIXTURE_REFERENCE_DATA.zones[0], hotlineNumber: "0917 123 4567", extraHotlines: [] as string[] };
@@ -22,6 +27,11 @@ const saved = {
 beforeEach(() => {
   setBarangayDetailsMock.mockReset();
   setBarangayDetailsMock.mockResolvedValue({ ok: true, saved });
+  setBarangayProfileMock.mockReset();
+  setBarangayProfileMock.mockResolvedValue({
+    ok: true,
+    saved: { id: zone.id, flood: "high", landslide: "low", storm_surge: "low", downstream_zone_id: "zone-2" },
+  });
 });
 
 describe("BarangayDetailsForm", () => {
@@ -132,5 +142,79 @@ describe("BarangayDetailsForm: the review's fixes", () => {
     expect(field).toHaveAttribute("aria-invalid", "true");
     expect(field).toHaveAttribute("aria-describedby", alert.id);
     expect(field).toHaveFocus();
+  });
+});
+
+describe("BarangayDetailsForm: the flood profile", () => {
+  it("starts at the barangay's levels and downstream barangay, the nearest choices first", () => {
+    renderWithData(<BarangayDetailsForm zone={zone} onClose={() => {}} />);
+    expect(screen.getByRole("group", { name: "Flood profile" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Flood")).toHaveValue("high");
+    expect(screen.getByLabelText("Landslide")).toHaveValue("low");
+    expect(screen.getByLabelText("Storm surge")).toHaveValue("low");
+    const levels = Array.from((screen.getByLabelText("Flood") as HTMLSelectElement).options).map((o) => o.text);
+    expect(levels).toEqual(["Low", "Medium", "High", "Not sure"]);
+    const next = screen.getByLabelText("Where does your floodwater go next?") as HTMLSelectElement;
+    expect(next).toHaveValue("zone-2");
+    expect(Array.from(next.options).map((o) => o.text)).toEqual([
+      "None / not sure",
+      "Barangay Poblacion Norte, Santa Barbara (Santa Barbara)",
+      "Barangay Poblacion, Manaoag (Manaoag)",
+      "Barangay Poblacion, Mangaldan (Mangaldan)",
+    ]);
+  });
+
+  it("speaks Filipino", () => {
+    renderWithData(<BarangayDetailsForm zone={zone} onClose={() => {}} />, { lang: "fil" });
+    expect(screen.getByRole("group", { name: "Profile sa baha" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Baha")).toBeInTheDocument();
+    expect(screen.getByLabelText("Pagguho ng lupa")).toBeInTheDocument();
+    const surge = screen.getByLabelText("Daluyong") as HTMLSelectElement;
+    expect(Array.from(surge.options).map((o) => o.text)).toEqual(["Mababa", "Katamtaman", "Mataas", "Hindi tiyak"]);
+    const next = screen.getByLabelText("Saan dumadaloy ang baha mula sa inyo?") as HTMLSelectElement;
+    expect(next.options[0].text).toBe("Wala / hindi tiyak");
+  });
+
+  it("saves the details, then the profile", async () => {
+    const user = userEvent.setup();
+    renderWithData(<BarangayDetailsForm zone={zone} onClose={() => {}} />);
+    await user.selectOptions(screen.getByLabelText("Storm surge"), "unknown");
+    await user.selectOptions(screen.getByLabelText("Where does your floodwater go next?"), "");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByRole("status")).toBeInTheDocument();
+    expect(setBarangayProfileMock).toHaveBeenCalledWith({
+      zoneId: zone.id,
+      flood: "high",
+      landslide: "low",
+      stormSurge: "unknown",
+      downstreamZoneId: null,
+    });
+    expect(setBarangayDetailsMock.mock.invocationCallOrder[0]).toBeLessThan(
+      setBarangayProfileMock.mock.invocationCallOrder[0]
+    );
+  });
+
+  it("shows a refused profile's message and stays open", async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    setBarangayProfileMock.mockResolvedValue({ ok: false, permanent: true, error: "not an official for this barangay" });
+    renderWithData(<BarangayDetailsForm zone={zone} onClose={onClose} />);
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Flood")).toBeInTheDocument();
+  });
+
+  it("does not send the profile when the details are refused", async () => {
+    const user = userEvent.setup();
+    setBarangayDetailsMock.mockResolvedValue({ ok: false, permanent: true, error: "down" });
+    renderWithData(<BarangayDetailsForm zone={zone} onClose={() => {}} />);
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(setBarangayProfileMock).not.toHaveBeenCalled();
   });
 });

@@ -226,6 +226,25 @@ describe("describeAction for a confirmed centre (idea 10)", () => {
   });
 });
 
+describe("describeAction: barangay.profile", () => {
+  it("describes an official's flood profile", () => {
+    const set = { flood: "high", landslide: "low", storm_surge: "unknown", downstream: "zone-2", downstream_name: "Poblacion" };
+    const none = { flood: "medium", landslide: "unknown", storm_surge: "low", downstream: null, downstream_name: null };
+    expect(describeAction(action({ action: "barangay.profile", detail: set }), "en")).toBe(
+      "Flood profile set: flood high, landslide low, storm surge not sure; downstream Poblacion."
+    );
+    expect(describeAction(action({ action: "barangay.profile", detail: set }), "fil")).toBe(
+      "Itinakda ang profile sa baha: baha mataas, pagguho ng lupa mababa, daluyong hindi tiyak; sa ibaba: Poblacion."
+    );
+    expect(describeAction(action({ action: "barangay.profile", detail: none }), "en")).toBe(
+      "Flood profile set: flood medium, landslide not sure, storm surge low; no downstream barangay."
+    );
+    expect(describeAction(action({ action: "barangay.profile", detail: none }), "fil")).toBe(
+      "Itinakda ang profile sa baha: baha katamtaman, pagguho ng lupa hindi tiyak, daluyong mababa; walang barangay sa ibaba."
+    );
+  });
+});
+
 describe("describeAction: barangay.details", () => {
   it("describes an official's barangay details", () => {
     const three = { hotlines: ["0917 123 4567", "0918 765 4321", "(075) 522-1234"], wrote: ["en"] };

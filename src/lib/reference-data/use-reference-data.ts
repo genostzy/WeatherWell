@@ -1,12 +1,18 @@
 "use client";
 
 import { useCallback, useContext } from "react";
-import { ReferenceDataContext, SetBarangayDetailsContext, SetCenterStatusContext } from "./provider";
+import {
+  ReferenceDataContext,
+  SetBarangayDetailsContext,
+  SetBarangayProfileContext,
+  SetCenterStatusContext,
+} from "./provider";
 import { hazardsForZone, type HazardsByZone, type ZoneHazards } from "@/lib/hazards";
 import type { PointOfInterest, Zone } from "@/lib/types";
 import type { SetCenterStatusInput } from "@/app/actions/set-center";
 import type { ActionResult } from "@/app/actions/action-result";
 import type { SetBarangayDetailsInput, SetBarangayDetailsResult } from "@/app/actions/set-barangay-details";
+import type { SetBarangayProfileInput, SetBarangayProfileResult } from "@/app/actions/set-barangay-profile";
 
 function useData() {
   const data = useContext(ReferenceDataContext);
@@ -107,6 +113,29 @@ export function useSetBarangayDetails(): (input: SetBarangayDetailsInput) => Pro
   if (!apply) {
     throw new Error(
       "useSetBarangayDetails requires ReferenceDataProvider's barangay-details context. In tests, use renderWithData()."
+    );
+  }
+  return save;
+}
+
+/** The same for a barangay's flood profile (set_barangay_profile). */
+export function useSetBarangayProfile(): (input: SetBarangayProfileInput) => Promise<SetBarangayProfileResult> {
+  const apply = useContext(SetBarangayProfileContext);
+  const save = useCallback(
+    async (input: SetBarangayProfileInput) => {
+      const { setBarangayProfile } = await import("@/app/actions/set-barangay-profile");
+      const result = await setBarangayProfile(input);
+      if (result.ok) {
+        apply?.(result.saved);
+        void fetch(`/api/barangay-profiles?saved=${Date.now()}`).catch(() => undefined);
+      }
+      return result;
+    },
+    [apply]
+  );
+  if (!apply) {
+    throw new Error(
+      "useSetBarangayProfile requires ReferenceDataProvider's barangay-profile context. In tests, use renderWithData()."
     );
   }
   return save;
