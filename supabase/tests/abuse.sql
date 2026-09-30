@@ -419,4 +419,225 @@ begin
   raise notice 'ok L1-L2: only the server counts; a count refuses past its limit and keeps keys apart';
 end $$;
 
+-- Pins, votes and photos (the pin_vote_photo_limits migration). A pin must be
+-- within 15 km of its barangay and one account places 5 an hour (officials
+-- are not counted); one account casts 30 votes an hour, a change of mind
+-- counting once; one account uploads 10 photos a day.
+
+-- A pin as p_uid through the authenticated role, at the zone's point unless a
+-- position is given. Returns its id.
+create or replace function tests.pin_as(
+  p_uid uuid, p_zone text,
+  p_lat double precision default null, p_lng double precision default null,
+  p_id uuid default null)
+returns uuid
+language plpgsql set search_path = '' as $$
+declare
+  v_lat double precision := p_lat;
+  v_lng double precision := p_lng;
+  v_id uuid := coalesce(p_id, gen_random_uuid());
+begin
+  if v_lat is null then
+    select z.lat, z.lng into v_lat, v_lng from public.zones z where z.id = p_zone;
+  end if;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', p_uid::text, 'role', 'authenticated')::text, true);
+  execute 'set local role authenticated';
+  begin
+    insert into public.community_pins (id, zone_id, author_id, status_tag, caption, lat, lng)
+      values (v_id, p_zone, p_uid, 'flooded', 'test pin', v_lat, v_lng);
+  exception when others then
+    execute 'reset role';
+    perform set_config('request.jwt.claims', '', true);
+    raise;
+  end;
+  execute 'reset role';
+  perform set_config('request.jwt.claims', '', true);
+  return v_id;
+end $$;
+
+-- A vote or a change of mind as p_uid, the upsert voteOnPin sends.
+create or replace function tests.vote_as(p_uid uuid, p_pin uuid, p_direction int) returns void
+language plpgsql set search_path = '' as $$
+begin
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', p_uid::text, 'role', 'authenticated')::text, true);
+  execute 'set local role authenticated';
+  begin
+    insert into public.pin_votes (pin_id, voter_id, direction)
+      values (p_pin, p_uid, p_direction)
+      on conflict (pin_id, voter_id) do update set direction = excluded.direction;
+  exception when others then
+    execute 'reset role';
+    perform set_config('request.jwt.claims', '', true);
+    raise;
+  end;
+  execute 'reset role';
+  perform set_config('request.jwt.claims', '', true);
+end $$;
+
+do $$
+begin
+  insert into auth.users (id, created_at)
+    select ('ab300000-0000-4000-8000-0000000000' || lpad(g::text, 2, '0'))::uuid, now() - interval '2 days'
+      from generate_series(1, 12) g;
+end $$;
+
+-- P1: a pin 16 km from its barangay is refused for good; 14 km is accepted.
+do $$
+declare
+  v_hint text;
+begin
+  begin
+    perform tests.pin_as('ab300000-0000-4000-8000-000000000001', 'abuse-z1', 15.2 + 16 / 111.32, 121);
+    raise exception using errcode = 'TSTFL', message = 'P1: a pin 16 km from its barangay was accepted';
+  exception when check_violation then
+    get stacked diagnostics v_hint = pg_exception_hint;
+    if v_hint is distinct from 'too_far' then
+      raise exception using errcode = 'TSTFL', message = format('P1: the refusal''s hint is %s, not too_far', v_hint);
+    end if;
+  end;
+  perform tests.pin_as('ab300000-0000-4000-8000-000000000001', 'abuse-z1', 15.2 + 14 / 111.32, 121);
+  raise notice 'ok P1: a pin 16 km away is refused as too far, one 14 km away is accepted';
+end $$;
+
+-- P2: the 6th pin in an hour waits.
+do $$
+declare
+  v_hint text;
+begin
+  for i in 1..5 loop
+    perform tests.pin_as('ab300000-0000-4000-8000-000000000002', 'abuse-z2');
+  end loop;
+  begin
+    perform tests.pin_as('ab300000-0000-4000-8000-000000000002', 'abuse-z2');
+    raise exception using errcode = 'TSTFL', message = 'P2: a 6th pin in an hour was accepted';
+  exception when raise_exception then
+    get stacked diagnostics v_hint = pg_exception_hint;
+    if v_hint is distinct from 'rate_limited' then raise; end if;
+  end;
+  raise notice 'ok P2: the 6th pin in an hour is refused as rate_limited';
+end $$;
+
+-- P3: an official is not counted.
+do $$
+begin
+  for i in 1..6 loop
+    perform tests.pin_as('ab200000-0000-4000-8000-000000000001', 'abuse-z3');
+  end loop;
+  raise notice 'ok P3: an official places 6 pins in an hour';
+end $$;
+
+-- P4: an outbox replay under an existing id spends nothing.
+do $$
+declare
+  v_first uuid;
+  v_hint text;
+begin
+  v_first := tests.pin_as('ab300000-0000-4000-8000-000000000003', 'abuse-z4');
+  for i in 1..3 loop
+    perform tests.pin_as('ab300000-0000-4000-8000-000000000003', 'abuse-z4');
+  end loop;
+  begin
+    perform tests.pin_as('ab300000-0000-4000-8000-000000000003', 'abuse-z4', p_id => v_first);
+    raise exception using errcode = 'TSTFL', message = 'P4: a pin under an existing id was accepted';
+  exception when unique_violation then null;
+  end;
+  perform tests.pin_as('ab300000-0000-4000-8000-000000000003', 'abuse-z4');
+  begin
+    perform tests.pin_as('ab300000-0000-4000-8000-000000000003', 'abuse-z4');
+    raise exception using errcode = 'TSTFL', message = 'P4: a 6th pin in an hour was accepted';
+  exception when raise_exception then
+    get stacked diagnostics v_hint = pg_exception_hint;
+    if v_hint is distinct from 'rate_limited' then raise; end if;
+  end;
+  raise notice 'ok P4: a replay under an existing id spends nothing';
+end $$;
+
+-- V1: 30 votes an hour, a change of mind counting once.
+do $$
+declare
+  v_pin uuid;
+  v_hint text;
+begin
+  v_pin := tests.pin_as('ab300000-0000-4000-8000-000000000004', 'abuse-z5');
+  for i in 1..30 loop
+    perform tests.vote_as('ab300000-0000-4000-8000-000000000005', v_pin, case when i % 2 = 0 then 1 else -1 end);
+  end loop;
+  begin
+    perform tests.vote_as('ab300000-0000-4000-8000-000000000005', v_pin, 1);
+    raise exception using errcode = 'TSTFL', message = 'V1: a 31st vote in an hour was accepted';
+  exception when raise_exception then
+    get stacked diagnostics v_hint = pg_exception_hint;
+    if v_hint is distinct from 'rate_limited' then raise; end if;
+  end;
+  raise notice 'ok V1: the 31st vote in an hour is refused, and a change of mind counts once';
+end $$;
+
+-- V2: a refused vote takes nothing down.
+do $$
+declare
+  v_pin uuid;
+  v_other uuid;
+  v_hint text;
+begin
+  v_pin := tests.pin_as('ab300000-0000-4000-8000-000000000006', 'abuse-z6');
+  v_other := tests.pin_as('ab300000-0000-4000-8000-000000000006', 'abuse-z6');
+  -- Four downvotes leave it one short of the net-score removal (5).
+  for i in 7..10 loop
+    perform tests.vote_as(('ab300000-0000-4000-8000-0000000000' || lpad(i::text, 2, '0'))::uuid, v_pin, -1);
+  end loop;
+  -- The fifth voter has spent the hour's 30 votes on another pin.
+  for i in 1..30 loop
+    perform tests.vote_as('ab300000-0000-4000-8000-000000000011', v_other, case when i % 2 = 0 then 1 else -1 end);
+  end loop;
+  begin
+    perform tests.vote_as('ab300000-0000-4000-8000-000000000011', v_pin, -1);
+    raise exception using errcode = 'TSTFL', message = 'V2: a 31st vote in an hour was accepted';
+  exception when raise_exception then
+    get stacked diagnostics v_hint = pg_exception_hint;
+    if v_hint is distinct from 'rate_limited' then raise; end if;
+  end;
+  if (select p.removed from public.community_pins p where p.id = v_pin) then
+    raise exception using errcode = 'TSTFL', message = 'V2: a refused vote took the pin down';
+  end if;
+  raise notice 'ok V2: a refused vote removes nothing';
+end $$;
+
+-- PH1-PH2: 10 photos a day, counted although a resident cannot read them.
+do $$
+declare
+  u text := 'ab300000-0000-4000-8000-000000000012';
+  n int;
+begin
+  perform set_config('request.jwt.claims', json_build_object('sub', u, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  for i in 1..10 loop
+    insert into storage.objects (bucket_id, name, owner_id) values ('pin-photos', u || '/' || i || '.jpg', u);
+  end loop;
+  begin
+    insert into storage.objects (bucket_id, name, owner_id) values ('pin-photos', u || '/11.jpg', u);
+    raise exception using errcode = 'TSTFL', message = 'PH1: an 11th photo in a day was accepted';
+  exception when insufficient_privilege then null;
+  end;
+  select count(*) into n from storage.objects where bucket_id = 'pin-photos';
+  if n <> 0 then
+    raise exception using errcode = 'TSTFL', message = format('PH2: a resident read %s photos', n);
+  end if;
+  -- Counted with the resident's identity; called from the privileged session, since
+  -- a resident cannot name private functions directly (only a policy may).
+  reset role;
+  n := private.my_photo_uploads_today();
+  perform set_config('request.jwt.claims', '', true);
+  if n <> 10 then
+    raise exception using errcode = 'TSTFL', message = format('PH2: counted %s photos, expected 10', n);
+  end if;
+  raise notice 'ok PH1-PH2: the 11th photo in a day is refused; the count sees rows the resident cannot read';
+end $$;
+
+-- L3: the count is the caller's own, and needs a sign-in.
+select tests.as_anon();
+select tests.expect_denied('L3: count photo uploads without signing in',
+  $$select private.my_photo_uploads_today()$$);
+
 rollback;
