@@ -50,14 +50,23 @@ describe("pin photos", () => {
 
   it("uploads into the resident's own folder", async () => {
     upload.mockResolvedValue({ error: null });
-    const path = await uploadPinPhoto(blobOf(10));
-    expect(path).toMatch(/^u1\/[0-9a-f-]{36}\.jpg$/);
+    const result = await uploadPinPhoto(blobOf(10));
+    expect(result).toEqual({ path: expect.stringMatching(/^u1\/[0-9a-f-]{36}\.jpg$/) });
+    const path = (result as { path: string }).path;
     expect(upload).toHaveBeenCalledWith(path, expect.any(Blob), { contentType: "image/jpeg", upsert: false });
   });
 
   it("gives no path when the upload fails", async () => {
     upload.mockResolvedValue({ error: { message: "too big" } });
-    expect(await uploadPinPhoto(blobOf(10))).toBeNull();
+    expect(await uploadPinPhoto(blobOf(10))).toEqual({ failed: "error" });
+  });
+
+  it("says the day's photos are used up when the storage policy refuses the upload", async () => {
+    // Storage has answered a policy refusal both ways: statusCode "403" inside a 400, and a plain 403.
+    upload.mockResolvedValue({ error: { statusCode: "403", status: 400, message: "new row violates row-level security policy" } });
+    expect(await uploadPinPhoto(blobOf(10))).toEqual({ failed: "limit" });
+    upload.mockResolvedValue({ error: { status: 403, message: "new row violates row-level security policy" } });
+    expect(await uploadPinPhoto(blobOf(10))).toEqual({ failed: "limit" });
   });
 
   it("stops waiting for an upload that stalls, so the pin need not wait for its photo", async () => {
@@ -66,7 +75,7 @@ describe("pin photos", () => {
       upload.mockReturnValue(new Promise(() => {}));
       const result = uploadPinPhoto(blobOf(10));
       await vi.advanceTimersByTimeAsync(20_000);
-      expect(await result).toBeNull();
+      expect(await result).toEqual({ failed: "error" });
     } finally {
       vi.useRealTimers();
     }

@@ -51,30 +51,39 @@ export async function shrinkPhoto(file: Blob): Promise<Blob> {
  */
 const UPLOAD_TIMEOUT_MS = 20_000;
 
-async function upload(photo: Blob): Promise<string | null> {
+/** What an upload came to: the stored path, or why not ("limit": the day's 10 photos are used). */
+export type PhotoUpload = { path: string } | { failed: "limit" | "error" };
+
+const FAILED: PhotoUpload = { failed: "error" };
+
+async function upload(photo: Blob): Promise<PhotoUpload> {
   try {
     const userId = await ensureAnonymousSession();
-    if (!userId) return null;
+    if (!userId) return FAILED;
     const path = `${userId}/${crypto.randomUUID()}.jpg`;
     const { error } = await getBrowserClient()
       .storage.from("pin-photos")
       .upload(path, photo, { contentType: "image/jpeg", upsert: false });
-    return error ? null : path;
+    if (!error) return { path };
+    // The upload policy refuses an 11th photo in a day (pin_photos_insert_own). Storage has
+    // answered a policy refusal as statusCode "403" inside a 400, and as a plain 403.
+    const { status, statusCode } = error as { status?: number; statusCode?: string };
+    return status === 403 || statusCode === "403" ? { failed: "limit" } : FAILED;
   } catch {
-    return null;
+    return FAILED;
   }
 }
 
 /**
  * Uploads a shrunk photo into this account's own folder of the private
- * pin-photos bucket (only officials can read it). The path, or null on any
- * failure or a stall: the pin then goes without it. An upload that finishes
+ * pin-photos bucket (only officials can read it). The path, or why not: the
+ * day's limit, or any other failure or a stall. The pin can then go without it. An upload that finishes
  * after the wait leaves a file no pin points to, which the daily cleanup deletes.
  */
-export async function uploadPinPhoto(photo: Blob): Promise<string | null> {
+export async function uploadPinPhoto(photo: Blob): Promise<PhotoUpload> {
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const stalled = new Promise<null>((resolve) => {
-    timer = setTimeout(() => resolve(null), UPLOAD_TIMEOUT_MS);
+  const stalled = new Promise<PhotoUpload>((resolve) => {
+    timer = setTimeout(() => resolve(FAILED), UPLOAD_TIMEOUT_MS);
   });
   try {
     return await Promise.race([upload(photo), stalled]);

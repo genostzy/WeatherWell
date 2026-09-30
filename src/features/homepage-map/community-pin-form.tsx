@@ -55,6 +55,11 @@ const UPLOAD_FAILED: LocalizedText = {
   en: "The photo couldn't be sent — drop the pin again to send it without the photo.",
   fil: "Hindi naipadala ang larawan — pindutin muli para ipadala ang pin nang wala nito.",
 };
+/** The upload policy allows 10 photos a day from one account (pin_vote_photo_limits). */
+const PHOTO_LIMIT: LocalizedText = {
+  en: "You've added a lot of photos today — drop the pin again to send it without this one.",
+  fil: "Marami ka nang naidagdag na larawan ngayong araw — pindutin muli para ipadala ang pin nang wala nito.",
+};
 const UNVERIFIED_NOTE: LocalizedText = {
   en: "Unverified community report, separate from official alerts.",
   fil: "Hindi pa na-verify na ulat ng komunidad, hiwalay sa opisyal na alerto.",
@@ -184,17 +189,17 @@ export function CommunityPinForm({
       }
       busy.current = true;
       setSending(true);
-      const path = await uploadPinPhoto(photo.blob);
+      const uploaded = await uploadPinPhoto(photo.blob);
       busy.current = false;
       // Closed while the photo was uploading: the resident cancelled, so the pin is not sent.
       if (!alive.current) return;
       setSending(false);
-      if (!path) {
+      if (!("path" in uploaded)) {
         removePhoto();
-        setPhotoMessage(UPLOAD_FAILED);
+        setPhotoMessage(uploaded.failed === "limit" ? PHOTO_LIMIT : UPLOAD_FAILED);
         return;
       }
-      values.photoPath = path;
+      values.photoPath = uploaded.path;
     }
     onSubmit(values);
   }

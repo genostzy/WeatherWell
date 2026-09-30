@@ -60,6 +60,20 @@ const RATE_LIMITED: LocalizedText = {
   en: "Waiting: one report per barangay every 5 minutes. It will send by itself.",
   fil: "Naghihintay: isang ulat bawat barangay kada 5 minuto. Kusa itong maipapadala.",
 };
+/** The pin and vote limits (pin_vote_photo_limits): 5 pins and 30 votes an hour, waited out like a report's. */
+const PIN_RATE_LIMITED: LocalizedText = {
+  en: "Waiting: up to 5 pins an hour. It will send by itself.",
+  fil: "Naghihintay: hanggang 5 pin bawat oras. Kusa itong maipapadala.",
+};
+const VOTE_RATE_LIMITED: LocalizedText = {
+  en: "Waiting: up to 30 votes an hour. It will send by itself.",
+  fil: "Naghihintay: hanggang 30 boto bawat oras. Kusa itong maipapadala.",
+};
+/** A pin more than 15 km from the barangay it is pinned in. */
+const PIN_TOO_FAR_REASON: LocalizedText = {
+  en: "This spot is too far from {zone} to pin there.",
+  fil: "Masyadong malayo ang lugar na ito sa {zone} para mag-pin dito.",
+};
 
 /**
  * Not from the spec table. `stuckReason: "permanent"` (design doc
@@ -143,15 +157,28 @@ export function entryDescription(entry: OutboxEntry, zones: Zone[], lang: Langua
  * "This couldn't be accepted." `entry.lastError` is never read here — see
  * `NOT_ACCEPTED`'s comment for why raw server text must not reach this UI.
  */
-function stuckReasonText(entry: OutboxEntry, lang: LanguageCode): string {
+function stuckReasonText(entry: OutboxEntry, zones: Zone[], lang: LanguageCode): string {
   if (entry.stuckReason === "too_old") return t(TOO_OLD_REASON, lang);
   if (entry.stuckReason === "gave_up") return t(GAVE_UP_REASON, lang);
+  if (entry.stuckReason === "too_far" && entry.operation === "createPin") {
+    const payload = entry.payload as { zoneId: string };
+    return t(PIN_TOO_FAR_REASON, lang).replace("{zone}", zoneName(zones, payload.zoneId));
+  }
   if (entry.stuckReason === "too_far") return t(TOO_FAR_REASON, lang);
   return t(NOT_ACCEPTED, lang);
 }
 
+/** Why a held-back write waits: its own operation's limit. */
+function rateLimitedText(entry: OutboxEntry): LocalizedText {
+  if (entry.operation === "createPin") return PIN_RATE_LIMITED;
+  if (entry.operation === "voteOnPin") return VOTE_RATE_LIMITED;
+  return RATE_LIMITED;
+}
+
 /** "Will send when online" (or why else it waits), or "Couldn't send: {reason}" for a stuck entry. */
-export function entryStatusText(entry: OutboxEntry, lang: LanguageCode): string {
-  if (entry.status !== "stuck") return t(entry.waitReason === "rate_limited" ? RATE_LIMITED : WILL_SEND_WHEN_ONLINE, lang);
-  return t(COULD_NOT_SEND_REASON, lang).replace("{reason}", stuckReasonText(entry, lang));
+export function entryStatusText(entry: OutboxEntry, lang: LanguageCode, zones: Zone[]): string {
+  if (entry.status !== "stuck") {
+    return t(entry.waitReason === "rate_limited" ? rateLimitedText(entry) : WILL_SEND_WHEN_ONLINE, lang);
+  }
+  return t(COULD_NOT_SEND_REASON, lang).replace("{reason}", stuckReasonText(entry, zones, lang));
 }

@@ -120,7 +120,7 @@ describe("CommunityPinForm: a photo for officials", () => {
   beforeEach(() => {
     localStorage.clear();
     shrinkPhoto.mockReset().mockResolvedValue(shrunk);
-    uploadPinPhoto.mockReset().mockResolvedValue("u1/x.jpg");
+    uploadPinPhoto.mockReset().mockResolvedValue({ path: "u1/x.jpg" });
     vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: () => "blob:preview", revokeObjectURL: () => {} }));
     Object.defineProperty(navigator, "onLine", { configurable: true, value: true });
   });
@@ -210,7 +210,7 @@ describe("CommunityPinForm: a photo for officials", () => {
 
   it("uploads once when Send is pressed twice", async () => {
     localStorage.setItem("weatherwell.pinPhotoNoticeSeen", "1");
-    let finish: (path: string) => void = () => {};
+    let finish: (result: { path: string }) => void = () => {};
     uploadPinPhoto.mockImplementation(() => new Promise((resolve) => (finish = resolve)));
     const onSubmit = vi.fn();
     const user = userEvent.setup();
@@ -219,14 +219,14 @@ describe("CommunityPinForm: a photo for officials", () => {
     const drop = screen.getByRole("button", { name: /drop pin/i });
     await user.click(drop);
     await user.click(drop);
-    finish("u1/x.jpg");
+    finish({ path: "u1/x.jpg" });
     await vi.waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
     expect(uploadPinPhoto).toHaveBeenCalledTimes(1);
   });
 
   it("does not queue a pin whose form was closed while its photo was uploading", async () => {
     localStorage.setItem("weatherwell.pinPhotoNoticeSeen", "1");
-    let finish: (path: string) => void = () => {};
+    let finish: (result: { path: string }) => void = () => {};
     uploadPinPhoto.mockImplementation(() => new Promise((resolve) => (finish = resolve)));
     const onSubmit = vi.fn();
     const user = userEvent.setup();
@@ -234,7 +234,7 @@ describe("CommunityPinForm: a photo for officials", () => {
     await fillAndPick(user);
     await user.click(screen.getByRole("button", { name: /drop pin/i }));
     form.unmount(); // Cancel, the X, or Escape
-    finish("u1/x.jpg");
+    finish({ path: "u1/x.jpg" });
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(onSubmit).not.toHaveBeenCalled();
   });
@@ -285,7 +285,7 @@ describe("CommunityPinForm: a photo for officials", () => {
 
   it("keeps the form open when the upload fails, so the pin can go without the photo", async () => {
     localStorage.setItem("weatherwell.pinPhotoNoticeSeen", "1");
-    uploadPinPhoto.mockResolvedValue(null);
+    uploadPinPhoto.mockResolvedValue({ failed: "error" });
     const onSubmit = vi.fn();
     const user = userEvent.setup();
     render(<CommunityPinForm onSubmit={onSubmit} onCancel={() => {}} />);
@@ -293,6 +293,23 @@ describe("CommunityPinForm: a photo for officials", () => {
     await user.click(screen.getByRole("button", { name: /drop pin/i }));
     expect(onSubmit).not.toHaveBeenCalled();
     expect(screen.getByText(/the photo couldn't be sent/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /drop pin/i }));
+    expect(onSubmit).toHaveBeenCalledWith({ statusTag: "flooded", caption: "Water at the gate" });
+  });
+
+  it("when the day's photos are used up, says so and lets the pin go without this one", async () => {
+    localStorage.setItem("weatherwell.pinPhotoNoticeSeen", "1");
+    uploadPinPhoto.mockResolvedValue({ failed: "limit" });
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(<CommunityPinForm onSubmit={onSubmit} onCancel={() => {}} />);
+    await fillAndPick(user);
+    await user.click(screen.getByRole("button", { name: /drop pin/i }));
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(
+      screen.getByText("You've added a lot of photos today — drop the pin again to send it without this one.")
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: /photo to send/i })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /drop pin/i }));
     expect(onSubmit).toHaveBeenCalledWith({ statusTag: "flooded", caption: "Water at the gate" });
   });

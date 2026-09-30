@@ -190,7 +190,7 @@ export function OutboxBadge() {
               <li key={entry.id} className="space-y-1 border-b border-border pb-3 last:border-b-0 last:pb-0">
                 <p className="font-medium">{entryDescription(entry, zones, lang)}</p>
                 <p className="text-sm text-muted-foreground">{formatActionTime(entry.queuedAt, lang)}</p>
-                <p className="text-sm">{entryStatusText(entry, lang)}</p>
+                <p className="text-sm">{entryStatusText(entry, lang, zones)}</p>
                 {entry.status === "stuck" && discardingId === entry.id && (
                   <div className="space-y-2 pt-1">
                     <p className="text-sm font-medium">{t(DISCARD_CONFIRM, lang)}</p>
