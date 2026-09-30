@@ -3,7 +3,7 @@
 ## State
 
 - `mvp` was merged into `v1` on 25 September. `v1` is the default branch and the production branch; `mvp` stays at `0b9f0fd` for reference.
-- **On `v1`, not pushed and not released** (30 September): limits for pins, votes and photos, the first of four approved plans. The first section below.
+- **On `v1`, not pushed and not released** (30 September): limits for pins, votes and photos, and the flood profile with the downstream heads-up, the first two of four approved plans. The first two sections below.
 - **Production runs `4057809`**, released on 30 September as `dpl_EsTauojzpkGCWE1QPBCdFRr34Q2U` after CI run #128 passed: the server functions in Tokyo, a weekly encrypted backup, and `/api/route`'s limits counted exactly in the database. The first section below.
 - Before that, production ran `12a24c6`, promoted on 29 September from the Vercel dashboard after CI run #125 passed (the Vercel connector was failing, so its deployment id is not recorded here): the "Fix the map" link beside the map's OpenStreetMap credit (`c2bc778`). The first section below.
 - Before that, production ran `b7b17e6` (`dpl_7hvjZwFretu7RPNuynnSstp6VoJT`, CI run #123): Next.js 16.3.7 for a security fix, and limits on how often `/api/route` asks the walking router. Also the first section below.
@@ -24,6 +24,21 @@
 - `pg_cron` now starts the GitHub workflows on time. The owner put the token in Vault at 02:18 UTC on 26 September, and the first dispatched Monitor run started at 02:30 UTC and passed.
 - The Nilombot test alert (yellow, set by Test Official at 22:17 on 25 September) was lifted at 02:21 UTC on 26 September. The action record shows it as cleared by the System owner. No push or email went out, because it was lifted in the database, not through the app.
 
+### Flood profile and downstream heads-up, 30 September (built, not released)
+
+The second approved plan (`docs/superpowers/plans/2026-09-30-flood-profile-and-downstream-heads-up.md`). **On `v1`, not pushed and not released.**
+
+| Commit | What |
+|---|---|
+| `44a4e01` | `20260930072031_barangay_profile` and `20260930072122_barangay_profile_action`, live: `set_barangay_profile` saves a barangay's three levels and its downstream barangay (another one, within 20 km), for its officials, its town's and the admin. `rls.sql` FP1-FP5 |
+| `69f3121` | `20260930122255_upstream_heads_up`, live: a first Warning or Evacuate leaves a `heads_up` message for the downstream barangay; its officials and the town's read and acknowledge it. `rls.sql` HU1-HU4 |
+| `b22e6c2` | `/api/barangay-profiles` (cached by the service worker) and `applyProfileOverlay`, so the Hazards layer shows officials' levels |
+| `833944c` | The barangay details form asks for the profile; `20260930123459_barangay_profile_record_name`, live, keeps the downstream barangay's name in the action record |
+| `e7cc900` | The downstream officials are told by push and email; the Updates panel shows "Upstream alert" |
+
+- **The migrations are live.** Until the release, the production app never calls `set_barangay_profile`, and a heads-up waits in the Updates list (production's panel shows it without a label or a button). No barangay has a profile yet.
+- Checked on the live database in scripts that rolled back: FP1-FP4 and HU1-HU4 pass.
+
 ### Limits for pins, votes and photos, 30 September (built, not released)
 
 The first of the four approved plans (`docs/superpowers/plans/2026-09-30-pin-vote-photo-limits.md`). **On `v1`, not pushed and not released.**
@@ -36,6 +51,7 @@ The first of the four approved plans (`docs/superpowers/plans/2026-09-30-pin-vot
 
 - **The migration is live and refuses writes now.** Until the release, the production app shows a refused pin or vote as a generic failure and retries a rate-limited one later. The database holds 2 pins, so nobody is near a limit.
 - Checked on the live database in a script that rolled back: every new test block passes, and one real resident upload still works under the new policy (a policy's function call is resolved when the policy is made, so the uploader needs no access to `private`; only a direct call would).
+- The final review's fix, `ac3e1cf` with `20260930124001_pin_replay_skips_limits` (live): a pin the outbox replays after the hour's 5 have landed is a duplicate, taken as delivered, not a wait (`abuse.sql` P4b). The pin geofence is documented as a consistency check: the phone names the nearest barangay, so it refuses only spots far from every barangay, and the hourly count is what bounds pins. **Owner decision:** keep it so, or check pins against the resident's saved barangay.
 
 ### Tokyo region, weekly backups and exact route limits, 29 September
 
