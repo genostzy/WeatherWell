@@ -3648,4 +3648,107 @@ begin
   raise notice 'ok FP1-FP5: only a barangay''s officials set its flood profile, and only sensible values';
 end $$;
 
+-- HU1-HU4: a first Warning or Evacuate upstream leaves a heads-up for the downstream barangay's officials.
+do $$
+declare n int; v_msg record;
+begin
+  set local role postgres;
+  perform set_config('request.jwt.claims', '', true);
+  insert into auth.users (id) values
+    ('b7000000-0000-4000-8000-000000000001'), ('b7000000-0000-4000-8000-000000000002'),
+    ('b7000000-0000-4000-8000-000000000003'), ('b7000000-0000-4000-8000-000000000004');
+  insert into public.zones
+    (id, psgc_barangay_code, name, evacuation_route_text, lat, lng, evacuation_route_path, hotline_number)
+  values
+    ('tests-hu-up', '9900000081', 'Upstream Test', '{"en":"x","fil":"x"}'::jsonb, 16.1, 120.4, '[]'::jsonb, '000'),
+    ('tests-hu-down', '9900000082', 'Downstream Test', '{"en":"x","fil":"x"}'::jsonb, 16.145, 120.4, '[]'::jsonb, '000'),
+    ('tests-hu-alone', '9900000083', 'No Link Test', '{"en":"x","fil":"x"}'::jsonb, 16.3, 120.4, '[]'::jsonb, '000'),
+    ('tests-hu-up-2', '9900000084', 'Upstream Two', '{"en":"x","fil":"x"}'::jsonb, 16.5, 120.4, '[]'::jsonb, '000'),
+    ('tests-hu-down-2', '9900001081', 'Downstream Other Town', '{"en":"x","fil":"x"}'::jsonb, 16.545, 120.4, '[]'::jsonb, '000');
+  update public.zones set downstream_zone_id = 'tests-hu-down' where id = 'tests-hu-up';
+  update public.zones set downstream_zone_id = 'tests-hu-down-2' where id = 'tests-hu-up-2';
+  insert into public.profiles (id, role, area_code, display_name) values
+    ('b7000000-0000-4000-8000-000000000001', 'operator', '9900000081', 'Upstream Kagawad'),
+    ('b7000000-0000-4000-8000-000000000002', 'operator', '9900000082', 'Downstream Kagawad'),
+    ('b7000000-0000-4000-8000-000000000004', 'operator', '9900000', 'Town A MDRRMO')
+  on conflict (id) do update set role = excluded.role, area_code = excluded.area_code, display_name = excluded.display_name;
+
+  -- HU1: only a first Warning or Evacuate leaves a heads-up: not Warning again, Evacuate over Warning, a lift,
+  -- an Advisory or a Watch; a Watch raised to Warning does.
+  set local role authenticated;
+  perform set_config('request.jwt.claims', '{"sub":"b7000000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+  perform public.set_zone_alert('tests-hu-up', 'red', '{"en":"r","fil":"r"}'::jsonb);
+  perform public.set_zone_alert('tests-hu-up', 'red', '{"en":"r","fil":"r"}'::jsonb);
+  perform public.set_zone_alert('tests-hu-up', 'evacuate', '{"en":"e","fil":"e"}'::jsonb);
+  perform public.set_zone_alert('tests-hu-up', null, null);
+  perform public.set_zone_alert('tests-hu-up', 'yellow', '{"en":"y","fil":"y"}'::jsonb);
+  perform public.set_zone_alert('tests-hu-up', 'orange', '{"en":"o","fil":"o"}'::jsonb);
+  reset role;
+  select count(*) into n from public.official_messages where direction = 'heads_up' and zone_id = 'tests-hu-down';
+  if n <> 1 then
+    raise exception using errcode = 'TSTFL', message = format('HU1: %s heads-ups after Warning, Warning, Evacuate, lift, Advisory, Watch; expected 1', n);
+  end if;
+  set local role authenticated;
+  perform public.set_zone_alert('tests-hu-up', 'red', '{"en":"r","fil":"r"}'::jsonb);
+  reset role;
+  select count(*) into n from public.official_messages where direction = 'heads_up' and zone_id = 'tests-hu-down';
+  if n <> 2 then
+    raise exception using errcode = 'TSTFL', message = format('HU1: a Watch raised to Warning left %s heads-ups, expected 2', n);
+  end if;
+  select * into v_msg from public.official_messages where direction = 'heads_up' and zone_id = 'tests-hu-down' limit 1;
+  if v_msg.town_code <> '9900000' or v_msg.kind <> 'upstream_alert' or v_msg.body <> 'Upstream Test is under Warning.'
+     or v_msg.sender_name <> 'WeatherWell' then
+    raise exception using errcode = 'TSTFL', message = format('HU1: the heads-up reads %s', v_msg);
+  end if;
+  -- A barangay with no downstream link leaves nothing.
+  set local role authenticated;
+  perform set_config('request.jwt.claims', '{"sub":"b7000000-0000-4000-8000-000000000004","role":"authenticated"}', true);
+  perform public.set_zone_alert('tests-hu-alone', 'red', '{"en":"r","fil":"r"}'::jsonb);
+  reset role;
+  if exists (select 1 from public.official_messages where direction = 'heads_up' and body like 'No Link Test%') then
+    raise exception using errcode = 'TSTFL', message = 'HU1: a barangay with no downstream link left a heads-up';
+  end if;
+
+  -- HU2: the engine's automatic advisory (always yellow) leaves nothing.
+  perform set_config('request.jwt.claims', '', true);
+  perform public.set_zone_alert('tests-hu-up-2', 'yellow', '{"en":"a","fil":"a"}'::jsonb, 'auto_crowdsourced');
+  if exists (select 1 from public.official_messages where direction = 'heads_up' and zone_id = 'tests-hu-down-2') then
+    raise exception using errcode = 'TSTFL', message = 'HU2: an automatic advisory left a heads-up';
+  end if;
+
+  -- HU3: a resident reads no heads-up; the downstream barangay's official reads and acknowledges one.
+  set local role authenticated;
+  perform set_config('request.jwt.claims', '{"sub":"b7000000-0000-4000-8000-000000000003","role":"authenticated"}', true);
+  select count(*) into n from public.official_messages where direction = 'heads_up';
+  if n <> 0 then raise exception using errcode = 'TSTFL', message = format('HU3: a resident read %s heads-ups', n); end if;
+  perform set_config('request.jwt.claims', '{"sub":"b7000000-0000-4000-8000-000000000002","role":"authenticated"}', true);
+  select count(*) into n from public.official_messages where direction = 'heads_up' and zone_id = 'tests-hu-down';
+  if n <> 2 then raise exception using errcode = 'TSTFL', message = format('HU3: the downstream official read %s of 2', n); end if;
+  perform public.acknowledge_official_message(v_msg.id);
+  reset role;
+  if (select acknowledged_by_name from public.official_messages where id = v_msg.id) is distinct from 'Downstream Kagawad' then
+    raise exception using errcode = 'TSTFL', message = 'HU3: the downstream official''s acknowledgement was not recorded';
+  end if;
+
+  -- HU4: a heads-up for a barangay in another town belongs to that town; the upstream town cannot acknowledge it.
+  set local role authenticated;
+  perform set_config('request.jwt.claims', '{"sub":"b7000000-0000-4000-8000-000000000004","role":"authenticated"}', true);
+  perform public.set_zone_alert('tests-hu-up-2', 'red', '{"en":"r","fil":"r"}'::jsonb);
+  reset role;
+  select * into v_msg from public.official_messages where direction = 'heads_up' and zone_id = 'tests-hu-down-2';
+  if not found or v_msg.town_code <> '9900001' then
+    raise exception using errcode = 'TSTFL', message = format('HU4: the other town''s heads-up is %s', v_msg);
+  end if;
+  set local role authenticated;
+  perform set_config('request.jwt.claims', '{"sub":"b7000000-0000-4000-8000-000000000004","role":"authenticated"}', true);
+  begin
+    perform public.acknowledge_official_message(v_msg.id);
+    raise exception using errcode = 'TSTFL', message = 'HU4: the upstream town acknowledged another town''s heads-up';
+  exception when insufficient_privilege then null;
+  end;
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+  raise notice 'ok HU1-HU4: a first Warning or Evacuate upstream leaves one heads-up, for the downstream barangay''s officials';
+end $$;
+
 rollback;
