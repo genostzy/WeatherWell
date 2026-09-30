@@ -40,12 +40,14 @@ const KIND: Record<MessageKind, LocalizedText> = {
   need_help: { en: "We need help", fil: "Kailangan namin ng tulong" },
   all_clear: { en: "All clear here", fil: "Ligtas na rito" },
   update: { en: "Update", fil: "Update" },
+  upstream_alert: { en: "Upstream alert", fil: "Babala mula sa itaas" },
 };
 const KIND_TONE: Record<MessageKind, string> = {
   centre_full: "text-severity-orange",
   need_help: "text-severity-red",
   all_clear: "text-green-500",
   update: "text-foreground",
+  upstream_alert: "text-severity-red",
 };
 const QUICK: { kind: MessageKind; icon: typeof Users }[] = [
   { kind: "centre_full", icon: Users },
@@ -132,13 +134,18 @@ export function OfficialMessagesPanel() {
     act(id, async () => (await import("@/app/actions/official-messages")).acknowledgeOfficialMessage(id));
 
   const busy = busyKey !== null;
-  // The town reads what still needs it first.
+  // The town marks a barangay's update seen; a heads-up, its barangay's officials or the town
+  // (acknowledge_official_message checks the same).
+  const canAcknowledge = (m: OfficialMessage) =>
+    m.direction === "up"
+      ? isTown
+      : m.direction === "heads_up" &&
+        (isTown || zones.find((z) => z.id === m.zoneId)?.psgcBarangayCode === official.areaCode);
+  // What still needs the official reads first.
   const sorted = (messages ?? []).slice().sort((a, b) => {
-    if (isTown) {
-      const aOpen = a.direction === "up" && !a.acknowledgedAt;
-      const bOpen = b.direction === "up" && !b.acknowledgedAt;
-      if (aOpen !== bOpen) return aOpen ? -1 : 1;
-    }
+    const aOpen = canAcknowledge(a) && !a.acknowledgedAt;
+    const bOpen = canAcknowledge(b) && !b.acknowledgedAt;
+    if (aOpen !== bOpen) return aOpen ? -1 : 1;
     return b.createdAt.localeCompare(a.createdAt);
   });
 
@@ -262,14 +269,14 @@ export function OfficialMessagesPanel() {
                     {t(KIND[m.kind], lang)}
                   </p>
                   {m.body && <p className="whitespace-pre-wrap text-sm">{m.body}</p>}
-                  {m.direction === "up" &&
+                  {m.direction !== "down" &&
                     (m.acknowledgedAt ? (
                       <p lang={lang} className="flex items-center gap-1 text-xs text-muted-foreground">
                         <CheckCircle2 aria-hidden="true" className="h-3.5 w-3.5" />
                         {t(SEEN_BY, lang).replace("{name}", m.acknowledgedByName ?? "")}
                       </p>
                     ) : (
-                      isTown && (
+                      canAcknowledge(m) && (
                         <Button
                           type="button"
                           variant="secondary"

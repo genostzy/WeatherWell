@@ -1,11 +1,12 @@
-export type MessageKind = "centre_full" | "need_help" | "all_clear" | "update";
-export type MessageDirection = "up" | "down";
+export type MessageKind = "centre_full" | "need_help" | "all_clear" | "update" | "upstream_alert";
+/** heads_up: WeatherWell telling a barangay that the one upstream of it went to Warning or Evacuate. */
+export type MessageDirection = "up" | "down" | "heads_up";
 
 /** An update between a town and its barangays (official_messages). */
 export interface OfficialMessage {
   id: string;
   townCode: string;
-  /** The sending barangay's zone, for an update going up; null from the town. */
+  /** The sending barangay's zone going up, the downstream barangay's for a heads-up; null from the town. */
   zoneId: string | null;
   direction: MessageDirection;
   kind: MessageKind;

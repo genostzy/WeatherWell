@@ -10,6 +10,10 @@ vi.mock("@/lib/supabase/user-server", () => ({
 
 // after() runs its callback once the response is sent; here, straight away.
 vi.mock("next/server", () => ({ after: (callback: () => unknown) => void callback() }));
+const notifyDownstreamOfficials = vi.fn();
+vi.mock("@/lib/notify-officials", () => ({
+  notifyDownstreamOfficials: (...args: unknown[]) => notifyDownstreamOfficials(...args),
+}));
 const notifyResidentsOfAlertChange = vi.fn();
 vi.mock("@/lib/notify-residents", () => ({
   notifyResidentsOfAlertChange: (...args: unknown[]) => notifyResidentsOfAlertChange(...args),
@@ -236,5 +240,50 @@ describe("telling residents about an official's change", () => {
     const { rejectAutomaticAlert } = await import("./set-zone-alert");
     await rejectAutomaticAlert("zone-1");
     expect(notifyResidentsOfAlertChange).toHaveBeenCalledWith("zone-1", "withdrawn");
+  });
+});
+
+describe("telling the downstream barangay's officials", () => {
+  beforeEach(() => {
+    getClaims.mockResolvedValue({ data: { claims: { sub: "operator-1" } } });
+    rpc.mockResolvedValue({ error: null });
+  });
+
+  it("tells them when the barangay first goes to Warning or Evacuate", async () => {
+    const { setZoneAlert } = await import("./set-zone-alert");
+    for (const [before, now] of [[null, "red"], ["orange", "red"], ["yellow", "evacuate"]] as const) {
+      notifyDownstreamOfficials.mockClear();
+      activeSeverity(before);
+      await setZoneAlert({ zoneId: "zone-1", severity: now });
+      expect(notifyDownstreamOfficials).toHaveBeenCalledWith("zone-1");
+    }
+  });
+
+  it("does not for an Advisory, a Watch, Evacuate over Warning, a re-confirmation or a lift", async () => {
+    const { setZoneAlert } = await import("./set-zone-alert");
+    for (const [before, now] of [
+      [null, "yellow"],
+      ["yellow", "orange"],
+      ["red", "evacuate"],
+      ["red", "red"],
+      ["evacuate", "none"],
+    ] as const) {
+      activeSeverity(before);
+      await setZoneAlert({ zoneId: "zone-1", severity: now });
+    }
+    expect(notifyDownstreamOfficials).not.toHaveBeenCalled();
+  });
+
+  it("does not when the database refused the change", async () => {
+    rpc.mockResolvedValue({ error: { code: "42501", message: "no" } });
+    const { setZoneAlert } = await import("./set-zone-alert");
+    await setZoneAlert({ zoneId: "zone-1", severity: "red" });
+    expect(notifyDownstreamOfficials).not.toHaveBeenCalled();
+  });
+
+  it("does it once per barangay when a town alerts several", async () => {
+    const { setZoneAlerts } = await import("./set-zone-alert");
+    await setZoneAlerts({ zoneIds: ["zone-1", "zone-2", "zone-1"], severity: "red" });
+    expect(notifyDownstreamOfficials.mock.calls).toEqual([["zone-1"], ["zone-2"]]);
   });
 });

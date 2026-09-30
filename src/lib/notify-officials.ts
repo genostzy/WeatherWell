@@ -37,17 +37,47 @@ export async function notifyOfficialsOfMessage(messageId: string): Promise<void>
     const direction = msg.direction as MessageDirection;
     const officials = await officialsInTown(supabase, msg.town_code);
     let barangayName: string | null = null;
+    let barangayCode: string | undefined;
     if (msg.zone_id) {
-      const { data: zone } = await supabase.from("zones").select("name").eq("id", msg.zone_id).maybeSingle();
+      const { data: zone } = await supabase.from("zones").select("name, psgc_barangay_code").eq("id", msg.zone_id).maybeSingle();
       barangayName = zone?.name ?? null;
+      barangayCode = zone?.psgc_barangay_code;
     }
     const { title, body } = messageNotification(
       { direction, kind: msg.kind as MessageKind, body: msg.body, senderName: msg.sender_name },
       barangayName
     );
-    await tellOfficials(messageRecipients({ direction, townCode: msg.town_code }, officials), title, body);
+    await tellOfficials(messageRecipients({ direction, townCode: msg.town_code, barangayCode }, officials), title, body);
   } catch (error) {
     console.error("notifyOfficialsOfMessage failed", error);
+  }
+}
+
+/** How far back a heads-up counts as the one this alert just left (the trigger writes it with the alert). */
+const HEADS_UP_WINDOW_MS = 5 * 60_000;
+
+/**
+ * Tells the downstream barangay's officials, by push and email, about the
+ * heads-up the database left when this barangay first went to Warning or
+ * Evacuate (send_upstream_heads_up). Best effort, like the rest.
+ */
+export async function notifyDownstreamOfficials(zoneId: string): Promise<void> {
+  try {
+    const supabase = service();
+    const { data: zone } = await supabase.from("zones").select("downstream_zone_id").eq("id", zoneId).maybeSingle();
+    if (!zone?.downstream_zone_id) return;
+    const { data: msg } = await supabase
+      .from("official_messages")
+      .select("id")
+      .eq("direction", "heads_up")
+      .eq("zone_id", zone.downstream_zone_id)
+      .gte("created_at", new Date(Date.now() - HEADS_UP_WINDOW_MS).toISOString())
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (msg) await notifyOfficialsOfMessage(msg.id);
+  } catch (error) {
+    console.error("notifyDownstreamOfficials failed", error);
   }
 }
 

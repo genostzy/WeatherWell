@@ -40,6 +40,16 @@ const FROM_TOWN: OfficialMessage = {
   senderName: "MDRRMO",
 };
 
+const HEADS_UP: OfficialMessage = {
+  ...FROM_NILOMBOT,
+  id: "m3",
+  zoneId: "zone-1",
+  direction: "heads_up",
+  kind: "upstream_alert",
+  body: "Barangay Poblacion is under Warning.",
+  senderName: "WeatherWell",
+};
+
 function serve(messages: OfficialMessage[]) {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => messages }));
 }
@@ -118,5 +128,38 @@ describe("OfficialMessagesPanel phone notifications", () => {
     renderWithData(<OfficialMessagesPanel />, { official: KAPITAN });
     expect(screen.getByText(/get these on your phone/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /turn on alerts for zone-1/i })).toBeInTheDocument();
+  });
+});
+
+describe("OfficialMessagesPanel — an upstream heads-up", () => {
+  it("shows it to the downstream barangay's official, who marks it seen", async () => {
+    serve([HEADS_UP]);
+    renderWithData(<OfficialMessagesPanel />, { official: KAPITAN });
+    expect(await screen.findByText("Upstream alert")).toBeInTheDocument();
+    expect(screen.getByText("Barangay Poblacion is under Warning.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /mark as seen/i }));
+    await waitFor(() => expect(ackMock).toHaveBeenCalledWith("m3"));
+  });
+
+  it("speaks Filipino, and the town may mark it seen too", async () => {
+    serve([HEADS_UP]);
+    renderWithData(<OfficialMessagesPanel />, { official: TOWN, lang: "fil" });
+    expect(await screen.findByText("Babala mula sa itaas")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /markahang nakita/i })).toBeInTheDocument();
+  });
+
+  it("offers another barangay's official no button", async () => {
+    serve([HEADS_UP]);
+    renderWithData(<OfficialMessagesPanel />, {
+      official: { ...KAPITAN, areaCode: "0105528011", areaName: "Barangay Poblacion, Mapandan" },
+    });
+    expect(await screen.findByText("Upstream alert")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /mark as seen/i })).not.toBeInTheDocument();
+  });
+
+  it("says who saw it", async () => {
+    serve([{ ...HEADS_UP, acknowledgedAt: new Date().toISOString(), acknowledgedByName: "Kap" }]);
+    renderWithData(<OfficialMessagesPanel />, { official: TOWN });
+    expect(await screen.findByText(/seen by kap/i)).toBeInTheDocument();
   });
 });

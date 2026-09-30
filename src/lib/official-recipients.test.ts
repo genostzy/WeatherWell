@@ -22,6 +22,21 @@ describe("who hears about what (officials notified on their phones)", () => {
     expect(advisoryRecipients("0105528012", OFFICIALS)).toEqual(["town", "nilombot"]);
   });
 
+  it("sends an upstream heads-up to the downstream barangay's officials and its town's, no other barangay's", () => {
+    expect(
+      messageRecipients({ direction: "heads_up", townCode: "0105528", barangayCode: "0105528012" }, OFFICIALS)
+    ).toEqual(["town", "nilombot"]);
+  });
+
+  it("names the upstream barangay in a heads-up", () => {
+    const note = messageNotification(
+      { direction: "heads_up", kind: "upstream_alert", body: "Barangay Poblacion is under Warning.", senderName: "WeatherWell" },
+      "Barangay Nilombot, Mapandan"
+    );
+    expect(note.title).toBe("Upstream alert for Barangay Nilombot, Mapandan");
+    expect(note.body).toBe("Barangay Poblacion is under Warning. Water may reach you. Check your barangay. — WeatherWell");
+  });
+
   it("says plainly what came in", () => {
     const need = messageNotification({ direction: "up", kind: "need_help", body: "Boat needed", senderName: "Kap" }, "Barangay Nilombot, Mapandan");
     expect(need.title).toBe("Barangay Nilombot, Mapandan: We need help");

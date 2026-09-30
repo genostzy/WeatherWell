@@ -3,6 +3,7 @@
 import { after } from "next/server";
 import { manualAlertMessage, SEVERITY_ORDER, type Severity } from "@/lib/severity";
 import { notifyResidentsOfAlertChange } from "@/lib/notify-residents";
+import { notifyDownstreamOfficials } from "@/lib/notify-officials";
 import { createSupabaseUserClient } from "@/lib/supabase/user-server";
 import type { ActionResult } from "./action-result";
 
@@ -99,6 +100,11 @@ export async function setZoneAlert(input: SetZoneAlertInput): Promise<ActionResu
     // After the response, so the official is not kept waiting on push and email.
     if ((previous?.severity ?? null) !== severity) {
       after(() => notifyResidentsOfAlertChange(input.zoneId, severity ? "set" : "lifted"));
+    }
+    // The same rule as the database's heads-up trigger: a first Warning or Evacuate.
+    const urgent = (s: string | null | undefined) => s === "red" || s === "evacuate";
+    if (urgent(severity) && !urgent(previous?.severity)) {
+      after(() => notifyDownstreamOfficials(input.zoneId));
     }
     return { ok: true };
   }
