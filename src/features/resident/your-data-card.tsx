@@ -66,6 +66,8 @@ export function YourDataCard() {
     setBusy(true);
     setProblem(null);
     try {
+      const supabase = getBrowserClient();
+      const { data: session } = await supabase.auth.getSession();
       const { deleteMyData } = await import("@/app/actions/delete-my-data");
       const result = await deleteMyData();
       if (!result.ok) {
@@ -73,9 +75,15 @@ export function YourDataCard() {
         return;
       }
       setDone(true);
-      await forgetThisPhone();
-      await getBrowserClient().auth.signOut();
-      router.push("/onboarding");
+      try {
+        const userId = session.session?.user.id;
+        if (userId) await forgetThisPhone(userId);
+      } finally {
+        // Locally: deleting the account already ended its sessions, and a sign-out over a weak
+        // signal must not leave this phone signed in as an account that no longer exists.
+        await supabase.auth.signOut({ scope: "local" });
+        router.push("/onboarding");
+      }
     } catch (error) {
       setProblem(friendlyError(error instanceof Error ? error.message : String(error), lang));
     } finally {

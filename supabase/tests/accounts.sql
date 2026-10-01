@@ -277,6 +277,9 @@ begin
     ('ad100000-0000-4000-8000-000000000001', b, 1);
   insert into public.evacuation_check_ins (zone_id, user_id, status) values ('dr-z1', a, 'safe'), ('dr-z1', b, 'safe');
   insert into private.recovery_attempts (email, succeeded) values ('dr-a@test.local', false), ('dr-b@test.local', false);
+  insert into storage.objects (bucket_id, name, owner_id) values
+    ('pin-photos', 'ad000000-0000-4000-8000-000000000001/p.jpg', a::text),
+    ('pin-photos', 'ad000000-0000-4000-8000-000000000002/q.jpg', b::text);
   perform public.set_zone_alert('dr-z3', 'yellow', '{"en":"a","fil":"a"}'::jsonb, 'auto_crowdsourced');
   select id into v_alert from public.alerts where zone_id = 'dr-z3' and is_active;
   if (select e.reporters from private.report_evidence('dr-z3', null) e) <> 3 then
@@ -354,16 +357,36 @@ begin
     raise exception using errcode = 'TSTFL', message = 'DR4: anon can call the data functions';
   end if;
 
-  -- DR5: a second call finds nothing.
+  -- DR5: a second call changes nothing more; the photo, still in storage here (only the action
+  -- deletes it), is handed back again, so a retry finishes deleting it.
   perform set_config('request.jwt.claims', json_build_object('sub', a, 'role', 'authenticated')::text, true);
   set local role authenticated;
   v_paths := public.delete_my_data();
   reset role;
   perform set_config('request.jwt.claims', '', true);
-  if v_paths is distinct from '{}'::text[] then
+  if v_paths is distinct from array['ad000000-0000-4000-8000-000000000001/p.jpg'] then
     raise exception using errcode = 'TSTFL', message = format('DR5: a second call returned %s', v_paths);
   end if;
   raise notice 'ok DR1-DR6: a resident''s data is anonymised or deleted in one step, and only theirs';
+end $$;
+
+-- DR7 (the plan D review): every photo in the resident's folder is handed back for deleting, attached or not.
+do $$
+declare
+  a constant uuid := 'ad000000-0000-4000-8000-000000000011';
+  v_paths text[];
+begin
+  insert into auth.users (id, email, created_at) values (a, 'dr7@test.local', now() - interval '2 days');
+  insert into storage.objects (bucket_id, name, owner_id) values ('pin-photos', a::text || '/stray.jpg', a::text);
+  perform set_config('request.jwt.claims', json_build_object('sub', a, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  v_paths := public.delete_my_data();
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+  if v_paths is distinct from array[a::text || '/stray.jpg'] then
+    raise exception using errcode = 'TSTFL', message = format('DR7: returned %s', v_paths);
+  end if;
+  raise notice 'ok DR7: an upload no pin points to is handed back for deleting too';
 end $$;
 
 rollback;

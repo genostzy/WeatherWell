@@ -5,10 +5,11 @@ import { LanguageProvider } from "@/features/i18n/language-provider";
 
 const deleteMyData = vi.fn();
 vi.mock("@/app/actions/delete-my-data", () => ({ deleteMyData: () => deleteMyData() }));
-const forgetThisPhone = vi.fn(async () => {});
-vi.mock("@/lib/forget-this-phone", () => ({ forgetThisPhone: () => forgetThisPhone() }));
+const forgetThisPhone = vi.fn(async (_userId: string) => {});
+vi.mock("@/lib/forget-this-phone", () => ({ forgetThisPhone: (userId: string) => forgetThisPhone(userId) }));
 const signOut = vi.fn(async () => ({ error: null }));
-vi.mock("@/lib/supabase/browser", () => ({ getBrowserClient: () => ({ auth: { signOut } }) }));
+const getSession = vi.fn(async () => ({ data: { session: { user: { id: "me" } } } }));
+vi.mock("@/lib/supabase/browser", () => ({ getBrowserClient: () => ({ auth: { signOut, getSession } }) }));
 const push = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push, refresh: vi.fn() }) }));
 
@@ -62,9 +63,22 @@ describe("YourDataCard", () => {
 
     expect(await screen.findByText("Your data is deleted.")).toBeInTheDocument();
     expect(deleteMyData).toHaveBeenCalledTimes(1);
-    expect(forgetThisPhone).toHaveBeenCalled();
-    expect(signOut).toHaveBeenCalled();
+    expect(forgetThisPhone).toHaveBeenCalledWith("me");
+    // Locally: deleting the account already ended its sessions, and a network sign-out can fail.
+    expect(signOut).toHaveBeenCalledWith({ scope: "local" });
     expect(push).toHaveBeenCalledWith("/onboarding");
+  });
+
+  it("still signs this phone out when forgetting it fails", async () => {
+    const user = userEvent.setup();
+    forgetThisPhone.mockRejectedValueOnce(new Error("storage blocked"));
+    show();
+    await user.click(screen.getByRole("button", { name: "Delete my data" }));
+    await user.type(screen.getByRole("textbox"), "DELETE");
+    await user.click(screen.getByRole("button", { name: "Delete everything" }));
+    await screen.findByText("Your data is deleted.");
+    await vi.waitFor(() => expect(push).toHaveBeenCalledWith("/onboarding"));
+    expect(signOut).toHaveBeenCalledWith({ scope: "local" });
   });
 
   it("shows why it failed and stays", async () => {

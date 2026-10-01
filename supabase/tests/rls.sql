@@ -3442,7 +3442,7 @@ end $$;
 
 -- PT1-PT6: pin types, and pin photos only officials can read.
 do $$
-declare n int; r record; p1 uuid := 'c7100000-0000-4000-8000-000000000001'; p2 uuid := 'c7100000-0000-4000-8000-000000000002';
+declare n int; r record; p1 uuid := 'c7100000-0000-4000-8000-000000000001'; p2 uuid := 'c7100000-0000-4000-8000-000000000002'; p_detached uuid;
   u1 text := 'c7000000-0000-4000-8000-000000000001'; u2 text := 'c7000000-0000-4000-8000-000000000002';
 begin
   set local role postgres;
@@ -3490,6 +3490,20 @@ begin
   if n < 3 then raise exception using errcode = 'TSTFL', message = format('PT3: an official read %s photos', n); end if;
 
   -- PT4: attach_pin_photo checks whose pin, whose folder, and that the photo exists.
+  -- AP1 (the plan D review): a pin whose author deleted their data is nobody's to attach to.
+  reset role;
+  insert into public.community_pins (id, zone_id, author_id, status_tag, caption, lat, lng)
+    select gen_random_uuid(), p.zone_id, p.author_id, 'flooded', 'detached', p.lat, p.lng
+      from public.community_pins p where p.id = p1
+    returning id into p_detached;
+  update public.community_pins set author_id = null where id = p_detached;
+  set local role authenticated;
+  perform set_config('request.jwt.claims', json_build_object('sub', u1, 'role', 'authenticated')::text, true);
+  begin
+    perform public.attach_pin_photo(p_detached, u1 || '/a.jpg');
+    raise exception using errcode = 'TSTFL', message = 'AP1: a photo was attached to a detached pin';
+  exception when insufficient_privilege then null;
+  end;
   perform set_config('request.jwt.claims', json_build_object('sub', u2, 'role', 'authenticated')::text, true);
   begin
     perform public.attach_pin_photo(p1, u1 || '/a.jpg');

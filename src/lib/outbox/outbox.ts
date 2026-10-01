@@ -389,13 +389,21 @@ export function discardEntry(id: string): void {
 }
 
 /**
- * Empties the queue and its IndexedDB mirror (a resident who deleted their
- * data: nothing queued under the old account may be sent). Resolves once the
- * mirror is empty, so the service worker has nothing left to send.
+ * Drops what `userId` queued, and anything queued with no account yet, from
+ * the queue and its IndexedDB mirror (a resident who deleted their data:
+ * nothing of theirs may be sent). Another account's entries on a shared
+ * phone stay. Resolves once the mirror is done, so the service worker has
+ * nothing of theirs left to send.
  */
-export async function clearOutbox(): Promise<void> {
-  const ids = new Set([...readOutbox(), ...(await idbGetAll())].map((entry) => entry.id));
-  await commit([], [], [...ids]);
+export async function clearOutbox(userId: string): Promise<void> {
+  const theirs = (entry: OutboxEntry) => entry.userId === userId || entry.userId == null;
+  const page = readOutbox();
+  const ids = new Set([...page, ...(await idbGetAll())].filter(theirs).map((entry) => entry.id));
+  await commit(
+    page.filter((entry) => !ids.has(entry.id)),
+    [],
+    [...ids]
+  );
 }
 
 function sameEntry(a: OutboxEntry, b: OutboxEntry): boolean {
