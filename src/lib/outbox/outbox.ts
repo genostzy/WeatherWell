@@ -388,6 +388,16 @@ export function discardEntry(id: string): void {
   );
 }
 
+/**
+ * Empties the queue and its IndexedDB mirror (a resident who deleted their
+ * data: nothing queued under the old account may be sent). Resolves once the
+ * mirror is empty, so the service worker has nothing left to send.
+ */
+export async function clearOutbox(): Promise<void> {
+  const ids = new Set([...readOutbox(), ...(await idbGetAll())].map((entry) => entry.id));
+  await commit([], [], [...ids]);
+}
+
 function sameEntry(a: OutboxEntry, b: OutboxEntry): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }

@@ -21,6 +21,16 @@ function read(key: string): string | null {
   }
 }
 
+/** Forgets setup, consent and the chosen barangay, so onboarding starts again (forgetThisPhone). */
+export function forgetOnboarding(): void {
+  if (typeof window === "undefined") return;
+  try {
+    for (const key of [ONBOARDED_KEY, CONSENT_KEY, SELECTED_ZONE_KEY]) window.localStorage.removeItem(key);
+  } catch {
+    // Storage blocked: nothing was kept to forget.
+  }
+}
+
 /** Browser-only; safe to call from effects. Returns false during SSR. */
 export function hasOnboarded(): boolean {
   return read(ONBOARDED_KEY) === "true" && hasConsented();
