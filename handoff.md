@@ -1,10 +1,13 @@
-# Handoff — 29 September 2026
+# Handoff — 1 October 2026
 
 ## State
 
 - `mvp` was merged into `v1` on 25 September. `v1` is the default branch and the production branch; `mvp` stays at `0b9f0fd` for reference.
-- **On `v1`, not pushed and not released** (30 September): all four approved plans: limits for pins, votes and photos, the flood profile with the downstream heads-up, the rain heads-up, and residents' data rights, each reviewed and its findings fixed. The first four sections below.
-- **Production runs `4057809`**, released on 30 September as `dpl_EsTauojzpkGCWE1QPBCdFRr34Q2U` after CI run #128 passed: the server functions in Tokyo, a weekly encrypted backup, and `/api/route`'s limits counted exactly in the database. The first section below.
+- **Production runs `889bf2c`**, released on 1 October as `dpl_Bxt44nKM5ntvuSojKEF1fR4da3sw` (service worker v26) after CI run #131 passed: all four approved plans, limits for pins, votes and photos, the flood profile with the downstream heads-up, the rain heads-up, and residents' data rights, each reviewed and its findings fixed. The first four sections below.
+  - CI runs #129 and #130 failed on test fixtures written before the pin limits: `rls.sql` pins 30-60 km from their barangay, a sixth pin in an hour from one author, and the flood-profile and heads-up blocks reusing other blocks' users and barangay codes (`8493afd`, `889bf2c`). The live checks had run those blocks alone, so the clashes only showed in the full suite.
+  - The `dispatch-rain-forecast` pg_cron job (`20261001070707`) was applied just before promoting: the rain heads-up runs at five past every hour.
+  - Checked on production after the release: `sw.js` serves v26; `/api/health` reports the database ok with no recent errors; `/api/barangay-profiles` answers (no barangay has a profile yet); `/api/rain-forecast` and `/api/my-data` refuse callers without the cron secret or a session; the home and Settings pages load.
+- Before that, production ran `4057809`, released on 30 September as `dpl_EsTauojzpkGCWE1QPBCdFRr34Q2U` after CI run #128 passed: the server functions in Tokyo, a weekly encrypted backup, and `/api/route`'s limits counted exactly in the database. The first section below.
 - Before that, production ran `12a24c6`, promoted on 29 September from the Vercel dashboard after CI run #125 passed (the Vercel connector was failing, so its deployment id is not recorded here): the "Fix the map" link beside the map's OpenStreetMap credit (`c2bc778`). The first section below.
 - Before that, production ran `b7b17e6` (`dpl_7hvjZwFretu7RPNuynnSstp6VoJT`, CI run #123): Next.js 16.3.7 for a security fix, and limits on how often `/api/route` asks the walking router. Also the first section below.
 - Earlier on 29 September it ran `37a793c` (`dpl_64s7sTC5FzB3Wv8ZgNnvPzigprpa`, CI run #121): pin types and photos for officials, and a Find safe evacuation center that points somewhere safe. They are the second and third sections below.
@@ -24,9 +27,9 @@
 - `pg_cron` now starts the GitHub workflows on time. The owner put the token in Vault at 02:18 UTC on 26 September, and the first dispatched Monitor run started at 02:30 UTC and passed.
 - The Nilombot test alert (yellow, set by Test Official at 22:17 on 25 September) was lifted at 02:21 UTC on 26 September. The action record shows it as cleared by the System owner. No push or email went out, because it was lifted in the database, not through the app.
 
-### Residents' data rights, 1 October (built, not released)
+### Residents' data rights, 1 October (released 1 October)
 
-The fourth approved plan (`docs/superpowers/plans/2026-09-30-residents-data-rights.md`). **On `v1`, not pushed and not released.**
+The fourth approved plan (`docs/superpowers/plans/2026-09-30-residents-data-rights.md`). **Released on 1 October.**
 
 | Commit | What |
 |---|---|
@@ -39,9 +42,9 @@ The fourth approved plan (`docs/superpowers/plans/2026-09-30-residents-data-righ
 - Checked on the live database in a script that rolled back: DR1-DR6 pass. Not tried end to end on a real account: that needs a resident to delete theirs.
 - The final review's fixes, with `20261001060921_data_rights_review_fixes` (live): deleting hands back every photo in the resident's folder, attached or not; a detached pin takes no one's photo (a NULL author no longer slips past the check); the phone signs out locally, even if forgetting it fails; and only the deleted account's queued entries are dropped, so another person's on a shared phone stay. `accounts.sql` DR7, `rls.sql` AP1.
 
-### Rain heads-up, 1 October (built, not released)
+### Rain heads-up, 1 October (released 1 October)
 
-The third approved plan (`docs/superpowers/plans/2026-09-30-rain-heads-up.md`). **On `v1`, not pushed and not released.**
+The third approved plan (`docs/superpowers/plans/2026-09-30-rain-heads-up.md`). **Released on 1 October.**
 
 | Commit | What |
 |---|---|
@@ -50,15 +53,15 @@ The third approved plan (`docs/superpowers/plans/2026-09-30-rain-heads-up.md`). 
 | `6e8a4cc` | The "Forecast" tag and "Expected: From about 3 PM" on the alert; the inbox never asks to re-confirm one |
 
 - **The migration is live**, and harmless before the release: nothing calls `set_forecast_advisory` yet, and the engine change only matters once a Forecast advisory exists.
-- **At the release:** apply `supabase/pending/dispatch_rain_forecast.sql` with `apply_migration` (name `dispatch_rain_forecast`) just before promoting, and move the file to `supabase/migrations/<that version>_dispatch_rain_forecast.sql`. Until then only GitHub's own late hourly schedule runs it.
+- The schedule, `20261001070707_dispatch_rain_forecast`, was applied just before promoting.
 - Checked on the live database in a script that rolled back: RH1-RH6 pass. Open-Meteo's real multi-place answer was checked: a list in the order asked, times in UTC without a zone.
 - The final review's fixes, `a52fbc7` with `20261001054840_forecast_review_fixes` (live): the start time is the hour the rain starts (Open-Meteo stamps an hour's total at its end), the engine ends an advisory 3 hours past its peak even if the hourly runs stop, a kept advisory shows the latest forecast, and an official's alert over a Forecast advisory reaches residents. `calibration.sql` RH7-RH8.
 - **Promote soon after pushing:** GitHub's hourly schedule for `rain-forecast.yml` starts once `v1` is pushed, and every run answers 404 until production has `/api/rain-forecast`.
 - **Owner's call:** one storm can raise all 15 Mapandan barangays at once (they share one or two Open-Meteo grid cells), so up to 15 emails per storm come out of the 500-a-day Gmail allowance.
 
-### Flood profile and downstream heads-up, 30 September (built, not released)
+### Flood profile and downstream heads-up, 30 September (released 1 October)
 
-The second approved plan (`docs/superpowers/plans/2026-09-30-flood-profile-and-downstream-heads-up.md`). **On `v1`, not pushed and not released.**
+The second approved plan (`docs/superpowers/plans/2026-09-30-flood-profile-and-downstream-heads-up.md`). **Released on 1 October.**
 
 | Commit | What |
 |---|---|
@@ -72,9 +75,9 @@ The second approved plan (`docs/superpowers/plans/2026-09-30-flood-profile-and-d
 - Checked on the live database in scripts that rolled back: FP1-FP4 and HU1-HU4 pass.
 - The final review's fixes, `38700bb` with `20261001054226_heads_up_review_fixes` (live): saving hotlines sends the profile only when it was changed, so a phone's older copy never overwrites it; only a link an official saved sends a heads-up (the three seeded demo links do not); each heads-up records its sender (`from_zone_id`), so a push names the right upstream barangay; and a heads-up that cannot be written never stops the Warning. `rls.sql` HU5-HU7.
 
-### Limits for pins, votes and photos, 30 September (built, not released)
+### Limits for pins, votes and photos, 30 September (released 1 October)
 
-The first of the four approved plans (`docs/superpowers/plans/2026-09-30-pin-vote-photo-limits.md`). **On `v1`, not pushed and not released.**
+The first of the four approved plans (`docs/superpowers/plans/2026-09-30-pin-vote-photo-limits.md`). **Released on 1 October.**
 
 | Commit | What |
 |---|---|
