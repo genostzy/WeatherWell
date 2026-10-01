@@ -266,7 +266,7 @@ Location is personal data under the **Data Privacy Act of 2012 (RA 10173)**.
 | The action record (`official_actions`) | Indefinite | Append-only accountability record; contains no resident data |
 | `app_errors` | 30 days | Scrubbed crash reports with no personal data |
 
-**RA 10173 Article 16** — data export and deletion, keyed to the resident's anonymous identity. No phone numbers stored.
+**RA 10173 Article 16** — data export and deletion, keyed to the resident's anonymous identity. No phone numbers stored. In Settings, "Your data" downloads everything held about the resident as `weatherwell-my-data.json` (`/api/my-data`: account, barangay, reports with their positions, pins, votes, check-ins, alert subscriptions and security questions, never the answers or push keys), and "Delete my data" (typing DELETE) anonymises their reports, which stay in the barangay's counts without account or location, detaches their pins and deletes the pins' photos, and deletes their votes, check-ins, alerts, security questions and account. Officials and the admin cannot use it: their records are the town's.
 
 ---
 
@@ -433,7 +433,7 @@ This table is the single source of truth for implementation state. Everything ab
 | Server region | **Built** | The server functions run in Tokyo, beside the database, rather than in Washington, where every database call crossed the Pacific |
 | Accessibility (WCAG 2.1 AA) | **Audited, 26 September 2026** | Every page checked for keyboard use, focus, reflow at 320 px, contrast, names and `lang`. Fixed: placing a pin or marker without a pointer, form-field edges and the focus ring below 3:1, card titles that were not headings, `lang` not following the toggle, the one-tap report's message disappearing after 3 seconds, and every page titled only "WeatherWell". The axe sweep runs in CI, and tests check the palette's contrast and the page titles, which jsdom cannot see. The app is dark-only, so a light-theme preference still renders dark |
 | Location privacy | **Built** | Positions go in POST bodies, never in a URL. Elevation lookups round the position to about 100 m and store nothing |
-| Data export and deletion (RA 10173 Article 16) | **Not started** | A resident cannot yet download or delete their data from the app |
+| Data export and deletion (RA 10173 Article 16) | **Built** | Settings, "Your data": download as `weatherwell-my-data.json`, and delete after typing DELETE (`delete_my_data`, then the photos and the account). Reports stay anonymised, pins stay detached. Residents only |
 | Clean-up of unused anonymous identities | **Not started** | Nothing removes anonymous identities with nothing attributed to them (see Risks & Open Questions) |
 
 ---
