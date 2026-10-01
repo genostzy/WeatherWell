@@ -8,6 +8,7 @@ import { getBrowserClient } from "@/lib/supabase/browser";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { EmailAlertsCard } from "@/features/resident/email-alerts-card";
 import { SecurityQuestionsCard } from "@/features/resident/security-questions-card";
+import { YourDataCard } from "@/features/resident/your-data-card";
 import { t } from "@/lib/i18n";
 import type { LocalizedText } from "@/lib/types";
 
@@ -66,6 +67,7 @@ export default function ResidentSettingsPage() {
       </Card>
       {providers.includes("email") && isResident && <SecurityQuestionsCard />}
       {providers.includes("google") && email && <EmailAlertsCard email={email} />}
+      {isResident && <YourDataCard />}
     </div>
   );
 }

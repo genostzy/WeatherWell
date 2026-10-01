@@ -80,6 +80,21 @@ describe("ResidentSettingsPage", () => {
     role = "resident";
   });
 
+  it("lets a resident download and delete their data, and not an official", async () => {
+    role = "resident";
+    signedInWith([]);
+    const { unmount } = render(<ResidentSettingsPage />);
+    expect(await screen.findByRole("link", { name: "Download my data" })).toBeInTheDocument();
+    unmount();
+
+    role = "operator";
+    signedInWith([]);
+    render(<ResidentSettingsPage />);
+    await waitFor(() => expect(profileRead).toHaveBeenCalled());
+    expect(screen.queryByRole("link", { name: "Download my data" })).not.toBeInTheDocument();
+    role = "resident";
+  });
+
   it("offers email alerts to a Google account, naming its address", async () => {
     signedInWith(["google"], "someone@gmail.com");
     render(<ResidentSettingsPage />);
