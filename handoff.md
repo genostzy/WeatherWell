@@ -3,6 +3,7 @@
 ## State
 
 - `mvp` was merged into `v1` on 25 September. `v1` is the default branch and the production branch; `mvp` stays at `0b9f0fd` for reference.
+- **On `v1`, not pushed and not released** (1 October): the owner's five dashboard requests: History grouped by day, a section menu on both officials' dashboards, and live updates. The section below.
 - **Production runs `889bf2c`**, released on 1 October as `dpl_Bxt44nKM5ntvuSojKEF1fR4da3sw` (service worker v26) after CI run #131 passed: all four approved plans, limits for pins, votes and photos, the flood profile with the downstream heads-up, the rain heads-up, and residents' data rights, each reviewed and its findings fixed. The first four sections below.
   - CI runs #129 and #130 failed on test fixtures written before the pin limits: `rls.sql` pins 30-60 km from their barangay, a sixth pin in an hour from one author, and the flood-profile and heads-up blocks reusing other blocks' users and barangay codes (`8493afd`, `889bf2c`). The live checks had run those blocks alone, so the clashes only showed in the full suite.
   - The `dispatch-rain-forecast` pg_cron job (`20261001070707`) was applied just before promoting: the rain heads-up runs at five past every hour.
@@ -26,6 +27,19 @@
 - Checked on production after the release: the 8 public pages tried each have their own title, `/api/health` reports the database ok with no recent errors, and `/api/alert-bars` answers (no barangay's bar has moved yet).
 - `pg_cron` now starts the GitHub workflows on time. The owner put the token in Vault at 02:18 UTC on 26 September, and the first dispatched Monitor run started at 02:30 UTC and passed.
 - The Nilombot test alert (yellow, set by Test Official at 22:17 on 25 September) was lifted at 02:21 UTC on 26 September. The action record shows it as cleared by the System owner. No push or email went out, because it was lifted in the database, not through the app.
+
+### Dashboard requests, 1 October (built, not released)
+
+The owner's five requests of 1 October. **On `v1`, not pushed and not released.**
+
+| Commit | What |
+|---|---|
+| `d388a9e` | History groups actions under sticky day headings ("Today", "Yesterday", "September 26, 2026"), each row showing only its time |
+| `88af7ef` | A section menu on the barangay page and the town (and admin) dashboard: a sidebar on wide screens, a row at the top on phones; each link jumps to its section and moves focus there. The page scrolls as before |
+| `de228f0` | Live updates: `20261001072459_live_changes_table` (live) adds `public.live_changes`, the one table Realtime publishes. A report, an alert or an officials' update leaves a row with only its kind and barangay or town code; open screens refetch alerts (every dashboard), reports, and a town's Updates within a second or two. `rls.sql` LV1-LV3 |
+
+- **The migrations are live.** `20261001072331_live_update_announcements` first tried Realtime's broadcast store, which has no partitions on this project, so nothing was stored; `20261001072459` replaces its two functions to write `live_changes` instead. Rows older than an hour are pruned as new ones arrive.
+- Checked: a labelled test row in `live_changes` made a local dev page refetch `/api/alerts` through Realtime within seconds (the row was deleted after). The menus and History were checked by tests only: both need an official's sign-in.
 
 ### Residents' data rights, 1 October (released 1 October)
 
