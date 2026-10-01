@@ -3,7 +3,8 @@
 ## State
 
 - `mvp` was merged into `v1` on 25 September. `v1` is the default branch and the production branch; `mvp` stays at `0b9f0fd` for reference.
-- **Production runs `687c6e7`**, released later on 1 October as `dpl_7P8BB4Grhcky7AZ5nUCMYv4p6n5K` (service worker v27) after CI run #132 passed: the owner's five dashboard requests, History grouped by day, a section menu on both officials' dashboards, and live updates. The section below. Checked on production after the release: `sw.js` serves v27, `/api/health` reports the database ok with no recent errors, and `/api/alerts`, `/api/reports` and `/api/barangay-profiles` answer.
+- **Production runs `99d2928`**, released on the evening of 1 October as `dpl_8HrwQJuwNnSUc3mysp9sbhmJbA8Z` (service worker v28) after CI run #135 passed: every deferred review finding fixed, and Monitor's false alarm. The section below. CI run #134 failed first: V1 cast its 31st vote the same way as its 30th, which the fix now lets through for free; the test now changes its mind (`99d2928`). Checked on production after the release: `sw.js` serves v28, `/api/health` reports the database ok with no recent errors, the feeds answer, and `/api/my-data` refuses a caller with no session.
+- Before that, production ran `687c6e7`, released later on 1 October as `dpl_7P8BB4Grhcky7AZ5nUCMYv4p6n5K` (service worker v27) after CI run #132 passed: the owner's five dashboard requests, History grouped by day, a section menu on both officials' dashboards, and live updates. The section below. Checked on production after the release: `sw.js` serves v27, `/api/health` reports the database ok with no recent errors, and `/api/alerts`, `/api/reports` and `/api/barangay-profiles` answer.
 - Before that, production ran `889bf2c`, released on 1 October as `dpl_Bxt44nKM5ntvuSojKEF1fR4da3sw` (service worker v26) after CI run #131 passed: all four approved plans, limits for pins, votes and photos, the flood profile with the downstream heads-up, the rain heads-up, and residents' data rights, each reviewed and its findings fixed. The first four sections below.
   - CI runs #129 and #130 failed on test fixtures written before the pin limits: `rls.sql` pins 30-60 km from their barangay, a sixth pin in an hour from one author, and the flood-profile and heads-up blocks reusing other blocks' users and barangay codes (`8493afd`, `889bf2c`). The live checks had run those blocks alone, so the clashes only showed in the full suite.
   - The `dispatch-rain-forecast` pg_cron job (`20261001070707`) was applied just before promoting: the rain heads-up runs at five past every hour. Confirmed: pg_cron started it on time at 08:05, 09:05 and 10:05 UTC, every run green; the 10:05 run checked all 15 Mapandan barangays and raised nothing (no heavy rain forecast).
@@ -28,7 +29,7 @@
 - `pg_cron` now starts the GitHub workflows on time. The owner put the token in Vault at 02:18 UTC on 26 September, and the first dispatched Monitor run started at 02:30 UTC and passed.
 - The Nilombot test alert (yellow, set by Test Official at 22:17 on 25 September) was lifted at 02:21 UTC on 26 September. The action record shows it as cleared by the System owner. No push or email went out, because it was lifted in the database, not through the app.
 
-### Deferred review findings and Monitor, 1 October (service worker v28)
+### Deferred review findings and Monitor, 1 October (released 1 October, v28)
 
 Every minor finding the four plan reviews had deferred, fixed on the owner's word ("fix everything"), and a false alarm in Monitor.
 
