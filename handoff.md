@@ -37,6 +37,7 @@ The fourth approved plan (`docs/superpowers/plans/2026-09-30-residents-data-righ
 
 - **The migration is live**, and harmless before the release: nothing calls the two functions yet, and no code reads a null author or reporter until someone deletes.
 - Checked on the live database in a script that rolled back: DR1-DR6 pass. Not tried end to end on a real account: that needs a resident to delete theirs.
+- The final review's fixes, with `20261001060921_data_rights_review_fixes` (live): deleting hands back every photo in the resident's folder, attached or not; a detached pin takes no one's photo (a NULL author no longer slips past the check); the phone signs out locally, even if forgetting it fails; and only the deleted account's queued entries are dropped, so another person's on a shared phone stay. `accounts.sql` DR7, `rls.sql` AP1.
 
 ### Rain heads-up, 1 October (built, not released)
 
