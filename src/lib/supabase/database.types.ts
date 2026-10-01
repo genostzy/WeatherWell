@@ -168,7 +168,7 @@ export type Database = {
       }
       community_pins: {
         Row: {
-          author_id: string
+          author_id: string | null
           caption: string
           created_at: string
           id: string
@@ -181,7 +181,7 @@ export type Database = {
           zone_id: string
         }
         Insert: {
-          author_id: string
+          author_id?: string | null
           caption: string
           created_at?: string
           id?: string
@@ -194,7 +194,7 @@ export type Database = {
           zone_id: string
         }
         Update: {
-          author_id?: string
+          author_id?: string | null
           caption?: string
           created_at?: string
           id?: string
@@ -753,7 +753,7 @@ export type Database = {
           received_at: string
           reported_at: string
           reporter_established: boolean
-          reporter_id: string
+          reporter_id: string | null
           trust_weight: number
           zone_id: string
         }
@@ -767,7 +767,7 @@ export type Database = {
           received_at?: string
           reported_at?: string
           reporter_established?: boolean
-          reporter_id: string
+          reporter_id?: string | null
           trust_weight?: number
           zone_id: string
         }
@@ -781,7 +781,7 @@ export type Database = {
           received_at?: string
           reported_at?: string
           reporter_established?: boolean
-          reporter_id?: string
+          reporter_id?: string | null
           trust_weight?: number
           zone_id?: string
         }
@@ -966,6 +966,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      delete_my_data: { Args: never; Returns: string[] }
       email_alert_recipients: {
         Args: { p_user_ids?: string[]; p_zone_id?: string }
         Returns: {
@@ -978,6 +979,14 @@ export type Database = {
         Returns: {
           question_1: string
           question_2: string
+        }[]
+      }
+      my_report_positions: {
+        Args: never
+        Returns: {
+          id: string
+          lat: number
+          lng: number
         }[]
       }
       my_water_level_reports: {

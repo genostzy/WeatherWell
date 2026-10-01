@@ -221,4 +221,149 @@ begin
   raise notice 'ok M2: recipients are Google subscribers only; the link unsubscribes once';
 end $$;
 
+-- DR1-DR6: a resident downloads and deletes their data. Reports stay,
+-- anonymised; pins stay, detached, their photo paths handed back for
+-- deleting; votes, check-ins and recovery attempts go. Officials and the
+-- admin cannot use it.
+create or replace function tests.dr_report(p_uid uuid, p_zone text) returns void
+language plpgsql set search_path = '' as $$
+declare
+  v_lat double precision;
+  v_lng double precision;
+begin
+  select z.lat, z.lng into v_lat, v_lng from public.zones z where z.id = p_zone;
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', p_uid::text, 'role', 'authenticated')::text, true);
+  execute 'set local role authenticated';
+  insert into public.water_level_reports (zone_id, depth_level, reporter_id, lat, lng)
+    values (p_zone, 'knee', p_uid, v_lat, v_lng);
+  execute 'reset role';
+  perform set_config('request.jwt.claims', '', true);
+end $$;
+
+do $$
+declare
+  a constant uuid := 'ad000000-0000-4000-8000-000000000001';
+  b constant uuid := 'ad000000-0000-4000-8000-000000000002';
+  c constant uuid := 'ad000000-0000-4000-8000-000000000003';
+  v_paths text[];
+  u uuid;
+  v_alert uuid;
+  n int;
+  m int;
+  r record;
+begin
+  insert into auth.users (id, email, created_at) values
+    (a, 'dr-a@test.local', now() - interval '2 days'),
+    (b, 'dr-b@test.local', now() - interval '2 days'),
+    (c, 'dr-c@test.local', now() - interval '2 days');
+  insert into public.zones
+    (id, psgc_barangay_code, name, evacuation_route_text, lat, lng, evacuation_route_path, hotline_number)
+    select 'dr-z' || g, '9900008' || (200 + g)::text, 'Data Zone ' || g,
+           '{"en":"x","fil":"x"}'::jsonb, 15 + g * 0.2, 121.5, '[]'::jsonb, '000'
+      from generate_series(1, 3) g;
+  perform tests.dr_report(a, 'dr-z1');
+  perform tests.dr_report(a, 'dr-z2');
+  perform tests.dr_report(a, 'dr-z3');
+  perform tests.dr_report(b, 'dr-z3');
+  perform tests.dr_report(c, 'dr-z3');
+  insert into public.community_pins (id, zone_id, author_id, status_tag, caption, lat, lng, photo_path)
+    values ('ad100000-0000-4000-8000-000000000001', 'dr-z1', a, 'flooded', 'a pin', 15.2, 121.5, 'ad000000-0000-4000-8000-000000000001/p.jpg'),
+           ('ad100000-0000-4000-8000-000000000003', 'dr-z1', b, 'flooded', 'b pin', 15.2, 121.5, 'ad000000-0000-4000-8000-000000000002/q.jpg');
+  insert into public.community_pins (id, zone_id, author_id, status_tag, caption, lat, lng, removed, removed_reason)
+    values ('ad100000-0000-4000-8000-000000000002', 'dr-z1', a, 'other', 'a removed pin', 15.2, 121.5, true, 'admin');
+  insert into public.pin_votes (pin_id, voter_id, direction) values
+    ('ad100000-0000-4000-8000-000000000003', a, 1),
+    ('ad100000-0000-4000-8000-000000000001', b, 1);
+  insert into public.evacuation_check_ins (zone_id, user_id, status) values ('dr-z1', a, 'safe'), ('dr-z1', b, 'safe');
+  insert into private.recovery_attempts (email, succeeded) values ('dr-a@test.local', false), ('dr-b@test.local', false);
+  perform public.set_zone_alert('dr-z3', 'yellow', '{"en":"a","fil":"a"}'::jsonb, 'auto_crowdsourced');
+  select id into v_alert from public.alerts where zone_id = 'dr-z3' and is_active;
+  if (select e.reporters from private.report_evidence('dr-z3', null) e) <> 3 then
+    raise exception using errcode = 'TSTFL', message = 'DR3: the fixture did not count three reporters';
+  end if;
+
+  -- DR6: a resident reads back their own report positions, and no one else's.
+  perform set_config('request.jwt.claims', json_build_object('sub', a, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  -- Three of the five reports in the fixture are theirs; anyone else's would make more.
+  select count(*) filter (where p.lat is not null and p.lng is not null), count(*) into n, m
+    from public.my_report_positions() p;
+  if n <> 3 or m <> 3 then
+    reset role;
+    raise exception using errcode = 'TSTFL', message = format('DR6: read %s positions of %s rows; expected 3 of 3', n, m);
+  end if;
+
+  -- DR1: deleting anonymises the reports, detaches the pins and hands back the photo path.
+  v_paths := public.delete_my_data();
+  reset role;
+  if v_paths is distinct from array['ad000000-0000-4000-8000-000000000001/p.jpg'] then
+    raise exception using errcode = 'TSTFL', message = format('DR1: returned %s', v_paths);
+  end if;
+  for r in select * from public.water_level_reports where zone_id like 'dr-z%' and depth_level = 'knee'
+             and reporter_id is null loop
+    if r.lat is not null or r.lng is not null or r.located or r.reported_at is null or r.zone_id is null then
+      raise exception using errcode = 'TSTFL', message = format('DR1: a report kept %s', r);
+    end if;
+  end loop;
+  select count(*) into n from public.water_level_reports where reporter_id is null and zone_id like 'dr-z%';
+  if n <> 3 or exists (select 1 from public.water_level_reports where reporter_id = a) then
+    raise exception using errcode = 'TSTFL', message = format('DR1: %s of 3 reports anonymised', n);
+  end if;
+  if exists (select 1 from public.community_pins where author_id = a)
+     or (select photo_path from public.community_pins where id = 'ad100000-0000-4000-8000-000000000001') is not null
+     or exists (select 1 from public.pin_votes where voter_id = a)
+     or exists (select 1 from public.evacuation_check_ins where user_id = a)
+     or exists (select 1 from private.recovery_attempts where email = 'dr-a@test.local') then
+    raise exception using errcode = 'TSTFL', message = 'DR1: a pin, vote, check-in or recovery attempt was kept';
+  end if;
+
+  -- DR2: a pin an official had removed is detached too, and stays removed.
+  if (select author_id is not null or not removed from public.community_pins where id = 'ad100000-0000-4000-8000-000000000002') then
+    raise exception using errcode = 'TSTFL', message = 'DR2: the removed pin was not detached, or came back';
+  end if;
+
+  -- DR3: the advisory's evidence counts one fewer reporter; the advisory itself is untouched.
+  if (select e.reporters from private.report_evidence('dr-z3', null) e) <> 2
+     or not (select is_active from public.alerts where id = v_alert) then
+    raise exception using errcode = 'TSTFL', message = 'DR3: an anonymised report still counted, or the advisory broke';
+  end if;
+
+  -- DR4: the other resident keeps everything; officials and the admin are refused; anon cannot call it.
+  if (select count(*) from public.water_level_reports where reporter_id = b) <> 1
+     or (select author_id from public.community_pins where id = 'ad100000-0000-4000-8000-000000000003') <> b
+     or (select photo_path from public.community_pins where id = 'ad100000-0000-4000-8000-000000000003') is null
+     or not exists (select 1 from public.pin_votes where voter_id = b)
+     or not exists (select 1 from public.evacuation_check_ins where user_id = b)
+     or not exists (select 1 from private.recovery_attempts where email = 'dr-b@test.local') then
+    raise exception using errcode = 'TSTFL', message = 'DR4: another resident''s data changed';
+  end if;
+  foreach u in array array['ac000000-0000-4000-8000-000000000002', 'ac000000-0000-4000-8000-000000000003']::uuid[] loop
+    perform set_config('request.jwt.claims', json_build_object('sub', u, 'role', 'authenticated')::text, true);
+    set local role authenticated;
+    begin
+      perform public.delete_my_data();
+      reset role;
+      raise exception using errcode = 'TSTFL', message = format('DR4: %s deleted their data', u);
+    exception when insufficient_privilege then reset role;
+    end;
+  end loop;
+  perform set_config('request.jwt.claims', '', true);
+  if has_function_privilege('anon', 'public.delete_my_data()', 'execute')
+     or has_function_privilege('anon', 'public.my_report_positions()', 'execute') then
+    raise exception using errcode = 'TSTFL', message = 'DR4: anon can call the data functions';
+  end if;
+
+  -- DR5: a second call finds nothing.
+  perform set_config('request.jwt.claims', json_build_object('sub', a, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  v_paths := public.delete_my_data();
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+  if v_paths is distinct from '{}'::text[] then
+    raise exception using errcode = 'TSTFL', message = format('DR5: a second call returned %s', v_paths);
+  end if;
+  raise notice 'ok DR1-DR6: a resident''s data is anonymised or deleted in one step, and only theirs';
+end $$;
+
 rollback;
