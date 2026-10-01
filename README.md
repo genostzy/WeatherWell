@@ -183,8 +183,9 @@ Conventions worth knowing before editing:
   Vercel preview; production is released by redeploying that build to
   production.
 - Scheduled jobs (GitHub Actions, from `v1`): the threshold engine and
-  typhoon refresh every 3 hours, and a production health check every 15
-  minutes. GitHub starts scheduled runs late, so Supabase's `pg_cron`
+  typhoon refresh every 3 hours, the rain heads-up (`rain-forecast.yml`,
+  `/api/rain-forecast`) every hour at five past, and a production health
+  check every 15 minutes. GitHub starts scheduled runs late, so Supabase's `pg_cron`
   also starts them on time, once a GitHub token is in Vault (PRD Setup
   step 10).
 - Vercel crons (`vercel.json`), daily: `/api/threshold-check`, `/api/cleanup-weather`,

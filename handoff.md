@@ -3,7 +3,7 @@
 ## State
 
 - `mvp` was merged into `v1` on 25 September. `v1` is the default branch and the production branch; `mvp` stays at `0b9f0fd` for reference.
-- **On `v1`, not pushed and not released** (30 September): limits for pins, votes and photos, and the flood profile with the downstream heads-up, the first two of four approved plans. The first two sections below.
+- **On `v1`, not pushed and not released** (30 September): limits for pins, votes and photos, the flood profile with the downstream heads-up, and the rain heads-up, the first three of four approved plans. The first three sections below.
 - **Production runs `4057809`**, released on 30 September as `dpl_EsTauojzpkGCWE1QPBCdFRr34Q2U` after CI run #128 passed: the server functions in Tokyo, a weekly encrypted backup, and `/api/route`'s limits counted exactly in the database. The first section below.
 - Before that, production ran `12a24c6`, promoted on 29 September from the Vercel dashboard after CI run #125 passed (the Vercel connector was failing, so its deployment id is not recorded here): the "Fix the map" link beside the map's OpenStreetMap credit (`c2bc778`). The first section below.
 - Before that, production ran `b7b17e6` (`dpl_7hvjZwFretu7RPNuynnSstp6VoJT`, CI run #123): Next.js 16.3.7 for a security fix, and limits on how often `/api/route` asks the walking router. Also the first section below.
@@ -23,6 +23,20 @@
 - Checked on production after the release: the 8 public pages tried each have their own title, `/api/health` reports the database ok with no recent errors, and `/api/alert-bars` answers (no barangay's bar has moved yet).
 - `pg_cron` now starts the GitHub workflows on time. The owner put the token in Vault at 02:18 UTC on 26 September, and the first dispatched Monitor run started at 02:30 UTC and passed.
 - The Nilombot test alert (yellow, set by Test Official at 22:17 on 25 September) was lifted at 02:21 UTC on 26 September. The action record shows it as cleared by the System owner. No push or email went out, because it was lifted in the database, not through the app.
+
+### Rain heads-up, 1 October (built, not released)
+
+The third approved plan (`docs/superpowers/plans/2026-09-30-rain-heads-up.md`). **On `v1`, not pushed and not released.**
+
+| Commit | What |
+|---|---|
+| `4387de5` | `20260930125234_forecast_advisory`, live: `set_forecast_advisory` (service role only) raises, keeps and ends a Forecast advisory; the engine no longer waits behind one, and an official's alert over one counts as raised from nothing for calibration. `calibration.sql` RH1-RH6 |
+| `3976d8f` | `/api/rain-forecast` and `rain-forecast.yml`: one Open-Meteo request for every barangay in a town with an official; residents are told of a new one only |
+| `6e8a4cc` | The "Forecast" tag and "Expected: From about 3 PM" on the alert; the inbox never asks to re-confirm one |
+
+- **The migration is live**, and harmless before the release: nothing calls `set_forecast_advisory` yet, and the engine change only matters once a Forecast advisory exists.
+- **At the release:** apply `supabase/pending/dispatch_rain_forecast.sql` with `apply_migration` (name `dispatch_rain_forecast`) just before promoting, and move the file to `supabase/migrations/<that version>_dispatch_rain_forecast.sql`. Until then only GitHub's own late hourly schedule runs it.
+- Checked on the live database in a script that rolled back: RH1-RH6 pass. Open-Meteo's real multi-place answer was checked: a list in the order asked, times in UTC without a zone.
 
 ### Flood profile and downstream heads-up, 30 September (built, not released)
 
