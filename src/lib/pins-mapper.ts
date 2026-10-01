@@ -19,7 +19,7 @@ export interface PinRow {
   caption: string;
   lat: number;
   lng: number;
-  author_id: string;
+  author_id: string | null;
   created_at: string;
   removed: boolean;
   removed_reason: string | null;
@@ -44,7 +44,8 @@ export interface MappedPin {
   /** The caller's own vote, if they have one. Replaces the local votes store. */
   ownVote?: 1 | -1;
   createdAt: string;
-  authorId: string;
+  /** Null once the pin's author deleted their data (delete_my_data): nobody's pin. */
+  authorId: string | null;
   removed: boolean;
   /**
    * Undefined means removed by the author themselves — see PinRemovalReason.

@@ -69,6 +69,11 @@ describe("pin photos", () => {
     expect(await uploadPinPhoto(blobOf(10))).toEqual({ failed: "limit" });
   });
 
+  it("does not call any other refusal (an expired session, say) the day's limit", async () => {
+    upload.mockResolvedValue({ error: { statusCode: "403", status: 400, message: "jwt expired" } });
+    expect(await uploadPinPhoto(blobOf(10))).toEqual({ failed: "error" });
+  });
+
   it("stops waiting for an upload that stalls, so the pin need not wait for its photo", async () => {
     vi.useFakeTimers();
     try {

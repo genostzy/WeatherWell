@@ -200,7 +200,7 @@ describe("describeActor (M2)", () => {
     ["Not an official", "Not an official", "Hindi opisyal"],
     ["Automatic — net score", "Automatic — net score", "Awtomatiko — net score"],
     ["Automatic — auto_crowdsourced", "Automatic — community reports", "Awtomatiko — mga ulat ng komunidad"],
-    ["Automatic — predicted", "Automatic — prediction", "Awtomatiko — prediksyon"],
+    ["Automatic — predicted", "Automatic — rain forecast", "Awtomatiko — forecast ng ulan"],
     ["Automatic — cascade", "Automatic — upstream alert", "Awtomatiko — babala mula sa itaas"],
     ["Automatic — calibration", "Automatic — calibration", "Awtomatiko — pagsasaayos"],
   ])("%s", (stored, en, fil) => {

@@ -77,6 +77,8 @@ export async function runRainForecast(): Promise<{ checked: number; raised: stri
   // One location comes back as an object, several as a list in the order asked.
   const replies = Array.isArray(body) ? body : [body];
   if (replies.length !== list.length) throw new Error(`Open-Meteo answered ${replies.length} of ${list.length} places`);
+  // A place without its hours says nothing about the rain there; reading it as dry would end its advisory.
+  if (replies.some((reply) => !Array.isArray(reply?.hourly?.time))) throw new Error("Open-Meteo left a place without its hours");
 
   const now = Date.now();
   const raised: string[] = [];

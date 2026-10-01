@@ -66,9 +66,11 @@ async function upload(photo: Blob): Promise<PhotoUpload> {
       .upload(path, photo, { contentType: "image/jpeg", upsert: false });
     if (!error) return { path };
     // The upload policy refuses an 11th photo in a day (pin_photos_insert_own). Storage has
-    // answered a policy refusal as statusCode "403" inside a 400, and as a plain 403.
-    const { status, statusCode } = error as { status?: number; statusCode?: string };
-    return status === 403 || statusCode === "403" ? { failed: "limit" } : FAILED;
+    // answered a policy refusal as statusCode "403" inside a 400, and as a plain 403; an expired
+    // session is a 403 too, so only a row-level security refusal counts as the limit.
+    const { status, statusCode, message } = error as { status?: number; statusCode?: string; message?: string };
+    const refused = status === 403 || statusCode === "403";
+    return refused && /row-level security/i.test(message ?? "") ? { failed: "limit" } : FAILED;
   } catch {
     return FAILED;
   }

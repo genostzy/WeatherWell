@@ -127,6 +127,12 @@ describe("runRainForecast", () => {
     expect(notifyResidentsOfAlertChange).not.toHaveBeenCalled();
   });
 
+  it("fails loudly, changing nothing, when a place comes back without its hours", async () => {
+    openMeteo([hours([30, 2, 16, 22]), {}]);
+    await expect(runRainForecast()).rejects.toThrow();
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
   it("fails loudly, after the rest, when the database refuses a barangay", async () => {
     openMeteo([hours([30, 2, 16, 22]), hours([1, 1, 2, 3])]);
     rpc.mockResolvedValueOnce({ data: null, error: { message: "down" } });

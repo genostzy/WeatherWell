@@ -212,7 +212,7 @@ const FIXED_ACTOR: Record<string, LocalizedText> = {
 const AUTOMATIC_CAUSE: Record<string, LocalizedText> = {
   "net score": { en: "net score", fil: "net score" },
   auto_crowdsourced: { en: "community reports", fil: "mga ulat ng komunidad" },
-  predicted: { en: "prediction", fil: "prediksyon" },
+  predicted: { en: "rain forecast", fil: "forecast ng ulan" },
   cascade: { en: "upstream alert", fil: "babala mula sa itaas" },
   calibration: { en: "calibration", fil: "pagsasaayos" },
 };
