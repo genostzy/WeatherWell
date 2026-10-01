@@ -41,7 +41,7 @@ describe("admin home at nationwide scale (idea 14)", () => {
     renderWithData(<AdminOverview />, { data: { zones, hazards: {} }, official: ADMIN, alerts: [] });
     const elapsed = performance.now() - started;
 
-    expect(screen.getByText(/needs your attention/i)).toBeInTheDocument();
+    expect(screen.getByText(/needs your attention/i, { ignore: "nav *, script, style" })).toBeInTheDocument();
     expect(screen.getByText(`of ${NATIONWIDE}`)).toBeInTheDocument();
     // The per-barangay picker would be a 42k-option select; it must be skipped.
     expect(screen.queryByLabelText(/barangay/i)).not.toBeInTheDocument();

@@ -18,6 +18,9 @@ import { addCommunityPin } from "@/lib/community-pins";
 import type { Official } from "@/lib/auth/official";
 
 // The flood panel lists barangays one by one; a town sees them in its Barangays list instead.
+/** Text the section menu repeats; these queries mean the sections themselves. */
+const IN_MENU = "nav *, script, style";
+
 const ONE_AREA: Official = { userId: "b", displayName: "Kap", areaCode: "", areaName: "All test zones", level: "barangay" };
 
 describe("AdminOverview dashboard", () => {
@@ -34,9 +37,31 @@ describe("AdminOverview dashboard", () => {
 
   it("opens on what needs the official's attention, before the figures (idea 5)", () => {
     renderWithData(<AdminOverview />);
-    const inbox = screen.getByText(/needs your attention/i);
-    const glance = screen.getByText(/at a glance/i);
+    // The section menu names them too; these are the sections themselves.
+    const outsideMenu = (el: HTMLElement) => !el.closest("nav");
+    const inbox = screen.getAllByText(/needs your attention/i).find(outsideMenu)!;
+    const glance = screen.getAllByText(/at a glance/i).find(outsideMenu)!;
     expect(inbox.compareDocumentPosition(glance) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("lists the town dashboard's sections in a menu that jumps to each", () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => [] }));
+    renderWithData(<AdminOverview />);
+    const nav = screen.getByRole("navigation", { name: "Sections on this page" });
+    const links = within(nav).getAllByRole("link");
+    expect(links.map((link) => link.textContent)).toEqual([
+      "Needs your attention",
+      "Updates",
+      "Barangays",
+      "At a glance",
+      "Hazard monitoring",
+      "Operations",
+      "Evacuation management",
+      "Community pins",
+    ]);
+    for (const link of links) {
+      expect(document.getElementById(link.getAttribute("href")!.slice(1))).not.toBeNull();
+    }
   });
 
   it("links out to the simulation page", () => {
@@ -56,7 +81,7 @@ describe("AdminOverview dashboard", () => {
     expect(screen.getByText(/flood monitoring/i)).toBeInTheDocument();
     expect(screen.getByText(/typhoon tracking/i)).toBeInTheDocument();
     expect(screen.getByText(/landslide risk/i)).toBeInTheDocument();
-    expect(screen.getByText(/evacuation management/i)).toBeInTheDocument();
+    expect(screen.getByText(/evacuation management/i, { ignore: IN_MENU })).toBeInTheDocument();
   });
 
   it("shows no figure the app has no real source for", () => {
@@ -155,7 +180,7 @@ describe("AdminOverview dashboard", () => {
     };
     renderWithData(<AdminOverview />, { official });
 
-    const label = screen.getByText(/^community pins$/i);
+    const label = screen.getByText(/^community pins$/i, { ignore: IN_MENU });
     const card = label.closest('[data-slot="card"]');
     expect(card).not.toBeNull();
     // Only the in-area pin counts, even though two pins were queued.
@@ -229,7 +254,7 @@ describe("AdminOverview for a nationwide admin", () => {
     };
     renderWithData(<AdminOverview />, { official });
     expect(screen.getByText(/flood monitoring/i)).toBeInTheDocument();
-    expect(screen.getByText(/evacuation management/i)).toBeInTheDocument();
+    expect(screen.getByText(/evacuation management/i, { ignore: IN_MENU })).toBeInTheDocument();
   });
 });
 
@@ -242,7 +267,7 @@ describe("AdminOverview by role (each account sees its own dashboard)", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => [] }));
     renderWithData(<AdminOverview townOfficials={[]} />, { official: TOWN });
     expect(screen.getByRole("heading", { level: 1, name: /mapandan dashboard/i })).toBeInTheDocument();
-    expect(screen.getByText(/^barangays$/i)).toBeInTheDocument();
+    expect(screen.getByText(/^barangays$/i, { ignore: IN_MENU })).toBeInTheDocument();
     expect(screen.getByText(/update to every barangay/i)).toBeInTheDocument();
   });
 
@@ -266,7 +291,7 @@ describe("AdminOverview by role (each account sees its own dashboard)", () => {
       />,
       { official: ADMIN }
     );
-    const panel = screen.getByText("Calibration").closest("[data-slot=card]") as HTMLElement;
+    const panel = screen.getByText("Calibration", { ignore: IN_MENU }).closest("[data-slot=card]") as HTMLElement;
     expect(within(panel).getByText(/rejected by an official/i)).toBeInTheDocument();
     // Only the barangays this dashboard covers.
     expect(within(panel).queryByText(/zone-elsewhere/)).not.toBeInTheDocument();

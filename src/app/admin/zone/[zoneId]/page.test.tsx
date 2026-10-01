@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 // The community-pin panel's outbox drain reaches the real Supabase browser
@@ -119,8 +119,40 @@ describe("ZoneDashboardPage as a barangay official's home (found checking the li
 
   it("puts Needs your attention at the top for the barangay's own official, with no dead Back link", () => {
     renderWithData(<ZoneDashboardPage params={resolvedParams({ zoneId: zone.id })} searchParams={emptySearchParams} />, { official: own });
-    expect(screen.getByText(/needs your attention/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/needs your attention/i).length).toBeGreaterThan(0);
     expect(screen.queryByRole("link", { name: /^back to dashboard$/i })).not.toBeInTheDocument();
+  });
+
+  it("lists every section in a menu that jumps to it", () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => [] }));
+    renderWithData(<ZoneDashboardPage params={resolvedParams({ zoneId: zone.id })} searchParams={emptySearchParams} />, { official: own });
+    const nav = screen.getByRole("navigation", { name: "Sections on this page" });
+    const links = within(nav).getAllByRole("link");
+    expect(links.map((link) => link.textContent)).toEqual([
+      "Needs your attention",
+      "Updates",
+      "Alert status",
+      "Evacuation centre",
+      "Weather and hazards",
+      "Set your evacuation centre",
+      "What neighbours are reporting",
+      "Resident check-ins",
+      "Community pins",
+    ]);
+    for (const link of links) {
+      expect(document.getElementById(link.getAttribute("href")!.slice(1))).not.toBeNull();
+    }
+    vi.unstubAllGlobals();
+  });
+
+  it("leaves the inbox and updates out of the menu on a barangay the official only views", () => {
+    renderWithData(
+      <ZoneDashboardPage params={resolvedParams({ zoneId: FIXTURE_REFERENCE_DATA.zones[1].id })} searchParams={emptySearchParams} />,
+      { official: own }
+    );
+    const nav = screen.getByRole("navigation", { name: "Sections on this page" });
+    expect(within(nav).queryByRole("link", { name: "Updates" })).not.toBeInTheDocument();
+    expect(within(nav).getByRole("link", { name: "What neighbours are reporting" })).toBeInTheDocument();
   });
 
   it("gives the barangay official the one-tap line to their town", () => {

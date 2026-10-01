@@ -6,6 +6,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, Building2, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SectionNav, type NavSection } from "@/components/section-nav";
 import {
   Select,
   SelectContent,
@@ -71,6 +72,18 @@ const VIEW_ONLY_NOTE: LocalizedText = {
   fil: "Tingnan lang — wala sa saklaw mo ang barangay na ito",
 };
 
+// The section menu (SectionNav): each label names the section it jumps to.
+const NAV_INBOX: LocalizedText = { en: "Needs your attention", fil: "Kailangan ng iyong pansin" };
+const NAV_UPDATES: LocalizedText = { en: "Updates", fil: "Mga update" };
+const NAV_CENTRE: LocalizedText = { en: "Evacuation centre", fil: "Evacuation center" };
+const NAV_WEATHER: LocalizedText = { en: "Weather and hazards", fil: "Panahon at panganib" };
+const NAV_SET_CENTRE: LocalizedText = { en: "Set your evacuation centre", fil: "Itakda ang evacuation center" };
+const NAV_REPORTS: LocalizedText = { en: "What neighbours are reporting", fil: "Ang iniuulat ng mga kapitbahay" };
+const NAV_CHECK_INS: LocalizedText = { en: "Resident check-ins", fil: "Check-in ng mga residente" };
+const NAV_PINS: LocalizedText = { en: "Community pins", fil: "Mga community pin" };
+/** Room above a section the menu jumps to, so the phone's sticky menu does not cover its title. */
+const ANCHOR = "scroll-mt-20 lg:scroll-mt-6";
+
 const EDIT_DETAILS: LocalizedText = { en: "Edit barangay details", fil: "I-edit ang detalye ng barangay" };
 
 const ALERT_SEVERITY_VALUES: (Severity | "none")[] = ["none", ...SEVERITY_ORDER];
@@ -125,8 +138,25 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
     if (!result.ok) setStatusError(true);
   }
 
+  const sections: NavSection[] = [
+    ...(isOwnHome
+      ? [
+          { id: "section-inbox", label: NAV_INBOX },
+          { id: "section-updates", label: NAV_UPDATES },
+        ]
+      : []),
+    { id: "section-alert", label: ALERT_STATUS },
+    { id: "section-centre", label: NAV_CENTRE },
+    { id: "section-weather", label: NAV_WEATHER },
+    ...(canManage ? [{ id: "section-set-centre", label: NAV_SET_CENTRE }] : []),
+    { id: "section-reports", label: NAV_REPORTS },
+    { id: "section-check-ins", label: NAV_CHECK_INS },
+    { id: "section-pins", label: NAV_PINS },
+  ];
+
   return (
-    <main className="flex flex-1 flex-col items-center gap-6 p-4 sm:p-6 lg:p-8">
+    <main className="flex flex-1 flex-col items-center gap-6 p-4 sm:p-6 lg:flex-row lg:items-start lg:justify-center lg:gap-8 lg:p-8">
+      <SectionNav sections={sections} />
       <div className="w-full max-w-2xl space-y-6">
         {!isOwnHome && (
           <Button asChild variant="ghost" size="lg">
@@ -145,10 +175,18 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
           )}
         </div>
 
-        {isOwnHome && <OfficialInbox zones={[zone]} />}
-        {isOwnHome && <OfficialMessagesPanel />}
+        {isOwnHome && (
+          <div id="section-inbox" className={ANCHOR}>
+            <OfficialInbox zones={[zone]} />
+          </div>
+        )}
+        {isOwnHome && (
+          <div id="section-updates" className={ANCHOR}>
+            <OfficialMessagesPanel />
+          </div>
+        )}
 
-        <Card>
+        <Card id="section-alert" className={ANCHOR}>
           <CardHeader>
             <CardTitle>{t(ALERT_STATUS, lang)}</CardTitle>
           </CardHeader>
@@ -190,7 +228,7 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
           </CardContent>
         </Card>
 
-        <Card>
+        <Card id="section-centre" className={ANCHOR}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Building2 aria-hidden="true" className="h-5 w-5" />
@@ -255,7 +293,7 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
           </CardContent>
         </Card>
 
-        <Card>
+        <Card id="section-weather" className={ANCHOR}>
           <CardContent className="grid grid-cols-1 gap-4 pt-6 sm:grid-cols-3">
             <div>
               <p className="text-sm text-muted-foreground">{t(RAINFALL, lang)}</p>
@@ -306,14 +344,24 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
           </CardContent>
         </Card>
 
-        {canManage && <ConfirmCentrePanel zone={zone} />}
+        {canManage && (
+          <div id="section-set-centre" className={ANCHOR}>
+            <ConfirmCentrePanel zone={zone} />
+          </div>
+        )}
         {canManage && <FloodPlanLink zoneId={zone.id} />}
 
-        <RecentReportsPanel zone={zone} />
+        <div id="section-reports" className={ANCHOR}>
+          <RecentReportsPanel zone={zone} />
+        </div>
 
-        <CheckInSummaryPanel zoneId={zone.id} />
+        <div id="section-check-ins" className={ANCHOR}>
+          <CheckInSummaryPanel zoneId={zone.id} />
+        </div>
 
-        <CommunityPinModerationPanel zones={zones} zoneId={zone.id} />
+        <div id="section-pins" className={ANCHOR}>
+          <CommunityPinModerationPanel zones={zones} zoneId={zone.id} />
+        </div>
 
         <p className="text-xs text-muted-foreground">{t(NOTE, lang)}</p>
       </div>

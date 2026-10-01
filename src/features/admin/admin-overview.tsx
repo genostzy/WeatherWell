@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { SectionNav, type NavSection } from "@/components/section-nav";
 import {
   AlertTriangle,
   Building2,
@@ -52,6 +53,15 @@ const TOWN_SUBTITLE: LocalizedText = {
 const AT_A_GLANCE: LocalizedText = { en: "At a glance", fil: "Sa isang sulyap" };
 const HAZARDS: LocalizedText = { en: "Hazard monitoring", fil: "Pagsubaybay sa panganib" };
 const OPERATIONS: LocalizedText = { en: "Operations", fil: "Operasyon" };
+// The section menu (SectionNav).
+const NAV_INBOX: LocalizedText = { en: "Needs your attention", fil: "Kailangan ng iyong pansin" };
+const NAV_UPDATES: LocalizedText = { en: "Updates", fil: "Mga update" };
+const NAV_BARANGAYS: LocalizedText = { en: "Barangays", fil: "Mga barangay" };
+const NAV_CALIBRATION: LocalizedText = { en: "Calibration", fil: "Pagsasaayos" };
+const NAV_EVACUATION: LocalizedText = { en: "Evacuation management", fil: "Pamamahala ng evacuation" };
+const NAV_PINS: LocalizedText = { en: "Community pins", fil: "Mga community pin" };
+/** Room above a section the menu jumps to, so the phone's sticky menu does not cover its title. */
+const ANCHOR = "scroll-mt-20 lg:scroll-mt-6";
 const OPEN_MAP: LocalizedText = { en: "Operations map", fil: "Mapa ng operasyon" };
 const MAP_HINT: LocalizedText = {
   en: "See every zone at once — override an alert, log a headcount, or moderate a pin where it actually sits.",
@@ -146,24 +156,51 @@ export function AdminOverview({
     return level !== undefined && level !== "unknown";
   });
 
+  const sections: NavSection[] = [
+    { id: "section-inbox", label: NAV_INBOX },
+    ...(isTown
+      ? [
+          { id: "section-updates", label: NAV_UPDATES },
+          { id: "section-barangays", label: NAV_BARANGAYS },
+        ]
+      : []),
+    { id: "section-glance", label: AT_A_GLANCE },
+    ...(calibration ? [{ id: "section-calibration", label: NAV_CALIBRATION }] : []),
+    ...(!isNationwide ? [{ id: "section-hazards", label: HAZARDS }] : []),
+    { id: "section-operations", label: OPERATIONS },
+    ...(!isNationwide
+      ? [
+          { id: "section-evacuation", label: NAV_EVACUATION },
+          { id: "section-pins", label: NAV_PINS },
+        ]
+      : []),
+  ];
+
   return (
-    <main className="flex min-h-screen flex-col items-center gap-6 p-4 sm:p-6 lg:p-8">
+    <main className="flex min-h-screen flex-col items-center gap-6 p-4 sm:p-6 lg:flex-row lg:items-start lg:justify-center lg:gap-8 lg:p-8">
+      <SectionNav sections={sections} />
       <div className="w-full max-w-2xl space-y-6 lg:max-w-5xl">
         <div>
           <h1 lang={lang} className="text-2xl font-bold">{title}</h1>
           <p lang={lang} className="text-muted-foreground">{subtitle}</p>
         </div>
 
-        <OfficialInbox zones={zones} />
+        <div id="section-inbox" className={ANCHOR}>
+          <OfficialInbox zones={zones} />
+        </div>
 
         {isTown && (
           <div className="grid gap-4 lg:grid-cols-2">
-            <OfficialMessagesPanel />
-            <TownBarangaysPanel zones={zones} officials={townOfficials} />
+            <div id="section-updates" className={ANCHOR}>
+              <OfficialMessagesPanel />
+            </div>
+            <div id="section-barangays" className={ANCHOR}>
+              <TownBarangaysPanel zones={zones} officials={townOfficials} />
+            </div>
           </div>
         )}
 
-        <section className="space-y-3">
+        <section id="section-glance" className={`space-y-3 ${ANCHOR}`}>
           <h2 className="text-lg font-semibold">{t(AT_A_GLANCE, lang)}</h2>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
             <StatCard
@@ -215,12 +252,14 @@ export function AdminOverview({
         )}
 
         {calibration && (
-          <CalibrationPanel {...inArea(calibration, inAreaZoneIds)} />
+          <div id="section-calibration" className={ANCHOR}>
+            <CalibrationPanel {...inArea(calibration, inAreaZoneIds)} />
+          </div>
         )}
 
         {!isNationwide && (
           <>
-            <section className="space-y-4">
+            <section id="section-hazards" className={`space-y-4 ${ANCHOR}`}>
               <h2 className="text-lg font-semibold">{t(HAZARDS, lang)}</h2>
               {/* A town's barangays, with their reports, are already listed above. */}
               {!isTown && <FloodMonitoringPanel zones={zones} />}
@@ -234,7 +273,7 @@ export function AdminOverview({
 
         <Separator />
 
-        <section className="space-y-4">
+        <section id="section-operations" className={`space-y-4 ${ANCHOR}`}>
           <h2 className="text-lg font-semibold">{t(OPERATIONS, lang)}</h2>
 
           <Card>
@@ -256,8 +295,12 @@ export function AdminOverview({
 
           {!isNationwide && (
             <>
-              <EvacuationManagementPanel zones={zones} />
-              <CommunityPinModerationPanel zones={zones} />
+              <div id="section-evacuation" className={ANCHOR}>
+                <EvacuationManagementPanel zones={zones} />
+              </div>
+              <div id="section-pins" className={ANCHOR}>
+                <CommunityPinModerationPanel zones={zones} />
+              </div>
             </>
           )}
 
