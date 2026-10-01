@@ -3569,25 +3569,25 @@ begin
   set local role postgres;
   perform set_config('request.jwt.claims', '', true);
   insert into auth.users (id) values
-    ('b6000000-0000-4000-8000-000000000001'), ('b6000000-0000-4000-8000-000000000002'),
-    ('b6000000-0000-4000-8000-000000000003');
+    ('b8000000-0000-4000-8000-000000000001'), ('b8000000-0000-4000-8000-000000000002'),
+    ('b8000000-0000-4000-8000-000000000003');
   insert into public.zones
     (id, psgc_barangay_code, name, evacuation_route_text, lat, lng, evacuation_route_path, hotline_number)
   values
-    ('tests-fixture-zone-profile', '9900000071', 'Test Zone Profile', '{"en":"x","fil":"x"}'::jsonb,
+    ('tests-fixture-zone-profile', '9900000171', 'Test Zone Profile', '{"en":"x","fil":"x"}'::jsonb,
      16.0288, 120.4366, '[]'::jsonb, '000'),
-    ('tests-fixture-zone-profile-near', '9900000072', 'Test Zone Near', '{"en":"x","fil":"x"}'::jsonb,
+    ('tests-fixture-zone-profile-near', '9900000172', 'Test Zone Near', '{"en":"x","fil":"x"}'::jsonb,
      16.0288 + 5 / 111.32, 120.4366, '[]'::jsonb, '000'),
-    ('tests-fixture-zone-profile-far', '9900000073', 'Test Zone Far', '{"en":"x","fil":"x"}'::jsonb,
+    ('tests-fixture-zone-profile-far', '9900000173', 'Test Zone Far', '{"en":"x","fil":"x"}'::jsonb,
      16.0288 + 25 / 111.32, 120.4366, '[]'::jsonb, '000');
   insert into public.profiles (id, role, area_code, display_name) values
-    ('b6000000-0000-4000-8000-000000000001', 'operator', '9900000071', 'Test Profile Kagawad'),
-    ('b6000000-0000-4000-8000-000000000003', 'operator', '9900000072', 'Test Near Kagawad')
+    ('b8000000-0000-4000-8000-000000000001', 'operator', '9900000171', 'Test Profile Kagawad'),
+    ('b8000000-0000-4000-8000-000000000003', 'operator', '9900000172', 'Test Near Kagawad')
   on conflict (id) do update set role = excluded.role, area_code = excluded.area_code, display_name = excluded.display_name;
 
   -- FP1: a resident and another barangay's official are refused, and a caller with no session cannot call it.
   set local role authenticated;
-  foreach u in array array['b6000000-0000-4000-8000-000000000002', 'b6000000-0000-4000-8000-000000000003'] loop
+  foreach u in array array['b8000000-0000-4000-8000-000000000002', 'b8000000-0000-4000-8000-000000000003'] loop
     perform set_config('request.jwt.claims', json_build_object('sub', u, 'role', 'authenticated')::text, true);
     begin
       perform public.set_barangay_profile('tests-fixture-zone-profile', 'high', 'low', 'unknown', null);
@@ -3603,7 +3603,7 @@ begin
   -- FP2-FP3: the barangay's own official saves. The three levels are written although no row existed, the
   -- downstream link and profile_set_at are set, one action is logged, and the saved profile is returned.
   set local role authenticated;
-  perform set_config('request.jwt.claims', '{"sub":"b6000000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+  perform set_config('request.jwt.claims', '{"sub":"b8000000-0000-4000-8000-000000000001","role":"authenticated"}', true);
   saved := public.set_barangay_profile('tests-fixture-zone-profile', 'high', 'low', 'unknown', 'tests-fixture-zone-profile-near');
   reset role;
   select count(*) into n from public.hazard_susceptibility
@@ -3628,7 +3628,7 @@ begin
   -- FP4: an unknown level, the barangay itself, a barangay 25 km away and an unknown id are refused;
   -- null clears the link.
   set local role authenticated;
-  perform set_config('request.jwt.claims', '{"sub":"b6000000-0000-4000-8000-000000000001","role":"authenticated"}', true);
+  perform set_config('request.jwt.claims', '{"sub":"b8000000-0000-4000-8000-000000000001","role":"authenticated"}', true);
   for bad in select * from (values
       ('severe', 'low', 'low', null::text),
       ('low', 'low', 'low', 'tests-fixture-zone-profile'),
@@ -3648,7 +3648,7 @@ begin
 
   -- FP5: a resident cannot change the levels or the link directly.
   set local role authenticated;
-  perform set_config('request.jwt.claims', '{"sub":"b6000000-0000-4000-8000-000000000002","role":"authenticated"}', true);
+  perform set_config('request.jwt.claims', '{"sub":"b8000000-0000-4000-8000-000000000002","role":"authenticated"}', true);
   begin
     update public.hazard_susceptibility set risk_level = 'low' where id = 'tests-fixture-zone-profile-flood';
   exception when insufficient_privilege then null;
@@ -3678,17 +3678,17 @@ begin
   insert into public.zones
     (id, psgc_barangay_code, name, evacuation_route_text, lat, lng, evacuation_route_path, hotline_number)
   values
-    ('tests-hu-up', '9900000081', 'Upstream Test', '{"en":"x","fil":"x"}'::jsonb, 16.1, 120.4, '[]'::jsonb, '000'),
-    ('tests-hu-down', '9900000082', 'Downstream Test', '{"en":"x","fil":"x"}'::jsonb, 16.145, 120.4, '[]'::jsonb, '000'),
-    ('tests-hu-alone', '9900000083', 'No Link Test', '{"en":"x","fil":"x"}'::jsonb, 16.3, 120.4, '[]'::jsonb, '000'),
-    ('tests-hu-up-2', '9900000084', 'Upstream Two', '{"en":"x","fil":"x"}'::jsonb, 16.5, 120.4, '[]'::jsonb, '000'),
+    ('tests-hu-up', '9900000181', 'Upstream Test', '{"en":"x","fil":"x"}'::jsonb, 16.1, 120.4, '[]'::jsonb, '000'),
+    ('tests-hu-down', '9900000182', 'Downstream Test', '{"en":"x","fil":"x"}'::jsonb, 16.145, 120.4, '[]'::jsonb, '000'),
+    ('tests-hu-alone', '9900000183', 'No Link Test', '{"en":"x","fil":"x"}'::jsonb, 16.3, 120.4, '[]'::jsonb, '000'),
+    ('tests-hu-up-2', '9900000184', 'Upstream Two', '{"en":"x","fil":"x"}'::jsonb, 16.5, 120.4, '[]'::jsonb, '000'),
     ('tests-hu-down-2', '9900001081', 'Downstream Other Town', '{"en":"x","fil":"x"}'::jsonb, 16.545, 120.4, '[]'::jsonb, '000');
   -- Links an official saved (set_barangay_profile sets profile_set_at with them).
   update public.zones set downstream_zone_id = 'tests-hu-down', profile_set_at = now() where id = 'tests-hu-up';
   update public.zones set downstream_zone_id = 'tests-hu-down-2', profile_set_at = now() where id = 'tests-hu-up-2';
   insert into public.profiles (id, role, area_code, display_name) values
-    ('b7000000-0000-4000-8000-000000000001', 'operator', '9900000081', 'Upstream Kagawad'),
-    ('b7000000-0000-4000-8000-000000000002', 'operator', '9900000082', 'Downstream Kagawad'),
+    ('b7000000-0000-4000-8000-000000000001', 'operator', '9900000181', 'Upstream Kagawad'),
+    ('b7000000-0000-4000-8000-000000000002', 'operator', '9900000182', 'Downstream Kagawad'),
     ('b7000000-0000-4000-8000-000000000004', 'operator', '9900000', 'Town A MDRRMO')
   on conflict (id) do update set role = excluded.role, area_code = excluded.area_code, display_name = excluded.display_name;
 
