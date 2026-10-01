@@ -581,10 +581,10 @@ values
 insert into public.community_pins (id, zone_id, status_tag, caption, lat, lng, author_id)
 values
   ('88888888-8888-8888-8888-000000000001', 'tests-fixture-zone', 'flooded',
-   'net-score fixture: 0 up / 5 down, margin 5, at the threshold', 14.2, 121.2,
+   'net-score fixture: 0 up / 5 down, margin 5, at the threshold', 14.02, 121.02,
    '66666666-6666-6666-6666-666666666666'),
   ('88888888-8888-8888-8888-000000000002', 'tests-fixture-zone', 'flooded',
-   'net-score fixture: 4 up / 8 down, margin 4, below the threshold', 14.3, 121.3,
+   'net-score fixture: 4 up / 8 down, margin 4, below the threshold', 14.03, 121.03,
    '66666666-6666-6666-6666-666666666666');
 
 -- 5 downvotes, 0 upvotes: margin 5, exactly at the threshold -> removed.
@@ -726,7 +726,7 @@ select tests.as_user('11111111-1111-1111-1111-111111111111');
 select tests.expect_denied(
   'a resident cannot insert a pin that is already removed',
   $$insert into public.community_pins (zone_id, status_tag, caption, lat, lng, author_id, removed)
-    values ('tests-fixture-zone', 'flooded', 'born-removed pin', 14.4, 121.4,
+    values ('tests-fixture-zone', 'flooded', 'born-removed pin', 14.04, 121.04,
             '11111111-1111-1111-1111-111111111111', true)$$);
 
 -- The pairing half, and also the "a resident CAN insert their own pin" case
@@ -739,7 +739,7 @@ select tests.as_user('11111111-1111-1111-1111-111111111111');
 select tests.expect_allowed(
   'a resident CAN insert their own pin when removed is left to its default',
   $$insert into public.community_pins (zone_id, status_tag, caption, lat, lng, author_id)
-    values ('tests-fixture-zone', 'flooded', 'ordinary resident pin', 14.5, 121.5,
+    values ('tests-fixture-zone', 'flooded', 'ordinary resident pin', 14.05, 121.05,
             '11111111-1111-1111-1111-111111111111')$$);
 
 -- ---------------------------------------------------------------------------
@@ -753,7 +753,7 @@ select tests.as_user('11111111-1111-1111-1111-111111111111');
 select tests.expect_denied(
   'a resident cannot backdate a pin''s created_at',
   $$insert into public.community_pins (zone_id, status_tag, caption, lat, lng, author_id, created_at)
-    values ('tests-fixture-zone', 'flooded', 'backdated pin', 14.6, 121.6,
+    values ('tests-fixture-zone', 'flooded', 'backdated pin', 14.06, 121.06,
             '11111111-1111-1111-1111-111111111111', now() - interval '30 days')$$);
 
 select tests.as_user('11111111-1111-1111-1111-111111111111');
@@ -1362,6 +1362,10 @@ select tests.expect_row_count(
   1);
 
 -- R6: an admin removal of a pin in a1 by the a1 official.
+-- These fixtures give one author more pins in an hour than the pin limit
+-- allows (5); the limit itself is abuse.sql's to test (P2), so its count starts over here.
+delete from private.rate_limit_counts where key = 'pin:66666666-6666-6666-6666-666666666666';
+
 insert into public.community_pins (id, zone_id, status_tag, caption, lat, lng, author_id)
 values ('99999999-0000-0000-0000-000000000002', 'tests-area-a1', 'flooded',
         'R6 fixture pin (admin removal)', 14.0, 121.0, '66666666-6666-6666-6666-666666666666');
