@@ -354,4 +354,112 @@ begin
   raise notice 'ok C8: the bar is public, the record is officials'', and only the loop writes either';
 end $$;
 
+-- RH1-RH6: the rain heads-up. A Forecast advisory (source 'predicted') is
+-- raised, kept and ended by the service role's set_forecast_advisory, never
+-- over another alert, and not again within 6 hours of the last one ending.
+-- Residents' reports replace it, and an official's alert over it counts as
+-- raised from nothing for the loop.
+do $$
+declare
+  u text := 'ca400000-0000-4000-8000-0000000000';
+  msg constant jsonb := '{"en":"Forecast advisory","fil":"Paalala mula sa forecast"}';
+  timing constant jsonb := '{"en":"From about 3 PM","fil":"Mula bandang 3 PM"}';
+  r text;
+  a record;
+begin
+  insert into public.zones
+    (id, psgc_barangay_code, name, evacuation_route_text, lat, lng, evacuation_route_path, hotline_number)
+    select 'rh-z' || g, '9900008' || (100 + g)::text, 'Rain Zone ' || g,
+           '{"en":"x","fil":"x"}'::jsonb, 13 + g * 0.2, 122, '[]'::jsonb, '000'
+      from generate_series(1, 5) g;
+  insert into auth.users (id, created_at)
+    select (u || lpad(g::text, 2, '0'))::uuid, now() - interval '2 days' from generate_series(1, 11) g;
+
+  -- RH1: raised in a barangay with no alert, then kept.
+  set local role service_role;
+  r := public.set_forecast_advisory('rh-z1', now() + interval '1 hour', now() + interval '2 hours', 22, msg, timing);
+  reset role;
+  select * into a from public.alerts where zone_id = 'rh-z1' and is_active;
+  if r <> 'raised' or a.severity <> 'yellow' or a.source <> 'predicted' or a.message <> msg
+     or a.predicted_timing->>'en' <> 'From about 3 PM' or a.predicted_timing->>'peak_at' is null then
+    raise exception using errcode = 'TSTFL', message = format('RH1: %s raised %s', r, a);
+  end if;
+  set local role service_role;
+  r := public.set_forecast_advisory('rh-z1', now() + interval '1 hour', now() + interval '2 hours', 22, msg, timing);
+  reset role;
+  if r <> 'kept' or (select count(*) from public.alerts where zone_id = 'rh-z1') <> 1 then
+    raise exception using errcode = 'TSTFL', message = format('RH1: the second run answered %s', r);
+  end if;
+
+  -- RH2: no heavy rain ahead ends it, quietly; none again within 6 hours; a manual alert is left alone.
+  set local role service_role;
+  r := public.set_forecast_advisory('rh-z1', null, null, null, null, null);
+  reset role;
+  if r <> 'ended' or exists (select 1 from public.alerts where zone_id = 'rh-z1' and is_active)
+     or not (select expired_automatically from public.alerts where zone_id = 'rh-z1') then
+    raise exception using errcode = 'TSTFL', message = format('RH2: ending answered %s', r);
+  end if;
+  set local role service_role;
+  r := public.set_forecast_advisory('rh-z1', now() + interval '1 hour', now() + interval '2 hours', 22, msg, timing);
+  reset role;
+  if r <> 'skipped' then
+    raise exception using errcode = 'TSTFL', message = format('RH2: a new one within 6 hours answered %s', r);
+  end if;
+  perform tests.as_calibrator($q$select public.set_zone_alert('rh-z2', 'orange', '{"en":"o","fil":"o"}'::jsonb)$q$);
+  set local role service_role;
+  r := public.set_forecast_advisory('rh-z2', now() + interval '1 hour', now() + interval '2 hours', 22, msg, timing);
+  reset role;
+  if r <> 'skipped' or (select severity || source from public.alerts where zone_id = 'rh-z2' and is_active) <> 'orangemanual' then
+    raise exception using errcode = 'TSTFL', message = format('RH2: over a manual alert it answered %s', r);
+  end if;
+  set local role service_role;
+  r := public.set_forecast_advisory('rh-z2', null, null, null, null, null);
+  reset role;
+  if r <> 'skipped' or not exists (select 1 from public.alerts where zone_id = 'rh-z2' and is_active) then
+    raise exception using errcode = 'TSTFL', message = format('RH2: an end over a manual alert answered %s', r);
+  end if;
+
+  -- RH3: three hours and a minute past its heaviest hour, the next run ends it.
+  set local role service_role;
+  perform public.set_forecast_advisory('rh-z3', now() - interval '4 hours', now() - interval '3 hours 1 minute', 22, msg, timing);
+  r := public.set_forecast_advisory('rh-z3', now() + interval '1 hour', now() - interval '3 hours 1 minute', 22, msg, timing);
+  reset role;
+  if r <> 'ended' or exists (select 1 from public.alerts where zone_id = 'rh-z3' and is_active) then
+    raise exception using errcode = 'TSTFL', message = format('RH3: past its peak it answered %s', r);
+  end if;
+
+  -- RH4: residents' reports replace it at once.
+  set local role service_role;
+  perform public.set_forecast_advisory('rh-z4', now() + interval '1 hour', now() + interval '2 hours', 22, msg, timing);
+  reset role;
+  for g in 1..6 loop
+    perform tests.calibration_report((u || lpad(g::text, 2, '0'))::uuid, 'rh-z4');
+  end loop;
+  perform * from public.check_and_trigger_alerts();
+  if (select source from public.alerts where zone_id = 'rh-z4' and is_active) is distinct from 'auto_crowdsourced' then
+    raise exception using errcode = 'TSTFL', message = 'RH4: residents'' reports did not replace the forecast advisory';
+  end if;
+
+  -- RH5: an official's alert over it, with reports the floor bar would act on, is a miss.
+  insert into public.zone_alert_floors (zone_id, step) values ('rh-z5', 1);
+  set local role service_role;
+  perform public.set_forecast_advisory('rh-z5', now() + interval '1 hour', now() + interval '2 hours', 22, msg, timing);
+  reset role;
+  for g in 7..11 loop
+    perform tests.calibration_report((u || lpad(g::text, 2, '0'))::uuid, 'rh-z5');
+  end loop;
+  perform tests.as_calibrator($q$select public.set_zone_alert('rh-z5', 'red', '{"en":"r","fil":"r"}'::jsonb)$q$);
+  if not exists (select 1 from public.calibration_events where zone_id = 'rh-z5' and kind = 'missed') then
+    raise exception using errcode = 'TSTFL', message = 'RH5: a Warning over a forecast advisory hid a miss';
+  end if;
+
+  -- RH6: only the service role may call it.
+  if has_function_privilege('anon', 'public.set_forecast_advisory(text,timestamptz,timestamptz,numeric,jsonb,jsonb)', 'execute')
+     or has_function_privilege('authenticated', 'public.set_forecast_advisory(text,timestamptz,timestamptz,numeric,jsonb,jsonb)', 'execute')
+     or not has_function_privilege('service_role', 'public.set_forecast_advisory(text,timestamptz,timestamptz,numeric,jsonb,jsonb)', 'execute') then
+    raise exception using errcode = 'TSTFL', message = 'RH6: set_forecast_advisory is callable by the wrong roles';
+  end if;
+  raise notice 'ok RH1-RH6: Forecast advisories are raised, kept and ended by the service role, and reports replace them';
+end $$;
+
 rollback;

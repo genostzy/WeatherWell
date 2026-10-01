@@ -1056,6 +1056,17 @@ export type Database = {
         }
         Returns: Json
       }
+      set_forecast_advisory: {
+        Args: {
+          p_message: Json
+          p_peak_at: string
+          p_peak_mm: number
+          p_starts_at: string
+          p_timing: Json
+          p_zone_id: string
+        }
+        Returns: string
+      }
       set_recovery_answers: {
         Args: {
           p_answer_1: string
