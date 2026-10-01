@@ -586,7 +586,8 @@ begin
     perform tests.vote_as('ab300000-0000-4000-8000-000000000005', v_pin, case when i % 2 = 0 then 1 else -1 end);
   end loop;
   begin
-    perform tests.vote_as('ab300000-0000-4000-8000-000000000005', v_pin, 1);
+    -- A change of mind (the 30th was an upvote): the same vote again would spend nothing (FX3).
+    perform tests.vote_as('ab300000-0000-4000-8000-000000000005', v_pin, -1);
     raise exception using errcode = 'TSTFL', message = 'V1: a 31st vote in an hour was accepted';
   exception when raise_exception then
     get stacked diagnostics v_hint = pg_exception_hint;
