@@ -28,6 +28,21 @@
 - `pg_cron` now starts the GitHub workflows on time. The owner put the token in Vault at 02:18 UTC on 26 September, and the first dispatched Monitor run started at 02:30 UTC and passed.
 - The Nilombot test alert (yellow, set by Test Official at 22:17 on 25 September) was lifted at 02:21 UTC on 26 September. The action record shows it as cleared by the System owner. No push or email went out, because it was lifted in the database, not through the app.
 
+### Deferred review findings and Monitor, 1 October (service worker v28)
+
+Every minor finding the four plan reviews had deferred, fixed on the owner's word ("fix everything"), and a false alarm in Monitor.
+
+| Commit | What |
+|---|---|
+| `53c4041` | Monitor checks Supabase's on-time schedule only in GitHub's own runs, and twice: a lagging run list had failed three on-time runs and emailed the owner. PRD Build Status checked against production |
+| `49b9151` | `20261001104044_deferred_review_fixes` (live): officials' photos are not limited; the photo count goes by folder; the same vote again spends nothing; an unattached photo is kept three hours; `my_recovery_attempts()`. The map refuses a spot more than 15 km from every barangay when it is tapped. `abuse.sql` FX1-FX5, L3 now checks the grant |
+| `8332b19` | Only a row-level security refusal reads as the photo limit; a rain run fails when a place comes back without its hours; the history names the actor "Automatic — rain forecast"; a pin's author may be null |
+| `3b7ec99` | An upstream heads-up says what to do and has its own icon; the barangay page says when officials last set the flood levels |
+| `c90a0a2` | The download says when it fails; the export adds the account's role and recovery attempts; a hiccup after a successful delete is not shown as an error |
+
+- Two findings needed no change: a storm's Forecast advisories email each subscriber once (one barangay each), not fifteen times; and the rain workflow's 404s before promotion ended with the first release.
+- Checked on the live database in rolled-back scripts: FX1-FX5 pass, each first watched failing.
+
 ### Dashboard requests, 1 October (released 1 October)
 
 The owner's five requests of 1 October. **Released on 1 October.**
