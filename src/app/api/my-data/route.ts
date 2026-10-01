@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 /** What /api/my-data hands back: everything WeatherWell holds about the signed-in resident. */
 export interface MyData {
   exportedAt: string;
-  account: { id: string; createdAt: string; anonymous: boolean; email: string | null };
+  account: { id: string; createdAt: string; anonymous: boolean; email: string | null; role: string };
   /** The resident's saved barangay (profiles.zone_id). */
   barangay: string | null;
   reports: { id: string; zoneId: string; depthLevel: string; reportedAt: string; lat: number | null; lng: number | null }[];
@@ -15,6 +15,8 @@ export interface MyData {
   checkIns: { zoneId: string; status: string; checkedInAt: string }[];
   alerts: { push: { zoneId: string; since: string }[]; email: { zoneId: string | null; since: string }[] };
   securityQuestions: string[];
+  /** The password-reset attempts kept for its hourly limit (the email is the account's). */
+  recoveryAttempts: { attemptedAt: string; succeeded: boolean }[];
 }
 
 /**
@@ -23,8 +25,9 @@ export interface MyData {
  * The signed-in resident's own data, as a JSON file to download (Settings,
  * "Download my data"). Read with their session, so RLS keeps it to their own
  * rows, and each table is also filtered by their id. Report positions, which
- * RLS hides from residents, come from my_report_positions. Never the push
- * keys, the email unsubscribe token or the security answers.
+ * RLS hides from residents, come from my_report_positions, and recovery
+ * attempts from my_recovery_attempts. Never the push keys, the email
+ * unsubscribe token or the security answers.
  */
 export async function GET() {
   const supabase = await createSupabaseUserClient();
@@ -33,8 +36,8 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: "Sign in to download your data." }, { status: 401 });
   const me = user.id;
 
-  const [profile, pins, votes, checkIns, push, email, reports, positions, questions] = await Promise.all([
-    supabase.from("profiles").select("zone_id").eq("id", me),
+  const [profile, pins, votes, checkIns, push, email, reports, positions, questions, attempts] = await Promise.all([
+    supabase.from("profiles").select("zone_id, role").eq("id", me),
     supabase.from("community_pins").select("id, zone_id, status_tag, caption, lat, lng, created_at, photo_path").eq("author_id", me),
     supabase.from("pin_votes").select("pin_id, direction, voted_at").eq("voter_id", me),
     supabase.from("evacuation_check_ins").select("zone_id, status, checked_in_at").eq("user_id", me),
@@ -43,14 +46,24 @@ export async function GET() {
     supabase.rpc("my_water_level_reports"),
     supabase.rpc("my_report_positions"),
     supabase.rpc("my_recovery_questions"),
+    supabase.rpc("my_recovery_attempts"),
   ]);
-  const failed = [profile, pins, votes, checkIns, push, email, reports, positions, questions].find((r) => r.error);
+  const failed = [profile, pins, votes, checkIns, push, email, reports, positions, questions, attempts].find(
+    (r) => r.error
+  );
   if (failed?.error) return NextResponse.json({ error: failed.error.message }, { status: 502 });
 
   const where = new Map((positions.data ?? []).map((p) => [p.id, p]));
   const body: MyData = {
     exportedAt: new Date().toISOString(),
-    account: { id: me, createdAt: user.created_at, anonymous: user.is_anonymous ?? false, email: user.email ?? null },
+    account: {
+      id: me,
+      createdAt: user.created_at,
+      anonymous: user.is_anonymous ?? false,
+      email: user.email ?? null,
+      // An account with no profile row yet is a resident's.
+      role: profile.data?.[0]?.role ?? "resident",
+    },
     barangay: profile.data?.[0]?.zone_id ?? null,
     reports: (reports.data ?? []).map((r) => ({
       id: r.id,
@@ -77,6 +90,7 @@ export async function GET() {
       email: (email.data ?? []).map((s) => ({ zoneId: s.zone_id, since: s.created_at })),
     },
     securityQuestions: (questions.data ?? []).flatMap((q) => [q.question_1, q.question_2]),
+    recoveryAttempts: (attempts.data ?? []).map((a) => ({ attemptedAt: a.attempted_at, succeeded: a.succeeded })),
   };
   return new NextResponse(JSON.stringify(body, null, 2), {
     headers: {

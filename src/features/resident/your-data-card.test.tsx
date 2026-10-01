@@ -29,12 +29,32 @@ beforeEach(() => {
 });
 
 describe("YourDataCard", () => {
-  it("offers the download as a file", () => {
+  it("saves the download as a file", async () => {
+    const user = userEvent.setup();
+    const blob = new Blob(["{}"], { type: "application/json" });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, blob: async () => blob }));
+    const createObjectURL = vi.fn(() => "blob:my-data");
+    URL.createObjectURL = createObjectURL;
+    URL.revokeObjectURL = vi.fn();
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
     show();
     expect(screen.getByText("Your data")).toBeInTheDocument();
-    const link = screen.getByRole("link", { name: "Download my data" });
-    expect(link).toHaveAttribute("href", "/api/my-data");
-    expect(link).toHaveAttribute("download");
+    await user.click(screen.getByRole("button", { name: "Download my data" }));
+    await vi.waitFor(() => expect(click).toHaveBeenCalled());
+    expect(fetch).toHaveBeenCalledWith("/api/my-data", expect.anything());
+    expect(createObjectURL).toHaveBeenCalledWith(blob);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    click.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
+  it("says so when the download fails, rather than saving an error as the file", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 502, blob: async () => new Blob() }));
+    show();
+    await user.click(screen.getByRole("button", { name: "Download my data" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not download your data. Try again.");
+    vi.unstubAllGlobals();
   });
 
   it("says what deleting does before anything is deleted", async () => {
@@ -79,6 +99,8 @@ describe("YourDataCard", () => {
     await screen.findByText("Your data is deleted.");
     await vi.waitFor(() => expect(push).toHaveBeenCalledWith("/onboarding"));
     expect(signOut).toHaveBeenCalledWith({ scope: "local" });
+    // The data is deleted; a hiccup forgetting this phone is not an error to show.
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("shows why it failed and stays", async () => {
@@ -99,7 +121,7 @@ describe("YourDataCard", () => {
     const user = userEvent.setup();
     show("fil");
     expect(screen.getByText("Ang iyong data")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "I-download ang aking data" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "I-download ang aking data" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Burahin ang aking data" }));
     const dialog = screen.getByRole("dialog");
     expect(dialog).toHaveTextContent("Mananatili ang iyong mga ulat sa bilang ng barangay, nang wala ang iyong account o lokasyon.");

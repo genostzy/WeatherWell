@@ -3,7 +3,7 @@
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Download, Trash2 } from "lucide-react";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -45,6 +45,10 @@ const CONFIRM: LocalizedText = { en: "Delete everything", fil: "Burahin lahat" }
 const CANCEL: LocalizedText = { en: "Cancel", fil: "Kanselahin" };
 const CLOSE: LocalizedText = { en: "Close", fil: "Isara" };
 const DELETED: LocalizedText = { en: "Your data is deleted.", fil: "Nabura na ang iyong data." };
+const DOWNLOAD_FAILED: LocalizedText = {
+  en: "Could not download your data. Try again.",
+  fil: "Hindi ma-download ang iyong data. Subukan ulit.",
+};
 
 /**
  * A resident's data rights (RA 10173): download what WeatherWell holds about
@@ -61,6 +65,28 @@ export function YourDataCard() {
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadFailed, setDownloadFailed] = useState(false);
+
+  // Fetched rather than a plain link, so a failed download says so instead of saving the error as the file.
+  async function download() {
+    setDownloading(true);
+    setDownloadFailed(false);
+    try {
+      const response = await fetch("/api/my-data", { cache: "no-store" });
+      if (!response.ok) throw new Error(`/api/my-data answered ${response.status}`);
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "weatherwell-my-data.json";
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setDownloadFailed(true);
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   async function remove() {
     setBusy(true);
@@ -78,6 +104,8 @@ export function YourDataCard() {
       try {
         const userId = session.session?.user.id;
         if (userId) await forgetThisPhone(userId);
+      } catch {
+        // The data is deleted; a phone that cannot clear its own storage still signs out below.
       } finally {
         // Locally: deleting the account already ended its sessions, and a sign-out over a weak
         // signal must not leave this phone signed in as an account that no longer exists.
@@ -108,15 +136,20 @@ export function YourDataCard() {
           {t(EXPLAIN, lang)}
         </p>
         <div className="flex flex-wrap gap-2">
-          <a href="/api/my-data" download className={buttonVariants({ variant: "outline", size: "lg" })}>
+          <Button type="button" variant="outline" size="lg" loading={downloading} onClick={() => void download()}>
             <Download aria-hidden="true" />
             <span lang={lang}>{t(DOWNLOAD, lang)}</span>
-          </a>
+          </Button>
           <Button type="button" variant="destructive" size="lg" onClick={() => setOpen(true)}>
             <Trash2 aria-hidden="true" />
             <span lang={lang}>{t(DELETE, lang)}</span>
           </Button>
         </div>
+        {downloadFailed && (
+          <p role="alert" lang={lang} className="text-sm text-destructive">
+            {t(DOWNLOAD_FAILED, lang)}
+          </p>
+        )}
       </CardContent>
       {open && (
         <OverlayDialog onClose={close} label={t(DELETE, lang)} closeLabel={t(CLOSE, lang)} className="max-w-sm">

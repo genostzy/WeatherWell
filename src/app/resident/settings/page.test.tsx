@@ -84,14 +84,14 @@ describe("ResidentSettingsPage", () => {
     role = "resident";
     signedInWith([]);
     const { unmount } = render(<ResidentSettingsPage />);
-    expect(await screen.findByRole("link", { name: "Download my data" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Download my data" })).toBeInTheDocument();
     unmount();
 
     role = "operator";
     signedInWith([]);
     render(<ResidentSettingsPage />);
     await waitFor(() => expect(profileRead).toHaveBeenCalled());
-    expect(screen.queryByRole("link", { name: "Download my data" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Download my data" })).not.toBeInTheDocument();
     role = "resident";
   });
 
