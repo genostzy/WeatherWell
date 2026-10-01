@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildOpenMeteoUrl, parseOpenMeteo, forecastSteps } from "./open-meteo";
+import { buildOpenMeteoUrl, parseOpenMeteo, forecastSteps, heavyRainAhead } from "./open-meteo";
 
 describe("buildOpenMeteoUrl", () => {
   it("asks for the zone's point, current conditions, and 12 past + 6 forecast hours of rain", () => {
@@ -75,5 +75,18 @@ describe("forecastSteps", () => {
 
   it("forecasts nothing without a forecast", () => {
     expect(forecastSteps([])).toEqual([]);
+  });
+});
+
+describe("heavyRainAhead", () => {
+  const T = ["t1", "t2", "t3", "t4"];
+  it("finds the first hour at 15 mm or more and the heaviest hour", () => {
+    expect(heavyRainAhead(T, [2, 16, 22, 9])).toEqual({ startsAt: "t2", peakAt: "t3", peakMm: 22 });
+  });
+  it("finds nothing below 15 mm", () => {
+    expect(heavyRainAhead(T.slice(0, 2), [14.9, 3])).toBeNull();
+  });
+  it("counts a missing hour as dry", () => {
+    expect(heavyRainAhead(T.slice(0, 2), [null, 15])).toEqual({ startsAt: "t2", peakAt: "t2", peakMm: 15 });
   });
 });

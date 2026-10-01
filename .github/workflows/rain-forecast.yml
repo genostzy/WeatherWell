@@ -1,0 +1,28 @@
+name: Rain heads-up
+
+# Every hour, a Forecast advisory for barangays in towns with an appointed
+# official when Open-Meteo forecasts 15 mm or more in an hour within 6 hours
+# (/api/rain-forecast). pg_cron starts it at five past the hour
+# (dispatch-rain-forecast); GitHub's own schedule is the fallback.
+on:
+  schedule:
+    - cron: "5 * * * *"
+  workflow_dispatch:
+
+env:
+  APP_URL: https://weatherwell.vercel.app
+
+concurrency:
+  group: rain-forecast
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Check the rain forecast
+        run: |
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "$APP_URL/api/rain-forecast"

@@ -87,6 +87,24 @@ export function parseOpenMeteo(reply: unknown, fetchedAt: string): ParsedWeather
 /** PAGASA rainfall warning thresholds, mm/hr. */
 const THRESHOLDS = { yellow: 7.5, orange: 15, red: 30 };
 
+/**
+ * The first forecast hour at PAGASA's Orange (15 mm or more) and the heaviest
+ * hour, over the hours given; null when none reaches it. A missing hour
+ * counts as dry.
+ */
+export function heavyRainAhead(
+  times: string[],
+  mm: (number | null)[]
+): { startsAt: string; peakAt: string; peakMm: number } | null {
+  const first = mm.findIndex((v) => (v ?? 0) >= THRESHOLDS.orange);
+  if (first < 0) return null;
+  let peak = first;
+  mm.forEach((v, i) => {
+    if ((v ?? 0) > (mm[peak] ?? 0)) peak = i;
+  });
+  return { startsAt: times[first], peakAt: times[peak], peakMm: mm[peak] ?? 0 };
+}
+
 const WINDOWS: { timing: PredictionStep["timing"]; label: PredictionStep["label"] }[] = [
   { timing: { en: "+2 hrs", fil: "+2 oras" }, label: { en: "In 2 hours", fil: "Sa 2 oras" } },
   { timing: { en: "+4 hrs", fil: "+4 oras" }, label: { en: "In 4 hours", fil: "Sa 4 oras" } },
