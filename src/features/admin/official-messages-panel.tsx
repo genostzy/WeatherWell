@@ -14,6 +14,7 @@ import { useOfficial } from "@/lib/auth/official-context";
 import { useZones } from "@/lib/reference-data/use-reference-data";
 import { minutesSinceReport } from "@/lib/water-level-reports";
 import { formatAge } from "@/lib/format-age";
+import { useLiveChange } from "@/lib/live-changes";
 import type { MessageKind, OfficialMessage } from "@/lib/official-messages";
 import type { LanguageCode, LocalizedText } from "@/lib/types";
 
@@ -108,6 +109,8 @@ export function OfficialMessagesPanel() {
   // A phone subscription needs a barangay; an official's own (or their town's first) will do,
   // since officials' notifications go to their account whichever barangay the phone follows.
   const phoneZoneId = zones.find((z) => z.psgcBarangayCode.startsWith(official.areaCode))?.id;
+  // A new or acknowledged update in this town shows up without waiting for the next poll.
+  useLiveChange((change) => change.kind === "message" && change.town_code === townCode, reload);
 
   async function act(key: string, action: () => Promise<{ ok: true } | { ok: false; error: string }>, done?: string) {
     setBusyKey(key);

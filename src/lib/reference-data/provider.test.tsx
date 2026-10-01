@@ -6,6 +6,7 @@ import { useAlerts } from "@/lib/alerts-store";
 import { LanguageProvider } from "@/features/i18n/language-provider";
 import { ONBOARDED_KEY, markConsented } from "@/features/onboarding/onboarding-storage";
 import type { AlertRecord } from "@/lib/types";
+import { dispatchLiveChange } from "@/lib/live-changes";
 
 const { mockUsePathname } = vi.hoisted(() => ({ mockUsePathname: vi.fn(() => "/") }));
 vi.mock("next/navigation", () => ({
@@ -218,6 +219,28 @@ describe("ReferenceDataProvider", () => {
     expect(await screen.findByText("none")).toBeInTheDocument();
     await waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/barangay-profiles", expect.anything()));
     expect(screen.getByText("none")).toBeInTheDocument();
+  });
+
+  it("fetches the alerts again when any barangay's alert changes", async () => {
+    const reference = { zones: [{ id: "zone-1", name: "N", hotlineNumber: "000" }], pois: [], hazards: {} };
+    (fetch as ReturnType<typeof vi.fn>).mockImplementation(async (url: string) => ({
+      ok: true,
+      json: async () => (String(url).includes("/api/") ? [] : reference),
+    }));
+    render(
+      <LanguageProvider>
+        <ReferenceDataProvider>
+          <span>ready</span>
+        </ReferenceDataProvider>
+      </LanguageProvider>
+    );
+    expect(await screen.findByText("ready")).toBeInTheDocument();
+    const alertReads = () =>
+      (fetch as ReturnType<typeof vi.fn>).mock.calls.filter(([url]) => String(url).startsWith("/api/alerts")).length;
+    const before = alertReads();
+
+    act(() => dispatchLiveChange({ kind: "alert", zone_id: "zone-1", town_code: null }));
+    await waitFor(() => expect(alertReads()).toBe(before + 1), { timeout: 3000 });
   });
 
   it("keeps the static details when the feed fails", async () => {

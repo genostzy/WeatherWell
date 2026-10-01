@@ -14,6 +14,8 @@ import { OfficialMessagesPanel } from "./official-messages-panel";
 import { renderWithData } from "@/test-utils/render-with-data";
 import type { Official } from "@/lib/auth/official";
 import type { OfficialMessage } from "@/lib/official-messages";
+import { dispatchLiveChange } from "@/lib/live-changes";
+import { act } from "@testing-library/react";
 
 const KAPITAN: Official = { userId: "k", displayName: "Kap", areaCode: "0105528012", areaName: "Barangay Nilombot, Mapandan", level: "barangay" };
 const TOWN: Official = { userId: "t", displayName: "MDRRMO", areaCode: "0105528", areaName: "Mapandan", level: "municipality" };
@@ -161,5 +163,21 @@ describe("OfficialMessagesPanel — an upstream heads-up", () => {
     serve([{ ...HEADS_UP, acknowledgedAt: new Date().toISOString(), acknowledgedByName: "Kap" }]);
     renderWithData(<OfficialMessagesPanel />, { official: TOWN });
     expect(await screen.findByText(/seen by kap/i)).toBeInTheDocument();
+  });
+});
+
+describe("OfficialMessagesPanel live updates", () => {
+  it("shows a new update from its own town without a reload, and ignores other towns'", async () => {
+    serve([]);
+    renderWithData(<OfficialMessagesPanel />, { official: KAPITAN });
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+
+    act(() => dispatchLiveChange({ kind: "message", zone_id: null, town_code: "0105526" }));
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    expect(fetch).toHaveBeenCalledTimes(1);
+
+    serve([FROM_TOWN]);
+    act(() => dispatchLiveChange({ kind: "message", zone_id: null, town_code: "0105528" }));
+    expect(await screen.findByText("Rescue boat heading to Nilombot", undefined, { timeout: 3000 })).toBeInTheDocument();
   });
 });

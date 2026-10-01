@@ -7,6 +7,7 @@ import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
 import { AlertsContext, AlertsRefreshContext } from "@/lib/alerts-store";
 import { useHasOnboarded } from "@/features/onboarding/onboarding-storage";
+import { useLiveChange } from "@/lib/live-changes";
 import type { AlertRecord, CenterStatus, LocalizedText } from "@/lib/types";
 import {
   applyCentreOverlay,
@@ -293,6 +294,10 @@ export function ReferenceDataProvider({
         .catch(() => undefined),
     []
   );
+
+  // Any barangay's alert set, changed or lifted: every open dashboard, a
+  // resident's or an official's, shows it without a reload.
+  useLiveChange((change) => change.kind === "alert", refreshAlerts);
 
   /**
    * Patches one zone's centerStatus in place once a setCenterStatus write is

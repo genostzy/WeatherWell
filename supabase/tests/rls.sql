@@ -3818,4 +3818,66 @@ begin
   raise notice 'ok HU5-HU7: only an official''s link sends a heads-up, it names its sender, and it never blocks the Warning';
 end $$;
 
+
+-- LV1-LV3: live updates. A report, an alert and an officials' update each
+-- leave a row in public.live_changes, the one table Realtime publishes, with
+-- only the kind and the barangay or town code: never a position, an author or
+-- the words. Anyone may read it; no client may write it; it keeps an hour.
+do $$
+declare
+  n int;
+  u constant uuid := 'b9000000-0000-4000-8000-000000000001';
+begin
+  set local role postgres;
+  perform set_config('request.jwt.claims', '', true);
+  insert into auth.users (id, created_at) values (u, now() - interval '2 days');
+  insert into public.zones
+    (id, psgc_barangay_code, name, evacuation_route_text, lat, lng, evacuation_route_path, hotline_number)
+  values ('tests-live', '9900000291', 'Live Test', '{"en":"x","fil":"x"}'::jsonb, 16.2, 120.3, '[]'::jsonb, '000');
+  insert into public.live_changes (kind, zone_id, at) values ('report', 'tests-live-old', now() - interval '2 hours');
+
+  -- LV1: a report, an alert and an update each leave their kind and code, and nothing more.
+  perform set_config('request.jwt.claims', json_build_object('sub', u, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  insert into public.water_level_reports (zone_id, depth_level, reporter_id, lat, lng)
+    values ('tests-live', 'knee', u, 16.2, 120.3);
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+  perform public.set_zone_alert('tests-live', 'orange', '{"en":"o","fil":"o"}'::jsonb);
+  insert into public.official_messages (town_code, direction, kind, body, sender_name)
+    values ('9900000', 'down', 'update', 'secret words', 'Test Town');
+  if not exists (select 1 from public.live_changes where kind = 'report' and zone_id = 'tests-live')
+     or not exists (select 1 from public.live_changes where kind = 'alert' and zone_id = 'tests-live')
+     or not exists (select 1 from public.live_changes where kind = 'message' and town_code = '9900000') then
+    raise exception using errcode = 'TSTFL', message = 'LV1: a report, an alert or an update left no change';
+  end if;
+  if exists (select 1 from information_schema.columns
+              where table_schema = 'public' and table_name = 'live_changes'
+                and column_name not in ('id', 'kind', 'zone_id', 'town_code', 'at')) then
+    raise exception using errcode = 'TSTFL', message = 'LV1: live_changes holds more than the kind and the code';
+  end if;
+  if exists (select 1 from public.live_changes where zone_id = 'tests-live-old') then
+    raise exception using errcode = 'TSTFL', message = 'LV1: a change over an hour old was kept';
+  end if;
+
+  -- LV2: anyone reads it; no client writes it.
+  set local role anon;
+  select count(*) into n from public.live_changes where zone_id = 'tests-live';
+  reset role;
+  if n < 2 then raise exception using errcode = 'TSTFL', message = format('LV2: anon read %s changes', n); end if;
+  if has_table_privilege('anon', 'public.live_changes', 'insert')
+     or has_table_privilege('authenticated', 'public.live_changes', 'insert')
+     or has_table_privilege('authenticated', 'public.live_changes', 'update')
+     or has_table_privilege('authenticated', 'public.live_changes', 'delete') then
+    raise exception using errcode = 'TSTFL', message = 'LV2: a client can write live_changes';
+  end if;
+
+  -- LV3: Realtime publishes this table, and only this one.
+  if (select array_agg(schemaname || '.' || tablename) from pg_publication_tables where pubname = 'supabase_realtime')
+     is distinct from array['public.live_changes']::text[] then
+    raise exception using errcode = 'TSTFL', message = 'LV3: Realtime publishes something other than live_changes';
+  end if;
+  raise notice 'ok LV1-LV3: reports, alerts and updates announce only what changed where, through one public table';
+end $$;
+
 rollback;

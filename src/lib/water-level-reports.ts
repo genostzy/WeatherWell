@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { onDelivered } from "./outbox/drain";
 import { enqueue, useOutbox, visibleToCurrentUser } from "./outbox/outbox";
+import { useLiveChange } from "@/lib/live-changes";
 import { useSessionUserId } from "./auth/anonymous-session";
 import { drainForCurrentSession } from "./outbox/session-drain";
 import type { OutboxEntry, OutboxPayloads } from "./outbox/types";
@@ -50,8 +51,14 @@ function isReportEntry(entry: OutboxEntry): boolean {
  * afterwards — the plain `/api/reports` entry the next mount reads is already
  * fresh the moment this call resolves.
  */
-function reportsUrl(afterDeliveries: number): string {
-  return afterDeliveries === 0 ? "/api/reports" : `/api/reports?delivered=${afterDeliveries}`;
+/**
+ * A query string makes the service worker fetch afresh rather than answer
+ * from its copy (revalidatePlainEntry in sw.js): after this phone's own
+ * delivery, or after anyone's new report (a live change).
+ */
+function reportsUrl(afterDeliveries: number, liveChanges: number): string {
+  if (afterDeliveries > 0) return `/api/reports?delivered=${afterDeliveries}`;
+  return liveChanges === 0 ? "/api/reports" : `/api/reports?live=${liveChanges}`;
 }
 
 /**
@@ -88,6 +95,12 @@ function reportsUrl(afterDeliveries: number): string {
 function useServerReports(): { rows: LiveWaterLevelReport[]; delivered: OutboxEntry[] } {
   const [rows, setRows] = useState<LiveWaterLevelReport[]>(NO_SERVER_ROWS);
   const [delivered, setDelivered] = useState<OutboxEntry[]>(NO_DELIVERED);
+  // Counts anyone's new reports while this screen is open, so it shows them without a reload.
+  const [liveChanges, setLiveChanges] = useState(0);
+  useLiveChange(
+    (change) => change.kind === "report",
+    () => setLiveChanges((n) => n + 1)
+  );
 
   // Subscribing signs nobody in: the drain this hears from is already gated
   // behind "something is queued", so a visitor who only reads never reaches
@@ -106,7 +119,7 @@ function useServerReports(): { rows: LiveWaterLevelReport[]; delivered: OutboxEn
   useEffect(() => {
     let cancelled = false;
 
-    fetch(reportsUrl(delivered.length))
+    fetch(reportsUrl(delivered.length, liveChanges))
       .then((response) =>
         response.ok
           ? (response.json() as Promise<LiveWaterLevelReport[]>)
@@ -124,7 +137,7 @@ function useServerReports(): { rows: LiveWaterLevelReport[]; delivered: OutboxEn
     return () => {
       cancelled = true;
     };
-  }, [delivered]);
+  }, [delivered, liveChanges]);
 
   return { rows, delivered };
 }

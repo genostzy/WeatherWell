@@ -391,6 +391,30 @@ export type Database = {
           },
         ]
       }
+      live_changes: {
+        Row: {
+          at: string
+          id: number
+          kind: string
+          town_code: string | null
+          zone_id: string | null
+        }
+        Insert: {
+          at?: string
+          id?: never
+          kind: string
+          town_code?: string | null
+          zone_id?: string | null
+        }
+        Update: {
+          at?: string
+          id?: never
+          kind?: string
+          town_code?: string | null
+          zone_id?: string | null
+        }
+        Relationships: []
+      }
       municipalities: {
         Row: {
           code: string

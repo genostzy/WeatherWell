@@ -24,6 +24,7 @@ import {
   useWaterLevelReports,
 } from "./water-level-reports";
 import { readOutbox, enqueue, applyEntryOutcome, OutboxWriteFailed } from "@/lib/outbox/outbox";
+import { dispatchLiveChange } from "@/lib/live-changes";
 import { drainOutbox } from "@/lib/outbox/drain";
 import { rememberSessionUserId } from "@/lib/auth/session-user";
 
@@ -389,5 +390,19 @@ describe("water-level-reports", () => {
     const entry = enqueue("submitWaterLevelReport", { zoneId: "zone-1", depthLevel: "knee" });
 
     expect(mergeReports([], [entry, entry])).toHaveLength(1);
+  });
+});
+
+describe("useWaterLevelReports live updates", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("fetches the reports afresh when anyone's new report arrives, past the offline copy", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => [] });
+    vi.stubGlobal("fetch", fetchMock);
+    renderHook(() => useWaterLevelReports());
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/reports"));
+
+    act(() => dispatchLiveChange({ kind: "report", zone_id: "zone-1", town_code: null }));
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/reports?live=1"), { timeout: 3000 });
   });
 });
