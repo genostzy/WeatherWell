@@ -656,9 +656,101 @@ begin
   raise notice 'ok PH1-PH2: the 11th photo in a day is refused; the count sees rows the resident cannot read';
 end $$;
 
--- L3: the count is the caller's own, and needs a sign-in.
-select tests.as_anon();
-select tests.expect_denied('L3: count photo uploads without signing in',
-  $$select private.my_photo_uploads_today()$$);
+-- L3: the count is the caller's own, and needs a sign-in. Checked on the
+-- grant itself: anon has no USAGE on schema private, so a call as anon would
+-- be refused whatever the function's grant said.
+reset role;
+select set_config('request.jwt.claims', '', false);
+do $$
+begin
+  if has_function_privilege('anon', 'private.my_photo_uploads_today()', 'execute') then
+    raise exception using errcode = 'TSTFL', message = 'L3: anon may count photo uploads';
+  end if;
+  raise notice 'ok L3: only a signed-in caller may count photo uploads';
+end $$;
+
+
+-- FX1-FX5 (the deferred review findings, 1 October): officials are not held
+-- to the photo limit; the photo count goes by folder, not storage's owner
+-- column; a repeated vote spends nothing; the cleanup gives a pin waiting out
+-- the rate limit three hours to attach its photo; a resident reads back their
+-- own recovery attempts and no one else's.
+do $$
+declare
+  off constant text := 'ab200000-0000-4000-8000-000000000001';
+  res constant text := 'ab300000-0000-4000-8000-000000000016';
+  voter constant uuid := 'ab300000-0000-4000-8000-000000000015';
+  pin_a uuid;
+  pin_b uuid;
+  n int;
+  v_hint text;
+begin
+  insert into auth.users (id, email, created_at)
+    select ('ab300000-0000-4000-8000-0000000000' || g)::uuid, 'fx' || g || '@test.local', now() - interval '2 days'
+      from generate_series(14, 16) g;
+
+  -- FX1: an official's 11th photo in a day is accepted.
+  perform set_config('request.jwt.claims', json_build_object('sub', off, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  for i in 1..11 loop
+    insert into storage.objects (bucket_id, name, owner_id) values ('pin-photos', off || '/fx' || i || '.jpg', off);
+  end loop;
+  reset role;
+
+  -- FX2: uploads in a resident's folder count even without storage's owner column filled in.
+  perform set_config('request.jwt.claims', json_build_object('sub', res, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  for i in 1..10 loop
+    insert into storage.objects (bucket_id, name) values ('pin-photos', res || '/fx' || i || '.jpg');
+  end loop;
+  begin
+    insert into storage.objects (bucket_id, name) values ('pin-photos', res || '/fx11.jpg');
+    raise exception using errcode = 'TSTFL', message = 'FX2: an 11th photo with no owner column was accepted';
+  exception when insufficient_privilege then null;
+  end;
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+
+  -- FX3: the same vote again, 30 times, spends nothing; a new vote still goes through.
+  pin_a := tests.pin_as('ab300000-0000-4000-8000-000000000014', 'abuse-z5');
+  pin_b := tests.pin_as('ab300000-0000-4000-8000-000000000014', 'abuse-z5');
+  for i in 1..31 loop
+    perform tests.vote_as(voter, pin_a, 1);
+  end loop;
+  begin
+    perform tests.vote_as(voter, pin_b, 1);
+  exception when raise_exception then
+    get stacked diagnostics v_hint = pg_exception_hint;
+    if v_hint = 'rate_limited' then
+      raise exception using errcode = 'TSTFL', message = 'FX3: repeated votes used up the hour';
+    end if;
+    raise;
+  end;
+
+  -- FX4: an unattached photo two hours old is kept; four hours old, it is listed for deleting.
+  insert into storage.objects (bucket_id, name, owner_id, created_at) values
+    ('pin-photos', res || '/waiting.jpg', res, now() - interval '2 hours'),
+    ('pin-photos', res || '/abandoned.jpg', res, now() - interval '4 hours');
+  if exists (select 1 from public.pin_photos_to_delete() d where d.path = res || '/waiting.jpg')
+     or not exists (select 1 from public.pin_photos_to_delete() d where d.path = res || '/abandoned.jpg') then
+    raise exception using errcode = 'TSTFL', message = 'FX4: the cleanup took a waiting photo, or kept an abandoned one';
+  end if;
+
+  -- FX5: a resident reads back their own recovery attempts, and no one else's.
+  insert into private.recovery_attempts (email, succeeded) values
+    ('fx16@test.local', false), ('fx16@test.local', true), ('fx14@test.local', false);
+  perform set_config('request.jwt.claims', json_build_object('sub', res, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  select count(*) into n from public.my_recovery_attempts();
+  reset role;
+  perform set_config('request.jwt.claims', '', true);
+  if n <> 2 then
+    raise exception using errcode = 'TSTFL', message = format('FX5: read %s of 2 own recovery attempts', n);
+  end if;
+  if has_function_privilege('anon', 'public.my_recovery_attempts()', 'execute') then
+    raise exception using errcode = 'TSTFL', message = 'FX5: anon can read recovery attempts';
+  end if;
+  raise notice 'ok FX1-FX5: officials unlimited, count by folder, repeated votes free, waiting photos kept, own attempts only';
+end $$;
 
 rollback;

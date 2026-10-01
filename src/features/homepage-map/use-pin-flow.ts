@@ -11,6 +11,18 @@ import {
 import type { Zone } from "@/lib/types";
 import type { CommunityPinFormValues } from "./community-pin-form";
 
+/** The database refuses a pin farther than this from the barangay it names (20260930070414). */
+const PIN_RADIUS_M = 15_000;
+
+function nearestZone(zones: Zone[], at: { lat: number; lng: number }): { zone: Zone; distanceM: number } {
+  let best = { zone: zones[0], distanceM: getBearingAndDistance(at, zones[0]).distanceMeters };
+  for (const zone of zones) {
+    const distanceM = getBearingAndDistance(at, zone).distanceMeters;
+    if (distanceM < best.distanceM) best = { zone, distanceM };
+  }
+  return best;
+}
+
 /**
  * Manages the community pin placement, editing, viewing, and deletion flow.
  * Extracted from HomepageMap to reduce its useState count and isolate the
@@ -22,8 +34,16 @@ export function usePinFlow(zones: Zone[]) {
   const [editingPin, setEditingPin] = useState<CommunityPin | null>(null);
   const [photoPin, setPhotoPin] = useState<CommunityPin | null>(null);
   const [deletingPin, setDeletingPin] = useState<CommunityPin | null>(null);
+  // A tap farther than 15 km from every barangay: the map says why and waits for a closer one,
+  // rather than queueing a pin the database would refuse.
+  const [pinTooFar, setPinTooFar] = useState(false);
 
   function handleMapClickForPin(lat: number, lng: number) {
+    if (zones.length > 0 && nearestZone(zones, { lat, lng }).distanceM > PIN_RADIUS_M) {
+      setPinTooFar(true);
+      return;
+    }
+    setPinTooFar(false);
     setPendingPinLocation({ lat, lng });
     setIsPlacingPin(false);
   }
@@ -52,14 +72,8 @@ export function usePinFlow(zones: Zone[]) {
     // Nearest zone by straight-line distance — the same math already used
     // for the direction-to-safety indicator, just picking the closest zone
     // center instead of a fixed evacuation center.
-    const nearestZone = zones.reduce((closest, zone) => {
-      const distance = getBearingAndDistance(pendingPinLocation, zone).distanceMeters;
-      const closestDistance = getBearingAndDistance(pendingPinLocation, closest).distanceMeters;
-      return distance < closestDistance ? zone : closest;
-    }, zones[0]);
-
     addCommunityPin({
-      zoneId: nearestZone.id,
+      zoneId: nearestZone(zones, pendingPinLocation).zone.id,
       statusTag: input.statusTag,
       caption: input.caption,
       lat: pendingPinLocation.lat,
@@ -71,7 +85,11 @@ export function usePinFlow(zones: Zone[]) {
 
   return {
     isPlacingPin,
-    setIsPlacingPin,
+    setIsPlacingPin: (next: boolean | ((current: boolean) => boolean)) => {
+      setPinTooFar(false);
+      setIsPlacingPin(next);
+    },
+    pinTooFar,
     pendingPinLocation,
     editingPin,
     setEditingPin,

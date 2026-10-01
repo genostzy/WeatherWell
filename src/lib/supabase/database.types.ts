@@ -1008,6 +1008,13 @@ export type Database = {
           question_2: string
         }[]
       }
+      my_recovery_attempts: {
+        Args: never
+        Returns: {
+          attempted_at: string
+          succeeded: boolean
+        }[]
+      }
       my_report_positions: {
         Args: never
         Returns: {

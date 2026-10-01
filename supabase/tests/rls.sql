@@ -3542,8 +3542,8 @@ begin
   end;
   reset role;
 
-  -- PT5: the cleanup list: a removed pin's photo, an orphan over an hour old, a photo over 7 days old; not a fresh live one.
-  update storage.objects set created_at = now() - interval '2 hours' where bucket_id = 'pin-photos' and name = u1 || '/orphan.jpg';
+  -- PT5: the cleanup list: a removed pin's photo, an orphan over three hours old, a photo over 7 days old; not a fresh live one.
+  update storage.objects set created_at = now() - interval '4 hours' where bucket_id = 'pin-photos' and name = u1 || '/orphan.jpg';
   insert into storage.objects (bucket_id, name, owner_id, created_at) values ('pin-photos', u1 || '/old.jpg', u1, now() - interval '8 days');
   select count(*) into n from public.pin_photos_to_delete() d
    where d.path in (u1 || '/a.jpg', u1 || '/orphan.jpg', u1 || '/old.jpg');

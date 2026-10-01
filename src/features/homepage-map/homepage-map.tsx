@@ -48,6 +48,10 @@ const TAP_MAP_TO_PLACE: LocalizedText = {
   en: "Tap the map to drop your pin",
   fil: "Pindutin ang mapa para ilagay ang pin",
 };
+const PIN_TOO_FAR: LocalizedText = {
+  en: "That spot is more than 15 km from every barangay. Tap closer to where it is happening.",
+  fil: "Mahigit 15 km ang layo ng lugar na iyan sa bawat barangay. Pumindot nang mas malapit sa nangyayari.",
+};
 const PIN_DIALOG_LABEL: LocalizedText = { en: "Pin details", fil: "Detalye ng pin" };
 const CLOSE_DIALOG: LocalizedText = { en: "Close", fil: "Isara" };
 const DELETE_PIN_TITLE: LocalizedText = { en: "Delete this pin?", fil: "Burahin ang pin na ito?" };
@@ -88,6 +92,7 @@ export function HomepageMap({ zones, myZoneId }: { zones: Zone[]; myZoneId?: str
   const {
     isPlacingPin,
     setIsPlacingPin,
+    pinTooFar,
     pendingPinLocation,
     editingPin,
     setEditingPin,
@@ -176,6 +181,11 @@ export function HomepageMap({ zones, myZoneId }: { zones: Zone[]; myZoneId?: str
           <div className="rounded-md border-2 border-border bg-muted/50 px-3 py-1.5 text-center text-xs font-medium">
             {t(TAP_MAP_TO_PLACE, lang)}
           </div>
+        )}
+        {isPlacingPin && pinTooFar && (
+          <p role="alert" lang={lang} className="rounded-md border-2 border-severity-orange px-3 py-1.5 text-center text-xs font-medium">
+            {t(PIN_TOO_FAR, lang)}
+          </p>
         )}
         <MapCanvas
           zones={zones}
