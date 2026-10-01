@@ -64,13 +64,12 @@ const HEADS_UP_WINDOW_MS = 5 * 60_000;
 export async function notifyDownstreamOfficials(zoneId: string): Promise<void> {
   try {
     const supabase = service();
-    const { data: zone } = await supabase.from("zones").select("downstream_zone_id").eq("id", zoneId).maybeSingle();
-    if (!zone?.downstream_zone_id) return;
+    // By sender: several barangays may drain into one, and each push names its own.
     const { data: msg } = await supabase
       .from("official_messages")
       .select("id")
       .eq("direction", "heads_up")
-      .eq("zone_id", zone.downstream_zone_id)
+      .eq("from_zone_id", zoneId)
       .gte("created_at", new Date(Date.now() - HEADS_UP_WINDOW_MS).toISOString())
       .order("created_at", { ascending: false })
       .limit(1)

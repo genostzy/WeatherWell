@@ -82,15 +82,17 @@ export function BarangayDetailsForm({ zone, onClose }: { zone: Zone; onClose: ()
   const hazards = useHazardsForZone(zone.id);
   const zones = useZones();
   const [choices] = useState(() => downstreamChoices(zone, zones));
-  const [levels, setLevels] = useState({
+  // What the form opened with: the profile is sent only when the official changed it, so a
+  // hotline fix on a phone with an older copy never puts back old levels or clears a link.
+  const [start] = useState(() => ({
     flood: hazards.flood,
     landslide: hazards.landslide,
     stormSurge: hazards.storm_surge,
-  });
-  // A link the list does not offer (farther than 20 km) would be refused on save; start at none instead.
-  const [downstream, setDownstream] = useState(() =>
-    choices.some((choice) => choice.id === zone.downstreamZoneId) ? zone.downstreamZoneId! : ""
-  );
+    // A link the list does not offer (farther than 20 km) would be refused on save; start at none instead.
+    downstream: choices.some((choice) => choice.id === zone.downstreamZoneId) ? zone.downstreamZoneId! : "",
+  }));
+  const [levels, setLevels] = useState({ flood: start.flood, landslide: start.landslide, stormSurge: start.stormSurge });
+  const [downstream, setDownstream] = useState(start.downstream);
   const problemId = useId();
   const [numbers, setNumbers] = useState<string[]>(() => {
     const current = hotlinesOf(zone);
@@ -138,9 +140,19 @@ export function BarangayDetailsForm({ zone, onClose }: { zone: Zone; onClose: ()
         setProblem(friendlyError(result.error, lang));
         return;
       }
-      const profile = await saveProfile({ zoneId: zone.id, ...levels, downstreamZoneId: downstream || null });
-      if (profile.ok) setSaved(true);
-      else setProblem(friendlyError(profile.error, lang));
+      const changed =
+        levels.flood !== start.flood ||
+        levels.landslide !== start.landslide ||
+        levels.stormSurge !== start.stormSurge ||
+        downstream !== start.downstream;
+      if (changed) {
+        const profile = await saveProfile({ zoneId: zone.id, ...levels, downstreamZoneId: downstream || null });
+        if (!profile.ok) {
+          setProblem(friendlyError(profile.error, lang));
+          return;
+        }
+      }
+      setSaved(true);
     } catch (error) {
       setProblem(friendlyError(error instanceof Error ? error.message : String(error), lang));
     } finally {

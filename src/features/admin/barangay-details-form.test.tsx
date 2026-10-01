@@ -200,12 +200,22 @@ describe("BarangayDetailsForm: the flood profile", () => {
     const onClose = vi.fn();
     setBarangayProfileMock.mockResolvedValue({ ok: false, permanent: true, error: "not an official for this barangay" });
     renderWithData(<BarangayDetailsForm zone={zone} onClose={onClose} />);
+    await user.selectOptions(screen.getByLabelText("Flood"), "medium");
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     expect(await screen.findByRole("alert")).toBeInTheDocument();
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
     expect(onClose).not.toHaveBeenCalled();
     expect(screen.getByLabelText("Flood")).toBeInTheDocument();
+  });
+
+  it("does not send a profile the official left alone, so a hotline fix never overwrites it", async () => {
+    const user = userEvent.setup();
+    renderWithData(<BarangayDetailsForm zone={zone} onClose={() => {}} />);
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByRole("status")).toBeInTheDocument();
+    expect(setBarangayDetailsMock).toHaveBeenCalled();
+    expect(setBarangayProfileMock).not.toHaveBeenCalled();
   });
 
   it("does not send the profile when the details are refused", async () => {

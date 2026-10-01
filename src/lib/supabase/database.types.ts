@@ -487,6 +487,7 @@ export type Database = {
           body: string
           created_at: string
           direction: string
+          from_zone_id: string | null
           id: string
           kind: string
           sender_name: string
@@ -499,6 +500,7 @@ export type Database = {
           body?: string
           created_at?: string
           direction: string
+          from_zone_id?: string | null
           id?: string
           kind: string
           sender_name: string
@@ -511,6 +513,7 @@ export type Database = {
           body?: string
           created_at?: string
           direction?: string
+          from_zone_id?: string | null
           id?: string
           kind?: string
           sender_name?: string

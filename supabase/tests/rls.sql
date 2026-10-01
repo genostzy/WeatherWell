@@ -3665,8 +3665,9 @@ begin
     ('tests-hu-alone', '9900000083', 'No Link Test', '{"en":"x","fil":"x"}'::jsonb, 16.3, 120.4, '[]'::jsonb, '000'),
     ('tests-hu-up-2', '9900000084', 'Upstream Two', '{"en":"x","fil":"x"}'::jsonb, 16.5, 120.4, '[]'::jsonb, '000'),
     ('tests-hu-down-2', '9900001081', 'Downstream Other Town', '{"en":"x","fil":"x"}'::jsonb, 16.545, 120.4, '[]'::jsonb, '000');
-  update public.zones set downstream_zone_id = 'tests-hu-down' where id = 'tests-hu-up';
-  update public.zones set downstream_zone_id = 'tests-hu-down-2' where id = 'tests-hu-up-2';
+  -- Links an official saved (set_barangay_profile sets profile_set_at with them).
+  update public.zones set downstream_zone_id = 'tests-hu-down', profile_set_at = now() where id = 'tests-hu-up';
+  update public.zones set downstream_zone_id = 'tests-hu-down-2', profile_set_at = now() where id = 'tests-hu-up-2';
   insert into public.profiles (id, role, area_code, display_name) values
     ('b7000000-0000-4000-8000-000000000001', 'operator', '9900000081', 'Upstream Kagawad'),
     ('b7000000-0000-4000-8000-000000000002', 'operator', '9900000082', 'Downstream Kagawad'),
@@ -3749,6 +3750,54 @@ begin
   reset role;
   perform set_config('request.jwt.claims', '', true);
   raise notice 'ok HU1-HU4: a first Warning or Evacuate upstream leaves one heads-up, for the downstream barangay''s officials';
+end $$;
+
+-- HU5-HU7 (the plan B review): only a link an official set sends a heads-up;
+-- the heads-up names the barangay that sent it; and a heads-up that cannot be
+-- written never stops the Warning itself.
+do $$
+declare
+  v_msg record;
+begin
+  set local role postgres;
+  perform set_config('request.jwt.claims', '', true);
+  insert into public.zones
+    (id, psgc_barangay_code, name, evacuation_route_text, lat, lng, evacuation_route_path, hotline_number)
+  values
+    ('tests-hu5-up', '9900000091', 'Unset Link Test', '{"en":"x","fil":"x"}'::jsonb, 16.7, 120.4, '[]'::jsonb, '000'),
+    ('tests-hu5-down', '9900000092', 'Unset Link Down', '{"en":"x","fil":"x"}'::jsonb, 16.71, 120.4, '[]'::jsonb, '000'),
+    ('tests-hu6-up', '9900000093', 'Named Upstream', '{"en":"x","fil":"x"}'::jsonb, 16.8, 120.4, '[]'::jsonb, '000'),
+    ('tests-hu6-down', '9900000094', 'Named Downstream', '{"en":"x","fil":"x"}'::jsonb, 16.81, 120.4, '[]'::jsonb, '000'),
+    ('tests-hu7-up', '9900000095', repeat('Long Name ', 60), '{"en":"x","fil":"x"}'::jsonb, 16.9, 120.4, '[]'::jsonb, '000'),
+    ('tests-hu7-down', '9900000096', 'Long Name Down', '{"en":"x","fil":"x"}'::jsonb, 16.91, 120.4, '[]'::jsonb, '000');
+  -- A link from the seed or a file, never saved by an official.
+  update public.zones set downstream_zone_id = 'tests-hu5-down' where id = 'tests-hu5-up';
+  update public.zones set downstream_zone_id = 'tests-hu6-down', profile_set_at = now() where id = 'tests-hu6-up';
+  update public.zones set downstream_zone_id = 'tests-hu7-down', profile_set_at = now() where id = 'tests-hu7-up';
+
+  -- HU5: a link no official set sends nothing.
+  perform public.set_zone_alert('tests-hu5-up', 'red', '{"en":"r","fil":"r"}'::jsonb);
+  if exists (select 1 from public.official_messages where direction = 'heads_up' and zone_id = 'tests-hu5-down') then
+    raise exception using errcode = 'TSTFL', message = 'HU5: a link no official set sent a heads-up';
+  end if;
+
+  -- HU6: the heads-up records the barangay that sent it.
+  perform public.set_zone_alert('tests-hu6-up', 'red', '{"en":"r","fil":"r"}'::jsonb);
+  select * into v_msg from public.official_messages where direction = 'heads_up' and zone_id = 'tests-hu6-down';
+  if not found or v_msg.from_zone_id is distinct from 'tests-hu6-up' then
+    raise exception using errcode = 'TSTFL', message = format('HU6: the heads-up reads %s', v_msg);
+  end if;
+
+  -- HU7: a heads-up that cannot be written (its body is over 500 characters) leaves the Warning in place.
+  begin
+    perform public.set_zone_alert('tests-hu7-up', 'red', '{"en":"r","fil":"r"}'::jsonb);
+  exception when others then
+    raise exception using errcode = 'TSTFL', message = format('HU7: the Warning failed with the heads-up: %s', sqlerrm);
+  end;
+  if not exists (select 1 from public.alerts where zone_id = 'tests-hu7-up' and is_active and severity = 'red') then
+    raise exception using errcode = 'TSTFL', message = 'HU7: the Warning was not saved';
+  end if;
+  raise notice 'ok HU5-HU7: only an official''s link sends a heads-up, it names its sender, and it never blocks the Warning';
 end $$;
 
 rollback;
