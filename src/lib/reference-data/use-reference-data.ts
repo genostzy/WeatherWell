@@ -126,7 +126,7 @@ export function useSetBarangayProfile(): (input: SetBarangayProfileInput) => Pro
       const { setBarangayProfile } = await import("@/app/actions/set-barangay-profile");
       const result = await setBarangayProfile(input);
       if (result.ok) {
-        apply?.(result.saved);
+        apply?.({ ...result.saved, set_at: new Date().toISOString() });
         void fetch(`/api/barangay-profiles?saved=${Date.now()}`).catch(() => undefined);
       }
       return result;

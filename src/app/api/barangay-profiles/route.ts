@@ -20,6 +20,7 @@ const PAGE = 1000;
 interface DbRow {
   id: string;
   downstream_zone_id: string | null;
+  profile_set_at: string | null;
   hazard_susceptibility: { hazard_type: string; risk_level: HazardLevel }[];
 }
 
@@ -29,7 +30,7 @@ export async function GET() {
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await supabase
       .from("zones")
-      .select("id, downstream_zone_id, hazard_susceptibility(hazard_type, risk_level)")
+      .select("id, downstream_zone_id, profile_set_at, hazard_susceptibility(hazard_type, risk_level)")
       .not("profile_set_at", "is", null)
       .order("id")
       .range(from, from + PAGE - 1);
@@ -43,6 +44,7 @@ export async function GET() {
         landslide: level("landslide"),
         storm_surge: level("storm_surge"),
         downstream_zone_id: row.downstream_zone_id,
+        set_at: row.profile_set_at,
       });
     }
     if (!data || data.length < PAGE) break;

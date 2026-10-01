@@ -14,6 +14,7 @@ import { GET } from "./route";
 const DB_ROW = {
   id: "zone-1",
   downstream_zone_id: "zone-2",
+  profile_set_at: "2026-09-30T06:00:00Z",
   hazard_susceptibility: [
     { hazard_type: "flood", risk_level: "high" },
     { hazard_type: "landslide", risk_level: "low" },
@@ -27,10 +28,10 @@ describe("GET /api/barangay-profiles", () => {
     range.mockResolvedValue({ data: [DB_ROW], error: null });
     const res = await GET();
     expect(await res.json()).toEqual([
-      { id: "zone-1", flood: "high", landslide: "low", storm_surge: "unknown", downstream_zone_id: "zone-2" },
+      { id: "zone-1", flood: "high", landslide: "low", storm_surge: "unknown", downstream_zone_id: "zone-2", set_at: "2026-09-30T06:00:00Z" },
     ]);
     expect(from).toHaveBeenCalledWith("zones");
-    expect(select).toHaveBeenCalledWith("id, downstream_zone_id, hazard_susceptibility(hazard_type, risk_level)");
+    expect(select).toHaveBeenCalledWith("id, downstream_zone_id, profile_set_at, hazard_susceptibility(hazard_type, risk_level)");
     expect(not).toHaveBeenCalledWith("profile_set_at", "is", null);
     expect(order).toHaveBeenCalledWith("id");
     expect(res.headers.get("Cache-Control")).toBe("public, s-maxage=30");

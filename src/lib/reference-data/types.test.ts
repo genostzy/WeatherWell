@@ -132,6 +132,10 @@ describe("applyProfileOverlay", () => {
     expect(out.hazards[a.id]).toEqual({ flood: "high", landslide: "low", storm_surge: "unknown", dam_release: "low" });
     expect(out.zones[0].downstreamZoneId).toBe(b.id);
     expect(out.zones[1]).toBe(b);
+    const dated = applyProfileOverlay(data, [
+      { id: a.id, flood: "high", landslide: "low", storm_surge: "unknown", downstream_zone_id: null, set_at: "2026-09-30T06:00:00Z" },
+    ]);
+    expect(dated.zones[0].profileSetAt).toBe("2026-09-30T06:00:00Z");
   });
 
   it("clears a link set to none, and an empty feed changes nothing", () => {

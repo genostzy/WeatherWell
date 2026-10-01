@@ -271,6 +271,8 @@ export interface ProfileOverlayRow {
   landslide: HazardLevel;
   storm_surge: HazardLevel;
   downstream_zone_id: string | null;
+  /** When an official last saved it; absent from a save's own answer, which is now. */
+  set_at?: string | null;
 }
 
 /**
@@ -294,6 +296,7 @@ export function applyProfileOverlay(
     const patched: Zone = { ...zone };
     if (row.downstream_zone_id) patched.downstreamZoneId = row.downstream_zone_id;
     else delete patched.downstreamZoneId;
+    if (row.set_at) patched.profileSetAt = row.set_at;
     return patched;
   });
   return { zones, hazards };

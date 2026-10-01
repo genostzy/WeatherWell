@@ -596,3 +596,19 @@ describe("ZoneDashboardPage barangay details", () => {
     );
   });
 });
+
+describe("ZoneDashboardPage flood profile date", () => {
+  it("says when the barangay's officials last set its levels", () => {
+    const zone = { ...FIXTURE_REFERENCE_DATA.zones[0], profileSetAt: "2026-09-30T06:00:00Z" };
+    renderWithData(<ZoneDashboardPage params={resolvedParams({ zoneId: zone.id })} searchParams={emptySearchParams} />, {
+      data: { zones: [zone, ...FIXTURE_REFERENCE_DATA.zones.slice(1)] },
+    });
+    expect(screen.getByText("Set by officials on September 30, 2026")).toBeInTheDocument();
+  });
+
+  it("says nothing of the kind where no official has set them", () => {
+    const zone = FIXTURE_REFERENCE_DATA.zones[0];
+    renderWithData(<ZoneDashboardPage params={resolvedParams({ zoneId: zone.id })} searchParams={emptySearchParams} />);
+    expect(screen.queryByText(/^Set by officials/)).not.toBeInTheDocument();
+  });
+});

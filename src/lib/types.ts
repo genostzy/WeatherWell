@@ -60,6 +60,8 @@ export interface Zone {
    */
   currentOccupancy?: number;
   downstreamZoneId?: string;
+  /** When the barangay's officials last saved its flood profile (set_barangay_profile). */
+  profileSetAt?: string;
 }
 
 export interface AlertRecord {

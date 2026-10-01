@@ -57,6 +57,7 @@ const NO_CENTRE: LocalizedText = {
 const NO_HOTLINE: LocalizedText = { en: "No verified hotline", fil: "Walang beripikadong hotline" };
 const NO_READING: LocalizedText = { en: "No live weather reading right now", fil: "Walang live na ulat ng panahon ngayon" };
 const FLOOD_SUSCEPTIBILITY: LocalizedText = { en: "Flood susceptibility", fil: "Panganib ng Baha" };
+const PROFILE_SET_ON: LocalizedText = { en: "Set by officials on {date}", fil: "Itinakda ng mga opisyal noong {date}" };
 const LANDSLIDE_SUSCEPTIBILITY: LocalizedText = { en: "Landslide susceptibility", fil: "Panganib ng Guho" };
 const NOTE: LocalizedText = {
   en: "Changes here are visible everywhere in the app immediately — the homepage map, the zone list, and the admin dashboard.",
@@ -302,6 +303,18 @@ export default function ZoneDashboardPage({ params }: PageProps<"/admin/zone/[zo
             <div>
               <p className="text-sm text-muted-foreground">{t(FLOOD_SUSCEPTIBILITY, lang)}</p>
               <p className="text-lg font-semibold">{t(HAZARD_LEVEL_LABEL[susceptibility.flood], lang)}</p>
+              {zone.profileSetAt && (
+                <p lang={lang} className="text-xs text-muted-foreground">
+                  {t(PROFILE_SET_ON, lang).replace(
+                    "{date}",
+                    new Date(zone.profileSetAt).toLocaleDateString(lang === "fil" ? "fil-PH" : "en-PH", {
+                      year: "numeric",
+                      month: "long",
+                      day: "numeric",
+                    })
+                  )}
+                </p>
+              )}
             </div>
             <div>
               <p className="text-sm text-muted-foreground">{t(LANDSLIDE_SUSCEPTIBILITY, lang)}</p>

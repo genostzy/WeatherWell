@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowDown, ArrowUp, CheckCircle2, LifeBuoy, MessagesSquare, Send, Users } from "lucide-react";
+import { ArrowDown, ArrowUp, CheckCircle2, LifeBuoy, MessagesSquare, Send, Users, Waves } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -22,6 +22,11 @@ const TITLE: LocalizedText = { en: "Updates", fil: "Mga update" };
 const LOADING: LocalizedText = { en: "Loading updates…", fil: "Kinukuha ang mga update…" };
 const NONE: LocalizedText = { en: "No updates yet.", fil: "Wala pang update." };
 const FROM_TOWN: LocalizedText = { en: "From the town", fil: "Mula sa munisipyo" };
+/** Under an upstream heads-up, as in its push (messageNotification). */
+const HEADS_UP_ADVICE: LocalizedText = {
+  en: "Water may reach you. Check your barangay.",
+  fil: "Maaaring umabot sa inyo ang tubig. Suriin ang inyong barangay.",
+};
 const SEEN_BY: LocalizedText = { en: "Seen by {name}", fil: "Nakita ni {name}" };
 const MARK_SEEN: LocalizedText = { en: "Mark as seen", fil: "Markahang nakita" };
 const NOTE: LocalizedText = { en: "Note (optional for the quick buttons)", fil: "Tala (opsyonal sa mabilis na button)" };
@@ -256,7 +261,7 @@ export function OfficialMessagesPanel() {
         ) : (
           <ul className="space-y-2">
             {sorted.map((m) => {
-              const DirectionIcon = m.direction === "up" ? ArrowUp : ArrowDown;
+              const DirectionIcon = m.direction === "up" ? ArrowUp : m.direction === "heads_up" ? Waves : ArrowDown;
               return (
                 <li key={m.id} className="space-y-1 rounded-md border-2 border-border p-3">
                   <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
@@ -272,6 +277,11 @@ export function OfficialMessagesPanel() {
                     {t(KIND[m.kind], lang)}
                   </p>
                   {m.body && <p className="whitespace-pre-wrap text-sm">{m.body}</p>}
+                  {m.direction === "heads_up" && (
+                    <p lang={lang} className="text-sm">
+                      {t(HEADS_UP_ADVICE, lang)}
+                    </p>
+                  )}
                   {m.direction !== "down" &&
                     (m.acknowledgedAt ? (
                       <p lang={lang} className="flex items-center gap-1 text-xs text-muted-foreground">

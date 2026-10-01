@@ -139,6 +139,7 @@ describe("OfficialMessagesPanel — an upstream heads-up", () => {
     renderWithData(<OfficialMessagesPanel />, { official: KAPITAN });
     expect(await screen.findByText("Upstream alert")).toBeInTheDocument();
     expect(screen.getByText("Barangay Poblacion is under Warning.")).toBeInTheDocument();
+    expect(screen.getByText("Water may reach you. Check your barangay.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /mark as seen/i }));
     await waitFor(() => expect(ackMock).toHaveBeenCalledWith("m3"));
   });
@@ -147,6 +148,7 @@ describe("OfficialMessagesPanel — an upstream heads-up", () => {
     serve([HEADS_UP]);
     renderWithData(<OfficialMessagesPanel />, { official: TOWN, lang: "fil" });
     expect(await screen.findByText("Babala mula sa itaas")).toBeInTheDocument();
+    expect(screen.getByText("Maaaring umabot sa inyo ang tubig. Suriin ang inyong barangay.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /markahang nakita/i })).toBeInTheDocument();
   });
 
