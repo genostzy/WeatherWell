@@ -254,6 +254,29 @@ export function describeLastChange(action: OfficialAction, lang: LanguageCode, n
 
 const LOCALE: Record<LanguageCode, string> = { en: "en-PH", fil: "fil-PH" };
 
+const TODAY: LocalizedText = { en: "Today", fil: "Ngayon" };
+const YESTERDAY: LocalizedText = { en: "Yesterday", fil: "Kahapon" };
+
+/** The device's local calendar day of an action, as a key for grouping the history by day. */
+export function actionDayKey(occurredAt: string): string {
+  const at = new Date(occurredAt);
+  return `${at.getFullYear()}-${at.getMonth()}-${at.getDate()}`;
+}
+
+/** A history day heading: "Today", "Yesterday", else the full date ("September 26, 2026"). */
+export function actionDayLabel(occurredAt: string, lang: LanguageCode, now: Date = new Date()): string {
+  const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+  const key = actionDayKey(occurredAt);
+  if (key === actionDayKey(now.toISOString())) return t(TODAY, lang);
+  if (key === actionDayKey(yesterday.toISOString())) return t(YESTERDAY, lang);
+  return new Date(occurredAt).toLocaleDateString(LOCALE[lang], { year: "numeric", month: "long", day: "numeric" });
+}
+
+/** The time of day alone ("10:21 AM"), for a row under its day heading. */
+export function formatActionClock(occurredAt: string, lang: LanguageCode): string {
+  return new Date(occurredAt).toLocaleTimeString(LOCALE[lang], { hour: "numeric", minute: "2-digit" });
+}
+
 /**
  * When an action happened, for the history list and the last-change line
  * (I6). Today's entries stay time-only; anything earlier carries its date,

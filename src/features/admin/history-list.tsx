@@ -5,7 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useLanguage } from "@/features/i18n/language-provider";
 import { t } from "@/lib/i18n";
-import { describeAction, describeActor, formatActionTime } from "@/lib/official-actions-copy";
+import {
+  actionDayKey,
+  actionDayLabel,
+  describeAction,
+  describeActor,
+  formatActionClock,
+} from "@/lib/official-actions-copy";
 import type { OfficialAction } from "@/lib/official-actions-mapper";
 import type { LocalizedText } from "@/lib/types";
 
@@ -43,6 +49,14 @@ export function HistoryList({
 }) {
   const { lang } = useLanguage();
   const zoneById = new Map(zones.map((zone) => [zone.id, zone]));
+  // The actions arrive newest first; each day becomes a group under its own heading, so a row
+  // shows only its time and an audit reads day by day.
+  const days: { key: string; actions: OfficialAction[] }[] = [];
+  for (const action of actions) {
+    const key = actionDayKey(action.occurredAt);
+    if (days.at(-1)?.key === key) days.at(-1)!.actions.push(action);
+    else days.push({ key, actions: [action] });
+  }
 
   return (
     <main className="flex flex-1 flex-col items-center gap-6 p-4 sm:p-6 lg:p-8">
@@ -68,27 +82,39 @@ export function HistoryList({
         {actions.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t(NO_ENTRIES, lang)}</p>
         ) : (
-          <ul className="space-y-2">
-            {actions.map((action) => {
-              const zoneName = action.zoneId ? zoneById.get(action.zoneId)?.name : undefined;
-              const time = formatActionTime(action.occurredAt, lang);
-              return (
-                <li key={action.id}>
-                  <Card>
-                    <CardContent className="space-y-1 py-4">
-                      <p lang={lang} className="text-sm font-medium">
-                        {describeAction(action, lang)}
-                        {zoneName ? ` — ${zoneName}` : ""}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {describeActor(action.actorName, lang)}, {time}
-                      </p>
-                    </CardContent>
-                  </Card>
-                </li>
-              );
-            })}
-          </ul>
+          <div className="space-y-4">
+            {days.map((day) => (
+              <section key={day.key} aria-labelledby={`day-${day.key}`}>
+                <h2
+                  id={`day-${day.key}`}
+                  lang={lang}
+                  className="sticky top-0 z-10 -mx-1 bg-background/95 px-1 py-2 text-sm font-semibold text-muted-foreground backdrop-blur"
+                >
+                  {actionDayLabel(day.actions[0].occurredAt, lang)}
+                </h2>
+                <ul className="space-y-2">
+                  {day.actions.map((action) => {
+                    const zoneName = action.zoneId ? zoneById.get(action.zoneId)?.name : undefined;
+                    return (
+                      <li key={action.id}>
+                        <Card>
+                          <CardContent className="space-y-1 py-4">
+                            <p lang={lang} className="text-sm font-medium">
+                              {describeAction(action, lang)}
+                              {zoneName ? ` — ${zoneName}` : ""}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {describeActor(action.actorName, lang)}, {formatActionClock(action.occurredAt, lang)}
+                            </p>
+                          </CardContent>
+                        </Card>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            ))}
+          </div>
         )}
       </div>
     </main>

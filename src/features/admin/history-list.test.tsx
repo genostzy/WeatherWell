@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import { renderWithData } from "@/test-utils/render-with-data";
 import { HistoryList } from "./history-list";
 import type { OfficialAction } from "@/lib/official-actions-mapper";
@@ -94,31 +94,47 @@ describe("HistoryList timestamps (I6)", () => {
     vi.useRealTimers();
   });
 
-  it("shows a date as well as a time for an entry from an earlier day", () => {
+  it("groups entries under their day, newest first, each row showing only its time", () => {
     renderWithData(
-      <HistoryList actions={[action({ occurredAt: new Date(2026, 8, 8, 14, 14).toISOString() })]} zones={ZONES} scope="mine" />
+      <HistoryList
+        actions={[
+          action({ id: 1, occurredAt: new Date(2026, 8, 15, 9, 5).toISOString() }),
+          action({ id: 2, occurredAt: new Date(2026, 8, 14, 22, 49).toISOString(), actorName: "Maria Santos" }),
+          action({ id: 3, occurredAt: new Date(2026, 8, 8, 10, 21).toISOString(), actorName: "Pedro Reyes" }),
+          action({ id: 4, occurredAt: new Date(2026, 8, 8, 9, 0).toISOString(), actorName: "Ana Cruz" }),
+          action({ id: 5, occurredAt: new Date(2025, 11, 31, 23, 0).toISOString(), actorName: "Old Entry" }),
+        ]}
+        zones={ZONES}
+        scope="mine"
+      />
     );
 
-    expect(screen.getByText(/Juan Dela Cruz, Sep 8, 2:14\sPM/)).toBeInTheDocument();
+    const headings = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
+    expect(headings).toEqual(["Today", "Yesterday", "September 8, 2026", "December 31, 2025"]);
+    // Two entries share September 8; each group is a list of its own.
+    const sep8 = screen.getByRole("heading", { name: "September 8, 2026" }).closest("section")!;
+    expect(within(sep8).getAllByRole("listitem")).toHaveLength(2);
+    expect(within(sep8).getByText(/Pedro Reyes, 10:21\sAM/)).toBeInTheDocument();
+    // A row never repeats the date its heading already gives.
+    expect(screen.getByText(/Juan Dela Cruz, 9:05\sAM/)).not.toHaveTextContent(/Sep/);
   });
 
-  it("shows the time only for an entry from today", () => {
+  it("names the days in Filipino too", () => {
     renderWithData(
-      <HistoryList actions={[action({ occurredAt: new Date(2026, 8, 15, 9, 5).toISOString() })]} zones={ZONES} scope="mine" />
-    );
-
-    const line = screen.getByText(/Juan Dela Cruz, /);
-    expect(line).toHaveTextContent(/9:05/);
-    expect(line).not.toHaveTextContent(/Sep/);
-  });
-
-  it("shows the date in Filipino too", () => {
-    renderWithData(
-      <HistoryList actions={[action({ occurredAt: new Date(2026, 8, 8, 14, 14).toISOString() })]} zones={ZONES} scope="mine" />,
+      <HistoryList
+        actions={[
+          action({ id: 1, occurredAt: new Date(2026, 8, 15, 9, 5).toISOString() }),
+          action({ id: 2, occurredAt: new Date(2026, 8, 14, 9, 5).toISOString() }),
+          action({ id: 3, occurredAt: new Date(2026, 8, 8, 14, 14).toISOString() }),
+        ]}
+        zones={ZONES}
+        scope="mine"
+      />,
       { lang: "fil" }
     );
 
-    expect(screen.getByText(/Set 8, 2:14\sPM/)).toBeInTheDocument();
+    const headings = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
+    expect(headings).toEqual(["Ngayon", "Kahapon", "Setyembre 8, 2026"]);
   });
 
   it("has no back link of its own; the officials menu covers it (found checking the officials screen)", () => {
