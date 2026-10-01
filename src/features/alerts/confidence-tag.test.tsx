@@ -18,6 +18,15 @@ describe("ConfidenceTag (PRD: confidence always shown, never hidden behind a num
     expect(screen.getByText(/naisaayos/i)).toBeInTheDocument();
   });
 
+  it("tags a Forecast advisory as a forecast, whatever its confidence", () => {
+    const { unmount } = render(<ConfidenceTag source="predicted" confidence="validated" lang="en" />);
+    expect(screen.getByText("Forecast:")).toBeInTheDocument();
+    expect(screen.queryByText(/validated/i)).not.toBeInTheDocument();
+    unmount();
+    render(<ConfidenceTag source="predicted" confidence="estimated" lang="fil" />);
+    expect(screen.getByText("Pagtataya:")).toBeInTheDocument();
+  });
+
   it("says an official's alert was set by an official", () => {
     render(<ConfidenceTag source="manual" confidence="validated" lang="en" />);
     expect(screen.getByText(/validated/i).closest("p")).toHaveTextContent(/set by an official/i);

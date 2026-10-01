@@ -73,3 +73,24 @@ describe("AlertDetails fresh alert (found testing the live site)", () => {
     expect(screen.getByText(/issued less than an hour ago/i)).toBeInTheDocument();
   });
 });
+
+describe("AlertDetails for a Forecast advisory", () => {
+  const forecast = {
+    ...alert,
+    source: "predicted" as const,
+    predictedTiming: { en: "From about 3 PM", fil: "Mula bandang 3 PM" },
+  };
+
+  it("says when the rain is expected", () => {
+    const { unmount } = render(<AlertDetails alert={forecast} zone={zone} lang="en" />);
+    expect(screen.getByText("Expected: From about 3 PM")).toBeInTheDocument();
+    unmount();
+    render(<AlertDetails alert={forecast} zone={zone} lang="fil" />);
+    expect(screen.getByText("Inaasahan: Mula bandang 3 PM")).toBeInTheDocument();
+  });
+
+  it("adds nothing to any other alert", () => {
+    render(<AlertDetails alert={{ ...alert, predictedTiming: forecast.predictedTiming }} zone={zone} lang="en" />);
+    expect(screen.queryByText(/^Expected:/)).not.toBeInTheDocument();
+  });
+});

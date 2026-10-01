@@ -73,6 +73,14 @@ describe("OfficialInbox (ideas 4, 5, 13)", () => {
     await waitFor(() => expect(setZoneAlertMock).toHaveBeenCalledWith({ zoneId: zone2.id, severity: "none" }));
   });
 
+  it("never asks to re-confirm a Forecast advisory, however old", () => {
+    const old = new Date(Date.now() - 30 * HOUR).toISOString();
+    renderWithData(<OfficialInbox zones={FIXTURE_REFERENCE_DATA.zones} />, {
+      alerts: [alertFor(zone2.id, { source: "predicted", confidence: "estimated", issuedAt: old })],
+    });
+    expect(screen.getByText(/nothing needs you right now/i)).toBeInTheDocument();
+  });
+
   it("leaves a fresh official alert alone and says when nothing needs attention", () => {
     renderWithData(<OfficialInbox zones={FIXTURE_REFERENCE_DATA.zones} />, { alerts: [alertFor(zone3.id, {})] });
     expect(screen.getByText(/nothing needs you right now/i)).toBeInTheDocument();

@@ -24,6 +24,11 @@ const MEANING: Record<ConfidenceLevel, LocalizedText> = {
 };
 
 const SET_BY_AN_OFFICIAL: LocalizedText = { en: "Set by an official.", fil: "Itinakda ng isang opisyal." };
+const FORECAST: LocalizedText = { en: "Forecast", fil: "Pagtataya" };
+const FROM_THE_FORECAST: LocalizedText = {
+  en: "From the rain forecast, not from reports.",
+  fil: "Mula sa forecast ng ulan, hindi sa mga ulat.",
+};
 
 /**
  * How much an alert can be trusted, always shown (PRD: "never hidden behind a
@@ -38,10 +43,12 @@ export function ConfidenceTag({
   confidence: ConfidenceLevel;
   lang: LanguageCode;
 }) {
+  // A Forecast advisory has no track record to speak of: it says what it is instead.
+  const forecast = source === "predicted";
   return (
     <p lang={lang} className="text-xs text-muted-foreground">
-      <span className="font-semibold">{t(LABEL[confidence], lang)}:</span>{" "}
-      {t(source === "manual" ? SET_BY_AN_OFFICIAL : MEANING[confidence], lang)}
+      <span className="font-semibold">{t(forecast ? FORECAST : LABEL[confidence], lang)}:</span>{" "}
+      {t(forecast ? FROM_THE_FORECAST : source === "manual" ? SET_BY_AN_OFFICIAL : MEANING[confidence], lang)}
     </p>
   );
 }

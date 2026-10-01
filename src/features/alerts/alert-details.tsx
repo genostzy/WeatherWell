@@ -14,6 +14,7 @@ const UNVERIFIED: LocalizedText = {
   fil: "Hindi pa kumpirmado — batay sa ulat ng mga residente, hindi pa napapatunayan ng opisyal.",
 };
 const ISSUED: LocalizedText = { en: "Issued", fil: "Inilabas" };
+const EXPECTED: LocalizedText = { en: "Expected", fil: "Inaasahan" };
 const HOURS_AGO: LocalizedText = { en: "h ago", fil: "oras na ang nakalipas" };
 const UNDER_AN_HOUR: LocalizedText = { en: "less than an hour ago", fil: "wala pang isang oras ang nakalipas" };
 const MAYBE_STALE: LocalizedText = {
@@ -47,6 +48,11 @@ export function AlertDetails({ alert, zone, lang }: { alert: AlertRecord; zone: 
       {alert.source === "auto_crowdsourced" && (
         <p lang={lang} className="text-xs text-muted-foreground">
           {t(UNVERIFIED, lang)}
+        </p>
+      )}
+      {alert.source === "predicted" && alert.predictedTiming && (
+        <p lang={lang} className="text-xs font-medium">
+          {`${t(EXPECTED, lang)}: ${t(alert.predictedTiming, lang)}`}
         </p>
       )}
       <ConfidenceTag source={alert.source} confidence={alert.confidence} lang={lang} />

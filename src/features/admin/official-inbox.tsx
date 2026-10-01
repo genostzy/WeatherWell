@@ -104,7 +104,10 @@ export function OfficialInbox({ zones }: { zones: Zone[] }) {
   const zoneById = new Map(zones.map((z) => [z.id, z]));
   const active = alerts.filter((a) => a.isActive && zoneById.has(a.zoneId));
   const needsReview = active.filter(
-    (a) => a.source === "auto_crowdsourced" || minutesSinceReport(a.issuedAt) >= STALE_AFTER_MINUTES
+    // A Forecast advisory ends itself (set_forecast_advisory), so it is never asked about.
+    (a) =>
+      a.source === "auto_crowdsourced" ||
+      (a.source !== "predicted" && minutesSinceReport(a.issuedAt) >= STALE_AFTER_MINUTES)
   );
 
   async function run(key: string, action: () => Promise<Result>, done: LocalizedText) {
