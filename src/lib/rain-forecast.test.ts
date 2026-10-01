@@ -21,7 +21,9 @@ const ZONES = [
   { id: "z-wet", lat: 16.02, lng: 120.45 },
   { id: "z-dry", lat: 16.03, lng: 120.46 },
 ];
-const TIMES = ["2026-10-01T06:00", "2026-10-01T07:00", "2026-10-01T08:00"];
+// Run at 05:30 UTC. Open-Meteo stamps each hour's total at its end, starting with the hour already past.
+const NOW = new Date("2026-10-01T05:30:00Z");
+const TIMES = ["2026-10-01T05:00", "2026-10-01T06:00", "2026-10-01T07:00", "2026-10-01T08:00"];
 const hours = (mm: (number | null)[]) => ({ hourly: { time: TIMES, precipitation: mm } });
 
 function openMeteo(body: unknown, ok = true) {
@@ -32,6 +34,7 @@ function openMeteo(body: unknown, ok = true) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
   profilesEq.mockResolvedValue({
     data: [{ area_code: "0105528" }, { area_code: "0105528012" }, { area_code: null }],
     error: null,
@@ -42,7 +45,10 @@ beforeEach(() => {
     error: null,
   }));
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
 
 describe("forecastAdvisoryCopy", () => {
   it("says when, in Philippine time, and how heavy, in both languages", () => {
@@ -59,7 +65,7 @@ describe("forecastAdvisoryCopy", () => {
 
 describe("runRainForecast", () => {
   it("asks Open-Meteo once for every barangay in towns with an official", async () => {
-    const fetchMock = openMeteo([hours([2, 16, 22]), hours([1, 2, 3])]);
+    const fetchMock = openMeteo([hours([30, 2, 16, 22]), hours([1, 1, 2, 3])]);
     await runRainForecast();
     expect(zonesOr).toHaveBeenCalledWith("psgc_barangay_code.like.0105528*");
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -67,17 +73,18 @@ describe("runRainForecast", () => {
     expect(url.searchParams.get("latitude")).toBe("16.02,16.03");
     expect(url.searchParams.get("longitude")).toBe("120.45,120.46");
     expect(url.searchParams.get("hourly")).toBe("precipitation");
-    expect(url.searchParams.get("forecast_hours")).toBe("6");
+    expect(url.searchParams.get("forecast_hours")).toBe("7");
     expect(url.searchParams.get("timezone")).toBe("UTC");
   });
 
   it("raises where heavy rain is coming, ends where it is not, and tells residents of a new one only", async () => {
-    openMeteo([hours([2, 16, 22]), hours([1, 2, 3])]);
+    openMeteo([hours([30, 2, 16, 22]), hours([1, 1, 2, 3])]);
     const result = await runRainForecast();
-    const copy = forecastAdvisoryCopy("2026-10-01T07:00:00.000Z", 22);
+    // 16 mm falls in the hour stamped 07:00, so from 06:00 UTC (2 PM); the 30 mm hour is already past.
+    const copy = forecastAdvisoryCopy("2026-10-01T06:00:00.000Z", 22);
     expect(rpc).toHaveBeenCalledWith("set_forecast_advisory", {
       p_zone_id: "z-wet",
-      p_starts_at: "2026-10-01T07:00:00.000Z",
+      p_starts_at: "2026-10-01T06:00:00.000Z",
       p_peak_at: "2026-10-01T08:00:00.000Z",
       p_peak_mm: 22,
       p_message: copy.message,
@@ -96,7 +103,7 @@ describe("runRainForecast", () => {
   });
 
   it("does not tell residents again about one it kept", async () => {
-    openMeteo([hours([2, 16, 22]), hours([1, 2, 3])]);
+    openMeteo([hours([30, 2, 16, 22]), hours([1, 1, 2, 3])]);
     rpc.mockResolvedValue({ data: "kept", error: null });
     await runRainForecast();
     expect(notifyResidentsOfAlertChange).not.toHaveBeenCalled();
@@ -104,11 +111,11 @@ describe("runRainForecast", () => {
 
   it("accepts one location's object in place of a list", async () => {
     zonesOr.mockResolvedValue({ data: [ZONES[0]], error: null });
-    openMeteo(hours([null, 15, 3]));
+    openMeteo(hours([null, null, 15, 3]));
     const result = await runRainForecast();
     expect(rpc).toHaveBeenCalledWith(
       "set_forecast_advisory",
-      expect.objectContaining({ p_zone_id: "z-wet", p_starts_at: "2026-10-01T07:00:00.000Z", p_peak_mm: 15 })
+      expect.objectContaining({ p_zone_id: "z-wet", p_starts_at: "2026-10-01T06:00:00.000Z", p_peak_mm: 15 })
     );
     expect(result.raised).toEqual(["z-wet"]);
   });
@@ -121,7 +128,7 @@ describe("runRainForecast", () => {
   });
 
   it("fails loudly, after the rest, when the database refuses a barangay", async () => {
-    openMeteo([hours([2, 16, 22]), hours([1, 2, 3])]);
+    openMeteo([hours([30, 2, 16, 22]), hours([1, 1, 2, 3])]);
     rpc.mockResolvedValueOnce({ data: null, error: { message: "down" } });
     await expect(runRainForecast()).rejects.toThrow("down");
     expect(rpc).toHaveBeenCalledTimes(2);

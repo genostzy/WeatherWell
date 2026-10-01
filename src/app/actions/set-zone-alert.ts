@@ -76,10 +76,12 @@ export async function setZoneAlert(input: SetZoneAlertInput): Promise<ActionResu
   const message = input.severity === "none" ? null : manualAlertMessage(input.severity);
 
   // What residents were last told: re-confirming the same severity (Still
-  // in effect, or confirming an advisory) does not notify them again.
+  // in effect, or confirming an advisory) does not notify them again. An
+  // official's alert over a Forecast advisory always does: it was "a forecast,
+  // not a report", and this is a person's decision.
   const { data: previous } = await supabase
     .from("alerts")
-    .select("severity")
+    .select("severity, source")
     .eq("zone_id", input.zoneId)
     .eq("is_active", true)
     .maybeSingle();
@@ -98,7 +100,7 @@ export async function setZoneAlert(input: SetZoneAlertInput): Promise<ActionResu
 
   if (!error) {
     // After the response, so the official is not kept waiting on push and email.
-    if ((previous?.severity ?? null) !== severity) {
+    if ((previous?.severity ?? null) !== severity || previous?.source === "predicted") {
       after(() => notifyResidentsOfAlertChange(input.zoneId, severity ? "set" : "lifted"));
     }
     // The same rule as the database's heads-up trigger: a first Warning or Evacuate.

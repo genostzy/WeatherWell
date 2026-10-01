@@ -27,6 +27,8 @@ interface HourlyReply {
   hourly?: { time?: string[]; precipitation?: (number | null)[] };
 }
 
+const HOUR_MS = 60 * 60 * 1000;
+
 /** Open-Meteo answers in UTC without a zone ("2026-10-01T07:00"); made a full ISO time. */
 const utc = (time: string) => new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(time) ? time : `${time}Z`).toISOString();
 
@@ -65,7 +67,8 @@ export async function runRainForecast(): Promise<{ checked: number; raised: stri
     latitude: list.map((z) => z.lat).join(","),
     longitude: list.map((z) => z.lng).join(","),
     hourly: "precipitation",
-    forecast_hours: "6",
+    // The first stamp is the hour already under way (its total is the hour before it), so 7 give the next 6.
+    forecast_hours: "7",
     timezone: "UTC",
   });
   const res = await fetch(`https://api.open-meteo.com/v1/forecast?${params.toString()}`, { cache: "no-store" });
@@ -75,12 +78,21 @@ export async function runRainForecast(): Promise<{ checked: number; raised: stri
   const replies = Array.isArray(body) ? body : [body];
   if (replies.length !== list.length) throw new Error(`Open-Meteo answered ${replies.length} of ${list.length} places`);
 
+  const now = Date.now();
   const raised: string[] = [];
   let ended = 0;
   let firstError: string | undefined;
   for (const [i, zone] of list.entries()) {
     const hourly = replies[i]?.hourly;
-    const heavy = heavyRainAhead((hourly?.time ?? []).map(utc), hourly?.precipitation ?? []);
+    // Each stamp closes the hour it totals: only hours still to end count, and rain stamped 3 PM
+    // starts falling at 2 PM.
+    const times = (hourly?.time ?? []).map(utc);
+    const ahead = times.flatMap((time, h) => (Date.parse(time) > now ? [h] : []));
+    const found = heavyRainAhead(
+      ahead.map((h) => times[h]),
+      ahead.map((h) => hourly?.precipitation?.[h] ?? null)
+    );
+    const heavy = found && { ...found, startsAt: new Date(Date.parse(found.startsAt) - HOUR_MS).toISOString() };
     const copy = heavy ? forecastAdvisoryCopy(heavy.startsAt, heavy.peakMm) : null;
     const { data, error } = await supabase.rpc("set_forecast_advisory", {
       p_zone_id: zone.id,

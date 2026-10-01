@@ -462,4 +462,47 @@ begin
   raise notice 'ok RH1-RH6: Forecast advisories are raised, kept and ended by the service role, and reports replace them';
 end $$;
 
+-- RH7-RH8 (the plan C review): a Forecast advisory ends 3 hours after its
+-- heaviest hour even when the hourly runs stop (the engine ends it), and one
+-- that is kept shows the latest run's words and times.
+do $$
+declare
+  msg1 constant jsonb := '{"en":"from about 2 PM, up to 16 mm","fil":"a"}';
+  msg2 constant jsonb := '{"en":"from about 11 AM, up to 40 mm","fil":"b"}';
+  r text;
+  a record;
+begin
+  insert into public.zones
+    (id, psgc_barangay_code, name, evacuation_route_text, lat, lng, evacuation_route_path, hotline_number)
+    select 'rh-z' || g, '9900008' || (100 + g)::text, 'Rain Zone ' || g,
+           '{"en":"x","fil":"x"}'::jsonb, 13 + g * 0.2, 122, '[]'::jsonb, '000'
+      from generate_series(7, 8) g;
+
+  -- RH7: past its peak and no run since: the engine ends it, as automatically expired.
+  set local role service_role;
+  perform public.set_forecast_advisory('rh-z7', now() - interval '5 hours', now() - interval '3 hours 1 minute', 22,
+    msg1, '{"en":"From about 2 PM","fil":"Mula bandang 2 PM"}'::jsonb);
+  reset role;
+  perform * from public.check_and_trigger_alerts();
+  select * into a from public.alerts where zone_id = 'rh-z7';
+  if a.is_active or not a.expired_automatically then
+    raise exception using errcode = 'TSTFL', message = 'RH7: a forecast advisory past its peak outlived the runs';
+  end if;
+
+  -- RH8: kept, it takes the latest run's words and times, and stays one row.
+  set local role service_role;
+  perform public.set_forecast_advisory('rh-z8', now() + interval '4 hours', now() + interval '5 hours', 16,
+    msg1, '{"en":"From about 2 PM","fil":"Mula bandang 2 PM"}'::jsonb);
+  r := public.set_forecast_advisory('rh-z8', now() + interval '1 hour', now() + interval '2 hours', 40,
+    msg2, '{"en":"From about 11 AM","fil":"Mula bandang 11 AM"}'::jsonb);
+  reset role;
+  select * into a from public.alerts where zone_id = 'rh-z8' and is_active;
+  if r <> 'kept' or a.message <> msg2 or a.predicted_timing->>'en' <> 'From about 11 AM'
+     or (a.predicted_timing->>'peak_mm')::numeric <> 40
+     or (select count(*) from public.alerts where zone_id = 'rh-z8') <> 1 then
+    raise exception using errcode = 'TSTFL', message = format('RH8: kept as %s: %s', r, a);
+  end if;
+  raise notice 'ok RH7-RH8: a forecast advisory ends 3 hours past its peak without a run, and shows the latest forecast';
+end $$;
+
 rollback;

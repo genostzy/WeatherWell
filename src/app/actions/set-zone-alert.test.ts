@@ -20,8 +20,8 @@ vi.mock("@/lib/notify-residents", () => ({
 }));
 
 /** The zone's active alert as setZoneAlert reads it before changing it. */
-function activeSeverity(severity: string | null) {
-  const maybeSingle = vi.fn().mockResolvedValue({ data: severity ? { severity } : null, error: null });
+function activeSeverity(severity: string | null, source = "manual") {
+  const maybeSingle = vi.fn().mockResolvedValue({ data: severity ? { severity, source } : null, error: null });
   const eq2 = vi.fn(() => ({ maybeSingle }));
   const eq1 = vi.fn(() => ({ eq: eq2 }));
   from.mockReturnValue({ select: vi.fn(() => ({ eq: eq1 })) });
@@ -219,6 +219,13 @@ describe("telling residents about an official's change", () => {
     const { setZoneAlert } = await import("./set-zone-alert");
     await setZoneAlert({ zoneId: "zone-1", severity: "none" });
     expect(notifyResidentsOfAlertChange).toHaveBeenCalledWith("zone-1", "lifted");
+  });
+
+  it("tells them when an official's Advisory replaces a Forecast advisory", async () => {
+    activeSeverity("yellow", "predicted");
+    const { setZoneAlert } = await import("./set-zone-alert");
+    await setZoneAlert({ zoneId: "zone-1", severity: "yellow" });
+    expect(notifyResidentsOfAlertChange).toHaveBeenCalledWith("zone-1", "set");
   });
 
   it("does not notify them again when the same severity is re-confirmed", async () => {
