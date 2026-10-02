@@ -1,6 +1,6 @@
 # WeatherWell
 
-[![CI](https://github.com/genostzy/WeatherWell/actions/workflows/ci.yml/badge.svg?branch=v1)](https://github.com/genostzy/WeatherWell/actions/workflows/ci.yml)
+[![CI](https://github.com/genostzy/WeatherWell/actions/workflows/ci.yml/badge.svg?branch=mvp)](https://github.com/genostzy/WeatherWell/actions/workflows/ci.yml)
 
 An offline-first flood-alert PWA for Philippine barangays. Residents get
 barangay-level "should I evacuate now?" answers instead of province-level
@@ -179,10 +179,10 @@ Conventions worth knowing before editing:
 
 ## Deployment
 
-- `v1` is the default branch and the production branch. A push builds a
+- `mvp` is the default branch and the production branch. A push builds a
   Vercel preview; production is released by redeploying that build to
   production.
-- Scheduled jobs (GitHub Actions, from `v1`): the threshold engine and
+- Scheduled jobs (GitHub Actions, from `mvp`): the threshold engine and
   typhoon refresh every 3 hours, the rain heads-up (`rain-forecast.yml`,
   `/api/rain-forecast`) every hour at five past, and a production health
   check every 15 minutes. GitHub starts scheduled runs late, so Supabase's `pg_cron`
@@ -231,5 +231,5 @@ Pin photos in Storage are not in the backup; they are deleted after 7 days anywa
 ## Documentation
 
 - [PRD.md](PRD.md) — product requirements
+- [USER-MANUAL.md](docs/USER-MANUAL.md) — how to use WeatherWell
 - [AGENTS.md](AGENTS.md) — notes for AI coding agents working in this repo
-- [docs/](docs/) — design specs and implementation plans
